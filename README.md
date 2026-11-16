@@ -74,7 +74,7 @@ skillfleet fetches sources through Vercel's [`skills`](https://github.com/vercel
 
 ## Status
 
-Early, and not usable yet. npm has `skillfleet@0.0.0`, which only holds the name and prints this status. The commands and the manifest above are the plan, and they may change before the first release.
+Early, and not usable yet. The first version on npm, `0.0.0`, only claims the name and prints this status. The commands and the manifest above are the plan, and they may change before the first release.
 
 ## Develop
 
