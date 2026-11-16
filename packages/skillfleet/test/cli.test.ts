@@ -6,14 +6,14 @@ import { describe, expect, it } from "vite-plus/test";
 
 const pkg = JSON.parse(readFileSync("package.json", "utf8")) as {
   version: string;
-  bin: { skync: string };
+  bin: { skillfleet: string };
 };
-const cli = resolve(pkg.bin.skync);
+const cli = resolve(pkg.bin.skillfleet);
 
 const run = (...args: string[]) =>
   spawnSync(process.execPath, [cli, ...args], { encoding: "utf8" });
 
-describe("skync", () => {
+describe("skillfleet", () => {
   it("is built", () => {
     expect(existsSync(cli), `${cli} is missing, run pnpm build`).toBe(true);
   });
@@ -22,7 +22,7 @@ describe("skync", () => {
     const { status, stdout } = run();
     expect(status).toBe(0);
     expect(stdout).toBe(
-      `skync ${pkg.version}\nskync is not released yet: https://github.com/onmax/skync\n`,
+      `skillfleet ${pkg.version}\nskillfleet is not released yet: https://github.com/onmax/skillfleet\n`,
     );
   });
 

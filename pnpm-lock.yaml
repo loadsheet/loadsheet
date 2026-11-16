@@ -166,7 +166,7 @@ importers:
 
   .: {}
 
-  packages/skync:
+  packages/skillfleet:
     devDependencies:
       '@types/node':
         specifier: ^26.6.6

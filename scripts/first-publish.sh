@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Publishes skync@0.0.0 by hand, once, to claim the name on npm. npm only lets
+# Publishes skillfleet@0.0.0 by hand, once, to claim the name on npm. npm only lets
 # you add a trusted publisher to a package that exists, and every later
 # version goes out from release.yaml through that trusted publisher.
 set -euo pipefail
@@ -11,8 +11,8 @@ if ! user=$(npm whoami 2>/dev/null); then
   exit 1
 fi
 
-name=$(node -p 'require("./packages/skync/package.json").name')
-version=$(node -p 'require("./packages/skync/package.json").version')
+name=$(node -p 'require("./packages/skillfleet/package.json").name')
+version=$(node -p 'require("./packages/skillfleet/package.json").version')
 
 if npm view "$name" name >/dev/null 2>&1; then
   echo "$name is already on npm, so there is nothing to claim. Skip to the trusted publisher below." >&2
@@ -24,9 +24,9 @@ pnpm install --frozen-lockfile
 pnpm build
 pnpm test
 
-# ./ so npm reads a folder, not the GitHub repo packages/skync. publishConfig
+# ./ so npm reads a folder, not the GitHub repo packages/skillfleet. publishConfig
 # asks for provenance, which only CI can sign.
-npm publish ./packages/skync --access public --provenance=false
+npm publish ./packages/skillfleet --access public --provenance=false
 
 echo
 echo "$name@$version is on npm: https://www.npmjs.com/package/$name"
@@ -37,7 +37,7 @@ if npm trust github --help >/dev/null 2>&1; then
   cat <<EOF
 Either run:
 
-  npm trust github $name --file release.yaml --repo onmax/skync --env npm --allow-publish
+  npm trust github $name --file release.yaml --repo onmax/skillfleet --env npm --allow-publish
 
 or, on npmjs.com, open https://www.npmjs.com/package/$name/access, and under
 Trusted publishing pick GitHub Actions and fill in:
@@ -52,7 +52,7 @@ fi
 cat <<EOF
 
   Organization or user: onmax
-  Repository:           skync
+  Repository:           skillfleet
   Workflow filename:    release.yaml
   Environment name:     npm
 

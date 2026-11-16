@@ -1,5 +1,5 @@
 {
-  "name": "skync",
+  "name": "skillfleet",
   "version": "0.0.0",
   "description": "The same skills on every agent and every machine, kept current by a timer.",
   "keywords": [
@@ -12,17 +12,17 @@
     "skills",
     "sync"
   ],
-  "homepage": "https://github.com/onmax/skync#readme",
-  "bugs": "https://github.com/onmax/skync/issues",
+  "homepage": "https://github.com/onmax/skillfleet#readme",
+  "bugs": "https://github.com/onmax/skillfleet/issues",
   "license": "MIT",
   "author": "onmax",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/onmax/skync.git",
-    "directory": "packages/skync"
+    "url": "git+https://github.com/onmax/skillfleet.git",
+    "directory": "packages/skillfleet"
   },
   "bin": {
-    "skync": "./dist/cli.mjs"
+    "skillfleet": "./dist/cli.mjs"
   },
   "files": [
     "dist"
