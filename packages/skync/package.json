@@ -1,0 +1,55 @@
+{
+  "name": "skync",
+  "version": "0.0.0",
+  "description": "The same skills on every agent and every machine, kept current by a timer.",
+  "keywords": [
+    "agent-skills",
+    "claude-code",
+    "cli",
+    "codex",
+    "cursor",
+    "gemini",
+    "skills",
+    "sync"
+  ],
+  "homepage": "https://github.com/onmax/skync#readme",
+  "bugs": "https://github.com/onmax/skync/issues",
+  "license": "MIT",
+  "author": "onmax",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/onmax/skync.git",
+    "directory": "packages/skync"
+  },
+  "bin": {
+    "skync": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "vp pack",
+    "lint": "vp lint",
+    "fmt": "vp fmt",
+    "typecheck": "tsrs --noEmit",
+    "test": "vp test",
+    "check": "vp check && pnpm typecheck",
+    "ready": "vp fmt && pnpm build && pnpm check && pnpm test",
+    "prepare": "vp config"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "publint": "^0.3.25",
+    "tsrs": "0.20.1-ts7.1.0-beta",
+    "typescript": "^7.0.2",
+    "vite-plus": "^1.4.0"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
