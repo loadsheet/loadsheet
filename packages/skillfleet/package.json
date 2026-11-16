@@ -4,13 +4,19 @@
   "description": "The same skills on every agent and every machine, kept current by a timer.",
   "keywords": [
     "agent-skills",
+    "ai-agents",
     "claude-code",
     "cli",
     "codex",
+    "copilot",
     "cursor",
-    "gemini",
+    "gemini-cli",
+    "opencode",
+    "skill-md",
     "skills",
-    "sync"
+    "ssh",
+    "sync",
+    "tailscale"
   ],
   "homepage": "https://github.com/onmax/skillfleet#readme",
   "bugs": "https://github.com/onmax/skillfleet/issues",
