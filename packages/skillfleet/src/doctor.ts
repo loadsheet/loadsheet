@@ -1,20 +1,50 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
-import { delimiter, join } from "node:path";
-import { agentTargets, codexLegacyDir } from "./agents.ts";
+import { delimiter, dirname, join, sep } from "node:path";
+import { agentTargets, aliasOf, codexLegacyDir } from "./agents.ts";
 import { exec, git } from "./exec.ts";
 import { lstat } from "./fs.ts";
 import { gitUrl } from "./gitcache.ts";
 import { linkTarget } from "./linker.ts";
-import { loadManifest, type Source } from "./manifest.ts";
-import { tildify } from "./paths.ts";
-import { installedCli, launcherPath } from "./selfinstall.ts";
+import { loadManifest, readConfig, remoteManifest, type Source } from "./manifest.ts";
+import { paths, tildify } from "./paths.ts";
+import { installedCli, launcherNode, launcherPath } from "./selfinstall.ts";
 import { manifestSpec } from "./sync.ts";
+import {
+  formatTimerStatus,
+  machineTimeZone,
+  missingTimer,
+  systemdMissing,
+  TimerError,
+  type TimerStatus,
+  timerNode,
+  timerStatus,
+} from "./timer.ts";
 
 export interface Check {
   name: string;
   ok: boolean;
   detail: string;
+  /** Not checked, by the user's choice (a timer they chose not to install). */
+  skipped?: boolean;
+  /** Worth knowing, but not a failure. */
+  warn?: boolean;
+}
+
+/**
+ * Why the timer runs at other times than the manifest's `timer.timeZone` says, or undefined. launchd
+ * and Task Scheduler run a timer in the machine's zone, so an explicit zone holds only while the
+ * machine stays in it; systemd takes the zone itself.
+ */
+export function timeZoneDrift(
+  timeZone: string | undefined,
+  platform: NodeJS.Platform = process.platform,
+  machine = machineTimeZone(),
+): string | undefined {
+  if (!timeZone || timeZone === "local" || platform === "linux" || timeZone === machine)
+    return undefined;
+  const scheduler = platform === "darwin" ? "launchd" : "Task Scheduler";
+  return `timer.timeZone is ${timeZone}, but this machine is now in ${machine}, and ${scheduler} runs the timer in the machine's zone, so it may run at other times than the manifest says; run \`skillfleet timer install\` to install it for this zone, or remove timer.timeZone`;
 }
 
 function remoteOf(source: Source): string | undefined {
@@ -33,6 +63,41 @@ function skillNames(dir: string): string[] {
   }
 }
 
+/**
+ * What fixes a launcher whose node or copy is gone. The launcher itself cannot run then, so the fix
+ * goes through npx, which brings its own skillfleet and writes the launcher and the timer again.
+ */
+const REPAIR =
+  "run `npx skillfleet@latest timer install` to write the launcher and the timer again";
+
+/** Why the installed launcher cannot run, or undefined when it can or there is none. */
+function launcherProblem(): string | undefined {
+  const launcher = launcherPath();
+  if (!existsSync(launcher)) return undefined;
+  const node = launcherNode(readFileSync(launcher, "utf8"));
+  if (!node || !existsSync(node))
+    return `${tildify(launcher)} and the timer run ${node ?? "no node"}, which is gone (Node.js was upgraded or removed); ${REPAIR}`;
+  if (!existsSync(installedCli()))
+    return `${tildify(launcher)} runs ${tildify(installedCli())}, which is gone; ${REPAIR}`;
+  return undefined;
+}
+
+/**
+ * Why the node the timer's unit, plist or task names cannot run the timer, or undefined when it
+ * can. `self-install` under another Node.js rewrites the launcher, and the timer keeps the old node.
+ */
+function timerNodeProblem(): string | undefined {
+  const timer = timerNode();
+  if (!timer) return undefined;
+  if (!existsSync(timer.node))
+    return `the timer (${tildify(timer.file)}) runs ${timer.node}, which is gone (Node.js was upgraded or removed); ${REPAIR}`;
+  const launcher = launcherPath();
+  const node = existsSync(launcher) ? launcherNode(readFileSync(launcher, "utf8")) : undefined;
+  if (node && node !== timer.node)
+    return `the timer (${tildify(timer.file)}) runs ${timer.node}, while ${tildify(launcher)} runs ${node}; run \`skillfleet timer install\` to run the timer with the launcher's node`;
+  return undefined;
+}
+
 async function nodeCheck(): Promise<Check> {
   const launcher = launcherPath();
   if (!existsSync(launcher))
@@ -41,15 +106,11 @@ async function nodeCheck(): Promise<Check> {
       ok: true,
       detail: `${process.execPath} (no installed copy yet; \`skillfleet timer install\` makes one)`,
     };
-  const text = readFileSync(launcher, "utf8");
-  const node = text.match(/"([^"]+)"/)?.[1];
-  const ok = Boolean(node && existsSync(node)) && existsSync(installedCli());
+  const problem = launcherProblem() ?? timerNodeProblem();
   return {
     name: "node",
-    ok,
-    detail: ok
-      ? `${tildify(launcher)} runs ${node}`
-      : `${tildify(launcher)} points at ${node ?? "nothing"}, which is gone; run \`skillfleet timer install\` again`,
+    ok: !problem,
+    detail: problem ?? `${tildify(launcher)} runs ${launcherNode(readFileSync(launcher, "utf8"))}`,
   };
 }
 
@@ -58,15 +119,85 @@ async function lingerCheck(): Promise<Check | undefined> {
   const run = await exec("loginctl", ["show-user", userInfo().username, "--property=Linger"], {
     timeoutMs: 5000,
   });
-  if (run.code !== 0)
-    return { name: "systemd linger", ok: true, detail: "loginctl is not available; skipped" };
-  const ok = run.stdout.trim() === "Linger=yes";
+  if (run.spawnError === "ENOENT")
+    return { name: "systemd linger", ok: true, detail: "loginctl is not installed; skipped" };
+  // Without lingering and with no login session (cron, `sudo -u`, `docker exec`), loginctl knows
+  // no such user: "User ID 1000 is not logged in or lingering".
+  const unknownUser = /not logged in or lingering/.test(run.stderr);
+  if (run.code !== 0 && !unknownUser)
+    return {
+      name: "systemd linger",
+      ok: true,
+      detail: `loginctl could not tell (${run.stderr.trim().split("\n")[0] || `exit ${run.code}`}); skipped`,
+    };
+  const ok = !unknownUser && run.stdout.trim() === "Linger=yes";
   return {
     name: "systemd linger",
     ok,
     detail: ok
       ? "on: the timer runs while you are logged out"
       : `off: the timer stops when you log out; run \`loginctl enable-linger ${userInfo().username}\``,
+  };
+}
+
+/** The user chose no timer; a config.json that does not read is reported by the manifest check. */
+function timerDeclined(): boolean {
+  try {
+    return readConfig()?.timer === false;
+  } catch {
+    return false;
+  }
+}
+
+/** Whether the OS scheduler has the timer, and how its last run ended. */
+async function timerCheck(): Promise<Check & { noSystemd?: boolean }> {
+  const name = "timer";
+  let status: TimerStatus;
+  try {
+    status = await timerStatus();
+  } catch (error) {
+    if (!(error instanceof TimerError)) throw error;
+    if (timerDeclined())
+      return {
+        name,
+        ok: true,
+        skipped: true,
+        detail: `not installed, as you chose; ${error.message.split("\n")[0]!}`,
+      };
+    return {
+      name,
+      ok: false,
+      detail: error.message.split("\n")[0]!,
+      ...(error.noSystemd ? { noSystemd: true } : {}),
+    };
+  }
+  if (!status.installed) {
+    const declined = timerDeclined();
+    return {
+      name,
+      ok: declined,
+      ...(declined ? { skipped: true } : {}),
+      detail: await missingTimer(status, declined),
+    };
+  }
+  // One timer name per user: after a change of HOME or XDG_STATE_HOME, it may run another copy.
+  const logs = paths.logs();
+  if (status.logFile && !status.logFile.startsWith(logs + sep))
+    return {
+      name,
+      ok: false,
+      detail: `installed, but it syncs another skillfleet state folder (its log is ${tildify(status.logFile)}); run \`skillfleet timer install\` to point it at ${tildify(dirname(logs))}`,
+    };
+  // A timer whose node is gone fails before it writes a line to its log: launchd says exit 78.
+  const problem = launcherProblem() ?? timerNodeProblem();
+  if (problem) return { name, ok: false, detail: problem };
+  const failed = status.lastExitCode !== undefined && status.lastExitCode !== 0;
+  return {
+    name,
+    ok: !failed,
+    detail: failed
+      ? `the last run exited with ${status.lastExitCode}${status.logFile ? `; see ${status.logFile}` : ""}`
+      : formatTimerStatus(status),
   };
 }
 
@@ -86,7 +217,8 @@ async function launchdCheck(): Promise<Check | undefined> {
   };
 }
 
-export async function doctor(): Promise<Check[]> {
+/** `manifest` is the manifest to check, instead of the configured one (`--manifest`). */
+export async function doctor(manifest?: string): Promise<Check[]> {
   const checks: Check[] = [];
   checks.push(await nodeCheck());
   const gitVersion = await git(["--version"], { allowFail: true });
@@ -95,11 +227,15 @@ export async function doctor(): Promise<Check[]> {
     ok: gitVersion.code === 0,
     detail: gitVersion.code === 0 ? gitVersion.stdout.trim() : "git is not on PATH",
   });
-  for (const check of [await lingerCheck(), await launchdCheck()]) if (check) checks.push(check);
+  const { noSystemd, ...timer } = await timerCheck();
+  checks.push(timer);
+  // Linger and launchd's PATH only matter to a timer.
+  if (!timerDeclined() && !noSystemd && !systemdMissing())
+    for (const check of [await lingerCheck(), await launchdCheck()]) if (check) checks.push(check);
 
   let spec: string;
   try {
-    spec = manifestSpec();
+    spec = manifestSpec(manifest);
   } catch (error) {
     checks.push({ name: "manifest", ok: false, detail: (error as Error).message });
     return checks;
@@ -112,13 +248,18 @@ export async function doctor(): Promise<Check[]> {
   checks.push({
     name: "manifest",
     ok: true,
-    detail: `${tildify(loaded.root.file)}, ${loaded.sources.length} sources`,
+    // A remote manifest's file is a cache copy; the user knows it by the spec they gave.
+    detail: `${remoteManifest(spec) ? spec : tildify(loaded.root.file)}, ${loaded.sources.length} sources`,
   });
+  const drift = timerDeclined() ? undefined : timeZoneDrift(loaded.root.timer.timeZone);
+  if (drift) checks.push({ name: "timer time zone", ok: true, warn: true, detail: drift });
+  // Without git, the git check above already says so once.
+  const reachable = gitVersion.code === 0 ? loaded.sources : [];
   await Promise.all(
-    loaded.sources.map(async (source) => {
+    reachable.map(async (source) => {
       const remote = remoteOf(source);
       if (!remote) return;
-      const run = await git(["ls-remote", "--exit-code", remote, "HEAD"], {
+      const run = await git(["ls-remote", "--exit-code", "--", remote, "HEAD"], {
         allowFail: true,
         timeoutMs: 30_000,
       });
@@ -134,7 +275,9 @@ export async function doctor(): Promise<Check[]> {
   // Codex reads both of its folders, so one name in both shows twice.
   const codexDirs = [join(homedir(), ".agents", "skills"), codexLegacyDir()];
   const [modern, legacy] = codexDirs.map(skillNames);
-  const both = modern!.filter((name) => legacy!.includes(name));
+  // One folder linked to the other is one folder.
+  const sameFolder = codexDirs.some((dir) => aliasOf(dir));
+  const both = sameFolder ? [] : modern!.filter((name) => legacy!.includes(name));
   checks.push({
     name: "duplicate skills",
     ok: both.length === 0,
@@ -168,4 +311,9 @@ export async function doctor(): Promise<Check[]> {
 }
 
 export const formatChecks = (checks: readonly Check[]) =>
-  checks.map((check) => `${check.ok ? "ok  " : "FAIL"} ${check.name}: ${check.detail}`).join("\n");
+  checks
+    .map(
+      (check) =>
+        `${check.skipped ? "skip" : check.warn ? "warn" : check.ok ? "ok  " : "FAIL"} ${check.name}: ${check.detail}`,
+    )
+    .join("\n");

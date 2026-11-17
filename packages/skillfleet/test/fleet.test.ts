@@ -1,10 +1,13 @@
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { chmodSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
+import { remoteScript } from "../src/fleet.ts";
+import { launchers } from "../src/selfinstall.ts";
 import { isWindows, machine, type Machine, pathWith, remote, skills } from "./fixture.ts";
 
 /**
- * A fake `ssh`: skips options, takes the host, and runs the remote command with `sh -c` on this
+ * A fake `ssh`: skips options and the `--` after them, takes the host, and runs the remote command with `sh -c` on this
  * machine for `localhost`. Any other host hangs, like a machine that dropped off the network.
  */
 function sshShim(m: Machine): NodeJS.ProcessEnv {
@@ -16,6 +19,7 @@ function sshShim(m: Machine): NodeJS.ProcessEnv {
     `import { spawnSync } from "node:child_process";
 const args = process.argv.slice(2);
 while (args[0] === "-o") args.splice(0, 2);
+if (args[0] === "--") args.shift();
 const [host, command] = args;
 if (host !== "localhost") setTimeout(() => {}, 1e9);
 else {
@@ -91,4 +95,70 @@ describe("fleet", () => {
       "maxi@100.105.98.81",
     ]);
   });
+
+  it("fleet add takes the host forms ssh reads, including ssh:// with a port", async () => {
+    const m = machine();
+    const manifest = m.manifest({ agents: ["claude-code"], sources: [] });
+    expect((await m.run("init", manifest, "--no-timer")).code).toBe(0);
+    const hosts = ["box.tail1234.ts.net", "my_alias", "ssh://me@box:2222", "fe80::1%eth0"];
+    const added = await m.run("fleet", "add", ...hosts);
+    expect(added.code, added.stderr).toBe(0);
+    expect((JSON.parse(readFileSync(manifest, "utf8")) as { fleet: string[] }).fleet).toEqual(
+      hosts,
+    );
+  });
+
+  it.skipIf(isWindows)(
+    "R3-6. fleet upgrade on a host whose launcher's node is gone says so, not that skillfleet is missing",
+    () => {
+      const m = machine();
+      const state = join(m.root, "state");
+      const launcher = join(state, "skillfleet", "bin", "skillfleet");
+      mkdirSync(join(launcher, ".."), { recursive: true });
+      // Node.js was upgraded: the launcher still names the old node, and ssh's PATH has no node or npx.
+      writeFileSync(
+        launcher,
+        launchers(
+          join(m.root, "node-v22.1.0", "bin", "node"),
+          join(state, "skillfleet", "app", "cli.mjs"),
+        ).sh,
+      );
+      chmodSync(launcher, 0o755);
+      const bin = join(m.root, "ssh-bin");
+      mkdirSync(bin);
+      const sed = spawnSync("sh", ["-c", "command -v sed"], { encoding: "utf8" }).stdout.trim();
+      symlinkSync(sed, join(bin, "sed"));
+      const run = spawnSync("/bin/sh", ["-c", remoteScript("upgrade", "1.2.3")], {
+        env: { HOME: m.home, XDG_STATE_HOME: state, PATH: bin },
+        encoding: "utf8",
+      });
+      expect(run.stdout.trim(), run.stderr).toBe("skillfleet-fleet: node-gone");
+    },
+  );
+
+  it.skipIf(isWindows)(
+    "R2-2. fleet sync reads a host whose sync failed for one source as synced with errors, and exits 1",
+    async () => {
+      const m = machine();
+      const vendor = remote(m, "vendor", skills("skills/", "tool"));
+      const manifest = m.manifest({
+        agents: ["claude-code"],
+        sources: [
+          { id: "vendor", git: vendor.url },
+          { id: "gone", local: join(m.root, "gone") },
+        ],
+        fleet: ["localhost"],
+      });
+      await m.run("init", manifest, "--no-timer");
+      expect((await m.run("self-install")).code).toBe(0);
+      const env = sshShim(m);
+      const sync = await m.runWith({ env }, "fleet", "sync");
+      expect(sync.stdout).toMatch(/^localhost: last run \d+s ago, 1 skills, with errors$/m);
+      expect(sync.code).toBe(1);
+      // status shows the last run as it was; it did not fail now.
+      const status = await m.runWith({ env }, "fleet", "status");
+      expect(status.stdout).toMatch(/^localhost: last run .*, with errors$/m);
+      expect(status.code).toBe(0);
+    },
+  );
 });

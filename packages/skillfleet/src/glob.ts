@@ -3,6 +3,10 @@ export function globToRegExp(glob: string): RegExp {
   let source = "";
   for (let i = 0; i < glob.length; i++) {
     const char = glob[i]!;
+    if (char === "/" && glob.slice(i + 1) === "**") {
+      source += "(?:/.*)?";
+      break;
+    }
     if (char === "*" && glob[i + 1] === "*") {
       // `a/**/b` also matches `a/b`, and a trailing `/**` matches the folder itself.
       if (glob[i + 2] === "/") {
@@ -19,7 +23,9 @@ export function globToRegExp(glob: string): RegExp {
   return new RegExp(`^${source}$`);
 }
 
-export const matchesGlob = (path: string, glob: string) => globToRegExp(glob).test(path);
+/** Paths and globs compare in Unicode NFC: macOS lists names in NFD, keyboards type NFC. */
+export const matchesGlob = (path: string, glob: string) =>
+  globToRegExp(glob.normalize("NFC")).test(path.normalize("NFC"));
 
 /** The folder part of a glob before its first wildcard: `skills/*` gives `skills`. */
 export function globBase(glob: string): string {

@@ -1,10 +1,33 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { delimiter, join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
-import { isWindows, machine, read, remote, skills, version } from "./fixture.ts";
+import { timeZoneDrift } from "../src/doctor.ts";
+import { stableNode } from "../src/selfinstall.ts";
+import { commandNode, systemdMissing } from "../src/timer.ts";
+import { isWindows, type Machine, machine, read, remote, skills, version } from "./fixture.ts";
 
+const kind =
+  process.platform === "linux"
+    ? "a systemd user timer"
+    : process.platform === "darwin"
+      ? "a launchd agent"
+      : "a Task Scheduler task";
+
+// These tests never install a real timer: CI proves that in .github/scripts/timer-e2e.mjs, which
+// installs one, waits for the OS to run it, and removes it.
 describe("timer", () => {
-  it("15. timer install --dry-run prints the command, an absolute node and the installed copy, and reports the scheduler blocker", async () => {
+  it("15. timer install --dry-run prints the command, an absolute node and the installed copy, and installs nothing", async () => {
     const m = machine();
     const vendor = remote(m, "vendor", skills("skills/", "timed"));
     const manifest = m.manifest({
@@ -13,27 +36,56 @@ describe("timer", () => {
       timer: { cron: "*/15 * * * *", timeZone: "Europe/Madrid" },
     });
     expect((await m.run("init", manifest, "--no-timer")).code).toBe(0);
+    // init installs the copy even without the timer, so `skillfleet` runs from a new shell.
+    rmSync(join(m.stateDir, "app"), { recursive: true });
     const dry = await m.run("timer", "install", "--dry-run");
     const app = join(m.stateDir, "app", "cli.mjs");
-    expect(dry.stdout).toContain(
-      `timer skillfleet-sync: \`${process.execPath} ${app} sync\` on "*/15 * * * *" (Europe/Madrid)`,
+    expect(dry.code, dry.stderr).toBe(0);
+    expect(dry.stdout).toBe(
+      `timer skillfleet-sync: \`${stableNode({ env: m.env, home: m.home })} ${app} sync\` on "*/15 * * * *" (Europe/Madrid)\n` +
+        `would install ${kind}\n`,
     );
-    // @vite-hub/schedule/os is not published yet; the run says so and exits 3.
-    expect(dry.code).toBe(3);
-    expect(dry.stdout).toContain("blocked: the OS timer comes from @vite-hub/schedule/os");
     expect(existsSync(app)).toBe(false);
   });
 
-  it("15b. the installed copy runs on its own from the state folder, with an absolute node path", async () => {
+  it("15a. without timer.timeZone the timer runs in the machine's time zone, as launchd and Task Scheduler do", async () => {
     const m = machine();
+    const manifest = m.manifest({ agents: ["claude-code"], sources: [] });
+    expect((await m.run("init", manifest, "--no-timer")).code).toBe(0);
+    const dry = await m.run("timer", "install", "--dry-run");
+    expect(dry.code, dry.stderr).toBe(0);
+    expect(dry.stdout).toContain(
+      `on "*/30 * * * *" (the machine's time zone, now ${Intl.DateTimeFormat().resolvedOptions().timeZone})`,
+    );
+    // "local", not today's zone name, so the timer follows the machine when its zone changes.
+    const spec = await m.json<{ timeZone: string }>("timer", "install", "--dry-run");
+    expect(spec.timeZone).toBe("local");
+  });
+
+  it("15c. init --dry-run neither installs a timer nor copies skillfleet", async () => {
+    const m = machine();
+    const manifest = m.manifest({
+      agents: ["claude-code"],
+      sources: [],
+      timer: { cron: "* * * * *" },
+    });
+    const dry = await m.run("init", manifest, "--dry-run");
+    expect(dry.code, dry.stderr).toBe(0);
+    expect(existsSync(join(m.stateDir, "app"))).toBe(false);
+    expect(existsSync(join(m.stateDir, "bin"))).toBe(false);
+  });
+
+  it("15b. the installed copy runs on its own from the state folder, with an absolute node path", async () => {
+    const m = machine({ scheduler: "empty" });
     const install = await m.run("self-install");
     expect(install.code, install.stderr).toBe(0);
     const launcher = join(m.stateDir, "bin", "skillfleet");
     const text = read(launcher);
     expect(text).toBe(
-      `#!/bin/sh\nexec "${process.execPath.replace(/\\/g, "/")}" "${join(m.stateDir, "app", "cli.mjs").replace(/\\/g, "/")}" "$@"\n`,
+      `#!/bin/sh\nexec "${stableNode({ env: m.env, home: m.home }).replace(/\\/g, "/")}" "${join(m.stateDir, "app", "cli.mjs").replace(/\\/g, "/")}" "$@"\n`,
     );
-    if (isWindows) expect(read(`${launcher}.cmd`)).toContain(process.execPath);
+    if (isWindows)
+      expect(read(`${launcher}.cmd`)).toContain(stableNode({ env: m.env, home: m.home }));
     // The copy has no node_modules beside it, so a run proves the bundle is self-contained.
     const { spawnSync } = await import("node:child_process");
     const run = spawnSync(process.execPath, [join(m.stateDir, "app", "cli.mjs"), "--version"], {
@@ -45,4 +97,223 @@ describe("timer", () => {
     const checks = JSON.parse(doctor.stdout) as { name: string; ok: boolean; detail: string }[];
     expect(checks.find((check) => check.name === "node")).toMatchObject({ ok: true });
   });
+
+  it("15d. installing the same build again leaves the copy alone, since the timer may be running it", async () => {
+    const m = machine();
+    expect((await m.run("self-install")).code).toBe(0);
+    const app = join(m.stateDir, "app", "cli.mjs");
+    const before = statSync(app).mtimeMs;
+    await new Promise((done) => setTimeout(done, 50));
+    expect((await m.run("self-install")).code).toBe(0);
+    expect(statSync(app).mtimeMs).toBe(before);
+  });
+
+  it.skipIf(process.platform !== "linux")(
+    "R2-11. on Linux without systemd, init links the skills and says to use cron, and status, doctor and timer say the same",
+    async () => {
+      const m = machine({ scheduler: "absent" });
+      const vendor = remote(m, "vendor", skills("skills/", "tool"));
+      const manifest = m.manifest({
+        agents: ["claude-code"],
+        sources: [{ id: "vendor", git: vendor.url }],
+      });
+      const init = await m.run("init", manifest);
+      const said = init.stdout + init.stderr;
+      // Linking worked; a timer is impossible here, which init says, with what to do instead.
+      expect(init.code, said).toBe(0);
+      expect(said).toContain("this machine has no systemd user manager");
+      expect(said).toMatch(/crontab -e.*\*\/30 \* \* \* \* '.*\/bin\/skillfleet' sync >> /);
+      expect(said).toContain("--no-timer");
+      expect(said).not.toContain("ENOENT");
+      const status = await m.run("status");
+      expect(status.stdout).toMatch(/^timer: this machine has no systemd user manager/m);
+      const doctor = await m.run("doctor");
+      expect(doctor.stdout).toMatch(/^FAIL timer: this machine has no systemd user manager/m);
+      expect(doctor.stdout).not.toContain("ENOENT");
+      for (const args of [
+        ["timer", "status"],
+        ["timer", "install"],
+      ]) {
+        const run = await m.run(...args);
+        expect(run.code, args.join(" ")).toBe(1);
+        expect(run.stdout + run.stderr).toContain("no systemd user manager");
+        expect(run.stdout + run.stderr).not.toContain("ENOENT");
+      }
+      // After init --no-timer, doctor skips the timer.
+      expect((await m.run("init", manifest, "--no-timer")).code).toBe(0);
+      expect((await m.run("doctor")).stdout).toMatch(/^skip timer: not installed, as you chose/m);
+    },
+  );
+
+  it.skipIf(process.platform !== "linux")(
+    "R2-11. a dry run tells a machine without systemctl, or not booted with systemd, from one with it",
+    () => {
+      const root = mkdtempSync(join(tmpdir(), "skillfleet-systemd-"));
+      try {
+        const bin = join(root, "bin");
+        const booted = join(root, "run-systemd-system");
+        mkdirSync(bin);
+        expect(systemdMissing(bin, booted)).toBe(true);
+        writeFileSync(join(bin, "systemctl"), "");
+        expect(systemdMissing(bin, booted)).toBe(true);
+        mkdirSync(booted);
+        expect(systemdMissing(bin, booted)).toBe(false);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it("R3-7. reads the node each scheduler's file runs", () => {
+    expect(commandNode("# x\n[Service]\nExecStart=/opt/node/bin/node /s/app/cli.mjs sync\n")).toBe(
+      "/opt/node/bin/node",
+    );
+    expect(
+      commandNode('[Service]\nExecStart="/opt/my node/100%%/$$x/node" "/s/app/cli.mjs" sync\n'),
+    ).toBe("/opt/my node/100%/$x/node");
+    expect(
+      commandNode(
+        "<key>ProgramArguments</key>\n\t<array>\n\t\t<string>/Users/a b/.volta/bin/node&amp;</string>\n",
+      ),
+    ).toBe("/Users/a b/.volta/bin/node&");
+    expect(
+      commandNode(
+        "$log = 'C:\\x.log'\n& 'C:\\Program Files\\nodejs\\node.exe' 'C:\\s\\app\\cli.mjs' 'sync' 2>&1\n",
+      ),
+    ).toBe("C:\\Program Files\\nodejs\\node.exe");
+    expect(commandNode("& 'C:\\it''s\\node.exe' 'x'\n")).toBe("C:\\it's\\node.exe");
+  });
+
+  it("R3-8. doctor warns when an explicit timer.timeZone is not the machine's, where the scheduler uses the machine's", () => {
+    expect(timeZoneDrift("Europe/Madrid", "darwin", "America/New_York")).toMatch(
+      /Europe\/Madrid.*America\/New_York.*launchd/,
+    );
+    expect(timeZoneDrift("Europe/Madrid", "win32", "UTC")).toContain("Task Scheduler");
+    expect(timeZoneDrift("Europe/Madrid", "darwin", "Europe/Madrid")).toBeUndefined();
+    expect(timeZoneDrift("local", "darwin", "UTC")).toBeUndefined();
+    expect(timeZoneDrift(undefined, "darwin", "UTC")).toBeUndefined();
+    // systemd takes the zone itself.
+    expect(timeZoneDrift("Europe/Madrid", "linux", "UTC")).toBeUndefined();
+  });
+
+  it("R3-8. init --dry-run names the launcher and the timer it would install", async () => {
+    const m = machine();
+    const manifest = m.manifest({ agents: ["claude-code"], sources: [] });
+    const dry = await m.run("init", manifest, "--dry-run");
+    expect(dry.code, dry.stderr).toBe(0);
+    expect(dry.stdout).toMatch(/would install .*skillfleet.*, the copy new shells, the timer/);
+    expect(dry.stdout).toContain(`would install ${kind}`);
+    const declined = await m.run("init", manifest, "--dry-run", "--no-timer");
+    expect(declined.stdout).toContain("no timer (--no-timer)");
+  });
+
+  it.skipIf(process.platform !== "linux")(
+    "R3-7, R3-8. self-install under another node moves the timer to it, doctor finds a timer whose node is gone, and a dry run sees an unchanged timer",
+    async () => {
+      const m = machine();
+      const shim = systemdShim(m);
+      // Two Node.js installs, as links to this node, so each can be removed.
+      const node = (name: string) => {
+        const dir = join(m.root, name, "bin");
+        mkdirSync(dir, { recursive: true });
+        symlinkSync(realpathSync(process.execPath), join(dir, "node"));
+        return { dir, node: join(dir, "node") };
+      };
+      const a = node("node-a");
+      const b = node("node-b");
+      const using = (n: { dir: string }) => ({ PATH: [n.dir, shim].join(delimiter) });
+      const manifest = m.manifest({ agents: ["claude-code"], sources: [] });
+      const service = m.at(".config/systemd/user/skillfleet-sync.service");
+
+      const init = await m.runWith({ env: using(a) }, "init", manifest);
+      expect(init.code, init.stdout + init.stderr).toBe(0);
+      expect(read(service)).toContain(`ExecStart=${a.node} `);
+      const same = await m.runWith({ env: using(a) }, "timer", "install", "--dry-run");
+      expect(same.stdout).toContain(`${kind}: already installed, unchanged`);
+      const other = await m.runWith({ env: using(b) }, "timer", "install", "--dry-run");
+      expect(other.stdout).toContain(`would update the installed timer (${kind})`);
+
+      const install = await m.runWith({ env: using(b) }, "self-install");
+      expect(install.code, install.stderr).toBe(0);
+      expect(install.stdout).toContain(
+        `the timer ran ${a.node}; installing it again with ${b.node}`,
+      );
+      expect(read(service)).toContain(`ExecStart=${b.node} `);
+      rmSync(a.dir, { recursive: true });
+      const fine = await m.runWith({ env: using(b) }, "doctor");
+      expect(fine.stdout).toMatch(/^ok {3}node: /m);
+      expect(fine.stdout).toMatch(/^ok {3}timer: installed/m);
+
+      // What an older self-install left: the launcher on node-b, the timer on node-a, now gone.
+      const old = read(service);
+      writeFileSync(service, old.replace(`ExecStart=${b.node} `, `ExecStart=${a.node} `));
+      const split = await m.runWith({ env: using(b) }, "doctor");
+      expect(split.stdout).toMatch(
+        new RegExp(
+          `^FAIL node: the timer \\(.*skillfleet-sync.service\\) runs ${a.node}, which is gone.*npx skillfleet@latest timer install`,
+          "m",
+        ),
+      );
+      expect(split.stdout).toMatch(/^FAIL timer: the timer .* which is gone/m);
+    },
+  );
+
+  it.skipIf(process.platform !== "darwin")(
+    "R3-8. with --no-timer, doctor and status still name another HOME's timer that holds the label",
+    async () => {
+      const m = machine();
+      const bin = join(m.root, "own-bin");
+      mkdirSync(bin);
+      const other = "/Users/someone/Library/LaunchAgents/skillfleet-sync.plist";
+      writeFileSync(
+        join(bin, "launchctl"),
+        `#!/bin/sh\ncase "$1" in\n  print) printf '%s = {\\n\\tpath = ${other}\\n\\tstate = not running\\n}\\n' "$2"; exit 0 ;;\n  getenv) exit 0 ;;\nesac\nexit 1\n`,
+      );
+      chmodSync(join(bin, "launchctl"), 0o755);
+      const env = { PATH: [bin, m.env.PATH].join(delimiter) };
+      const manifest = m.manifest({ agents: ["claude-code"], sources: [] });
+      expect((await m.runWith({ env }, "init", manifest, "--no-timer")).code).toBe(0);
+      const doctor = await m.runWith({ env }, "doctor");
+      expect(doctor.stdout).toMatch(/^skip timer: not installed, as you chose.*Note: .*someone/m);
+      const status = await m.runWith({ env }, "status");
+      expect(status.stdout).toMatch(/^timer: not installed, as you chose.*Note: .*someone/m);
+    },
+  );
 });
+
+/**
+ * A systemd that answers as one with skillfleet's units loaded once their files exist, and linger
+ * on. Its folder comes first on PATH and is inside the test's machine folder, so the scheduler
+ * guard lets it run. Returns PATH with it first.
+ */
+function systemdShim(m: Machine): string {
+  const dir = join(m.root, "systemd-bin");
+  mkdirSync(dir, { recursive: true });
+  const script = join(dir, "systemctl.mjs");
+  writeFileSync(
+    script,
+    `import { existsSync } from "node:fs";
+import { join } from "node:path";
+const args = process.argv.slice(2).filter((arg) => arg !== "--user");
+const units = join(process.env.XDG_CONFIG_HOME, "systemd", "user");
+const [verb] = args;
+if (verb === "show") {
+  if (args.includes("UnitPath")) process.exit(0);
+  for (const unit of args.filter((arg) => /\\.(timer|service)$/.test(arg))) {
+    const file = join(units, unit);
+    console.log(existsSync(file)
+      ? \`Id=\${unit}\\nLoadState=loaded\\nFragmentPath=\${file}\\nActiveState=\${unit.endsWith(".timer") ? "active" : "inactive"}\\nSubState=waiting\\n\`
+      : \`Id=\${unit}\\nLoadState=not-found\\nActiveState=inactive\\nSubState=dead\\n\`);
+  }
+} else if (verb === "is-enabled") console.log("enabled");
+else if (verb === "is-active") console.log("active");
+`,
+  );
+  const sh = (name: string, body: string) => {
+    writeFileSync(join(dir, name), `#!/bin/sh\n${body}\n`);
+    chmodSync(join(dir, name), 0o755);
+  };
+  sh("systemctl", `exec "${process.execPath}" "${script}" "$@"`);
+  sh("loginctl", `case "$*" in *--value*) echo yes ;; *) echo Linger=yes ;; esac`);
+  return [dir, m.env.PATH].join(delimiter);
+}

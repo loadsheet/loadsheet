@@ -1,24 +1,31 @@
 import {
+  accessSync,
+  constants,
   existsSync,
   mkdirSync,
+  readdirSync,
   readlinkSync,
   rmdirSync,
   rmSync,
   symlinkSync,
   unlinkSync,
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import {
   copyDir,
   type Hashes,
   hashDir,
   isErrno,
   isRecord,
+  JsonFileError,
   lstat,
+  materializeSkillMd,
   readJson,
+  renameFolder,
   sameTree,
   writeJson,
 } from "./fs.ts";
+import { nameKey, segmentProblem } from "./names.ts";
 import { tildify } from "./paths.ts";
 
 export const MANIFEST_FILE = ".skillfleet-manifest.json";
@@ -52,16 +59,36 @@ export interface TargetReport {
   /** Hand-made folders and links skillfleet did not create, left as they are. */
   foreign: string[];
   skipped?: string;
+  /** A folder skillfleet linked into before and no longer does: only its old links are removed. */
+  former?: boolean;
   warnings: string[];
+  /** Links that could not be made, changed or removed, and folders that could not be written. */
+  errors: string[];
 }
 
-export function readTargetManifest(dir: string): TargetManifest {
-  const raw = readJson(join(dir, MANIFEST_FILE));
+/**
+ * The links skillfleet made in `dir`. A record that does not parse reads as empty, with a
+ * warning: links it can't prove it made are then never pruned, only re-recorded when they point
+ * where skillfleet would link anyway.
+ */
+export function readTargetManifest(dir: string, warnings: string[] = []): TargetManifest {
+  let raw: unknown;
+  try {
+    raw = readJson(join(dir, MANIFEST_FILE));
+  } catch (error) {
+    if (!(error instanceof JsonFileError)) throw error;
+    warnings.push(
+      `${tildify(join(dir, MANIFEST_FILE))} is not valid JSON, so skillfleet started a new one; links it no longer knows it made stay where they are`,
+    );
+    return { version: 1, links: {} };
+  }
   if (!isRecord(raw) || raw.version !== 1 || !isRecord(raw.links)) return { version: 1, links: {} };
   const links: Record<string, LinkRecord> = {};
   for (const [name, record] of Object.entries(raw.links)) {
     if (!isRecord(record) || typeof record.target !== "string" || typeof record.source !== "string")
       continue;
+    // A record is only trusted to name a folder directly inside this one.
+    if (segmentProblem(name)) continue;
     const kind = record.kind === "junction" || record.kind === "copy" ? record.kind : "symlink";
     links[name] = {
       target: record.target,
@@ -113,6 +140,7 @@ export function makeLink(target: string, path: string, copy: boolean): LinkKind 
     }
   }
   copyDir(target, path);
+  materializeSkillMd(path, target);
   return "copy";
 }
 
@@ -132,6 +160,7 @@ export function linkTargetDir(
     removed: [],
     foreign: [],
     warnings: [],
+    errors: [],
   };
   const stat = lstat(dir);
   if (stat?.isSymbolicLink()) {
@@ -142,9 +171,22 @@ export function linkTargetDir(
     report.skipped = `${tildify(dir)} is not a folder`;
     return report;
   }
-  if (!stat && !dryRun) mkdirSync(dir, { recursive: true });
-  const manifest = readTargetManifest(dir);
-  const wanted = new Map(desired.map((link) => [link.name, link]));
+  try {
+    if (!stat && !dryRun) mkdirSync(dir, { recursive: true });
+    if (stat) accessSync(dir, constants.W_OK);
+  } catch (error) {
+    report.errors.push(`${tildify(dir)}: ${errorText(error)}; its skills were not linked`);
+    return report;
+  }
+  const manifest = readTargetManifest(dir, report.warnings);
+  const failed = (name: string, error: unknown) =>
+    report.errors.push(`${tildify(join(dir, name))}: ${errorText(error)}`);
+  const wanted = new Map<string, DesiredLink>();
+  for (const link of desired) {
+    const problem = segmentProblem(link.name);
+    if (problem) report.warnings.push(`skipped the skill "${link.name}": its name ${problem}`);
+    else wanted.set(link.name, link);
+  }
   const write = (name: string, link: DesiredLink, replacing: boolean) => {
     const path = join(dir, name);
     if (!dryRun) {
@@ -164,13 +206,36 @@ export function linkTargetDir(
     (replacing ? report.replaced : report.created).push(name);
   };
 
+  // A skill renamed only in case or Unicode form (alpha to Alpha) keeps its entry here, renamed.
   for (const link of wanted.values()) {
+    if (manifest.links[link.name]) continue;
+    const old = Object.keys(manifest.links).find(
+      (name) => !wanted.has(name) && nameKey(name) === nameKey(link.name),
+    );
+    if (old === undefined) continue;
+    try {
+      if (!dryRun && lstat(join(dir, old)) && !renameFolder(join(dir, old), join(dir, link.name)))
+        continue;
+      manifest.links[link.name] = manifest.links[old]!;
+      delete manifest.links[old];
+    } catch (error) {
+      failed(old, error);
+    }
+  }
+  for (const link of wanted.values()) {
+    try {
+      linkOne(link);
+    } catch (error) {
+      failed(link.name, error);
+    }
+  }
+  function linkOne(link: DesiredLink) {
     const path = join(dir, link.name);
     const current = lstat(path);
     const record = manifest.links[link.name];
     if (!current) {
       write(link.name, link, false);
-      continue;
+      return;
     }
     if (current.isSymbolicLink()) {
       const pointsTo = linkTarget(path);
@@ -182,55 +247,96 @@ export function linkTargetDir(
             source: link.source,
           };
         if (record) record.source = link.source;
-        continue;
+        return;
       }
       if (record && record.kind !== "copy") write(link.name, link, true);
       else {
         report.foreign.push(link.name);
         report.warnings.push(
-          `${tildify(path)} links to ${tildify(pointsTo)}, not ${tildify(link.target)}; skillfleet did not make it, so it stays`,
+          `${tildify(listedPath(dir, link.name))} links to ${tildify(pointsTo)}, not ${tildify(link.target)}; skillfleet did not make it, so it stays${sameFolderNote(dir, link.name)}`,
         );
       }
-      continue;
+      return;
     }
     if (current.isDirectory() && record?.kind === "copy") {
       const now = hashDir(path);
       if (record.hashes && !sameTree(now, record.hashes)) {
-        report.warnings.push(`${tildify(path)} is a copy with local edits, so it is not refreshed`);
-        continue;
+        report.warnings.push(
+          `${tildify(path)} is a copy with local edits, and ${link.name} changed too since it was copied, so it is not refreshed and other agents show ${link.name} without these edits; copy them into ${tildify(link.target)} and delete this copy to make the agents agree`,
+        );
+        return;
       }
-      if (!copy || !sameTree(now, hashDir(link.target)) || !samePath(record.target, link.target))
+      const fresh = hashDir(link.target, { skillMdAsFile: true });
+      if (!copy || !sameTree(now, fresh) || !samePath(record.target, link.target))
         write(link.name, link, true);
-      continue;
+      return;
     }
     report.foreign.push(link.name);
     report.warnings.push(
-      `${tildify(path)} is a ${current.isDirectory() ? "folder" : "file"} skillfleet did not make, so it stays`,
+      `${tildify(listedPath(dir, link.name))} is a ${current.isDirectory() ? "folder" : "file"} skillfleet did not make, so it stays${sameFolderNote(dir, link.name)}`,
     );
   }
 
   for (const [name, record] of Object.entries(manifest.links)) {
     if (wanted.has(name)) continue;
     const path = join(dir, name);
-    const current = lstat(path);
-    if (current?.isSymbolicLink() && samePath(linkTarget(path), record.target)) {
-      if (!dryRun) removeLink(path);
-      report.removed.push(name);
-    } else if (
-      current?.isDirectory() &&
-      record.kind === "copy" &&
-      record.hashes &&
-      sameTree(hashDir(path), record.hashes)
-    ) {
-      if (!dryRun) rmSync(path, { recursive: true, force: true });
-      report.removed.push(name);
-    } else if (current) {
-      report.warnings.push(
-        `${tildify(path)} changed since skillfleet made it, so it is not removed`,
-      );
+    try {
+      const current = lstat(path);
+      if (current?.isSymbolicLink() && samePath(linkTarget(path), record.target)) {
+        if (!dryRun) removeLink(path);
+        report.removed.push(name);
+      } else if (
+        current?.isDirectory() &&
+        record.kind === "copy" &&
+        record.hashes &&
+        sameTree(hashDir(path), record.hashes)
+      ) {
+        if (!dryRun) rmSync(path, { recursive: true, force: true });
+        report.removed.push(name);
+      } else if (current) {
+        report.warnings.push(
+          `${tildify(path)} changed since skillfleet made it, so it is not removed`,
+        );
+      }
+      if (!dryRun) delete manifest.links[name];
+    } catch (error) {
+      // Still recorded, so the next run tries again.
+      failed(name, error);
     }
-    if (!dryRun) delete manifest.links[name];
   }
-  if (!dryRun && existsSync(dir)) writeJson(join(dir, MANIFEST_FILE), manifest);
+  try {
+    if (!dryRun && existsSync(dir)) writeJson(join(dir, MANIFEST_FILE), manifest);
+  } catch (error) {
+    failed(MANIFEST_FILE, error);
+  }
   return report;
+}
+
+/**
+ * `dir/name` as the folder lists it. On a disk that ignores case or Unicode normalization (macOS,
+ * Windows), the skill `Mine` finds the folder `mine`, and a message should name the folder.
+ */
+export function listedPath(dir: string, name: string): string {
+  let entries: string[];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return join(dir, name);
+  }
+  if (entries.includes(name)) return join(dir, name);
+  return join(dir, entries.find((entry) => nameKey(entry) === nameKey(name)) ?? name);
+}
+
+/** Why a skill meets a folder with another name, when it does. */
+function sameFolderNote(dir: string, name: string): string {
+  const listed = basename(listedPath(dir, name));
+  return listed === name
+    ? ""
+    : `; this disk keeps "${listed}" and the skill "${name}" in one folder, so ${name} is not linked there`;
+}
+
+/** `EACCES: permission denied`, without the paths Node appends: the message names them already. */
+export function errorText(error: unknown): string {
+  const text = error instanceof Error ? error.message : String(error);
+  return error instanceof Error && "code" in error ? text.split(", ")[0]! : text;
 }

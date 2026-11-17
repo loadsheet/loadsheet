@@ -1,12 +1,14 @@
 import {
+  existsSync,
   mkdirSync,
   readdirSync,
   readlinkSync,
+  rmSync,
   statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 import {
   AGENT_DIRS,
@@ -141,7 +143,7 @@ describe("init", () => {
       skillMd("conversation-video"),
     );
     expect(linkOf(m.at(".agents/skills/unslop"))).toBe(join(work, "skills/unslop"));
-    expect(read(m.at(".gemini/skills/nuxt/SKILL.md"))).toBe(skillMd("nuxt"));
+    expect(read(m.at(".agents/skills/nuxt/SKILL.md"))).toBe(skillMd("nuxt"));
     expect(JSON.parse(read(manifest)).forks).toEqual({
       council: { from: "t3dotgg/tstack", path: "skills/council", base: "unknown" },
     });
@@ -223,6 +225,146 @@ describe("init", () => {
       id: "upstream",
       git: upstream.url,
       include: ["ag-dev", "ag-update"],
+    });
+  });
+
+  describe("R2-1. agent folders linked to one another are one folder", () => {
+    // [the link, the folder it points to]. Codex reads ~/.agents/skills and ~/.codex/skills.
+    const layouts: [string, string][] = [
+      [".codex/skills", ".agents/skills"],
+      [".agents/skills", ".codex/skills"],
+      [".claude/skills", ".agents/skills"],
+      [".agents/skills", ".claude/skills"],
+    ];
+    for (const [link, folder] of layouts)
+      it.skipIf(isWindows)(`${link} -> ${folder}`, async () => {
+        const m = machine({ scheduler: "empty" });
+        const vendor = remote(m, "vendor", skills("skills/", "tool"));
+        mkdirSync(m.at(folder, "handmade"), { recursive: true });
+        writeFileSync(m.at(folder, "handmade/SKILL.md"), skillMd("handmade"));
+        rmSync(m.at(link), { recursive: true, force: true });
+        mkdirSync(dirname(m.at(link)), { recursive: true });
+        symlinkSync(m.at(folder), m.at(link));
+        const manifest = m.manifest({
+          agents: "all",
+          sources: [{ id: "vendor", git: vendor.url }],
+        });
+        const dry = await m.json<{ lost: string[]; migrations: object[] }>(
+          "init",
+          manifest,
+          "--dry-run",
+        );
+        expect(dry.lost).toEqual([]);
+        expect(dry.migrations).toEqual([]);
+        const init = await m.run("init", manifest, "--no-timer");
+        expect(init.stdout).not.toContain("LOST");
+        expect(init.code, init.stdout + init.stderr).toBe(0);
+        // The link stays, and both agents see the hand-made skill and the synced one, once.
+        expect(isLink(m.at(link))).toBe(true);
+        expect(names(m.at(folder))).toEqual(["handmade", "tool"]);
+        expect(names(m.at(link))).toEqual(["handmade", "tool"]);
+        expect(isLink(m.at(folder, "tool"))).toBe(true);
+        const doctor = await m.run("doctor");
+        expect(doctor.stdout).toMatch(/^ok {3}duplicate skills:/m);
+        expect(doctor.stdout).toMatch(/^ok {3}agents agree:/m);
+        const sync = await m.json("sync");
+        expect(sync.errors).toEqual([]);
+        expect(sync.targets.filter((target) => target.skipped)).toEqual([]);
+      });
+  });
+
+  it("R3-8. a remote manifest is reported as the user named it, not as a cache or a deleted scratch copy", async () => {
+    const m = machine();
+    const vendor = remote(m, "vendor", skills("skills/", "tool"));
+    const team = remote(m, "team", {
+      "skills.json": JSON.stringify({
+        agents: ["claude-code"],
+        sources: [{ id: "vendor", git: vendor.url }],
+      }),
+    });
+    const spec = `${team.url}//skills.json`;
+    const dry = await m.json<{ manifestFile: string; sync: { manifest: string } }>(
+      "init",
+      team.url,
+      "--dry-run",
+    );
+    expect(dry.sync.manifest).toBe(spec);
+    expect(dry.manifestFile).toBe(spec);
+    const text = await m.run("init", team.url, "--dry-run");
+    expect(text.stdout).toMatch(
+      new RegExp(`^skillfleet init: manifest ${spec.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&")}$`, "m"),
+    );
+    expect((await m.run("init", team.url, "--no-timer")).code).toBe(0);
+    expect((await m.json("sync", "--dry-run")).manifest).toBe(spec);
+    expect((await m.json("sync")).manifest).toBe(spec);
+  });
+
+  describe("R3-1. init adopts hand-made skills into a clone it has not made yet", () => {
+    /** The README's new-machine flow: a personal manifest repository whose clone adopts skills. */
+    function newMachine(m: Machine, { reachable = true } = {}) {
+      const mine = remote(m, "mine", skills("skills/", "kept"));
+      const team = remote(m, "team", {
+        "skills.json": JSON.stringify({
+          agents: ["claude-code"],
+          sources: [
+            { id: "mine", git: mine.url, path: "~/code/mine", skills: "skills/*", adopt: true },
+          ],
+        }),
+      });
+      mkdirSync(m.at(".claude/skills/handmade"), { recursive: true });
+      writeFileSync(m.at(".claude/skills/handmade/SKILL.md"), skillMd("handmade"));
+      if (!reachable) rmSync(mine.url, { recursive: true, force: true });
+      return team;
+    }
+
+    it("clones first, then adopts, and the dry run says so in that order", async () => {
+      const m = machine();
+      const team = newMachine(m);
+      const dry = await m.run("init", team.url, "--dry-run", "--no-timer");
+      expect(dry.code, dry.stdout + dry.stderr).toBe(0);
+      const clone = dry.stdout.indexOf("clone ");
+      const adopt = dry.stdout.indexOf(
+        `adopt ${join("~", ".claude", "skills", "handmade")} into ${join("~", "code", "mine", "skills", "handmade")}`,
+      );
+      expect(clone).toBeGreaterThan(-1);
+      expect(adopt).toBeGreaterThan(clone);
+      const init = await m.run("init", team.url, "--no-timer");
+      expect(init.code, init.stdout + init.stderr).toBe(0);
+      expect(read(m.at("code/mine/skills/handmade/SKILL.md"))).toBe(skillMd("handmade"));
+      expect(isLink(m.at(".claude/skills/handmade"))).toBe(true);
+      expect(names(m.at(".claude/skills"))).toEqual(["handmade", "kept"]);
+      expect((await m.json("sync")).errors).toEqual([]);
+    });
+
+    it("leaves the hand-made skill where it is when the clone fails", async () => {
+      const m = machine();
+      const team = newMachine(m, { reachable: false });
+      const init = await m.run("init", team.url, "--no-timer");
+      const said = init.stdout + init.stderr;
+      expect(said).toContain(`could not clone mine into ${join("~", "code", "mine")} (`);
+      expect(said).toContain("so nothing is adopted");
+      expect(read(m.at(".claude/skills/handmade/SKILL.md"))).toBe(skillMd("handmade"));
+      expect(isLink(m.at(".claude/skills/handmade"))).toBe(false);
+      expect(existsSync(m.at("code/mine"))).toBe(false);
+    });
+
+    it("adopts nothing into a folder at the clone's path that is not a clone", async () => {
+      const m = machine();
+      const team = newMachine(m);
+      mkdirSync(m.at("code/mine/notes"), { recursive: true });
+      const dry = await m.json<{
+        migrations: { kind: string }[];
+        lost: string[];
+        warnings: string[];
+      }>("init", team.url, "--dry-run", "--no-timer");
+      expect(dry.migrations.map((migration) => migration.kind)).toEqual([]);
+      expect(dry.lost).toEqual([]);
+      expect(dry.warnings.join("\n")).toContain(
+        `${join("~", "code", "mine")} exists and is not a git repository`,
+      );
+      await m.run("init", team.url, "--no-timer");
+      expect(read(m.at(".claude/skills/handmade/SKILL.md"))).toBe(skillMd("handmade"));
+      expect(existsSync(m.at("code/mine/skills"))).toBe(false);
     });
   });
 });
