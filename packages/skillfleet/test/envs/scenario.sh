@@ -9,8 +9,9 @@
 #   SF_SRV      where the bare git repositories go (default: $SF_HOME/.scenario/srv)
 #   SF_RUNNER   how init is run: npx (default), pnpm-dlx or global
 #   SF_SKIP     space-separated step names to skip
-#   SF_TIMER    1 to let init install a real timer on a machine with systemd; by default the
-#               scenario passes --no-timer there, so it never leaves a timer on a host
+#   SF_TIMER    1 to let init install a real timer (--timer) on a machine with systemd; by
+#               default only a machine without systemd gets --timer, where init explains why it
+#               can't install one, so the scenario never leaves a timer on a host
 #
 # Every step prints `PASS <step>` or `FAIL <step>: <why>`, and the script ends with a summary line
 # `SUMMARY pass=<n> fail=<n>`. It never stops at the first failure, so one run shows every break.
@@ -98,7 +99,8 @@ if [ "$HAVE_GIT" = 1 ]; then
   skill_md extra-a >"$SF_SRV/work/extra/skills/extra-a/SKILL.md"
   push extra init
   bare manifest
-  cat >"$SF_SRV/work/manifest/skills.json" <<EOF
+  mkdir -p "$SF_SRV/work/manifest/.skillfleet"
+  cat >"$SF_SRV/work/manifest/.skillfleet/manifest.json" <<EOF
 {
   "agents": "all",
   "sources": [
@@ -109,13 +111,13 @@ if [ "$HAVE_GIT" = 1 ]; then
 EOF
   push manifest init
 fi
-MANIFEST="$SF_SRV/manifest.git//skills.json"
+MANIFEST="$SF_SRV/manifest.git"
 if [ "$HAVE_GIT" = 0 ]; then
   # No git: a plain manifest file with a local source, and a git source that must fail clearly.
   rm -rf "$SF_SRV"
-  mkdir -p "$SF_SRV/local-skills/loc-a" "$SF_SRV/manifest"
+  mkdir -p "$SF_SRV/local-skills/loc-a" "$SF_SRV/manifest/.skillfleet"
   skill_md loc-a >"$SF_SRV/local-skills/loc-a/SKILL.md"
-  cat >"$SF_SRV/manifest/skills.json" <<JSON
+  cat >"$SF_SRV/manifest/.skillfleet/manifest.json" <<JSON
 {
   "agents": "all",
   "sources": [
@@ -124,7 +126,7 @@ if [ "$HAVE_GIT" = 0 ]; then
   ]
 }
 JSON
-  MANIFEST="$SF_SRV/manifest/skills.json"
+  MANIFEST="$SF_SRV/manifest"
 fi
 # A skill the user made by hand before skillfleet: init adopts it into the clone it makes first.
 if [ "$HAVE_GIT" = 1 ]; then
@@ -150,11 +152,11 @@ fi
 run version init_cmd --version
 [ "$code" = 0 ] && ok "version $(head -n1 "$LOG/version.out")" || { bad version "exit $code"; show version; }
 
-# A machine booted with systemd gets a real timer from init; the scenario leaves hosts alone.
+# A machine booted with systemd would get a real timer from init --timer; the scenario leaves hosts alone.
 SYSTEMD=0
 [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1 && SYSTEMD=1
 TIMER_FLAG=""
-[ "$SYSTEMD" = 1 ] && [ "${SF_TIMER:-}" != 1 ] && TIMER_FLAG=--no-timer
+{ [ "$SYSTEMD" = 0 ] || [ "${SF_TIMER:-}" = 1 ]; } && TIMER_FLAG=--timer
 if ! skip init; then
   # shellcheck disable=SC2086
   run init init_cmd init "$MANIFEST" $TIMER_FLAG
@@ -232,7 +234,7 @@ if [ "$HAVE_GIT" = 1 ]; then
     bad add-remote-refused "exit $code"
     show add
   fi
-  cat >"$SF_SRV/work/manifest/skills.json" <<EOF
+  cat >"$SF_SRV/work/manifest/.skillfleet/manifest.json" <<EOF
 {
   "agents": "all",
   "sources": [

@@ -17,7 +17,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 import { processStartedAt } from "../src/process.ts";
-import { LockHeldError, takeLock } from "../src/sync.ts";
+import { LockHeldError, takeLock } from "../src/lock.ts";
 import {
   cli,
   clone,
@@ -35,9 +35,9 @@ import {
   writeFiles,
 } from "./fixture.ts";
 
-/** Runs init with --no-timer and fails the test unless it exits 0. */
+/** Runs init with --no-hooks and fails the test unless it exits 0. */
 async function init(m: Machine, manifest: string, ...args: string[]) {
-  const run = await m.run("init", manifest, "--no-timer", ...args);
+  const run = await m.run("init", manifest, "--no-hooks", ...args);
   expect(run.code, run.stdout + run.stderr).toBe(0);
   return run;
 }
@@ -117,7 +117,7 @@ describe("the user's journey", () => {
         agents: ["claude-code"],
         sources: [{ id: "vendor", git: vendor.url }],
       });
-      const run = await m.run("init", manifest);
+      const run = await m.run("init", manifest, "--timer");
       const said = run.stdout + run.stderr;
       const log = said.match(/sync >> '([^']+)' 2>&1/)?.[1];
       expect(log, said).toBeDefined();
@@ -142,7 +142,7 @@ describe("the user's journey", () => {
     const out = await m.json<{ plan: { after: string[] }; sync: Report }>(
       "init",
       manifest,
-      "--no-timer",
+      "--no-hooks",
     );
     expect(out.sync.skills.names).toContain("my-notes");
     // The plan said "0 before, 0 after; none lost" and listed no names, then linked my-notes.
@@ -206,14 +206,16 @@ describe("the user's journey", () => {
     const m = machine();
     const vendor = remote(m, "vendor", skills("skills/", "tool", "other"));
     const team = remote(m, "team", {
-      "skills.json": JSON.stringify({ sources: [{ id: "vendor", git: vendor.https }] }),
+      ".skillfleet/manifest.json": JSON.stringify({
+        sources: [{ id: "vendor", git: vendor.https }],
+      }),
     });
     const manifest = m.manifest({ agents: ["claude-code"], extends: [team.https], sources: [] });
     await init(m, manifest);
     expect(names(m.at(".claude", "skills"))).toEqual(["other", "tool"]);
 
     const skill = await m.run("remove", "tool");
-    // It said: "tool comes from vendor in ~/.local/state/skillfleet/cache/manifests/<hash>/skills.json;
+    // It said: "tool comes from vendor in ~/.local/state/skillfleet/cache/manifests/<hash>/.skillfleet/manifest.json;
     // exclude it there", a cache copy the next sync overwrites.
     expect(skill.stdout + skill.stderr).not.toMatch(/cache[\\/]manifests/);
 
@@ -238,14 +240,14 @@ describe("the user's journey", () => {
     const m = machine({ scheduler: "empty" });
     const vendor = remote(m, "vendor", skills("skills/", "tool"));
     const me = remote(m, "me", {
-      "skills.json": JSON.stringify({
+      ".skillfleet/manifest.json": JSON.stringify({
         agents: ["claude-code"],
         sources: [{ id: "vendor", git: vendor.url }],
       }),
     });
     await init(m, me.url);
     me.commit({
-      "skills.json": JSON.stringify({
+      ".skillfleet/manifest.json": JSON.stringify({
         agents: ["claude-code"],
         timer: { cron: "0 * * * *" },
         sources: [{ id: "vendor", git: vendor.url }],
@@ -273,7 +275,7 @@ describe("the user's journey", () => {
     const m = machine();
     const vendor = remote(m, "vendor", skills("skills/", "tool"));
     const extra = remote(m, "extra", skills("skills/", "lint"));
-    const file = join(m.root, "manifest", "skills.json");
+    const file = join(m.root, "manifest", ".skillfleet", "manifest.json");
     mkdirSync(dirname(file), { recursive: true });
     const text = `{\n  "agents": ["claude-code"],\n  "sources": [{ "id": "vendor", "git": ${JSON.stringify(vendor.url)} }]\n}\n`;
     writeFileSync(file, text);
@@ -496,7 +498,7 @@ describe("discovery containment and refused names", () => {
       m.git(dir, "commit", "--quiet", "-m", "link skills");
       const source = { id: "dotfiles", git: dotfiles.url, path: dir, skills: "skills/*" };
       const manifest = m.manifest({ agents: ["claude-code"], sources: [source] });
-      const out = await m.json<{ sync: Report }>("init", manifest, "--no-timer");
+      const out = await m.json<{ sync: Report }>("init", manifest, "--no-hooks");
       // It linked nothing and said only "dotfiles: No valid skills found. Skills require a SKILL.md
       // with name and description.": not the rule (links out of a working clone) that dropped them.
       // A cloned repository's links come from upstream, so they stay unfollowed until you opt in.
@@ -522,12 +524,12 @@ describe("discovery containment and refused names", () => {
     const m = machine();
     const vendor = remote(m, "vendor", skills("skills/", "tool"));
     const team = remote(m, "team", {
-      "skills.json": JSON.stringify({
+      ".skillfleet/manifest.json": JSON.stringify({
         sources: [{ id: "vendor", git: vendor.https, followLinks: true }],
       }),
     });
     const manifest = m.manifest({ agents: ["claude-code"], extends: [team.https], sources: [] });
-    const out = await m.json<{ sync: Report }>("init", manifest, "--no-timer");
+    const out = await m.json<{ sync: Report }>("init", manifest, "--no-hooks");
     expect(out.sync.warnings).toContain(
       `extends ${team.https}: ignored "followLinks" of source "vendor"; only the root manifest can follow links out of a source`,
     );
@@ -569,7 +571,7 @@ describe("the team manifest's transport allowlist", () => {
         `[url "${other.served}"]\n\tinsteadOf = git://git.skillfleet.test/other.git\n`,
     );
     const team = remote(m, "team", {
-      "skills.json": JSON.stringify({
+      ".skillfleet/manifest.json": JSON.stringify({
         sources: [
           { id: "vendor", git: "http://gitea.skillfleet.test/team/vendor.git" },
           { id: "other", git: "git://git.skillfleet.test/other.git" },
@@ -577,7 +579,7 @@ describe("the team manifest's transport allowlist", () => {
       }),
     });
     const manifest = m.manifest({ agents: ["claude-code"], extends: [team.https], sources: [] });
-    const out = await m.json<{ sync: Report }>("init", manifest, "--no-timer");
+    const out = await m.json<{ sync: Report }>("init", manifest, "--no-hooks");
     // 'ignored source "vendor"; a team manifest names only remote repositories (https, ssh or owner/repo)'
     expect(JSON.stringify(out)).not.toContain("ignored source");
     expect(out.sync.skills.names).toEqual(["lint", "tool"]);
@@ -625,7 +627,7 @@ describe("attacks that held", () => {
           agents: ["claude-code"],
           sources: [{ id: "loc", local: folder }],
         });
-        const run = await runFor(m, 30_000, "init", manifest, "--no-timer", "--copy");
+        const run = await runFor(m, 30_000, "init", manifest, "--no-hooks", "--copy");
         expect(run.code, run.out).toBe(0);
         expect(names(m.at(".claude", "skills", "tool"))).toEqual(["SKILL.md"]);
       } finally {
@@ -656,7 +658,7 @@ describe("attacks that held", () => {
           { id: "vendor", git: vendor.url, skills: "skills/*" },
         ],
       });
-      const out = await m.json<{ sync: Report }>("init", manifest, "--no-timer");
+      const out = await m.json<{ sync: Report }>("init", manifest, "--no-hooks");
       const status = Object.fromEntries(out.sync.sources.map((s) => [s.id, s.status]));
       expect(status.slow).toBe("installed");
       expect(status.broken).toBe("error");

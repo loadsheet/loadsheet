@@ -1,6 +1,8 @@
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 
+export const claudeHome = () => process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), ".claude");
+
 /** `~` and `~/x` become paths in the home directory; relative paths resolve against `base`. */
 export function expandPath(path: string, base = process.cwd()): string {
   if (path === "~") return homedir();
@@ -45,7 +47,8 @@ export const paths = {
   state: () => join(stateDir(), "state.json"),
   lastRun: () => join(stateDir(), "last-run.json"),
   fleet: () => join(stateDir(), "fleet.json"),
-  sessions: () => join(stateDir(), "sessions.json"),
+  /** Claude Code sessions, one record each (sessions.ts). */
+  sessions: () => join(stateDir(), "sessions"),
   lock: () => join(stateDir(), "sync.lock"),
   store: (source: string) => join(stateDir(), "store", source),
   cache: () => join(stateDir(), "cache"),
@@ -53,4 +56,10 @@ export const paths = {
   app: () => join(stateDir(), "app"),
   bin: () => join(stateDir(), "bin"),
   logs: () => join(stateDir(), "logs"),
+  /** When a session hook last started a sync, or found one running; see hook.ts. */
+  hookAttempt: () => join(stateDir(), "hook-attempt"),
+  /** When an agent's `hook run` last ran, within the hour; for `doctor`. */
+  hookRan: (agent: string) => join(stateDir(), `hook-ran-${agent}`),
+  /** The environment a sync started by a session hook runs with, saved by `hook install`. */
+  hookEnv: () => join(stateDir(), "hook-env.json"),
 };

@@ -3,7 +3,6 @@
 // a self-install under a running build. Every run uses the fixture's temporary HOME.
 import { spawn } from "node:child_process";
 import {
-  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -18,7 +17,8 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { jsonTemp } from "../src/fs.ts";
 import { whereabouts } from "../src/process.ts";
-import { LockHeldError, sweepJsonTemps, takeLock } from "../src/sync.ts";
+import { LockHeldError, takeLock } from "../src/lock.ts";
+import { sweepJsonTemps } from "../src/sync.ts";
 import {
   cli,
   http,
@@ -36,7 +36,7 @@ import {
 } from "./fixture.ts";
 
 async function init(m: Machine, manifest: string, ...args: string[]) {
-  const run = await m.run("init", manifest, "--no-timer", ...args);
+  const run = await m.run("init", manifest, "--no-hooks", ...args);
   expect(run.code, run.stdout + run.stderr).toBe(0);
   return run;
 }
@@ -253,7 +253,7 @@ describe("R7-19. folder links inside a skill", () => {
     const out = await m.json<{ sync: { warnings: string[] } }>(
       "init",
       manifest,
-      "--no-timer",
+      "--no-hooks",
       "--copy",
     );
     const copy = m.at(".claude", "skills", "bomb");
@@ -276,7 +276,7 @@ describe("R7-19. folder links inside a skill", () => {
         agents: ["claude-code"],
         sources: [{ id: "vendor", git: vendor.url, skills: "skills/*" }],
       });
-      const out = await m.json<{ sync: { warnings: string[] } }>("init", manifest, "--no-timer");
+      const out = await m.json<{ sync: { warnings: string[] } }>("init", manifest, "--no-hooks");
       expect(names(m.at(".claude", "skills"))).toEqual(["bomb", "tool"]);
       expect(read(m.at(".claude", "skills", "bomb", "d5", "leaf.txt"))).toBe("leaf\n");
       expect(count(join(m.stateDir, "store", "vendor", "live", "bomb"))).toBe(2);
@@ -300,7 +300,7 @@ describe("R7-19. folder links inside a skill", () => {
         agents: ["claude-code"],
         sources: [{ id: "vendor", git: vendor.url, skills: "skills/*" }],
       });
-      const out = await m.json<{ sync: { warnings: string[] } }>("init", manifest, "--no-timer");
+      const out = await m.json<{ sync: { warnings: string[] } }>("init", manifest, "--no-hooks");
       expect(names(m.at(".claude", "skills"))).toEqual(["tool"]);
       expect(out.sync.warnings.join("\n")).toContain(
         'vendor: skipped the skill "deep": it nests folders more than 32 deep',
@@ -390,14 +390,13 @@ describe("R7-22. self-install under a running build", () => {
     const dist = dirname(cli);
     const dir = join(m.root, "build-b");
     mkdirSync(dir);
+    const chunks = readdirSync(dist).filter((name) => name !== "cli.mjs");
+    // The entry and the chunks import chunks by name.
     for (const name of readdirSync(dist)) {
-      if (name === "cli.mjs") continue;
-      copyFileSync(join(dist, name), join(dir, name.replace(/\.mjs$/, "-b.mjs")));
+      let text = read(join(dist, name));
+      for (const chunk of chunks) text = text.replaceAll(chunk, chunk.replace(/\.mjs$/, "-b.mjs"));
+      writeFileSync(join(dir, name === "cli.mjs" ? name : name.replace(/\.mjs$/, "-b.mjs")), text);
     }
-    let entry = read(join(dist, "cli.mjs"));
-    for (const name of readdirSync(dist))
-      if (name !== "cli.mjs") entry = entry.replaceAll(name, name.replace(/\.mjs$/, "-b.mjs"));
-    writeFileSync(join(dir, "cli.mjs"), entry);
     return join(dir, "cli.mjs");
   }
 

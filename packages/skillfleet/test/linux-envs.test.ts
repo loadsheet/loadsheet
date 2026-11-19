@@ -57,12 +57,14 @@ describe("linux environments", () => {
     const team = remote(m, "team", skills("skills/", "team-a"));
     const extra = remote(m, "extra", skills("skills/", "extra-a"));
     const manifests = remote(m, "manifests", {
-      "skills.json": JSON.stringify({
+      ".skillfleet/manifest.json": JSON.stringify({
         agents: ["claude-code"],
         sources: [{ id: "team", git: team.url }],
       }),
     });
-    expect((await m.run("init", `${manifests.url}//skills.json`, "--no-timer")).code).toBe(0);
+    expect(
+      (await m.run("init", `${manifests.url}//.skillfleet/manifest.json`, "--no-hooks")).code,
+    ).toBe(0);
     const added = await m.run("add", extra.url);
     await m.run("sync");
     // Either add refuses (the manifest lives in a repository it cannot push to), or the source stays.
@@ -83,7 +85,7 @@ describe("linux environments", () => {
       });
       mkdirSync(m.at(".gemini/skills"), { recursive: true });
       chmodSync(m.at(".gemini/skills"), 0o555);
-      const init = await m.run("init", manifest, "--no-timer");
+      const init = await m.run("init", manifest, "--no-hooks");
       chmodSync(m.at(".gemini/skills"), 0o755);
       expect(init.stderr).not.toMatch(/\n\s+at /);
       expect(existsSync(m.at(".claude/skills/ro-skill/SKILL.md"))).toBe(true);
@@ -101,7 +103,7 @@ describe("linux environments", () => {
       agents: ["claude-code"],
       sources: [{ id: "vendor", git: vendor.url }],
     });
-    const init = await m.run("init", manifest, "--offline", "--no-timer");
+    const init = await m.run("init", manifest, "--offline", "--no-hooks");
     expect(`${init.stdout}${init.stderr}`).toMatch(/vendor.*(never|not).*fetched/);
     expect(init.code).toBe(1);
   });
@@ -131,7 +133,7 @@ describe("linux environments", () => {
   it("L5. a fleet host with a port reaches ssh as a port", async () => {
     const m = machine();
     const manifest = m.manifest({ agents: ["claude-code"], sources: [] });
-    expect((await m.run("init", manifest, "--no-timer")).code).toBe(0);
+    expect((await m.run("init", manifest, "--no-hooks")).code).toBe(0);
     const added = await m.run("fleet", "add", "me@localhost:2222");
     if (added.code !== 0) {
       expect(added.stderr).toMatch(/ssh:\/\/|port/i);
@@ -151,9 +153,9 @@ describe("linux environments", () => {
   it("L6. doctor checks the timer", async () => {
     const m = machine({ scheduler: "empty" });
     const manifest = m.manifest({ agents: ["claude-code"], sources: [] });
-    expect((await m.run("init", manifest, "--no-timer")).code).toBe(0);
+    expect((await m.run("init", manifest, "--no-hooks")).code).toBe(0);
     // A machine that expects a timer, as one where `timer install` ran once: doctor fails without
-    // it. After `init --no-timer` alone it skips the check (test/cli-contract.test.ts).
+    // it. Without the timer it skips the check (test/cli-contract.test.ts).
     writeFileSync(
       m.at(".config/skillfleet/config.json"),
       JSON.stringify({ manifest, timer: true }),
@@ -177,6 +179,13 @@ describe("linux environments", () => {
         '#!/bin/sh\necho "Failed to get user: User ID 1000 is not logged in or lingering" >&2\nexit 1\n',
       );
       chmodSync(loginctl, 0o755);
+      // A machine that has the timer: linger matters only to it.
+      const manifest = m.manifest({ agents: ["claude-code"], sources: [] });
+      mkdirSync(m.at(".config/skillfleet"), { recursive: true });
+      writeFileSync(
+        m.at(".config/skillfleet/config.json"),
+        JSON.stringify({ manifest, timer: true }),
+      );
       const checks = await m.runWith({ env: { PATH: `${bin}:${m.env.PATH}` } }, "doctor", "--json");
       const linger = (JSON.parse(checks.stdout) as { name: string; ok: boolean }[]).find(
         (check) => check.name === "systemd linger",
@@ -209,7 +218,7 @@ describe("linux environments", () => {
   // `onmax/skills` in the current folder: "<cwd>/onmax/skills: no such manifest".
   it("L10. init <owner>/<repo> reads the manifest from that GitHub repository", async () => {
     const m = machine();
-    const init = await m.run("init", "some-owner/some-skills", "--offline", "--no-timer");
+    const init = await m.run("init", "some-owner/some-skills", "--offline", "--no-hooks");
     const out = `${init.stdout}${init.stderr}`;
     expect(out).not.toContain(m.at("some-owner/some-skills"));
     expect(out).toContain("github.com/some-owner/some-skills");
@@ -217,12 +226,12 @@ describe("linux environments", () => {
 
   // L12: after `npx skillfleet init`, the README's next command is `skillfleet status`, but
   // nothing puts `skillfleet` on PATH; the copy sits in ~/.local/state/skillfleet/bin.
-  // With --no-timer: the command has to work without the timer too, and a test that installs the
-  // timer installs it in the real user's systemd, whatever HOME the test sets.
+  // Without the timer: the command has to work without it too, and a test that installs the timer
+  // installs it in the real user's systemd, whatever HOME the test sets.
   it.skipIf(isWindows)("L12. init leaves a `skillfleet` command the user can run", async () => {
     const m = machine();
     const manifest = m.manifest({ agents: ["claude-code"], sources: [] });
-    const init = await m.run("init", manifest, "--no-timer");
+    const init = await m.run("init", manifest, "--no-hooks");
     const onPath = existsSync(m.at(".local/bin/skillfleet"));
     expect(onPath || /PATH/.test(init.stdout), init.stdout).toBe(true);
   });
@@ -260,7 +269,7 @@ describe("linux environments", () => {
         agents: ["claude-code"],
         sources: [{ id: "vendor", git: "https://example.invalid/vendor.git" }],
       });
-      const init = await m.runWith({ env: { PATH: bin } }, "init", manifest, "--no-timer");
+      const init = await m.runWith({ env: { PATH: bin } }, "init", manifest, "--no-hooks");
       const out = `${init.stdout}${init.stderr}`;
       expect(out).not.toContain("ENOENT");
       expect(out).toMatch(/git.*(not installed|not found|install git|on PATH)/i);

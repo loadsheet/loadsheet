@@ -12,7 +12,7 @@ import { parseCronExpression } from "cron-schedule";
 import { exec } from "./exec.ts";
 import { isRecord, readJsonOrNothing, writeJson } from "./fs.ts";
 import { stateDir, tildify, xdgDir } from "./paths.ts";
-import { lastingPathDirs, launcherPath } from "./selfinstall.ts";
+import { launcherPath } from "./selfinstall.ts";
 
 export const TIMER_NAME = "skillfleet-sync";
 
@@ -177,7 +177,7 @@ export function noSystemdMessage(cron = "*/30 * * * *"): string {
   const logs = join(stateDir(), "logs");
   const log = join(logs, `${TIMER_NAME}.log`);
   // cron's shell opens the log before skillfleet starts, so the line makes its folder first.
-  return `this machine has no systemd user manager (a container, WSL1, or a system that boots without systemd), so skillfleet can't install a timer here. Run \`skillfleet sync\` from cron instead (\`crontab -e\`, then a line such as: ${cron} mkdir -p ${shQuote(logs)} && ${shQuote(launcherPath())} sync >> ${shQuote(log)} 2>&1), and pass --no-timer to init`;
+  return `this machine has no systemd user manager (a container, WSL1, or a system that boots without systemd), so skillfleet can't install a timer here. Run \`skillfleet sync\` from cron instead (\`crontab -e\`, then a line such as: ${cron} mkdir -p ${shQuote(logs)} && ${shQuote(launcherPath())} sync >> ${shQuote(log)} 2>&1), or let the session hooks start syncs (\`skillfleet hook install\`)`;
 }
 
 /** A `systemctl` failure that means systemd itself is missing, not that one call went wrong. */
@@ -423,16 +423,11 @@ export async function removeTimer(
 }
 
 /**
- * What to say about a timer this install does not have. `declined` is the user's choice of no
- * timer; another install's timer that holds the name is named either way, since it runs instead.
+ * What to say about a timer this install does not have: another install's timer that holds the
+ * name, which runs instead, is named.
  */
-export async function missingTimer(status: TimerStatus, declined: boolean): Promise<string> {
+export async function missingTimer(status: TimerStatus): Promise<string> {
   const foreign = await foreignTimerResource();
-  if (declined) {
-    const chose =
-      "not installed, as you chose (`init --no-timer` or `timer remove`); `skillfleet timer install` adds it";
-    return foreign ? `${chose}. Note: ${foreignTimer(TIMER_NAME, foreign)}` : chose;
-  }
   return foreign ? foreignTimer(TIMER_NAME, foreign) : formatTimerStatus(status);
 }
 
@@ -447,35 +442,4 @@ export function formatTimerStatus(status: TimerStatus): string {
   if (status.linger === false) parts.push("linger off: it stops when you log out");
   if (status.logFile) parts.push(`log ${status.logFile}`);
   return parts.join(", ");
-}
-
-/**
- * Environment of scheduled runs: PATH with node's folder and git's ahead of the user's own lasting
- * folders, and every variable skillfleet reads to find its config, state and the agents' folders,
- * so the timer works on the same folders as the shell that installed it. Installing from npx and
- * from the launcher gives the same environment, so switching between them leaves the timer alone.
- */
-export function timerEnv(git: string | undefined, node: string): Record<string, string> {
-  const dirs = [dirname(node), ...(git ? [dirname(git)] : []), ...lastingPathDirs()];
-  const env: Record<string, string> = {
-    PATH: [...new Set(dirs)].join(delimiter),
-    DO_NOT_TRACK: "1",
-  };
-  // __SKILLS_AGENT_ENV__: what `skills` reads to place agents' folders (CODEX_HOME, GROK_HOME, …).
-  for (const key of new Set([
-    "HOME",
-    "USERPROFILE",
-    "APPDATA",
-    "LOCALAPPDATA",
-    "SSH_AUTH_SOCK",
-    ...__SKILLS_AGENT_ENV__,
-  ])) {
-    const value = process.env[key];
-    if (value) env[key] = value;
-  }
-  for (const key of ["XDG_CONFIG_HOME", "XDG_STATE_HOME"] as const) {
-    const value = xdgDir(key);
-    if (value) env[key] = value;
-  }
-  return env;
 }

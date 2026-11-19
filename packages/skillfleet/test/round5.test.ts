@@ -40,9 +40,9 @@ import {
   writeFiles,
 } from "./fixture.ts";
 
-/** Runs init with --no-timer and fails the test unless it exits 0. */
+/** Runs init with --no-hooks and fails the test unless it exits 0. */
 async function init(m: Machine, manifest: string, ...args: string[]) {
-  const run = await m.run("init", manifest, "--no-timer", ...args);
+  const run = await m.run("init", manifest, "--no-hooks", ...args);
   expect(run.code, run.stdout + run.stderr).toBe(0);
   return run;
 }
@@ -449,7 +449,7 @@ describe("the timer-schedule warning", () => {
     const m = machine({ scheduler: "empty" });
     const vendor = remote(m, "vendor", skills("skills/", "tool"));
     const me = remote(m, "me", {
-      "skills.json": JSON.stringify({
+      ".skillfleet/manifest.json": JSON.stringify({
         agents: ["claude-code"],
         sources: [{ id: "vendor", git: vendor.url }],
       }),
@@ -466,7 +466,7 @@ describe("the timer-schedule warning", () => {
     // A schedule change pushed from another machine. The first sync to see it is the timer's, and
     // its note goes to the timer's log, which nobody reads.
     me.commit({
-      "skills.json": JSON.stringify({
+      ".skillfleet/manifest.json": JSON.stringify({
         agents: ["claude-code"],
         timer: { cron: "0 * * * *" },
         sources: [{ id: "vendor", git: vendor.url }],
@@ -605,6 +605,120 @@ describe("the manifest: extends objects, team git hosts, the in-place editor", (
       expect.soft(isRemoteGit(url), url).toBe(true);
   });
 
+  describe("a manifest in a folder's .skillfleet/", () => {
+    it("resolves relative paths against .skillfleet/; a team named by its file keeps its extends in the file's folder", async () => {
+      write("r5-folder/.skillfleet/manifest.json", {
+        extends: ["./team.json"],
+        sources: [{ id: "mine", local: ".." }],
+      });
+      write("r5-folder/.skillfleet/team.json", {
+        extends: ["./shared.json", "../outside.json"],
+        sources: [{ id: "team", index: "https://team.example.com" }],
+      });
+      write("r5-folder/.skillfleet/shared.json", {
+        sources: [{ id: "shared", index: "https://s.example.com" }],
+      });
+      write("r5-folder/outside.json", {
+        sources: [{ id: "outside", index: "https://o.example.com" }],
+      });
+      const loaded = await loadManifest(join(root, "r5-folder"), { offline: true });
+      expect(loaded.root.file).toBe(join(root, "r5-folder", ".skillfleet", "manifest.json"));
+      expect(loaded.sources.map((source) => source.id)).toEqual(["mine", "team", "shared"]);
+      const mine = loaded.sources[0]!;
+      expect(mine.kind === "local" && mine.local).toBe(join(root, "r5-folder"));
+      expect(loaded.failed).toEqual(["../outside.json"]);
+      expect(loaded.warnings.join("\n")).toMatch(/outside it/);
+    });
+
+    it("a team named by its file path in a .skillfleet/ folder can't extend the folder around it", async () => {
+      // ~/.skillfleet/team.json named as a file: its boundary is ~/.skillfleet, not the home folder.
+      const home = process.env.HOME!;
+      write("home/private.json", { sources: [{ id: "private", index: "https://p.example.com" }] });
+      write("home/.skillfleet/team.json", {
+        extends: ["../private.json"],
+        sources: [{ id: "team", index: "https://team.example.com" }],
+      });
+      const file = write("r5-byfile/me.json", {
+        extends: ["~/.skillfleet/team.json", join(home, ".skillfleet", "manifest.json")],
+      });
+      write("home/.skillfleet/manifest.json", { extends: ["../private.json"], sources: [] });
+      const loaded = await loadManifest(file, { offline: true });
+      expect(loaded.sources.map((source) => source.id)).toEqual(["team"]);
+      expect(loaded.failed).toEqual(["../private.json", "../private.json"]);
+      expect(loaded.warnings.join("\n")).toMatch(/outside it/);
+    });
+
+    it.each(["file", "folder"])(
+      "keeps each team's boundary when the %s is named first",
+      async (first) => {
+        const team = write("r5-boundary/team/.skillfleet/manifest.json", {
+          extends: ["../shared.json"],
+          sources: [
+            { id: "team", npm: "team" },
+            { id: "legacy", npm: "legacy" },
+          ],
+        });
+        write("r5-boundary/team/shared.json", {
+          sources: [{ id: "shared", npm: "shared" }],
+        });
+        const fileEntry = {
+          manifest: `${dirname(team)}/./manifest.json`,
+          exclude: ["file-only"],
+          excludeSources: ["legacy"],
+        };
+        const folderEntry = { manifest: "./team", exclude: ["folder-only"] };
+        const file = write("r5-boundary/me.json", {
+          extends: first === "file" ? [fileEntry, folderEntry] : [folderEntry, fileEntry],
+        });
+
+        const loaded = await loadManifest(file, { offline: true });
+        expect(loaded.sources.map((source) => source.id)).toEqual(["team", "shared"]);
+        expect(loaded.sources[0]!.exclude?.toSorted()).toEqual(["file-only", "folder-only"]);
+        expect(loaded.sources[1]!.exclude).toEqual(["folder-only"]);
+        expect(loaded.failed).toEqual([]);
+        expect(loaded.warnings).toEqual([expect.stringContaining("outside it")]);
+      },
+    );
+
+    it.each([true, false])(
+      "retires a removed source only if the shared manifest is readable (%s)",
+      async (readable) => {
+        const m = machine();
+        const local = join(m.root, "local");
+        writeFiles(local, skills("", "old-skill"));
+        const manifest = m.manifest({
+          agents: ["claude-code"],
+          sources: [{ id: "old", local }],
+        });
+        await init(m, manifest);
+        const link = m.at(".claude", "skills", "old-skill");
+        expect(existsSync(link)).toBe(true);
+
+        const team = join(m.root, "team");
+        writeFiles(team, {
+          ".skillfleet/manifest.json": JSON.stringify({ extends: ["../shared.json"] }),
+          "shared.json": readable ? "{}" : "{",
+        });
+        m.manifest({
+          agents: ["claude-code"],
+          extends: [team, `${team}/./.skillfleet/manifest.json`],
+        });
+
+        const report = await m.json<Report>("sync");
+        expect(report.warnings).toContainEqual(expect.stringContaining("outside it"));
+        expect(report.warnings.some((warning) => warning.includes("did not load"))).toBe(!readable);
+        expect(existsSync(link)).toBe(!readable);
+      },
+    );
+
+    it("does not read a skills.json at the folder's root", async () => {
+      write("r5-old/skills.json", { sources: [] });
+      await expect(loadManifest(join(root, "r5-old"), { offline: true })).rejects.toThrow(
+        /r5-old has no \.skillfleet\/manifest\.json; name the manifest file as .*<file>/,
+      );
+    });
+  });
+
   it("uses the transport's config for the team Git redirect check", async () => {
     const url = "https://example.com/team.git";
     const redirects = `[http "${url}"]\n\tfollowRedirects = true\n`;
@@ -711,7 +825,7 @@ describe("the manifest: extends objects, team git hosts, the in-place editor", (
       // JSON.parse keeps the last "sources"; the editor walks the first one's items by the last one's
       // indexes and reads past its end.
       const text = `{\n  "sources": [{ "id": "a", "git": "https://example.com/a.git" }],\n  "sources": [\n    { "id": "a", "git": "https://example.com/a.git" },\n    { "id": "b", "git": "https://example.com/b.git" }\n  ]\n}\n`;
-      const file = write("r5-dup/skills.json", text);
+      const file = write("r5-dup/.skillfleet/manifest.json", text);
       editManifest(file, (raw) => {
         const sources = raw.sources as Record<string, unknown>[];
         sources[1]!.exclude = ["x"];
@@ -847,7 +961,7 @@ describe("index sources", () => {
         agents: ["claude-code"],
         sources: [{ id: "site", index: site.url }],
       });
-      const run = await m.run("init", manifest, "--no-timer");
+      const run = await m.run("init", manifest, "--no-hooks");
       expect(names(m.at(".claude", "skills")), run.stdout + run.stderr).toContain("notes");
       expect(read(m.at(".claude", "skills", "notes", "SKILL.md"))).toBe(body);
     } finally {
@@ -884,7 +998,7 @@ describe("index sources", () => {
         agents: ["claude-code"],
         sources: [{ id: "site", index: site.url }],
       });
-      const run = await m.run("init", manifest, "--no-timer");
+      const run = await m.run("init", manifest, "--no-hooks");
       expect(names(m.at(".claude", "skills")), run.stdout + run.stderr).toContain("zipped");
       expect(read(m.at(".claude", "skills", "zipped", "SKILL.md"))).toBe(body);
     } finally {
@@ -925,7 +1039,7 @@ describe("index archives past the copy limits", () => {
         agents: ["claude-code"],
         sources: [{ id: "site", index: site.url }],
       });
-      const run = await m.run("init", manifest, "--no-timer");
+      const run = await m.run("init", manifest, "--no-hooks");
       expect(names(m.at(".claude", "skills"))).not.toContain("huge");
       expect(run.stdout + run.stderr).toContain("more than 200 MB");
     } finally {

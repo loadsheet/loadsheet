@@ -83,7 +83,7 @@ describe("names macOS and Windows fold together", () => {
       agents: ["claude-code"],
       sources: [{ id: "vendor", git: vendor.url }],
     });
-    const init = await m.run("init", manifest, "--no-timer");
+    const init = await m.run("init", manifest, "--no-hooks");
     expect(init.code, init.stdout + init.stderr).toBe(0);
     expect(nfc(names(m.at(".claude/skills")))).toEqual(["café", "plain"]);
 
@@ -114,7 +114,7 @@ describe("names macOS and Windows fold together", () => {
       agents: ["claude-code"],
       sources: [{ id: "vendor", git: vendor.url }],
     });
-    const init = await m.run("init", manifest, "--no-timer");
+    const init = await m.run("init", manifest, "--no-hooks");
     expect(init.code, init.stdout + init.stderr).toBe(0);
     expect(init.stdout).toContain(
       "vendor: left out skills/foo: macOS and Windows keep it in the same folder as skills/Foo",
@@ -227,7 +227,7 @@ describe("names macOS and Windows fold together", () => {
         agents: ["claude-code"],
         sources: [{ id: "vendor", git: vendor.url }],
       });
-      const init = await m.run("init", manifest, "--no-timer");
+      const init = await m.run("init", manifest, "--no-hooks");
       expect(init.code, init.stdout + init.stderr).toBe(0);
       const lack = (path: string, why: string) =>
         `vendor: Windows machines lack ${path}: its name ${why}; rename it upstream so every machine has it`;
@@ -272,7 +272,7 @@ describe("names macOS and Windows fold together", () => {
       agents: ["claude-code"],
       sources: [{ id: "personal", git: personal.url, path: work, skills: "skills/*" }],
     });
-    const init = await m.run("init", manifest, "--no-timer");
+    const init = await m.run("init", manifest, "--no-hooks");
     expect(init.code, init.stdout + init.stderr).toBe(0);
     const clash =
       "personal: skills/Foo and skills/foo differ only in case or Unicode form, so macOS and Windows check them out as one folder";
@@ -338,7 +338,7 @@ describe("names macOS and Windows fold together", () => {
       agents: ["claude-code", "codex"],
       sources: [{ id: "vendor", git: vendor.url }],
     });
-    const init = await m.run("init", manifest, "--no-timer");
+    const init = await m.run("init", manifest, "--no-hooks");
     expect(init.code, init.stdout + init.stderr).toBe(0);
     // Upstream renames skills/alpha to skills/Alpha, and its name with it.
     const rename = () =>
@@ -432,7 +432,7 @@ describe("names macOS and Windows fold together", () => {
         ...extra,
       });
     const manifest = write({});
-    const init = await m.run("init", manifest, "--no-timer");
+    const init = await m.run("init", manifest, "--no-hooks");
     expect(init.code, init.stdout + init.stderr).toBe(0);
     return { m, work, vendor, nfd, cafe, files, write };
   }
@@ -463,7 +463,7 @@ describe("names macOS and Windows fold together", () => {
     expect(read(join(work, "skills", nfd, "SKILL.md"))).toBe(
       `${cafe("ONE", "two", "three")}mine\n`,
     );
-    const recorded = JSON.parse(read(join(m.root, "manifest", "skills.json"))) as {
+    const recorded = JSON.parse(read(join(m.root, "manifest", ".skillfleet", "manifest.json"))) as {
       forks: Record<string, unknown>;
       sources: { exclude?: string[] }[];
     };
@@ -476,7 +476,7 @@ describe("names macOS and Windows fold together", () => {
     const removed = await m.run("remove", typed);
     expect(removed.code, removed.stdout + removed.stderr).toBe(0);
     expect(names(m.at(".claude/skills"))).toEqual(["mine", "plain"]);
-    const manifest = JSON.parse(read(join(m.root, "manifest", "skills.json"))) as {
+    const manifest = JSON.parse(read(join(m.root, "manifest", ".skillfleet", "manifest.json"))) as {
       sources: { exclude?: string[] }[];
     };
     expect(manifest.sources[1]!.exclude).toEqual([nfd]);
@@ -513,7 +513,7 @@ describe("refs that name a commit", () => {
         { id: "full", git: vendor.url, ref: pinned, skills: "skills/*" },
       ],
     });
-    const init = await m.run("init", manifest, "--no-timer");
+    const init = await m.run("init", manifest, "--no-hooks");
     expect(init.code, init.stdout + init.stderr).toBe(0);
     expect(read(m.at(".claude/skills/tool/SKILL.md"))).toBe(skillMd("tool", "pinned"));
 
@@ -534,7 +534,7 @@ describe("refs that name a commit", () => {
       agents: ["claude-code"],
       sources: [{ id: "vendor", git: vendor.url, ref: "abcdef1" }],
     });
-    await m.run("init", manifest, "--no-timer");
+    await m.run("init", manifest, "--no-hooks");
     const report = await m.json("sync");
     expect(report.errors.join("\n")).toContain("has no branch, tag or commit abcdef1");
   });
@@ -551,7 +551,7 @@ describe("refs that name a commit", () => {
         agents: ["claude-code"],
         sources: [{ id: "personal", git: personal.url, path: work, ref }],
       });
-    const init = await m.run("init", write(first.slice(0, 7)), "--no-timer");
+    const init = await m.run("init", write(first.slice(0, 7)), "--no-hooks");
     expect(init.code, init.stdout + init.stderr).toBe(0);
     expect(m.git(work, "rev-parse", "HEAD")).toBe(first);
     expect(read(m.at(".claude/skills/mine/SKILL.md"))).toBe(skillMd("mine", "first"));
@@ -581,7 +581,7 @@ describe("refs that name a commit", () => {
       agents: ["claude-code"],
       sources: [{ id: "personal", git: personal.url, path: work, ref: pinned }],
     });
-    const init = await m.run("init", manifest, "--no-timer");
+    const init = await m.run("init", manifest, "--no-hooks");
     expect(init.code, init.stdout + init.stderr).toBe(0);
     expect(m.git(work, "rev-parse", "HEAD")).toBe(pinned);
     expect(read(m.at(".claude/skills/mine/SKILL.md"))).toBe(skillMd("mine"));
@@ -604,9 +604,9 @@ describe("manifest specs", () => {
         agents: ["claude-code"],
         sources: [{ id: "vendor", git: vendor.url, include: [skill] }],
       });
-    const team = remote(m, "team", { "skills.json": manifest("tool") });
+    const team = remote(m, "team", { ".skillfleet/manifest.json": manifest("tool") });
     m.git(team.work, "checkout", "--quiet", "-b", "dev");
-    writeFiles(team.work, { "team/skills.json": manifest("extra") });
+    writeFiles(team.work, { "team/fleet.json": manifest("extra") });
     m.git(team.work, "add", "-A");
     m.git(team.work, "commit", "--quiet", "-m", "dev");
     m.git(team.work, "push", "--quiet", "origin", "dev");
@@ -615,21 +615,21 @@ describe("manifest specs", () => {
   const configured = (m: Machine) =>
     (JSON.parse(read(m.at(".config/skillfleet/config.json"))) as { manifest: string }).manifest;
 
-  it("D2. a GitHub page link without .git is a repository holding skills.json", async () => {
+  it("D2. a GitHub page link without .git is a repository holding .skillfleet/manifest.json", async () => {
     const m = machine();
     hostAt(m, "https://github.com/org/team", teamRepo(m));
-    const init = await m.run("init", "https://github.com/org/team", "--no-timer");
+    const init = await m.run("init", "https://github.com/org/team", "--no-hooks");
     expect(init.code, init.stdout + init.stderr).toBe(0);
     expect(names(m.at(".claude/skills"))).toEqual(["tool"]);
-    expect(configured(m)).toBe("https://github.com/org/team//skills.json");
+    expect(configured(m)).toBe("https://github.com/org/team//.skillfleet/manifest.json");
     expect((await m.json("sync")).ok).toBe(true);
   });
 
   it("D2. a GitHub blob link names the branch and the file", async () => {
     const m = machine();
     hostAt(m, "https://github.com/org/team", teamRepo(m));
-    const link = "https://github.com/org/team/blob/dev/team/skills.json";
-    const init = await m.run("init", link, "--no-timer");
+    const link = "https://github.com/org/team/blob/dev/team/fleet.json";
+    const init = await m.run("init", link, "--no-hooks");
     expect(init.code, init.stdout + init.stderr).toBe(0);
     expect(names(m.at(".claude/skills"))).toEqual(["extra"]);
     expect(configured(m)).toBe(link);
@@ -639,10 +639,10 @@ describe("manifest specs", () => {
   it("D2. a bare repository on this machine is a repository, not a folder", async () => {
     const m = machine();
     const team = teamRepo(m);
-    const init = await m.run("init", team.url, "--no-timer");
+    const init = await m.run("init", team.url, "--no-hooks");
     expect(init.code, init.stdout + init.stderr).toBe(0);
     expect(names(m.at(".claude/skills"))).toEqual(["tool"]);
-    expect(configured(m)).toBe(`${team.url}//skills.json`);
+    expect(configured(m)).toBe(`${team.url}//.skillfleet/manifest.json`);
     expect((await m.json("sync")).ok).toBe(true);
   });
 });
@@ -660,7 +660,7 @@ describe("hooks", () => {
         { name: "skill-relative", run: hook.run, on: ["vendor:tool/**"] },
       ],
     });
-    const init = await m.run("init", manifest, "--no-timer");
+    const init = await m.run("init", manifest, "--no-hooks");
     expect(init.code, init.stdout + init.stderr).toBe(0);
     expect(hook.runs()).toEqual([["vendor:skills/tool/SKILL.md"]]);
     expect(init.stdout).toContain(
@@ -686,7 +686,7 @@ describe("hooks", () => {
       sources: [{ id: "vendor", git: vendor.url }],
       hooks: [{ name: "typo", run: "exit 0", on: ["vendr:**"] }],
     });
-    await m.run("init", manifest, "--no-timer");
+    await m.run("init", manifest, "--no-hooks");
     expect((await m.json("sync")).warnings).toContain(
       'hook typo: "vendr:**" names no source "vendr"',
     );
@@ -706,7 +706,7 @@ describe("a sync of one source", () => {
         { id: "vendor", git: vendor.url, update: "review" },
       ],
     });
-    expect((await m.run("init", manifest, "--no-timer")).code).toBe(0);
+    expect((await m.run("init", manifest, "--no-hooks")).code).toBe(0);
     writeFiles(work, { "local.md": "local\n" });
     m.git(work, "add", "-A");
     m.git(work, "commit", "--quiet", "-m", "local");

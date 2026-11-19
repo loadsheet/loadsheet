@@ -44,7 +44,7 @@ afterEach(() => {
   if (refused.length > 0)
     throw new Error(
       `this test reached for the OS scheduler, which tests never touch:\n${refused.map((call) => `  ${call.command}`).join("\n")}\n` +
-        `Use --no-timer, machine({ scheduler: "empty" }) for a scheduler with no timer, or machine({ scheduler: "refuse" }) to test the failure.`,
+        `Use machine({ scheduler: "empty" }) for a scheduler with no timer, or machine({ scheduler: "refuse" }) to test the failure.`,
     );
 });
 afterAll(async () => {
@@ -313,7 +313,7 @@ export function machine({
         stdio: ["ignore", "pipe", "pipe"],
       }).trim(),
     manifest(content) {
-      const file = join(root, "manifest", "skills.json");
+      const file = join(root, "manifest", ".skillfleet", "manifest.json");
       mkdirSync(dirname(file), { recursive: true });
       writeFileSync(file, `${JSON.stringify(content, null, 2)}\n`);
       return file;
@@ -684,3 +684,40 @@ export function names(dir: string): string[] {
 
 export const pathWith = (dir: string, env: NodeJS.ProcessEnv) =>
   [dir, env.PATH ?? env.Path ?? ""].join(delimiter);
+
+/**
+ * A systemd that answers as one with skillfleet's units loaded once their files exist, and linger
+ * on. Its folder comes first on PATH and is inside the test's machine folder, so the scheduler
+ * guard lets it run. Returns PATH with it first.
+ */
+export function systemdShim(m: Machine): string {
+  const dir = join(m.root, "systemd-bin");
+  mkdirSync(dir, { recursive: true });
+  const script = join(dir, "systemctl.mjs");
+  writeFileSync(
+    script,
+    `import { existsSync } from "node:fs";
+import { join } from "node:path";
+const args = process.argv.slice(2).filter((arg) => arg !== "--user");
+const units = join(process.env.XDG_CONFIG_HOME, "systemd", "user");
+const [verb] = args;
+if (verb === "show") {
+  if (args.includes("UnitPath")) process.exit(0);
+  for (const unit of args.filter((arg) => /\\.(timer|service)$/.test(arg))) {
+    const file = join(units, unit);
+    console.log(existsSync(file)
+      ? \`Id=\${unit}\\nLoadState=loaded\\nFragmentPath=\${file}\\nActiveState=\${unit.endsWith(".timer") ? "active" : "inactive"}\\nSubState=waiting\\n\`
+      : \`Id=\${unit}\\nLoadState=not-found\\nActiveState=inactive\\nSubState=dead\\n\`);
+  }
+} else if (verb === "is-enabled") console.log("enabled");
+else if (verb === "is-active") console.log("active");
+`,
+  );
+  const sh = (name: string, body: string) => {
+    writeFileSync(join(dir, name), `#!/bin/sh\n${body}\n`);
+    chmodSync(join(dir, name), 0o755);
+  };
+  sh("systemctl", `exec "${process.execPath}" "${script}" "$@"`);
+  sh("loginctl", `case "$*" in *--value*) echo yes ;; *) echo Linger=yes ;; esac`);
+  return [dir, m.env.PATH].join(delimiter);
+}

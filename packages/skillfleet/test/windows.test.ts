@@ -164,7 +164,7 @@ async function setUp(m: Machine, env: NodeJS.ProcessEnv = m.env, ...flags: strin
     agents: ["claude-code", "codex"],
     sources: [{ id: "vendor", git: vendor.url }],
   });
-  const init = await m.runWith({ env }, "init", manifest, "--no-timer", ...flags);
+  const init = await m.runWith({ env }, "init", manifest, "--no-hooks", ...flags);
   expect(init.code, both(init)).toBe(0);
   return { vendor, manifest };
 }
@@ -434,7 +434,7 @@ describe.skipIf(!isWindows)(
           agents: ["claude-code"],
           sources: [{ id: "vendor", git: url }],
         });
-        const report = await json(m, m.env, "init", manifest, "--no-timer");
+        const report = await json(m, m.env, "init", manifest, "--no-hooks");
         expect(report.errors ?? [], JSON.stringify(report)).toEqual([]);
         expect(names(m.at(".claude/skills")), JSON.stringify(report, null, 2)).toEqual([
           "other",
@@ -476,7 +476,7 @@ describe.skipIf(!isWindows)(
             agents: ["claude-code"],
             sources: [{ id: "vendor", git: url }],
           });
-          const report = await json(m, m.env, "init", manifest, "--no-timer");
+          const report = await json(m, m.env, "init", manifest, "--no-hooks");
           const vendor = report.sources?.find((source) => source.id === "vendor");
           expect(vendor?.status, JSON.stringify(report, null, 2)).not.toBe("error");
           expect(names(m.at(".claude/skills")), JSON.stringify(report, null, 2)).toContain("good");
@@ -504,7 +504,7 @@ describe.skipIf(!isWindows)(
           agents: ["claude-code"],
           sources: [{ id: "vendor", git: url }],
         });
-        const report = await json(m, m.env, "init", manifest, "--no-timer");
+        const report = await json(m, m.env, "init", manifest, "--no-hooks");
         const file = m.at(".claude/skills/longname-skill/SKILL.md");
         expect(existsSync(file) ? read(file) : "(missing)", JSON.stringify(report, null, 2)).toBe(
           skillMd("longname-skill", "the real one"),
@@ -673,7 +673,7 @@ describe.skipIf(!isWindows)(
         writeFileSync(join(local, "tool", "frozen.txt"), "frozen\n");
         chmodSync(join(local, "tool", "frozen.txt"), 0o444);
         const manifest = m.manifest({ agents: ["claude-code"], sources: [{ id: "local", local }] });
-        const init = await m.run("init", manifest, "--no-timer", "--copy");
+        const init = await m.run("init", manifest, "--no-hooks", "--copy");
         expect(init.code, both(init)).toBe(0);
         expect(isLink(m.at(".claude/skills/tool"))).toBe(false);
         expect(read(m.at(".claude/skills/tool/frozen.txt"))).toBe("frozen\n");
@@ -700,7 +700,7 @@ describe.skipIf(!isWindows)(
             { id: "other", git: other.url },
           ],
         });
-        const init = await m.run("init", manifest, "--no-timer");
+        const init = await m.run("init", manifest, "--no-hooks");
         expect(init.code, both(init)).toBe(0);
         vendor.commit({ "skills/tool/SKILL.md": skillMd("tool", "v2") });
         other.commit({ "skills/extra/SKILL.md": skillMd("extra", "v2") });
@@ -746,7 +746,7 @@ describe.skipIf(!isWindows)(
             ],
           });
           const flags = copy ? ["--copy"] : [];
-          const init = await m.run("init", manifest, "--no-timer", ...flags);
+          const init = await m.run("init", manifest, "--no-hooks", ...flags);
           expect(init.code, both(init)).toBe(0);
           vendor.commit({ "skills/tool/SKILL.md": skillMd("tool", "v2") });
           personal.commit({ "skills/mine/SKILL.md": skillMd("mine", "v2") });
@@ -780,7 +780,7 @@ describe.skipIf(!isWindows)(
           "\uFEFF---\r\nname: tool\r\ndescription: The tool skill\r\n---\r\ntool body\r\n",
         );
         const manifest = m.manifest({ agents: ["claude-code"], sources: [{ id: "local", local }] });
-        const report = await json(m, m.env, "init", manifest, "--no-timer");
+        const report = await json(m, m.env, "init", manifest, "--no-hooks");
         expect(report.skills?.names ?? [], JSON.stringify(report, null, 2)).toContain("tool");
         expect(existsSync(m.at(".claude/skills/tool/SKILL.md"))).toBe(true);
       });
@@ -880,6 +880,86 @@ describe.skipIf(!isWindows)(
         expect(read(m.at(".claude/skills/tool/SKILL.md"))).toBe(skillMd("tool"));
         expect(leftovers(m.stateDir)).toEqual([]);
         expect(readdirSync(m.stateDir).filter((name) => name.startsWith("sync.lock"))).toEqual([]);
+      });
+    });
+
+    // ---------------------------------------------------------------------------------------------
+    // The session hooks run the .cmd launcher, which starts the sync detached and returns: the
+    // sync must outlive the hook, cmd and the parent that ran them.
+    describe("the session hook", () => {
+      const lastRun = (m: Machine) =>
+        JSON.parse(read(join(m.stateDir, "last-run.json"))) as { finishedAt: string; ok: boolean };
+
+      async function synced(m: Machine, before: string) {
+        const deadline = Date.now() + 90_000;
+        while (lastRun(m).finishedAt <= before) {
+          if (Date.now() > deadline) throw new Error("the hook's sync never finished");
+          await new Promise((done) => setTimeout(done, 250));
+        }
+        expect(lastRun(m).ok).toBe(true);
+      }
+
+      type Entry = { command: string; args?: string[] };
+      const entry = (file: string) =>
+        (JSON.parse(read(file)) as { hooks: Record<string, { hooks: Entry[] }[]> }).hooks
+          .SessionStart![0]!.hooks[0]!;
+
+      /**
+       * Codex's `cmd.exe /C "<command>"` of its entry, then Claude Code's exec form of its own: the
+       * node the entry names, with its args and no shell. Each sync must outlive what started it.
+       */
+      async function bothAgents(m: Machine, vendor: ReturnType<typeof remote>) {
+        const codex = entry(m.at(".codex", "hooks.json"));
+        expect(codex.args).toBeUndefined();
+        expect(codex.command).toMatch(/skillfleet\.cmd" hook run codex$/);
+        vendor.commit({ "skills/second/SKILL.md": skillMd("second") });
+        let before = lastRun(m).finishedAt;
+        const run = await start(comspec, ["/C", `"${codex.command}"`], {
+          env: m.env,
+          cwd: m.home,
+          verbatim: true,
+        }).done;
+        expect(run.code, both(run)).toBe(0);
+        expect(both(run)).toBe("");
+        await synced(m, before);
+        expect(existsSync(m.at(".claude/skills/second/SKILL.md"))).toBe(true);
+
+        rmSync(join(m.stateDir, "hook-attempt"), { force: true });
+        vendor.commit({ "skills/third/SKILL.md": skillMd("third") });
+        before = lastRun(m).finishedAt;
+        const claude = entry(m.at(".claude", "settings.json"));
+        // node.exe through the link in bin/, which self-install points at each new node.
+        expect(claude.command).toBe(join(bin(m), "node-dir", "node.exe"));
+        expect(claude.args).toEqual([
+          join(m.stateDir, "app", "cli.mjs"),
+          "hook",
+          "run",
+          "claude-code",
+        ]);
+        const exec = await start(claude.command, claude.args!, { env: m.env, cwd: m.home }).done;
+        expect(exec.code, both(exec)).toBe(0);
+        expect(both(exec)).toBe("");
+        await synced(m, before);
+        expect(existsSync(m.at(".claude/skills/third/SKILL.md"))).toBe(true);
+      }
+
+      it("W-HOOK-1. Codex's `cmd /C` and Claude Code's exec form of the written entries start a sync that outlives them", async () => {
+        const m = machine();
+        const { vendor, manifest } = await setUp(m);
+        expect((await m.run("init", manifest)).code).toBe(0);
+        await bothAgents(m, vendor);
+        // self-install moves the link, not the entry: install again is unchanged.
+        expect((await m.run("self-install")).code).toBe(0);
+        expect((await m.run("hook", "install")).stdout).toContain("Claude Code: hook already in");
+      });
+
+      it("W-HOOK-2. under a USERPROFILE with spaces, & and %PATH%, both entries still run", async () => {
+        const m = machine({ home: "Jo & Ann pct %PATH% x" });
+        const { vendor, manifest } = await setUp(m);
+        expect((await m.run("init", manifest)).code).toBe(0);
+        // cmd would expand %PATH% in the path, even quoted; through %USERPROFILE% it does not.
+        expect(entry(m.at(".codex", "hooks.json")).command).toMatch(/^"%USERPROFILE%\\/);
+        await bothAgents(m, vendor);
       });
     });
   },
