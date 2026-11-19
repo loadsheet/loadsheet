@@ -1,3 +1,5 @@
+import { UserError } from "./errors.ts";
+
 // Skill names and source ids become folder names in the store and in every agent folder, so each
 // one has to be a single path segment that Linux, macOS and Windows all create the same way.
 
@@ -21,6 +23,30 @@ export function segmentProblem(name: string): string | undefined {
   return undefined;
 }
 
+/** `checkoutProblem` of a name that is git's own folder on some system, which no system writes. */
+export const GIT_FOLDER = "is git's own folder";
+
+/**
+ * Why Windows can't write a file or folder named `segment` where a repository has it, or where
+ * writing it would open another one: a device name (`aux.txt`), a trailing dot or space, a
+ * character NTFS refuses, git's own folder, or an 8.3 short name (`longna~1`), which NTFS gives
+ * a longer name in the same folder. Undefined when it can.
+ */
+export function checkoutProblem(segment: string): string | undefined {
+  if (/[\p{Cc}<>:"|?*\\]/u.test(segment))
+    return 'has a control character or one of < > : " | ? * \\, which Windows does not allow';
+  if (/[. ]$/.test(segment)) return "ends with a dot or a space, which Windows drops";
+  if (/^(con|prn|aux|nul|conin\$|conout\$|com[0-9¹²³]|lpt[0-9¹²³]) *(\..*)?$/i.test(segment))
+    return "is a device name on Windows";
+  if (nameKey(segment) === ".git") return GIT_FOLDER;
+  const dot = segment.lastIndexOf(".");
+  const [stem, extension] =
+    dot > 0 ? [segment.slice(0, dot), segment.slice(dot + 1)] : [segment, ""];
+  if (/~\d+$/.test(stem) && stem.length <= 8 && extension.length <= 3)
+    return "looks like an 8.3 short name, which Windows can resolve to another folder";
+  return undefined;
+}
+
 /** Throws unless `name` is one plain path segment: the last check before a path is created or removed. */
 export function assertSegment(name: string): string {
   const problem = segmentProblem(name);
@@ -39,15 +65,21 @@ export const nameKey = (name: string) =>
     .replace(/[. ]+$/, "");
 
 /**
- * The one of `names` that `typed` means: itself, else the one with the same `nameKey`. Skill names
- * are unique by `nameKey` (sync keeps the first of two that macOS and Windows fold together), so a
- * name typed in another case or Unicode form, as a macOS keyboard types NFC, finds one skill.
+ * The one of `names` that `typed` means: itself, else the one with the same `nameKey`, as a macOS
+ * keyboard types NFC. Linked skills are unique by `nameKey` (sync keeps the first of two that macOS
+ * and Windows fold together), but a skill held for review may share it with a linked one: then the
+ * typed name could mean either, and this throws, naming them.
  */
 export function findName(names: Iterable<string>, typed: string): string | undefined {
-  const list = [...names];
-  if (list.includes(typed)) return typed;
+  const list = new Set(names);
+  if (list.has(typed)) return typed;
   const key = nameKey(typed);
-  return list.find((name) => nameKey(name) === key);
+  const matches = [...list].filter((name) => nameKey(name) === key);
+  if (matches.length > 1)
+    throw new UserError(
+      `"${typed}" could be any of ${matches.map((name) => `"${name}"`).join(", ")}, which differ only in case or Unicode form; type the one you mean exactly`,
+    );
+  return matches[0];
 }
 
 /**

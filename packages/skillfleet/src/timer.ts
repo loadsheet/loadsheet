@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
-import { delimiter, dirname, isAbsolute, join } from "node:path";
+import { delimiter, dirname, isAbsolute, join, sep } from "node:path";
 import {
   installOsSchedule,
   osScheduleErrors,
@@ -174,8 +174,10 @@ export function systemdMissing(
 
 /** What to say on a Linux machine with no systemd user manager, with a crontab line that does the timer's job. */
 export function noSystemdMessage(cron = "*/30 * * * *"): string {
-  const log = join(stateDir(), "logs", `${TIMER_NAME}.log`);
-  return `this machine has no systemd user manager (a container, WSL1, or a system that boots without systemd), so skillfleet can't install a timer here. Run \`skillfleet sync\` from cron instead (\`crontab -e\`, then a line such as: ${cron} ${shQuote(launcherPath())} sync >> ${shQuote(log)} 2>&1), and pass --no-timer to init`;
+  const logs = join(stateDir(), "logs");
+  const log = join(logs, `${TIMER_NAME}.log`);
+  // cron's shell opens the log before skillfleet starts, so the line makes its folder first.
+  return `this machine has no systemd user manager (a container, WSL1, or a system that boots without systemd), so skillfleet can't install a timer here. Run \`skillfleet sync\` from cron instead (\`crontab -e\`, then a line such as: ${cron} mkdir -p ${shQuote(logs)} && ${shQuote(launcherPath())} sync >> ${shQuote(log)} 2>&1), and pass --no-timer to init`;
 }
 
 /** A `systemctl` failure that means systemd itself is missing, not that one call went wrong. */
@@ -298,6 +300,28 @@ export function sameAsInstalled(spec: TimerSpec): boolean | undefined {
   return JSON.stringify(record.spec) === JSON.stringify(spec);
 }
 
+/** The schedule of the timer skillfleet installed last, from its record. */
+export function installedSchedule(): { cron: string; timeZone: string } | undefined {
+  const raw = readJsonOrNothing(recordFile());
+  if (!isRecord(raw) || !isRecord(raw.spec)) return undefined;
+  const { cron, timeZone } = raw.spec;
+  return typeof cron === "string" && typeof timeZone === "string" ? { cron, timeZone } : undefined;
+}
+
+/**
+ * What to say when the manifest's `timer` differs from the schedule the installed timer runs on, or
+ * undefined when they agree or no timer was installed.
+ */
+export function scheduleDrift(timer: { cron: string; timeZone?: string }): string | undefined {
+  const installed = installedSchedule();
+  const want = { cron: timer.cron, timeZone: timer.timeZone ?? "local" };
+  if (!installed || (installed.cron === want.cron && installed.timeZone === want.timeZone))
+    return undefined;
+  const zone = (spec: { timeZone: string }) =>
+    spec.timeZone === "local" ? "" : ` (${spec.timeZone})`;
+  return `the manifest's timer is now "${want.cron}"${zone(want)}, but the installed timer runs on "${installed.cron}"${zone(installed)}; run \`skillfleet timer install\` to apply it`;
+}
+
 /** The files the OS scheduler reads the timer's command from, where skillfleet's timer would be. */
 function timerCommandFiles(): string[] {
   const raw = readJsonOrNothing(recordFile());
@@ -326,37 +350,59 @@ function timerCommandFiles(): string[] {
   return [...new Set([...recorded.filter((file) => /\.(service|plist|ps1)$/.test(file)), ...own])];
 }
 
-/** The program a systemd unit, launchd plist or Task Scheduler wrapper of @vite-hub/schedule runs. */
-export function commandNode(text: string): string | undefined {
+const PS_QUOTE = "'\u2018\u2019\u201A\u201B";
+const PS_STRING = new RegExp(`'((?:[^${PS_QUOTE}]|[${PS_QUOTE}]{2})*)'`, "y");
+
+/**
+ * The command a systemd unit, launchd plist or Task Scheduler wrapper of @vite-hub/schedule runs,
+ * as the arguments it was given: each scheduler's quoting and escaping undone.
+ */
+export function commandArgs(text: string): string[] | undefined {
   const exec = text.match(/^ExecStart=(.*)$/m)?.[1];
   if (exec !== undefined) {
-    const quoted = exec.match(/^"((?:[^"\\]|\\.)*)"/)?.[1]?.replace(/\\(.)/g, "$1");
-    const first = quoted ?? exec.split(/\s/)[0]!;
-    return first.replace(/\$\$/g, "$").replace(/%%/g, "%");
+    // An argument is bare, or in double quotes with backslash escapes; then systemd's own `$$`
+    // and `%%` go back to `$` and `%`.
+    const args = [...exec.matchAll(/"((?:[^"\\]|\\.)*)"|(\S+)/g)].map(([, quoted, bare]) =>
+      (quoted === undefined ? bare! : quoted.replace(/\\(.)/g, "$1")).replace(
+        /\$\$|%%/g,
+        (pair) => pair[0]!,
+      ),
+    );
+    return args.length > 0 ? args : undefined;
   }
-  const plist = text.match(
-    /<key>ProgramArguments<\/key>\s*<array>\s*<string>([^<]*)<\/string>/,
-  )?.[1];
-  if (plist !== undefined) return unxml(plist);
-  const ps = text.match(
-    /^& '((?:[^'\u2018\u2019\u201A\u201B]|['\u2018\u2019\u201A\u201B]{2})*)'/m,
-  )?.[1];
-  return ps?.replace(/(['\u2018\u2019\u201A\u201B])\1/g, "$1");
+  const plist = text.match(/<key>ProgramArguments<\/key>\s*<array>([\s\S]*?)(?:<\/array>|$)/)?.[1];
+  if (plist !== undefined)
+    return [...plist.matchAll(/<string>([^<]*)<\/string>/g)].map(([, value]) => unxml(value!));
+  const line = text.match(/^& (.*)$/m)?.[1];
+  if (line === undefined) return undefined;
+  const args: string[] = [];
+  PS_STRING.lastIndex = 0;
+  for (let match; (match = PS_STRING.exec(line));) {
+    args.push(match[1]!.replace(new RegExp(`([${PS_QUOTE}])\\1`, "g"), "$1"));
+    if (line[PS_STRING.lastIndex] !== " ") break;
+    PS_STRING.lastIndex++;
+  }
+  return args.length > 0 ? args : undefined;
 }
+
+/** The program a systemd unit, launchd plist or Task Scheduler wrapper of @vite-hub/schedule runs. */
+export const commandNode = (text: string): string | undefined => commandArgs(text)?.[0];
 
 /** The node skillfleet's installed timer runs, and the file that names it. */
 export function timerNode(): { file: string; node: string } | undefined {
+  const app = join(stateDir(), "app");
+  // Windows paths compare without case.
+  const fold = (path: string) => (process.platform === "win32" ? path.toLowerCase() : path);
   for (const file of timerCommandFiles()) {
-    let text: string;
+    let args: string[] | undefined;
     try {
-      text = readFileSync(file, "utf8");
+      args = commandArgs(readFileSync(file, "utf8"));
     } catch {
       continue;
     }
     // Only a timer that runs this state folder's copy is this install's.
-    if (!text.includes(join(stateDir(), "app"))) continue;
-    const node = commandNode(text);
-    if (node) return { file, node };
+    const [node, ...rest] = args ?? [];
+    if (node && rest.some((arg) => fold(arg).startsWith(fold(app + sep)))) return { file, node };
   }
   return undefined;
 }

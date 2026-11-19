@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { UserError } from "./errors.ts";
 import { git, GitError, gitOut } from "./exec.ts";
 import { isRecord, isRunning, readJsonOrNothing, sha256, writeJson } from "./fs.ts";
-import { nameKey } from "./names.ts";
+import { checkoutProblem, GIT_FOLDER, nameKey } from "./names.ts";
 
 /** `owner/repo` and `github:owner/repo` become GitHub HTTPS URLs; anything else is a git URL already. */
 export function gitUrl(spec: string): string {
@@ -26,6 +26,8 @@ export const repoKey = (spec: string) =>
 /** A ref that names a commit: a full id, or a prefix of one at least 7 hex digits long. */
 export const isCommitRef = (ref: string) => /^[0-9a-f]{7,40}$/i.test(ref);
 
+export const NO_GIT_REDIRECTS = ["-c", "http.followRedirects=false"];
+
 /** A path left out of a checkout because another path takes its folder on macOS and Windows. */
 export interface Collision {
   /** The path left out, up to the part that collides. */
@@ -34,13 +36,30 @@ export interface Collision {
   kept: string;
 }
 
+/**
+ * A path Windows can't write. Windows leaves it out of a checkout; Linux and macOS write it, as git
+ * does in a working clone, and warn that the fleet's Windows machines lack it. A name that is git's
+ * own folder somewhere (`.GIT`) is left out everywhere.
+ */
+export interface Refusal {
+  /** The path, up to the part Windows refuses. */
+  path: string;
+  /** Why, as `checkoutProblem` says it. */
+  problem: string;
+}
+
 export interface CachedClone {
   /** The files of `commit`, without a .git folder. */
   dir: string;
   commit: string;
   collisions: Collision[];
+  refused: Refusal[];
   /** Paths of git submodules in the commit: their folders are empty, since nothing fetches them. */
   submodules: string[];
+  /** The bare repository the cache keeps, which holds `commit` and the commits fetched before. */
+  repo?: string;
+  /** The commit written out before this fetch, when this fetch brought another. */
+  previous?: string;
 }
 
 /**
@@ -77,6 +96,24 @@ export function collisions(paths: readonly string[]): Collision[] {
 }
 
 /**
+ * Paths that Windows can't write, or that would write into another folder there (an 8.3 short
+ * name). Only Windows leaves them out (see `Refusal`).
+ */
+export function refusals(paths: readonly string[]): Refusal[] {
+  const found = new Map<string, string>();
+  for (const path of paths) {
+    const parts = path.split("/");
+    for (let i = 0; i < parts.length; i++) {
+      const problem = checkoutProblem(parts[i]!);
+      if (!problem) continue;
+      found.set(parts.slice(0, i + 1).join("/"), problem);
+      break;
+    }
+  }
+  return [...found].map(([path, problem]) => ({ path, problem }));
+}
+
+/**
  * The files of `url` at `ref` (default branch when absent), kept under `root` between runs. The
  * `skills` package clones into a temporary folder on every call; this cache is what lets a timer
  * run cheap and lets `--offline` work.
@@ -90,7 +127,14 @@ export async function fetchClone(
   url: string,
   ref: string | undefined,
   root: string,
-  { offline = false }: { offline?: boolean } = {},
+  {
+    offline = false,
+    check,
+  }: {
+    offline?: boolean;
+    /** Why `url` may not be fetched, asked in the cache's own repository right before each fetch. */
+    check?: (url: string, cwd: string) => Promise<string | undefined>;
+  } = {},
 ): Promise<CachedClone> {
   const key = sha256(`${url}#${ref ?? ""}`).slice(0, 16);
   const cache = {
@@ -100,6 +144,15 @@ export async function fetchClone(
   };
   await recoverTree(cache, root, key);
   let written = readMarker(cache.marker, cache.tree);
+  if (written && written.skipsRefused !== SKIPS_REFUSED && written.refused.length > 0)
+    // Written when every system left out what Windows can't write: written again, which needs no
+    // network, so this system gets those files too.
+    try {
+      written = { commit: written.commit, ...(await writeTree(cache, written.commit)) };
+    } catch (error) {
+      if (!(error instanceof GitError)) throw error;
+      written = undefined;
+    }
   if (offline) {
     if (!written) throw new UserError(`${url} has never been fetched and --offline is set`);
     return { dir: cache.tree, ...written };
@@ -112,19 +165,28 @@ export async function fetchClone(
     if (fresh) {
       rmSync(cache.repo, { recursive: true, force: true });
       mkdirSync(root, { recursive: true });
-      await git(["init", "--quiet", "--bare", "--", cache.repo]);
+      // No template: its sample hooks are the deepest files, and nothing here runs hooks.
+      await git(["init", "--quiet", "--bare", "--template=", "--", cache.repo]);
     }
     let commit: string;
     try {
-      commit = await fetchCommit(url, ref, cache.repo);
+      const problem = await check?.(url, cache.repo);
+      if (problem) throw new UserError(problem);
+      commit = await fetchCommit(url, ref, cache.repo, check ? NO_GIT_REDIRECTS : []);
     } catch (error) {
       // The network or the remote: a cache with a commit stays for --offline and later runs.
       if (fresh) rmSync(cache.repo, { recursive: true, force: true });
       throw error;
     }
     try {
-      if (written?.commit === commit) return { dir: cache.tree, ...written };
-      return { dir: cache.tree, commit, ...(await writeTree(cache, commit)) };
+      if (written?.commit === commit) return { dir: cache.tree, ...written, repo: cache.repo };
+      return {
+        dir: cache.tree,
+        commit,
+        ...(await writeTree(cache, commit)),
+        repo: cache.repo,
+        ...(written ? { previous: written.commit } : {}),
+      };
     } catch (error) {
       // The fetch worked, so the cache itself is broken: start it over, once.
       if (attempt > 0 || !(error instanceof GitError) || error.result.code === null) throw error;
@@ -134,19 +196,27 @@ export async function fetchClone(
   }
 }
 
-function readMarker(marker: string, tree: string): Omit<CachedClone, "dir"> | undefined {
+/** Whether this system leaves out the paths Windows can't write (`Refusal`). */
+const SKIPS_REFUSED = process.platform === "win32";
+
+type Marker = Omit<CachedClone, "dir"> & { skipsRefused?: boolean };
+
+function readMarker(marker: string, tree: string): Marker | undefined {
   if (!existsSync(tree)) return undefined;
   return markedCommit(marker);
 }
 
-function markedCommit(marker: string): Omit<CachedClone, "dir"> | undefined {
+function markedCommit(marker: string): Marker | undefined {
   const raw = readJsonOrNothing(marker);
   if (!isRecord(raw) || typeof raw.commit !== "string" || !Array.isArray(raw.collisions))
     return undefined;
   return {
     commit: raw.commit,
     collisions: raw.collisions as Collision[],
+    refused: Array.isArray(raw.refused) ? (raw.refused as Refusal[]) : [],
     submodules: Array.isArray(raw.submodules) ? (raw.submodules as string[]) : [],
+    // Trees written before the field left them out on every system.
+    skipsRefused: typeof raw.skipsRefused === "boolean" ? raw.skipsRefused : true,
   };
 }
 
@@ -195,8 +265,23 @@ async function recoverTree(cache: CacheFiles, root: string, key: string) {
 }
 
 /** Fetches `ref` and returns its commit. A ref that is no branch or tag is read as a commit. */
-async function fetchCommit(url: string, ref: string | undefined, repo: string): Promise<string> {
-  const args = ["fetch", "--quiet", "--depth", "1", "--no-tags", "--", url, ref ?? "HEAD"];
+async function fetchCommit(
+  url: string,
+  ref: string | undefined,
+  repo: string,
+  config: readonly string[],
+): Promise<string> {
+  const args = [
+    ...config,
+    "fetch",
+    "--quiet",
+    "--depth",
+    "1",
+    "--no-tags",
+    "--",
+    url,
+    ref ?? "HEAD",
+  ];
   const fetched = await git(args, { cwd: repo, allowFail: true, timeoutMs: 600_000 });
   if (fetched.code === 0) {
     const commit = await gitOut(["rev-parse", "--verify", "FETCH_HEAD^{commit}"], repo);
@@ -211,6 +296,7 @@ async function fetchCommit(url: string, ref: string | undefined, repo: string): 
   const shallow = (await gitOut(["rev-parse", "--is-shallow-repository"], repo)) === "true";
   await git(
     [
+      ...config,
       "fetch",
       "--quiet",
       "--no-tags",
@@ -241,22 +327,28 @@ interface CacheFiles {
 
 /**
  * Writes the files of `commit` to a new folder that then replaces `cache.tree`, leaving out the
- * paths that would share a folder on macOS and Windows. Returns those, and the submodules.
+ * paths that would share a folder on macOS and Windows, and on Windows those it can't write.
+ * Returns those, and the submodules.
  */
 async function writeTree(
   cache: CacheFiles,
   commit: string,
-): Promise<Pick<CachedClone, "collisions" | "submodules">> {
+): Promise<Pick<CachedClone, "collisions" | "refused" | "submodules">> {
   const entries = (await gitOut(["ls-tree", "-r", "-z", "--full-tree", commit], cache.repo))
     .split("\0")
     .filter(Boolean)
-    .map((entry) => {
-      const tab = entry.indexOf("\t");
-      return { mode: entry.slice(0, entry.indexOf(" ")), path: entry.slice(tab + 1) };
+    .map((line) => {
+      const tab = line.indexOf("\t");
+      return { line, mode: line.slice(0, line.indexOf(" ")), path: line.slice(tab + 1) };
     });
-  const listed = entries.map((entry) => entry.path);
+  const refused = refusals(entries.map((entry) => entry.path));
+  const within = (paths: readonly { path: string }[]) => (file: string) =>
+    paths.some(({ path }) => file === path || file.startsWith(`${path}/`));
+  const skipped = refused.filter(({ problem }) => SKIPS_REFUSED || problem === GIT_FOLDER);
+  const writable = entries.filter((entry) => !within(skipped)(entry.path));
+  const left = collisions(writable.map((entry) => entry.path));
+  const kept = writable.filter((entry) => !within(left)(entry.path));
   const submodules = entries.filter((entry) => entry.mode === "160000").map((entry) => entry.path);
-  const left = collisions(listed);
   const temp = `${cache.tree}.${process.pid}.tmp`;
   const old = `${cache.tree}.${process.pid}.old`;
   rmSync(temp, { recursive: true, force: true });
@@ -270,23 +362,21 @@ async function writeTree(
       "core.ignorecase=false",
       `--work-tree=${temp}`,
     ];
-    await git([...at, "read-tree", commit], { cwd: cache.repo });
-    if (left.length > 0) {
-      const files = listed.filter((file) =>
-        left.some(({ path }) => file === path || file.startsWith(`${path}/`)),
-      );
-      await git([...at, "update-index", "-z", "--force-remove", "--stdin"], {
-        cwd: cache.repo,
-        input: files.map((file) => `${file}\0`).join(""),
-      });
-    }
+    // The index gets only the paths written out: git refuses a whole tree on Windows when one of
+    // its paths is one Windows can't write.
+    await git([...at, "read-tree", "--empty"], { cwd: cache.repo });
+    await git([...at, "update-index", "-z", "--index-info"], {
+      cwd: cache.repo,
+      input: kept.map((entry) => `${entry.line}\0`).join(""),
+    });
     await git([...at, "checkout-index", "--all", "--force"], { cwd: cache.repo });
-    writeJson(`${cache.tree}.${process.pid}.pending`, { commit, collisions: left, submodules });
+    const metadata = { commit, collisions: left, refused, submodules, skipsRefused: SKIPS_REFUSED };
+    writeJson(`${cache.tree}.${process.pid}.pending`, metadata);
     // Moved aside, not deleted, so a kill here leaves a whole tree for `recoverTree`.
     const replaced = existsSync(cache.tree);
     if (replaced) renameSync(cache.tree, old);
     renameSync(temp, cache.tree);
-    writeJson(cache.marker, { commit, collisions: left, submodules });
+    writeJson(cache.marker, metadata);
     rmSync(`${cache.tree}.${process.pid}.pending`, { force: true });
     if (replaced) rmSync(old, { recursive: true, force: true });
   } finally {
@@ -294,7 +384,7 @@ async function writeTree(
     if (!existsSync(`${cache.tree}.${process.pid}.pending`))
       rmSync(temp, { recursive: true, force: true });
   }
-  return { collisions: left, submodules };
+  return { collisions: left, refused, submodules };
 }
 
 /**

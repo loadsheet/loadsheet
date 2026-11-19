@@ -19,7 +19,7 @@ import {
 } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join, resolve } from "node:path";
+import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
 import { afterAll, afterEach } from "vite-plus/test";
@@ -207,17 +207,22 @@ function spawnAsync(
   });
 }
 
-/** A fresh temporary machine. `agents: false` leaves out the agent folders. */
+/**
+ * A fresh temporary machine. `agents: false` leaves out the agent folders. `home` names the HOME
+ * folder inside the machine's root, and `base` is where the root is made (the temp folder).
+ */
 export function machine({
   agents = true,
   scheduler = "forbid",
-}: { agents?: boolean; scheduler?: Scheduler } = {}): Machine {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "skillfleet-e2e-")));
+  home: homeName = "home",
+  base = tmpdir(),
+}: { agents?: boolean; scheduler?: Scheduler; home?: string; base?: string } = {}): Machine {
+  const root = realpathSync(mkdtempSync(join(base, "skillfleet-e2e-")));
   made.push(root);
   const schedulerLog = join(root, "scheduler-calls.jsonl");
   appendFileSync(schedulerLog, "");
   const path = [schedulerShims(root), process.env.PATH ?? process.env.Path ?? ""].join(delimiter);
-  const home = join(root, "home");
+  const home = join(root, homeName);
   mkdirSync(home, { recursive: true });
   if (agents) for (const dir of AGENT_HOMES) mkdirSync(join(home, dir), { recursive: true });
   const gitConfig = join(root, "gitconfig");
@@ -230,6 +235,10 @@ export function machine({
       "[core]\n\tautocrlf = false\n\tsymlinks = true",
       '[protocol "file"]\n\tallow = always',
       "[advice]\n\tdetachedHead = false",
+      // Every remote's https URL (`Remote.https`) reaches its bare repository over HTTP.
+      `[url "${GIT_SERVER}/${basename(root)}/remotes/"]\n\tinsteadOf = ${HTTPS_REMOTES}`,
+      // The git server's name, which is no loopback name, reaches it on 127.0.0.1.
+      `[http]\n\tcurloptResolve = ${new URL(GIT_SERVER).host}:127.0.0.1`,
     ].join("\n") + "\n",
   );
   const env: NodeJS.ProcessEnv = {
@@ -257,12 +266,16 @@ export function machine({
     DO_NOT_TRACK: "1",
     NO_COLOR: "1",
     // Every Node process the test starts, skillfleet and what it runs, loads the scheduler guard.
-    NODE_OPTIONS: `--import=${pathToFileURL(join(guardDir, "scheduler-guard.mjs")).href}`,
+    // Every Node process also resolves *.skillfleet.test to 127.0.0.1 (test-hosts.mjs).
+    NODE_OPTIONS: ["scheduler-guard.mjs", "test-hosts.mjs"]
+      .map((file) => `--import=${pathToFileURL(join(guardDir, file)).href}`)
+      .join(" "),
     SKILLFLEET_TEST_ROOT: root,
     SKILLFLEET_TEST_SCHEDULER: scheduler,
     SKILLFLEET_TEST_SCHEDULER_LOG: schedulerLog,
   };
   for (const key of Object.keys(env)) if (env[key] === undefined) delete env[key];
+  gitRoots.set(basename(root), { root, env });
   const self: Machine = {
     root,
     home,
@@ -310,9 +323,103 @@ export function machine({
   return self;
 }
 
+/** The https URL prefix that each test machine's git config rewrites to its bare remotes. */
+const HTTPS_REMOTES = "https://git.skillfleet.test/";
+
+/**
+ * Machine roots by the first part of the URL path the git server below answers under: the folder
+ * name, which `mkdtemp` made unique.
+ */
+const gitRoots = new Map<string, { root: string; env: NodeJS.ProcessEnv }>();
+
+/**
+ * A git server over smart HTTP (`git http-backend`) for every machine's bare remotes, so a team
+ * manifest's https URL reaches them through a remote transport: a team manifest may not name a
+ * repository on this machine by any spelling, an `insteadOf` alias to a path included.
+ */
+async function gitServer(): Promise<string> {
+  const server = createServer((req, res) => {
+    const url = new URL(req.url ?? "/", "http://x");
+    const [, token, ...rest] = url.pathname.split("/");
+    const machine = gitRoots.get(decodeURIComponent(token ?? ""));
+    if (!machine) {
+      res.writeHead(404).end("no such machine");
+      return;
+    }
+    const header = (name: string) => {
+      const value = req.headers[name];
+      return Array.isArray(value) ? value.join(", ") : (value ?? "");
+    };
+    const backend = spawn("git", ["http-backend"], {
+      env: {
+        ...machine.env,
+        GIT_PROJECT_ROOT: machine.root,
+        GIT_HTTP_EXPORT_ALL: "1",
+        PATH_INFO: `/${rest.map(decodeURIComponent).join("/")}`,
+        REQUEST_METHOD: req.method ?? "GET",
+        QUERY_STRING: url.search.slice(1),
+        CONTENT_TYPE: header("content-type"),
+        HTTP_CONTENT_ENCODING: header("content-encoding"),
+        HTTP_GIT_PROTOCOL: header("git-protocol"),
+        REMOTE_ADDR: "127.0.0.1",
+      },
+      windowsHide: true,
+    });
+    const out: Buffer[] = [];
+    backend.stdout.on("data", (chunk: Buffer) => out.push(chunk));
+    backend.stderr.resume();
+    backend.on("error", () => res.writeHead(500).end());
+    backend.on("close", () => {
+      const all = Buffer.concat(out);
+      let end = all.indexOf("\r\n\r\n");
+      let gap = 4;
+      if (end < 0) [end, gap] = [all.indexOf("\n\n"), 2];
+      if (end < 0) {
+        res.writeHead(500).end();
+        return;
+      }
+      const headers: Record<string, string> = {};
+      let status = 200;
+      for (const line of all.subarray(0, end).toString("latin1").split(/\r?\n/)) {
+        const colon = line.indexOf(":");
+        if (colon < 0) continue;
+        const [name, value] = [line.slice(0, colon).trim(), line.slice(colon + 1).trim()];
+        if (name.toLowerCase() === "status") status = Number.parseInt(value, 10);
+        else headers[name] = value;
+      }
+      res.writeHead(status, headers).end(all.subarray(end + gap));
+    });
+    req.pipe(backend.stdin);
+  });
+  servers.push(server);
+  await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+  server.unref();
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("no port");
+  return `http://${GIT_SERVER_NAME}:${address.port}`;
+}
+
+/**
+ * The domain test servers go by. A team manifest may not name this machine, a loopback address
+ * included, so a server a team manifest names goes by a name under it, which git's
+ * `http.curloptResolve` and Node's test-hosts.mjs send to 127.0.0.1.
+ */
+const TEST_DOMAIN = "skillfleet.test";
+/** The git server's host name. */
+const GIT_SERVER_NAME = `git-server.${TEST_DOMAIN}`;
+
+const GIT_SERVER = await gitServer();
+
 export interface Remote {
   /** The bare repository: what sources point at. */
   url: string;
+  /**
+   * The repository as an https URL, which the machine's git config rewrites to the test's git
+   * server: what a team manifest, which may not name a repository on this machine, points at.
+   */
+  https: string;
+  /** The repository's URL on the test's git server, which `https` is rewritten to. */
+  served: string;
   /** A clone where tests make upstream commits. */
   work: string;
   /** Writes files (null deletes), commits and pushes. Returns the new commit. */
@@ -321,20 +428,27 @@ export interface Remote {
 }
 
 /** A bare git remote with an initial commit of `files`. */
-export function remote(m: Machine, name: string, files: Files): Remote {
+export function remote(
+  m: Machine,
+  name: string,
+  files: Files | ((https: string) => Files),
+): Remote {
   const url = join(m.root, "remotes", `${name}.git`);
+  const https = `${HTTPS_REMOTES}${name}.git`;
   const work = join(m.root, "upstream", name);
   mkdirSync(url, { recursive: true });
   m.git(url, "init", "--quiet", "--bare");
   mkdirSync(work, { recursive: true });
   m.git(work, "init", "--quiet");
-  writeFiles(work, files);
+  writeFiles(work, typeof files === "function" ? files(https) : files);
   m.git(work, "add", "-A");
   m.git(work, "commit", "--quiet", "-m", "init");
   m.git(work, "remote", "add", "origin", url);
   m.git(work, "push", "--quiet", "-u", "origin", "main");
   const self: Remote = {
     url,
+    https,
+    served: `${GIT_SERVER}/${basename(m.root)}/remotes/${name}.git`,
     work,
     commit(changes, message = "change") {
       for (const [file, content] of Object.entries(changes)) {
@@ -399,31 +513,58 @@ export const sha256 = (data: Uint8Array) => createHash("sha256").update(data).di
 // HTTP: a well-known skills index and an npm registry.
 
 export interface Http {
+  /** The server on 127.0.0.1, a loopback address. */
   url: string;
+  /** The server as `<name>.skillfleet.test`, which is no loopback name and reaches 127.0.0.1. */
+  named(name: string): string;
   routes: Map<string, { body: Uint8Array | string; type: string }>;
+  /** Paths the server redirects (302) to another URL. */
+  redirects: Map<string, string>;
+  /** Runs before each request is answered, which waits for it. */
+  before?: (path: string) => void | Promise<void>;
   close(): Promise<void>;
 }
 
 export async function http(): Promise<Http> {
-  const routes = new Map<string, { body: Uint8Array | string; type: string }>();
+  const routes: Http["routes"] = new Map();
+  const redirects = new Map<string, string>();
   const server = createServer((req, res) => {
-    const route = routes.get(new URL(req.url ?? "/", "http://x").pathname);
-    if (!route) {
-      res.writeHead(404).end("not found");
-      return;
-    }
-    res.writeHead(200, { "content-type": route.type }).end(route.body);
+    const path = new URL(req.url ?? "/", "http://x").pathname;
+    void (async () => {
+      await self.before?.(path);
+      const location = redirects.get(path);
+      if (location !== undefined) {
+        res.writeHead(302, { location }).end();
+        return;
+      }
+      const route = routes.get(path);
+      if (!route) {
+        res.writeHead(404).end("not found");
+        return;
+      }
+      res.writeHead(200, { "content-type": route.type }).end(route.body);
+    })();
   });
   servers.push(server);
   await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("no port");
-  return {
+  const self: Http = {
     url: `http://127.0.0.1:${address.port}`,
+    named: (name) => named(`http://127.0.0.1:${address.port}`, name),
     routes,
+    redirects,
     close: () => new Promise((done) => server.close(() => done())),
   };
+  return self;
 }
+
+/**
+ * A test server's URL on 127.0.0.1 under the name `<name>.skillfleet.test`, which is no loopback
+ * name, so a team manifest may name it.
+ */
+export const named = (url: string, name: string) =>
+  url.replace("//127.0.0.1:", `//${name}.${TEST_DOMAIN}:`);
 
 export interface IndexSkill {
   name: string;
@@ -433,7 +574,7 @@ export interface IndexSkill {
 }
 
 /** A v0.2.0 index of archive skills at `/.well-known/agent-skills/`, the way vite-hub/skills serves them. */
-export function serveIndexV2(server: Http, list: IndexSkill[]) {
+export function serveIndexV2(server: Pick<Http, "routes">, list: IndexSkill[]) {
   const entries = list.map((skill) => {
     const archive = tgz(skill.files);
     const path = `/.well-known/agent-skills/${skill.name}.tar.gz`;
@@ -462,7 +603,7 @@ export function serveIndexV2(server: Http, list: IndexSkill[]) {
 
 /** A v0.1 index (file lists, no digests) at `/.well-known/skills/`. */
 export function serveIndexV1(
-  server: Http,
+  server: Pick<Http, "routes">,
   list: { name: string; files: Record<string, string> }[],
 ) {
   for (const skill of list)
@@ -483,12 +624,16 @@ export function serveIndexV1(
   });
 }
 
-/** Publishes `name@version` with these files (under `package/`) to a fake registry. */
+/**
+ * Publishes `name@version` with these files (under `package/`) to a fake registry, its tarballs
+ * named under `base`.
+ */
 export function publishNpm(
   server: Http,
   name: string,
   versions: Record<string, Files>,
   latest: string,
+  base = server.url,
 ) {
   const packument = { name, "dist-tags": { latest }, versions: {} as Record<string, unknown> };
   for (const [version, files] of Object.entries(versions)) {
@@ -505,7 +650,7 @@ export function publishNpm(
       name,
       version,
       dist: {
-        tarball: `${server.url}${path}`,
+        tarball: `${base}${path}`,
         integrity: `sha512-${createHash("sha512").update(tarball).digest("base64")}`,
       },
     };

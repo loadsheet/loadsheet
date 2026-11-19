@@ -1,19 +1,28 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { homedir, userInfo } from "node:os";
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { homedir, tmpdir, userInfo } from "node:os";
 import { delimiter, dirname, join, sep } from "node:path";
 import { agentTargets, aliasOf, codexLegacyDir } from "./agents.ts";
+import { conflictLines } from "./edits.ts";
 import { exec, git } from "./exec.ts";
-import { lstat } from "./fs.ts";
-import { gitUrl } from "./gitcache.ts";
+import { isErrno, lstat } from "./fs.ts";
+import { gitUrl, NO_GIT_REDIRECTS } from "./gitcache.ts";
 import { linkTarget } from "./linker.ts";
-import { loadManifest, readConfig, remoteManifest, type Source } from "./manifest.ts";
+import {
+  loadManifest,
+  readConfig,
+  remoteManifest,
+  type Source,
+  teamGitProblem,
+} from "./manifest.ts";
 import { paths, tildify } from "./paths.ts";
-import { installedCli, launcherNode, launcherPath } from "./selfinstall.ts";
+import { installedBuild, installedCli, launcherNode, launcherPath } from "./selfinstall.ts";
+import { loadState } from "./state.ts";
 import { manifestSpec } from "./sync.ts";
 import {
   formatTimerStatus,
   machineTimeZone,
   missingTimer,
+  scheduleDrift,
   systemdMissing,
   TimerError,
   type TimerStatus,
@@ -79,6 +88,9 @@ function launcherProblem(): string | undefined {
     return `${tildify(launcher)} and the timer run ${node ?? "no node"}, which is gone (Node.js was upgraded or removed); ${REPAIR}`;
   if (!existsSync(installedCli()))
     return `${tildify(launcher)} runs ${tildify(installedCli())}, which is gone; ${REPAIR}`;
+  const build = installedBuild();
+  if (build && !existsSync(build))
+    return `${tildify(installedCli())} loads ${tildify(build)}, which is gone; ${REPAIR}`;
   return undefined;
 }
 
@@ -253,13 +265,25 @@ export async function doctor(manifest?: string): Promise<Check[]> {
   });
   const drift = timerDeclined() ? undefined : timeZoneDrift(loaded.root.timer.timeZone);
   if (drift) checks.push({ name: "timer time zone", ok: true, warn: true, detail: drift });
+  // A sync says this once, often in the timer's own log; doctor says it until it is applied.
+  const schedule = scheduleDrift(loaded.root.timer);
+  if (schedule) checks.push({ name: "timer schedule", ok: true, warn: true, detail: schedule });
   // Without git, the git check above already says so once.
   const reachable = gitVersion.code === 0 ? loaded.sources : [];
   await Promise.all(
     reachable.map(async (source) => {
       const remote = remoteOf(source);
       if (!remote) return;
-      const run = await git(["ls-remote", "--exit-code", "--", remote, "HEAD"], {
+      const team = source.via !== undefined;
+      const cwd = team ? tmpdir() : undefined;
+      const problem = team ? await teamGitProblem(remote, cwd) : undefined;
+      if (problem) {
+        checks.push({ name: `git auth ${source.id}`, ok: false, detail: problem });
+        return;
+      }
+      const config = team ? NO_GIT_REDIRECTS : [];
+      const run = await git([...config, "ls-remote", "--exit-code", "--", remote, "HEAD"], {
+        cwd,
         allowFail: true,
         timeoutMs: 30_000,
       });
@@ -289,9 +313,16 @@ export async function doctor(manifest?: string): Promise<Check[]> {
   // Agent folders should agree on where each name points.
   const targets = await agentTargets(loaded.root.agents);
   const pointsTo = new Map<string, Set<string>>();
+  // A folder that links to another agent folder is merged into it by `agentTargets`; any other
+  // link is skipped by sync, so that agent shows none of the skills.
+  const skipped: string[] = [];
   for (const target of targets) {
     const stat = lstat(target.dir);
-    if (!stat || stat.isSymbolicLink()) continue;
+    if (stat?.isSymbolicLink()) {
+      skipped.push(`${tildify(target.dir)} is ${linkShape(target.dir)}`);
+      continue;
+    }
+    if (!stat) continue;
     for (const name of skillNames(target.dir)) {
       const path = join(target.dir, name);
       const resolved = lstat(path)?.isSymbolicLink() ? linkTarget(path) : path;
@@ -299,15 +330,43 @@ export async function doctor(manifest?: string): Promise<Check[]> {
     }
   }
   const split = [...pointsTo].filter(([, dirs]) => dirs.size > 1).map(([name]) => name);
+  const problems = [
+    ...(split.length > 0 ? [`different copies of ${split.join(", ")} across agent folders`] : []),
+    ...(skipped.length > 0
+      ? [
+          `${skipped.join("; ")}, so sync links no skill there; run \`skillfleet init\` to make it a folder of one link per skill`,
+        ]
+      : []),
+  ];
+  const conflicts = conflictLines(loadState());
+  checks.push({
+    name: "merge conflicts",
+    ok: conflicts.length === 0,
+    detail:
+      conflicts.length === 0 ? "no skill has unresolved merge conflicts" : conflicts.join("; "),
+  });
   checks.push({
     name: "agents agree",
-    ok: split.length === 0,
+    ok: problems.length === 0,
     detail:
-      split.length === 0
+      problems.length === 0
         ? `${targets.length} agent folders show the same skills`
-        : `different copies of ${split.join(", ")} across agent folders`,
+        : problems.join("; "),
   });
   return checks;
+}
+
+/** What the agent folder `dir`, a link, leads to. */
+function linkShape(dir: string): string {
+  const to = tildify(linkTarget(dir));
+  try {
+    realpathSync(dir);
+    return `a link to ${to}`;
+  } catch (error) {
+    return isErrno(error, "ELOOP")
+      ? `a link to ${to} that leads back to itself`
+      : `a link to ${to}, which does not exist`;
+  }
 }
 
 export const formatChecks = (checks: readonly Check[]) =>

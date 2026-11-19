@@ -1,31 +1,40 @@
-import { execFileSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import {
   copyFileSync,
   existsSync,
   linkSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
-  renameSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import { hostname, tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { agentTargets, formerTargets } from "./agents.ts";
 import { UserError } from "./errors.ts";
-import { exec } from "./exec.ts";
+import { checkForks, unresolvedFiles } from "./edits.ts";
+import { exec, stopAll } from "./exec.ts";
 import {
   changedFiles,
+  dict,
   hashDir,
+  inside,
   isErrno,
   isRecord,
+  isRunning,
+  jsonTempWriter,
+  linkOnPath,
   lstat,
   moveDir,
   readJsonOrNothing,
+  resolvedHashes,
   sameTree,
+  sha256,
+  tempOwner,
   writeJson,
 } from "./fs.ts";
 import { matchesGlob } from "./glob.ts";
@@ -45,11 +54,20 @@ import {
   readConfig,
   remoteManifest,
 } from "./manifest.ts";
-import { nameKey, segmentProblem } from "./names.ts";
+import { nameKey } from "./names.ts";
 import { paths, tildify } from "./paths.ts";
+import {
+  sameBoot as bootsMatch,
+  processAge,
+  processStartedAt,
+  processStartTicks,
+  type Whereabouts,
+  whereabouts,
+} from "./process.ts";
 import type { HookRun, Report } from "./report.ts";
-import { failedResult, type SourceResult, sourceFiles, storePaths, syncSource } from "./sources.ts";
-import { loadState, saveState, sourceState, type State } from "./state.ts";
+import { failedResult, type SourceResult, sourceFiles, syncSource } from "./sources.ts";
+import { loadState, sourceState, type State, StateFile } from "./state.ts";
+import { scheduleDrift } from "./timer.ts";
 import { version } from "./version.ts";
 
 export interface SyncOptions {
@@ -64,6 +82,25 @@ export interface SyncOptions {
   manifest?: string;
   /** An already loaded manifest (init plans with one that is not on disk yet). */
   loaded?: LoadedManifest;
+  /** Leave out the note about a timer whose schedule the manifest changed (init installs it next). */
+  skipTimerCheck?: boolean;
+}
+
+/**
+ * A note, once for each new schedule, when the manifest's `timer` differs from the one the installed
+ * timer runs on. The sync does not install it again: it may be the timer's own run, and launchd
+ * stops a job's running process when the job is replaced. `doctor` and `status` say it every time.
+ */
+function timerDrift(timer: { cron: string; timeZone?: string }, state: State): string | undefined {
+  const drift = scheduleDrift(timer);
+  if (!drift) {
+    delete state.timerNotice;
+    return undefined;
+  }
+  const key = `${timer.cron} ${timer.timeZone ?? "local"}`;
+  if (state.timerNotice === key) return undefined;
+  state.timerNotice = key;
+  return drift;
 }
 
 export function manifestSpec(override?: string): string {
@@ -76,15 +113,41 @@ export function manifestSpec(override?: string): string {
 /** Agents that skip a skill whose SKILL.md is a symlink, found by running them. */
 const SKIP_LINKED_SKILL_MD: Record<string, string> = { codex: "Codex", cursor: "Cursor" };
 
-/** No sync takes this long; a lock older than this was left by one that hung or was killed. */
+/**
+ * No sync takes this long (a whole run is stopped after `SYNC_TIMEOUT_MS`); a lock older than this
+ * was left by one that hung or was killed.
+ */
 const LOCK_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 
-interface LockHolder {
+/**
+ * How far the start the OS records for a process may come after the start it measured itself
+ * (`performance.timeOrigin`): `ps` gives whole seconds, and Linux places a start through the boot
+ * time, which moves when the clock is set.
+ */
+const START_SLACK_MS = 10_000;
+
+export interface LockHolder {
   pid: number;
-  /** The script the holder runs, to tell it from another program that got its pid. */
-  script?: string;
+  /** The command that holds it: `sync`, or one that changes state.json, such as `merge`. */
+  command?: string;
+  /** When the holder started, by its own clock, to tell it from a later process with its pid. */
+  started?: number;
   at: number;
+  /** The holder's machine (hostname), boot and pid namespace; see `Whereabouts`. */
+  host?: string;
+  boot?: string;
+  ns?: string;
+  /** Milliseconds since boot when the lock was taken, to age it on a clock nobody sets. */
+  uptime?: number;
+  /** Linux: the holder's start in clock ticks since boot, which setting the clock does not move. */
+  ticks?: number;
 }
+
+const optional = <T extends "string" | "number">(
+  raw: Record<string, unknown>,
+  key: string,
+  type: T,
+) => (typeof raw[key] === type ? (raw[key] as T extends "string" ? string : number) : undefined);
 
 function readLock(file: string): { text: string; holder: LockHolder } | undefined {
   let text: string;
@@ -100,122 +163,296 @@ function readLock(file: string): { text: string; holder: LockHolder } | undefine
   try {
     raw = JSON.parse(text);
   } catch {}
-  // Locks written before 0.0.1 hold just the pid.
-  if (typeof raw === "number") return { text, holder: { pid: raw, at: mtime } };
   if (isRecord(raw) && typeof raw.pid === "number")
     return {
       text,
       holder: {
         pid: raw.pid,
-        script: typeof raw.script === "string" ? raw.script : undefined,
-        at: typeof raw.at === "number" ? raw.at : mtime,
+        command: optional(raw, "command", "string"),
+        started: optional(raw, "started", "number"),
+        at: optional(raw, "at", "number") ?? mtime,
+        host: optional(raw, "host", "string"),
+        boot: optional(raw, "boot", "string"),
+        ns: optional(raw, "ns", "string"),
+        uptime: optional(raw, "uptime", "number"),
+        ticks: optional(raw, "ticks", "number"),
       },
     };
-  return { text, holder: { pid: 0, at: mtime } };
+  return { text, holder: { pid: typeof raw === "number" ? raw : 0, at: mtime } };
 }
 
-/** The command line of a running process, or undefined when the OS does not tell. */
-function commandLine(pid: number): string | undefined {
-  try {
-    if (process.platform === "linux")
-      return readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\0").join(" ");
-    if (process.platform === "win32")
-      // Only runs when a lock names a live pid. [wmisearcher] loads no module: Get-CimInstance
-      // would, and with a fresh profile PowerShell first spends seconds indexing every module.
-      return execFileSync(
-        "powershell.exe",
-        [
-          "-NoProfile",
-          "-NonInteractive",
-          "-Command",
-          `([wmisearcher]'SELECT CommandLine FROM Win32_Process WHERE ProcessId=${pid}').Get() | ForEach-Object { $_.CommandLine }`,
-        ],
-        {
-          encoding: "utf8",
-          stdio: ["ignore", "pipe", "ignore"],
-          timeout: 30_000,
-          windowsHide: true,
-        },
-      );
-    return execFileSync("ps", ["-o", "command=", "-p", String(pid)], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-      timeout: 5000,
-    });
-  } catch {}
+/** What this process writes into the sync lock: who it is, and where. */
+export function lockText(command = "sync"): string {
+  const here = whereabouts();
+  const ticks = processStartTicks();
+  return JSON.stringify({
+    pid: process.pid,
+    command,
+    started: Math.floor(performance.timeOrigin),
+    at: Date.now(),
+    ...here,
+    ...(ticks === undefined ? {} : { ticks }),
+  });
+}
+
+/** Where a lock's holder runs, when that is not here: another machine, or another container. */
+function elsewhere(holder: LockHolder, here: Whereabouts): string | undefined {
+  if (holder.host !== undefined && holder.host !== here.host) return `on ${holder.host}`;
+  if (holder.ns !== undefined && here.ns !== undefined && holder.ns !== here.ns)
+    return `in another container on ${holder.host ?? here.host}`;
   return undefined;
 }
 
-/** Why a lock no longer guards a running sync, or undefined while it does. */
+/**
+ * Why a lock no longer guards a running sync, or undefined while it does. The holder is the
+ * process with its pid that started no later than it did; one that started after it got the pid
+ * when the holder was gone. A pid names a process only on its own machine, boot and pid
+ * namespace, so a lock taken elsewhere (two containers or two machines sharing HOME) is held until
+ * it is too old.
+ */
 function staleBecause(holder: LockHolder): string | undefined {
+  const here = whereabouts();
   const { pid } = holder;
+  const sameBoot = holder.boot !== undefined && bootsMatch(holder.boot, here.boot);
+  // On one boot, the time since boot ages a lock whatever the clock does.
+  const lockAge =
+    sameBoot && holder.uptime !== undefined ? here.uptime - holder.uptime : Date.now() - holder.at;
+  const away = elsewhere(holder, here);
+  if (away)
+    return lockAge > LOCK_MAX_AGE_MS
+      ? `its sync ${away} took it more than two hours ago`
+      : undefined;
+  // A boot id differs only after a restart; a boot time elsewhere moves with the clock too.
+  if (
+    process.platform === "linux" &&
+    holder.boot !== undefined &&
+    !holder.boot.startsWith("t:") &&
+    !sameBoot
+  )
+    return `the machine restarted since its sync (pid ${pid}) took it`;
   if (!(pid > 0) || pid === process.pid) return `it names no running sync`;
   try {
     process.kill(pid, 0);
   } catch (error) {
     if (!isErrno(error, "EPERM")) return `its sync (pid ${pid}) is gone`;
   }
-  if (Date.now() - holder.at > LOCK_MAX_AGE_MS) return `it is more than two hours old`;
-  // An empty answer means the OS would not say, not that the command line is empty.
-  const command = commandLine(pid)?.trim() || undefined;
-  const script = holder.script ?? process.argv[1];
-  // Windows paths compare without case.
-  const fold = (text: string) => (process.platform === "win32" ? text.toLowerCase() : text);
-  if (command !== undefined && script && !fold(command).includes(fold(script)))
-    return `pid ${pid} is now another program`;
+  // Every lock since 0.0.1 says when its holder started; an older one can't tell a live sync from
+  // another program, and none was ever released.
+  if (holder.started === undefined && holder.ticks === undefined)
+    return `an older skillfleet wrote it`;
+  if (holder.ticks !== undefined && sameBoot) {
+    const ticks = processStartTicks(pid);
+    if (ticks !== undefined && ticks !== holder.ticks) return `pid ${pid} is now another program`;
+  } else {
+    // By the clock: a process that started after the holder did and after the lock was taken got
+    // the pid later. Both, since a clock set forward moves where the OS places a start.
+    const started = processStartedAt(pid);
+    if (
+      started !== undefined &&
+      started > (holder.started ?? 0) + START_SLACK_MS &&
+      started > holder.at + START_SLACK_MS
+    )
+      return `pid ${pid} is now another program`;
+  }
+  // The holder is this process, so the lock is no older than it: a clock set forward ages the lock
+  // by the clock, never the process by its time since boot.
+  const age = Math.min(lockAge, processAge(pid) ?? lockAge);
+  if (age > LOCK_MAX_AGE_MS) return `it is more than two hours old`;
   return undefined;
 }
 
-/** Another sync holds the lock and is still running. */
+/** Another sync, or a command that changes state.json, holds the lock and is still running. */
 export class LockHeldError extends UserError {
   readonly pid: number;
-  constructor(pid: number) {
-    super(`another skillfleet sync is running (pid ${pid})`);
+  constructor(pid: number, where?: string, command = "sync", hint = "") {
+    super(
+      `${command === "sync" ? "another skillfleet sync" : `skillfleet ${command}`} is running (pid ${pid}${where ? ` ${where}` : ""})${hint}`,
+    );
     this.pid = pid;
   }
 }
 
-/** Takes the sync lock atomically; a stale lock is moved aside first. Returns the release and a note. */
-function acquireLock(): { release: () => void; note?: string } {
+const heldError = (holder: LockHolder) =>
+  new LockHeldError(holder.pid, elsewhere(holder, whereabouts()), holder.command);
+
+/** How `takeLock` judges a lock and, in tests, lets other contenders in between its steps. */
+export interface LockOptions {
+  /** Why a holder no longer guards a running sync, or undefined while it does. */
+  staleBecause?: (holder: LockHolder) => string | undefined;
+  /** Called after each step that reads or changes the lock's files. */
+  step?: () => void;
+}
+
+/** Whether this process holds the sync lock for a command, which the sync it runs then shares. */
+let heldByCommand = false;
+
+/**
+ * Takes the sync lock atomically; a stale lock is moved aside first. Returns the release and a
+ * note. A sync that a command holding the lock runs (`merge`, `fork`, `remove`) runs under it.
+ */
+function acquireLock(command = "sync"): { release: () => void; note?: string } {
+  if (heldByCommand) return { release: () => {} };
   const file = paths.lock();
   mkdirSync(dirname(file), { recursive: true });
-  const mine = JSON.stringify({ pid: process.pid, script: process.argv[1], at: Date.now() });
+  const mine = lockText(command);
   const release = () => {
     if (readLock(file)?.text === mine) rmSync(file, { force: true });
   };
+  return { release, note: takeLock(file, mine) };
+}
+
+/** How long a command waits for a running sync to let go of the lock; SKILLFLEET_LOCK_WAIT_MS sets it, for tests. */
+function lockWaitMs(): number {
+  const set = Number(process.env.SKILLFLEET_LOCK_WAIT_MS);
+  return set >= 0 && process.env.SKILLFLEET_LOCK_WAIT_MS ? set : 10_000;
+}
+
+/**
+ * Runs `work`, a command that changes state.json or the store (`merge`, `fork`, `adopt`, `remove`),
+ * under the sync lock, so a sync never writes back a state.json it read before the command changed
+ * it. A running sync is waited for a few seconds; after that the command stops and says to try again.
+ */
+export async function withSyncLock<T>(command: string, work: () => Promise<T>): Promise<T> {
+  const deadline = Date.now() + lockWaitMs();
+  let lock: ReturnType<typeof acquireLock>;
+  for (;;) {
+    try {
+      lock = acquireLock(command);
+      break;
+    } catch (error) {
+      if (!(error instanceof LockHeldError) || Date.now() >= deadline) {
+        if (error instanceof LockHeldError)
+          throw new UserError(`${error.message}; try again when it finishes`);
+        throw error;
+      }
+      await new Promise((done) => setTimeout(done, 250));
+    }
+  }
+  heldByCommand = true;
+  try {
+    return await work();
+  } finally {
+    heldByCommand = false;
+    lock.release();
+  }
+}
+
+/**
+ * Creates the lock `file` holding `mine`, breaking a stale lock first. Returns a note when it broke
+ * one. Throws LockHeldError while a running sync holds it, or is breaking it.
+ */
+export function takeLock(
+  file: string,
+  mine: string,
+  options: LockOptions = {},
+): string | undefined {
+  const judge = options.staleBecause ?? staleBecause;
+  const step = options.step ?? (() => {});
   let note: string | undefined;
   for (let attempt = 0; attempt < 5; attempt++) {
-    if (create(file, mine)) return { release, note };
+    if (create(file, mine)) {
+      sweepBreakMarkers(file, judge);
+      return note;
+    }
+    step();
     const lock = readLock(file);
     if (!lock) continue;
-    const reason = staleBecause(lock.holder);
-    if (!reason) throw new LockHeldError(lock.holder.pid);
-    // Move it aside, then check it is still the lock judged stale: another sync may have broken
-    // it and taken a fresh one in between, and that one goes back.
-    const aside = `${file}.${process.pid}.stale`;
-    try {
-      renameSync(file, aside);
-    } catch (error) {
-      if (isErrno(error, "ENOENT")) continue;
-      throw error;
-    }
-    const moved = readFileSync(aside, "utf8");
-    if (moved !== lock.text) {
-      try {
-        linkSync(aside, file);
-      } catch {}
-      rmSync(aside, { force: true });
-      continue;
-    }
-    rmSync(aside, { force: true });
-    note = `removed a stale sync lock: ${reason}`;
+    const reason = judge(lock.holder);
+    if (!reason) throw heldError(lock.holder);
+    step();
+    if (breakLock(file, lock.text, mine, judge, step))
+      note = `removed a stale sync lock: ${reason}`;
   }
   throw new Error(`could not take the sync lock ${tildify(file)}`);
 }
 
+/** The marker that one breaker of the lock `file` holding `text` creates; named for that text. */
+const breakMarker = (file: string, text: string) => `${file}.${sha256(text).slice(0, 16)}.break`;
+
+/**
+ * Deletes the lock `file` if it still holds `text`, the lock judged stale. Breakers of one lock go
+ * one at a time: each first creates its marker, exclusively. A lock leaves its path only through its
+ * breaker, or its own sync's release, so while the marker is held, the lock read again is still the
+ * one judged stale, and a sync that took the path since is never removed. A marker left by a breaker
+ * that died is broken the same way. Returns whether it deleted the lock.
+ */
+function breakLock(
+  file: string,
+  text: string,
+  mine: string,
+  judge: (holder: LockHolder) => string | undefined,
+  step: () => void,
+  depth = 0,
+): boolean {
+  const marker = breakMarker(file, text);
+  if (!create(marker, mine)) {
+    step();
+    const breaker = readLock(marker);
+    if (!breaker) return false;
+    if (depth >= 3 || !judge(breaker.holder)) throw heldError(breaker.holder);
+    breakLock(marker, breaker.text, mine, judge, step, depth + 1);
+    return false;
+  }
+  try {
+    step();
+    if (readLock(file)?.text !== text) return false;
+    rmSync(file, { force: true });
+    step();
+    return true;
+  } finally {
+    rmSync(marker, { force: true });
+  }
+}
+
+/** Deletes break markers whose breaker is gone; the caller holds the lock, so none is in use for it. */
+function sweepBreakMarkers(file: string, judge: (holder: LockHolder) => string | undefined) {
+  const dir = dirname(file);
+  const prefix = `${basename(file)}.`;
+  let names: string[];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    if (!name.startsWith(prefix) || !name.endsWith(".break")) continue;
+    const marker = readLock(join(dir, name));
+    if (marker && judge(marker.holder)) rmSync(join(dir, name), { force: true });
+  }
+}
+
+/** A write of state.json takes well under this, so a temp file this old is no write in progress. */
+const JSON_TEMP_MAX_AGE_MS = 60 * 60_000;
+
+/**
+ * Deletes the temporary files a killed sync left while it wrote state.json or last-run.json
+ * (`writeJson`). Other commands write state.json without the lock, and other machines or
+ * containers may share this folder, so a file goes when this host and pid namespace wrote it and
+ * its process is gone, or when it is older than any write takes: its pid may be reused, or name a
+ * process elsewhere.
+ */
+export function sweepJsonTemps(dir = dirname(paths.state())) {
+  let names: string[];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    if (!/^(?:state|last-run)\.json\..*\.tmp$/.test(name)) continue;
+    const file = join(dir, name);
+    const age = Date.now() - (lstat(file)?.mtimeMs ?? Date.now());
+    const writer = jsonTempWriter(name);
+    const mine = writer?.owner === tempOwner();
+    if ((mine && !isRunning(writer!.pid)) || age > JSON_TEMP_MAX_AGE_MS)
+      rmSync(file, { force: true });
+  }
+}
+
 /** Creates `file` with `text` only if it does not exist, never leaving it half written. */
 function create(file: string, text: string): boolean {
-  const temp = `${file}.${process.pid}.tmp`;
+  // Unique across machines and containers that share this folder, where pids repeat.
+  const temp = `${file}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`;
   writeFileSync(temp, text);
   try {
     linkSync(temp, file);
@@ -233,6 +470,15 @@ function create(file: string, text: string): boolean {
   } finally {
     rmSync(temp, { force: true });
   }
+}
+
+/**
+ * The longest a whole sync may take: well under `LOCK_MAX_AGE_MS`, so a lock this old is never a
+ * live sync's. SKILLFLEET_SYNC_TIMEOUT_MS sets it, for tests.
+ */
+function syncTimeoutMs(): number {
+  const set = Number(process.env.SKILLFLEET_SYNC_TIMEOUT_MS);
+  return set > 0 && set < LOCK_MAX_AGE_MS ? set : 60 * 60_000;
 }
 
 /** Hooks run while the sync holds its lock, so a stuck one is stopped after this long. */
@@ -315,15 +561,22 @@ function carryOver(report: Report, only: string) {
   }
 }
 
-/** Runs each hook whose `on` patterns match a changed `<source>:<file>`; the report JSON goes to stdin. */
+/** Each `<source>:<file>` a result changed. */
+const changesOf = (result: SourceResult) => result.changed.map((file) => `${result.id}:${file}`);
+
+/**
+ * Runs each hook whose `on` patterns match a changed `<source>:<file>` (a source id has no `:`);
+ * the report JSON goes to stdin.
+ */
 async function runHooks(
   loaded: LoadedManifest,
-  results: SourceResult[],
+  due: readonly string[],
   report: Report,
 ): Promise<HookRun[]> {
-  const changed = results.flatMap((result) =>
-    result.changed.map((file) => ({ source: result.id, file })),
-  );
+  const changed = due.map((change) => {
+    const at = change.indexOf(":");
+    return { source: change.slice(0, at), file: change.slice(at + 1) };
+  });
   const runs: HookRun[] = [];
   for (const hook of loaded.root.hooks) {
     const matched = changed
@@ -370,49 +623,48 @@ function renamedFrom(
   );
 }
 
-function recordSkills(
-  state: State,
-  winners: Map<string, DesiredLink>,
-  results: SourceResult[],
-  now: string,
-): boolean {
-  let changed = false;
-  const touched = new Set(
-    results.flatMap((result) =>
-      [...result.updated, ...result.added].map((skill) => `${result.id}/${skill}`),
-    ),
-  );
-  const clonesChanged = new Set(
-    results
-      .filter(
-        (result) =>
-          result.changed.length > 0 && (result.kind === "clone" || result.kind === "local"),
-      )
-      .map((result) => result.id),
-  );
+function latestTime(previous?: string, next?: string): string | undefined {
+  return previous === undefined || (next !== undefined && next > previous) ? next : previous;
+}
+
+function checkpointSkillChanges(state: State, result: SourceResult, now: string) {
+  const all = result.changed.length > 0 && (result.kind === "clone" || result.kind === "local");
+  if (!all && result.updated.length === 0 && result.added.length === 0) return;
+  const changes = ((state.skillChanges ??= dict())[result.id] ??= { skills: dict() });
+  if (all) changes.all = latestTime(changes.all, now);
+  for (const name of [...result.updated, ...result.added])
+    changes.skills[name] = latestTime(changes.skills[name], now)!;
+}
+
+function recordSkills(state: State, winners: Map<string, DesiredLink>, now: string) {
+  let changed: string | undefined;
   for (const [name, link] of winners) {
     const record = state.skills[name];
+    const changes = state.skillChanges?.[link.source];
+    const touched = latestTime(changes?.skills[name], changes?.all);
     if (!record) {
       // Renamed only in case or Unicode form: the same skill, so it keeps when it arrived.
       const old = renamedFrom(state, winners, name);
-      const addedAt = old === undefined ? now : state.skills[old]!.addedAt;
-      state.skills[name] = { source: link.source, dir: link.target, addedAt, changedAt: now };
-      changed = true;
-    } else if (
-      record.dir !== link.target ||
-      touched.has(`${link.source}/${name}`) ||
-      clonesChanged.has(link.source)
-    ) {
-      Object.assign(record, { source: link.source, dir: link.target, changedAt: now });
-      changed = true;
+      const changedAt = touched ?? now;
+      const addedAt = old === undefined ? changedAt : state.skills[old]!.addedAt;
+      state.skills[name] = { source: link.source, dir: link.target, addedAt, changedAt };
+      changed = latestTime(changed, changedAt);
+    } else if (record.source !== link.source || record.dir !== link.target || touched) {
+      const changedAt =
+        record.source === link.source && record.dir === link.target
+          ? latestTime(record.changedAt, touched)!
+          : now;
+      Object.assign(record, { source: link.source, dir: link.target, changedAt });
+      changed = latestTime(changed, changedAt);
     }
   }
   for (const name of Object.keys(state.skills)) {
     if (winners.has(name)) continue;
     delete state.skills[name];
-    changed = true;
+    changed = latestTime(changed, now);
   }
-  return changed;
+  delete state.skillChanges;
+  if (changed !== undefined) state.lastChange = latestTime(state.lastChange, changed);
 }
 
 async function postToHub(hub: string, report: Report): Promise<string | undefined> {
@@ -435,7 +687,21 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
   const offline = options.offline ?? false;
   const scratch = dryRun ? mkdtempSync(join(tmpdir(), "skillfleet-dry-")) : undefined;
   const lock = dryRun ? { release: () => {} } : acquireLock();
+  if (!dryRun) sweepJsonTemps();
   const warnings: string[] = lock.note ? [lock.note] : [];
+  // Every download and command has its own timeout; this bounds the whole run, so a sync stuck
+  // anyway lets go of the lock and says so, and the next timer run starts over.
+  let doing = "loading the manifest";
+  const limit = syncTimeoutMs();
+  const watchdog = setTimeout(() => {
+    stopAll();
+    lock.release();
+    process.stderr.write(
+      `skillfleet: the sync was stopped after ${limit >= 60_000 ? `${Math.round(limit / 60_000)} minutes` : `${limit / 1000} s`} while ${doing}; its lock is released, and the next sync starts over\n`,
+    );
+    process.exit(1);
+  }, limit);
+  watchdog.unref();
   try {
     // A remote manifest's file is a cache copy (a scratch one in a dry run), so reports name its spec.
     const spec = options.loaded ? options.loaded.root.file : manifestSpec(options.manifest);
@@ -447,7 +713,12 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
       }));
     if (options.only && !loaded.sources.some((source) => source.id === options.only))
       throw new ManifestError(`no source "${options.only}" in the manifest`);
-    const state = loadState(dryRun ? undefined : warnings);
+    const stateFile = new StateFile(loadState(dryRun ? undefined : warnings));
+    const state = stateFile.state;
+    if (!dryRun && !options.skipTimerCheck) {
+      const drift = timerDrift(loaded.root.timer, state);
+      if (drift) warnings.push(drift);
+    }
     const targets = await agentTargets(loaded.root.agents);
     const adoptionErrors: string[] = [];
     // Before the sources look for local edits, so they find the ones made in a copy.
@@ -487,10 +758,21 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
         storeDir: paths.store(source.id),
         now: startedAt,
       };
+      doing = `fetching ${source.id}`;
       try {
         results.push(await syncSource(source, sourceState(state, source), ctx));
       } catch (error) {
         results.push({ ...failedResult(source, errorText(error)), skills: lastLinked(source.id) });
+      }
+      // Saved as each source is done: a sync stopped later (its time limit, a kill) leaves no copy
+      // in the store at a version state.json does not record. Its changes stay due to the hooks
+      // until they run, so a sync stopped first leaves them to the next.
+      if (!dryRun) {
+        checkpointSkillChanges(state, results.at(-1)!, startedAt);
+        const changes = changesOf(results.at(-1)!);
+        if (loaded.root.hooks.length > 0 && changes.length > 0)
+          state.hooksDue = [...new Set([...(state.hooksDue ?? []), ...changes])];
+        stateFile.save();
       }
     }
 
@@ -533,7 +815,12 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
             shadowed.push({ skill: skill.name, winner: winner.source, loser: result.id });
           continue;
         }
-        const link = { name: skill.name, target: skill.dir, source: result.id };
+        const link: DesiredLink = {
+          name: skill.name,
+          target: skill.dir,
+          source: result.id,
+          ...(skill.root ? { root: skill.root } : {}),
+        };
         winners.set(skill.name, link);
         byKey.set(nameKey(skill.name), link);
       }
@@ -551,6 +838,7 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
           : "none of the manifest's agents has a global skills folder, so no skills were linked",
       );
     const desired = [...winners.values()];
+    doing = "linking skills into agent folders";
     // One folder that can't be written must not stop the others.
     const linkInto = (dir: string, links: DesiredLink[]): TargetReport => {
       try {
@@ -608,6 +896,12 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
             );
       }
 
+    // Upstream changes to forks, said once; and a fork shadowing its source is what forking meant.
+    const forks =
+      dryRun || offline
+        ? { updates: [], warnings: [] }
+        : await checkForks(loaded, results, state, paths.cache());
+    const forked = new Set(Object.keys(loaded.root.forks).map(nameKey));
     const sourceWon = (result: SourceResult, skill: string) =>
       winners.get(skill)?.source === result.id;
     const report: Report = {
@@ -632,7 +926,7 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
           ),
         ].sort(),
       },
-      shadowed,
+      shadowed: shadowed.filter((entry) => !forked.has(nameKey(entry.skill))),
       renamed: [...winners.keys()].flatMap((name) => {
         const from = renamedFrom(state, winners, name);
         return from === undefined ? [] : [{ from, to: name }];
@@ -643,13 +937,17 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
       held: results.flatMap((result) =>
         result.held ? [{ source: result.id, ...result.held }] : [],
       ),
-      pending: results.flatMap((result) =>
-        result.pending.map((entry) => ({ source: result.id, ...entry })),
-      ),
+      pending: [
+        ...results.flatMap((result) =>
+          result.pending.map((entry) => ({ source: result.id, ...entry })),
+        ),
+        ...forks.updates.map((update) => ({ ...update, reason: "fork" as const })),
+      ],
       targets: targetReports,
       hooks: [],
       warnings: [
         ...warnings,
+        ...forks.warnings,
         ...loaded.warnings,
         ...results.flatMap((result) => result.warnings),
         ...(await unmatchedHooks(loaded, results)),
@@ -661,12 +959,30 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
       ],
     };
     if (options.only) carryOver(report, options.only);
+    // A merge's conflict markers are in the copy agents use, as git leaves them in a working tree;
+    // until they are resolved and `merge` runs again, the skill is reported as held.
+    for (const [name, conflict] of Object.entries(state.conflicts ?? {})) {
+      const files = unresolvedFiles(conflict);
+      if (files.length > 0)
+        report.held.push({
+          source: state.skills[name]?.source ?? name,
+          reason: `${name} has unresolved merge conflicts; resolve them, then run \`skillfleet merge ${name}\``,
+          files,
+        });
+    }
     if (!dryRun) {
-      report.hooks = await runHooks(loaded, results, report);
+      recordSkills(state, winners, startedAt);
+      stateFile.save();
+      doing = "running hooks";
+      report.hooks = await runHooks(
+        loaded,
+        [...new Set([...(state.hooksDue ?? []), ...results.flatMap(changesOf)])],
+        report,
+      );
+      delete state.hooksDue;
       for (const hook of report.hooks)
         if (hook.code !== 0) report.errors.push(`hook ${hook.name} exited with ${hook.code}`);
-      if (recordSkills(state, winners, results, startedAt)) state.lastChange = startedAt;
-      saveState(state);
+      stateFile.save();
     }
     report.ok = report.errors.length === 0;
     report.finishedAt = new Date().toISOString();
@@ -691,6 +1007,7 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
     }
     return report;
   } finally {
+    clearTimeout(watchdog);
     lock.release();
     if (scratch) rmSync(scratch, { recursive: true, force: true });
   }
@@ -718,11 +1035,23 @@ function adoptCopyEdits(dirs: readonly string[], dryRun: boolean, errors: string
           const now = hashDir(copy);
           const files = changedFiles(record.hashes, now);
           if (files.length === 0) continue;
-          if (!sameTree(hashDir(record.target, { skillMdAsFile: true }), record.hashes)) continue;
+          if (!sameTree(resolvedHashes(record.target, record.root), record.hashes)) continue;
           // A link moves as the file it points to, and a linked SKILL.md in place stays a link.
-          const linked = (path: string) => lstat(path)?.isSymbolicLink();
-          if (files.some((file) => linked(join(copy, file)) || linked(join(record.target, file))))
+          if (files.some((file) => lstat(join(record.target, file))?.isSymbolicLink())) continue;
+          // An edit goes into the source folder itself, never through a link on the way to it:
+          // a link the copy left out may lead out of the source.
+          const through = files.find(
+            (file) => linkOnPath(copy, file) || linkOnPath(record.target, file),
+          );
+          const outside =
+            record.root !== undefined &&
+            !inside(realpathSync(record.root), realpathSync(record.target));
+          if (through !== undefined || outside) {
+            said.push(
+              `${tildify(copy)} has local edits that could not be moved: ${outside ? `${tildify(record.target)} is outside ${tildify(record.root!)}` : `${through} is behind a link in ${tildify(record.target)}`}`,
+            );
             continue;
+          }
           if (dryRun) {
             said.push(
               `would move the edits in ${tildify(copy)} (${files.join(", ")}) into ${tildify(record.target)}, which every agent shows`,
@@ -758,23 +1087,29 @@ function adoptCopyEdits(dirs: readonly string[], dryRun: boolean, errors: string
 
 /**
  * Forgets the vendored copies of a source the manifest no longer declares, or no longer vendors
- * (`why` says which). Copies with local edits move to the backup folder first; unedited ones are
- * deleted with the store. Returns what to tell the user.
+ * (`why` says which). Every copy in the store moves to the backup folder first when it has local
+ * edits, or has no install record to tell: a sync killed before it saved state.json leaves copies
+ * without one, which the user may have edited since. Unedited ones are deleted with the store.
+ * Returns what to tell the user.
  */
 function retireStore(id: string, state: State, backupRoot: string, why: string): string[] {
   const said: string[] = [];
   const store = paths.store(id);
-  for (const [name, copy] of Object.entries(state.sources[id]?.skills ?? {})) {
-    // A name that is not one plain folder name was never written by this version.
-    if (segmentProblem(name)) continue;
-    const live = storePaths(store, name).live;
-    if (!existsSync(live)) continue;
-    const files = changedFiles(copy.hashes, hashDir(live));
-    if (files.length === 0) continue;
+  const records = state.sources[id]?.skills ?? {};
+  const liveDir = join(store, "live");
+  const onDisk = existsSync(liveDir) ? readdirSync(liveDir) : [];
+  for (const name of onDisk) {
+    const live = join(liveDir, name);
+    if (!lstat(live)?.isDirectory()) continue;
+    const record = Object.hasOwn(records, name) ? records[name] : undefined;
+    const files = record ? changedFiles(record.hashes, hashDir(live)) : [];
+    if (record && files.length === 0) continue;
     const to = join(backupRoot, id, name);
     moveDir(live, to);
     said.push(
-      `${why}; ${name} had local edits (${files.join(", ")}), so it was moved to ${tildify(to)}`,
+      record
+        ? `${why}; ${name} had local edits (${files.join(", ")}), so it was moved to ${tildify(to)}`
+        : `${why}; ${name} had no install record to tell whether it was edited, so it was moved to ${tildify(to)}`,
     );
   }
   rmSync(store, { recursive: true, force: true });

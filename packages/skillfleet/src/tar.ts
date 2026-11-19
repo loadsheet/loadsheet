@@ -27,7 +27,8 @@ export function safeRelativePath(raw: string): string | undefined {
 const UNPACKED_LIMIT = 100 * 1024 * 1024;
 const ENTRY_LIMIT = 50_000;
 
-function gunzipCapped(gz: Uint8Array): Buffer {
+/** Unpacks a gzip stream, refusing one that unpacks to more than the limit. */
+export function gunzipCapped(gz: Uint8Array): Buffer {
   try {
     return gunzipSync(gz, { maxOutputLength: UNPACKED_LIMIT });
   } catch (error) {
@@ -37,10 +38,10 @@ function gunzipCapped(gz: Uint8Array): Buffer {
   }
 }
 
-/** Regular files in a .tgz, keyed by path. Throws on links, on paths that leave the archive, and past the size limits. */
-export function readTgz(gz: Uint8Array): Map<string, Uint8Array> {
-  const tar = gunzipCapped(gz);
-  const files = new Map<string, Uint8Array>();
+/** Each entry of an unpacked tar, long names (pax `path`, GNU `L`) applied. Throws past the entry limit. */
+export function* tarEntries(
+  tar: Uint8Array,
+): Generator<{ name: string; type: string; body: Uint8Array }> {
   let offset = 0;
   let longName: string | undefined;
   let entries = 0;
@@ -67,6 +68,14 @@ export function readTgz(gz: Uint8Array): Map<string, Uint8Array> {
       longName = text(body, 0, body.length);
       continue;
     }
+    yield { name, type, body };
+  }
+}
+
+/** Regular files in a .tgz, keyed by path. Throws on links, on paths that leave the archive, and past the size limits. */
+export function readTgz(gz: Uint8Array): Map<string, Uint8Array> {
+  const files = new Map<string, Uint8Array>();
+  for (const { name, type, body } of tarEntries(gunzipCapped(gz))) {
     if (type === "1" || type === "2") throw new Error(`archive entry ${name} is a link`);
     if (type !== "0" && type !== "\0") continue;
     const path = safeRelativePath(name);
@@ -84,5 +93,77 @@ export function extractStripped(files: Map<string, Uint8Array>, dir: string) {
     const target = join(dir, stripped);
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, content);
+  }
+}
+
+/** A zip number past `Number.MAX_SAFE_INTEGER` reads as invalid. */
+function safe(value: bigint, what: string): number {
+  if (value > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error(`invalid zip archive: ${what}`);
+  return Number(value);
+}
+
+/**
+ * Each entry of a zip archive as its central directory lists it, with the size it unpacks to (zip64
+ * sizes and offsets read). Throws for an archive that is not a zip, and past the entry limit.
+ */
+export function* zipEntries(
+  zip: Uint8Array,
+): Generator<{ name: string; directory: boolean; size: number }> {
+  const buffer = Buffer.from(zip.buffer, zip.byteOffset, zip.byteLength);
+  const invalid = (what: string) => new Error(`invalid zip archive: ${what}`);
+  const within = (offset: number, length: number, what: string) => {
+    if (offset < 0 || offset + length > buffer.length) throw invalid(what);
+  };
+  // The end of central directory record, 22 bytes, then a comment of at most 65535.
+  let end = -1;
+  for (let at = buffer.length - 22; at >= 0 && at >= buffer.length - 22 - 0xffff; at--)
+    if (buffer.readUInt32LE(at) === 0x06054b50) {
+      end = at;
+      break;
+    }
+  if (end < 0) throw invalid("no end of central directory");
+  let entries = buffer.readUInt16LE(end + 10);
+  let offset = buffer.readUInt32LE(end + 16);
+  if (entries === 0xffff || offset === 0xffffffff) {
+    const locator = end - 20;
+    within(locator, 20, "no zip64 locator");
+    if (buffer.readUInt32LE(locator) !== 0x07064b50) throw invalid("no zip64 locator");
+    const record = safe(buffer.readBigUInt64LE(locator + 8), "zip64 record offset");
+    within(record, 56, "zip64 end of central directory");
+    if (buffer.readUInt32LE(record) !== 0x06064b50) throw invalid("zip64 end of central directory");
+    entries = safe(buffer.readBigUInt64LE(record + 32), "zip64 entry count");
+    offset = safe(buffer.readBigUInt64LE(record + 48), "zip64 central directory offset");
+  }
+  if (entries > ENTRY_LIMIT)
+    throw new Error(`the archive has more than ${ENTRY_LIMIT} entries, over skillfleet's limit`);
+  for (let i = 0; i < entries; i++) {
+    within(offset, 46, "central directory entry");
+    if (buffer.readUInt32LE(offset) !== 0x02014b50) throw invalid("central directory entry");
+    let size = buffer.readUInt32LE(offset + 24);
+    const nameLength = buffer.readUInt16LE(offset + 28);
+    const extraLength = buffer.readUInt16LE(offset + 30);
+    const commentLength = buffer.readUInt16LE(offset + 32);
+    const type = (buffer.readUInt32LE(offset + 38) >>> 16) & 0o170000;
+    const extra = offset + 46 + nameLength;
+    within(offset + 46, nameLength + extraLength + commentLength, "central directory entry");
+    const name = buffer.subarray(offset + 46, extra).toString("utf8");
+    if (size === 0xffffffff) {
+      // The zip64 extra field (id 1) starts with the unpacked size when the entry's says 0xffffffff.
+      let at = extra;
+      let found = false;
+      while (at + 4 <= extra + extraLength) {
+        const id = buffer.readUInt16LE(at);
+        const length = buffer.readUInt16LE(at + 2);
+        if (id === 1 && length >= 8 && at + 12 <= extra + extraLength) {
+          size = safe(buffer.readBigUInt64LE(at + 4), "zip64 entry size");
+          found = true;
+          break;
+        }
+        at += 4 + length;
+      }
+      if (!found) throw invalid("zip64 entry size");
+    }
+    yield { name, directory: name.endsWith("/") || type === 0o040000, size };
+    offset = extra + extraLength + commentLength;
   }
 }

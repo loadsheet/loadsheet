@@ -1,17 +1,31 @@
-import { existsSync, statSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import {
+  existsSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { isIPv4 } from "node:net";
+import { hostname, networkInterfaces, tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { getSupportedAgents } from "skills";
-import { fetchClone, gitUrl, splitRepoPath } from "./gitcache.ts";
-import { isRecord, readJson, readJsonFile, writeJson } from "./fs.ts";
+import { git } from "./exec.ts";
+import { fetchClone, gitUrl, NO_GIT_REDIRECTS, splitRepoPath } from "./gitcache.ts";
+import { dict, inside, isRecord, readJson, readJsonFile, writeJson } from "./fs.ts";
+import { editJsonText } from "./jsonedit.ts";
 import { nameKey, sourceIdProblem } from "./names.ts";
 import { registryUrl, urlOrigin } from "./npm.ts";
-import { expandPath, paths } from "./paths.ts";
+import { expandPath, paths, tildify } from "./paths.ts";
 import { cronProblem, timeZoneProblem } from "./timer.ts";
 
 export type UpdateMode = "auto" | "review";
 
 interface SourceCommon {
   id: string;
+  /** For a source an extended manifest declares: the root manifest's `extends` entry it came through. */
+  via?: number;
   /** Glob of skill folders inside the source, e.g. `skills/*`. */
   skills?: string;
   include?: string[];
@@ -28,6 +42,11 @@ export interface CloneSource extends SourceCommon {
   ref?: string;
   path: string;
   adopt: boolean;
+  /**
+   * Follow links that lead out of the clone, for discovery and linking. Only the root manifest
+   * sets it: a clone's links come from whoever pushes to the repository.
+   */
+  followLinks: boolean;
 }
 
 /** A git repository skillfleet keeps a copy of. */
@@ -81,9 +100,18 @@ export interface Fork {
   base: string;
 }
 
+/** A manifest `extends` names, and what the extending manifest leaves out of it. */
+export interface Extends {
+  manifest: string;
+  /** Skill names left out of every source it (and what it extends) declares. */
+  exclude: string[];
+  /** Source ids left out. */
+  excludeSources: string[];
+}
+
 export interface Manifest {
   file: string;
-  extends: string[];
+  extends: Extends[];
   agents: "all" | string[];
   sources: Source[];
   forks: Record<string, Fork>;
@@ -110,6 +138,7 @@ const SOURCE_KEYS = new Set([
   "exclude",
   "update",
   "adopt",
+  "followLinks",
 ]);
 const ROOT_KEYS = new Set([
   "$schema",
@@ -185,8 +214,9 @@ function parseSource(file: string, at: string, raw: unknown, base: string): Sour
   const update = raw.update ?? "auto";
   if (update !== "auto" && update !== "review")
     fail(file, `${at}.update`, 'must be "auto" or "review"');
-  if (raw.adopt !== undefined && typeof raw.adopt !== "boolean")
-    fail(file, `${at}.adopt`, "must be a boolean");
+  for (const key of ["adopt", "followLinks"])
+    if (raw[key] !== undefined && typeof raw[key] !== "boolean")
+      fail(file, `${at}.${key}`, "must be a boolean");
   const common: SourceCommon = {
     id,
     update,
@@ -214,12 +244,14 @@ function parseSource(file: string, at: string, raw: unknown, base: string): Sour
           ref,
           path: expandPath(path, base),
           adopt: raw.adopt === true,
+          followLinks: raw.followLinks === true,
         };
       onlyFor("adopt", "git sources with a path, and local");
+      onlyFor("followLinks", "git sources with a path");
       return { ...common, kind: "git", git: spec, ref };
     }
     case "index":
-      for (const key of ["ref", "path", "registry", "adopt"])
+      for (const key of ["ref", "path", "registry", "adopt", "followLinks"])
         onlyFor(key, key === "registry" ? "npm" : "git");
       // An index lists skills by name; there are no folders to glob.
       onlyFor("skills", "git, npm and local");
@@ -230,7 +262,7 @@ function parseSource(file: string, at: string, raw: unknown, base: string): Sour
       }
       return { ...common, kind: "index", index: spec };
     case "npm":
-      for (const key of ["ref", "path", "adopt"]) onlyFor(key, "git");
+      for (const key of ["ref", "path", "adopt", "followLinks"]) onlyFor(key, "git");
       return {
         ...common,
         kind: "npm",
@@ -239,7 +271,8 @@ function parseSource(file: string, at: string, raw: unknown, base: string): Sour
         sendToken: true,
       };
     case "local":
-      for (const key of ["ref", "path", "registry"])
+      // A folder of the user's own is followed wherever its links lead already.
+      for (const key of ["ref", "path", "registry", "followLinks"])
         onlyFor(key, key === "registry" ? "npm" : "git");
       return { ...common, kind: "local", local: expandPath(spec, base), adopt: raw.adopt === true };
     default: {
@@ -274,6 +307,30 @@ export function closest(word: string, known: readonly string[]): string | undefi
   return best && best.score <= Math.max(2, Math.floor(word.length / 3))
     ? best.candidate
     : undefined;
+}
+
+/** `extends`: manifest specs, or `{ "manifest", "exclude", "excludeSources" }` to leave parts out. */
+function extendsList(file: string, value: unknown): Extends[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) fail(file, "extends", "must be an array");
+  return value.map((entry, i): Extends => {
+    const at = `extends[${i}]`;
+    if (typeof entry === "string") {
+      if (entry === "") fail(file, at, "must be a non-empty string");
+      return { manifest: entry, exclude: [], excludeSources: [] };
+    }
+    if (!isRecord(entry)) fail(file, at, "must be a manifest spec or an object");
+    for (const key of Object.keys(entry))
+      if (!["manifest", "exclude", "excludeSources"].includes(key))
+        fail(file, `${at}.${key}`, "is not an extends field");
+    return {
+      manifest:
+        optionalString(file, `${at}.manifest`, entry.manifest) ??
+        fail(file, `${at}.manifest`, "is required"),
+      exclude: stringList(file, `${at}.exclude`, entry.exclude) ?? [],
+      excludeSources: stringList(file, `${at}.excludeSources`, entry.excludeSources) ?? [],
+    };
+  });
 }
 
 /** Validates a manifest file's JSON. `base` resolves relative paths. */
@@ -312,7 +369,7 @@ export function parseManifest(file: string, raw: unknown, base = dirname(file)):
       );
     ids.set(nameKey(source.id), source.id);
   }
-  const forks: Record<string, Fork> = {};
+  const forks = dict<Fork>();
   if (raw.forks !== undefined) {
     if (!isRecord(raw.forks)) fail(file, "forks", "must be an object");
     for (const [name, fork] of Object.entries(raw.forks)) {
@@ -363,7 +420,7 @@ export function parseManifest(file: string, raw: unknown, base = dirname(file)):
   }
   return {
     file,
-    extends: stringList(file, "extends", raw.extends) ?? [],
+    extends: extendsList(file, raw.extends),
     agents: agents === "all" ? "all" : (agents as string[]),
     sources,
     forks,
@@ -453,7 +510,8 @@ export interface WebPage {
 /**
  * A repository page on GitHub or GitLab, as a browser shows it: the repository, or a `blob` link
  * to a file or a `tree` link to a folder on a branch. A line anchor (`#L3`) or a query
- * (`?plain=1`) copied with the link is ignored.
+ * (`?plain=1`, `?tab=readme-ov-file`) copied with the link is ignored, and the path and branch are
+ * decoded.
  */
 export function webPage(spec: string): WebPage | undefined {
   const page =
@@ -464,12 +522,21 @@ export function webPage(spec: string): WebPage | undefined {
       /^(https?:\/\/gitlab\.com\/(?:[^/?#]+\/)+?[^/?#]+?)(?:\.git)?(?:\/-\/(blob|tree)\/([^/?#]+)(?:\/([^?#]*?))?)?\/?(?:[?#].*)?$/,
     );
   if (!page) return undefined;
-  const [, repo, kind, ref, path] = page;
+  // The address bar shows `my skills`, but a copied link holds `my%20skills`.
+  const [, repo, kind, ref, path] = page.map((part) => part && decoded(part));
   return {
     repo: repo!.replace(/^http:/, "https:").replace("://www.", "://"),
     ...(kind ? { kind: kind as "blob" | "tree", ref } : {}),
     ...(path ? { path } : {}),
   };
+}
+
+function decoded(part: string): string {
+  try {
+    return decodeURIComponent(part);
+  } catch {
+    return part;
+  }
 }
 
 /** A `blob` link names a manifest file, a `tree` link a folder holding `skills.json`. */
@@ -519,30 +586,296 @@ export function canonicalManifestSpec(spec: string): string {
   return remote ? `${remote.repo}//${remote.path}` : expandPath(spec);
 }
 
+interface LocateOptions {
+  offline?: boolean;
+  cacheRoot?: string;
+  base?: string;
+}
+
 /** Where a manifest spec lives on disk, fetching it when it is in a remote repository. */
-export async function locateManifest(
+export async function locateManifest(spec: string, options: LocateOptions = {}) {
+  return (await locate(spec, options)).file;
+}
+
+/**
+ * A manifest file and the folder it came in: the repository's checkout, or the file's own folder.
+ * With `team`, the spec comes from an extended manifest, which names only a remote repository on
+ * another machine or a file inside `team.within`, the folder that manifest came in.
+ */
+async function locate(
   spec: string,
-  { offline = false, cacheRoot = join(paths.cache(), "manifests"), base = process.cwd() } = {},
-) {
+  {
+    offline = false,
+    cacheRoot = join(paths.cache(), "manifests"),
+    base = process.cwd(),
+    team,
+  }: LocateOptions & { team?: { within: string } } = {},
+): Promise<{ file: string; root: string }> {
   const remote = remoteManifest(spec, base);
   if (!remote) {
     // A folder, such as a clone of the manifest's repository, means its skills.json.
     const path = expandPath(spec, base);
-    return statSync(path, { throwIfNoEntry: false })?.isDirectory()
+    const file = statSync(path, { throwIfNoEntry: false })?.isDirectory()
       ? join(path, DEFAULT_MANIFEST)
       : path;
+    if (team) within(team.within, file, spec);
+    return { file, root: team?.within ?? dirname(file) };
   }
   const url = gitUrl(remote.repo);
-  const clone = await fetchClone(url, remote.ref, cacheRoot, { offline });
+  const check = team ? teamGitProblem : undefined;
+  if (check) {
+    const problem = await check(remote.repo);
+    if (problem) throw new ManifestError(problem);
+  }
+  const clone = await fetchClone(url, remote.ref, cacheRoot, { offline, check });
   const file = join(clone.dir, remote.path);
   if (!existsSync(file))
     throw new ManifestError(
       `${url} has no ${remote.path}; name the manifest file as ${remote.repo}//<file>`,
     );
-  return file;
+  if (team) within(clone.dir, file, spec);
+  return { file, root: clone.dir };
 }
 
-function readManifestFile(file: string): Manifest {
+/** Throws unless `file`, links followed, is inside `root`. */
+function within(root: string, file: string, spec: string) {
+  if (!existsSync(file)) return;
+  if (!inside(realpathSync(root), realpathSync(file)))
+    throw new ManifestError(
+      `a team manifest names only manifests in its own repository or in a remote repository, not ${spec}, which is outside it`,
+    );
+}
+
+/** A URL git fetches over the network: http, https, git or ssh, or ssh's `[user@]host:path`. */
+const remoteTransport = (url: string) =>
+  /^(?:https?|git|ssh|git\+ssh|ssh\+git):\/\/(?:[^@/?#\\]*@)?[a-z0-9[]/i.test(url) ||
+  // A one-letter host would be a Windows drive (C:/repo), which is a path, and `<helper>::` runs
+  // a remote helper such as ext::, which runs a command.
+  /^(?:[a-z0-9_][\w.-]*@)?[a-z0-9][\w.-]+:(?!\/\/|:)/i.test(url);
+
+/**
+ * The host a git URL names: `scheme://[user@]host[:port]/…` or ssh's `[user@]host:path`. The
+ * authority ends at the first `/`, `?`, `#` or `\`, as curl and the WHATWG URL parser end it, and
+ * the user info at its last `@`. Undefined when parsers could read another host: an `@` after the
+ * authority's end and before the path, or a `;` or `\` in the user info.
+ */
+function gitHost(url: string): string | undefined {
+  const scheme = url.match(/^[a-z][a-z0-9+.-]*:\/\/([^/]*)/i);
+  if (scheme) {
+    const upToPath = scheme[1]!;
+    const authority = upToPath.match(/^[^?#\\]*/)![0];
+    if (upToPath.slice(authority.length).includes("@")) return undefined;
+    const at = authority.lastIndexOf("@");
+    if (/[;\\]/.test(authority.slice(0, Math.max(at, 0)))) return undefined;
+    return authority.slice(at + 1).match(/^(\[[^\]]*\]|[^:]*)/)![1];
+  }
+  return url.match(/^(?:[^@/:]+@)?(\[[^\]/]*\]|[^/:]+):/)?.[1];
+}
+
+/** A host as a URL parser reads it: lowercase, IP addresses in one spelling (127.1 is 127.0.0.1). */
+function canonicalHost(host: string): string | undefined {
+  try {
+    return new URL(`http://${host}/`).hostname.replace(/\.+$/, "");
+  } catch {
+    return undefined;
+  }
+}
+
+/** The 8 groups of an IPv6 address as `URL` writes it (no dotted quad), or undefined. */
+function ipv6Groups(ip: string): number[] | undefined {
+  const [head = "", tail] = ip.split("::");
+  const left = head ? head.split(":") : [];
+  const right = tail ? tail.split(":") : [];
+  const zeros = tail === undefined ? 0 : 8 - left.length - right.length;
+  const groups = [...left, ...Array<string>(Math.max(zeros, 0)).fill("0"), ...right].map((group) =>
+    Number.parseInt(group, 16),
+  );
+  return groups.length === 8 && groups.every((group) => group >= 0 && group <= 0xffff)
+    ? groups
+    : undefined;
+}
+
+/** 0.0.0.0/8, 127.0.0.0/8 and the link-local 169.254.0.0/16 reach this machine or its link. */
+function localIPv4(ip: string): boolean {
+  const [a, b] = ip.split(".").map(Number);
+  return a === 0 || a === 127 || (a === 169 && b === 254);
+}
+
+/** This machine's names and addresses, as `canonicalHost` writes them. */
+function ownHosts(): Set<string> {
+  const name = hostname().toLowerCase();
+  const short = name.split(".")[0]!;
+  const own = new Set([name, short, `${short}.local`]);
+  for (const addresses of Object.values(networkInterfaces()))
+    for (const { address, family } of addresses ?? []) {
+      const host = canonicalHost(family === "IPv6" ? `[${address.replace(/%.*$/, "")}]` : address);
+      if (host) own.add(host);
+    }
+  return own;
+}
+
+/**
+ * Whether a git URL's host is this machine: localhost and *.localhost, a loopback, unspecified
+ * or link-local address in any spelling, or one of the machine's own names and addresses. Private
+ * ranges (10/8, 192.168/16, fc00::/7) are other machines: a team's own git server lives there.
+ */
+export function isLocalHost(url: string): boolean {
+  const raw = gitHost(url);
+  return localHost(raw === undefined ? undefined : canonicalHost(raw));
+}
+
+/** Whether `host`, as `canonicalHost` writes it, is this machine (see `isLocalHost`). */
+function localHost(host: string | undefined): boolean {
+  if (!host) return true;
+  if (host === "localhost" || host.endsWith(".localhost")) return true;
+  if (ownHosts().has(host)) return true;
+  if (isIPv4(host)) return localIPv4(host);
+  if (!host.startsWith("[")) return false;
+  const groups = ipv6Groups(host.slice(1, -1));
+  if (!groups) return true;
+  // fe80::/10 is link-local.
+  if ((groups[0]! & 0xffc0) === 0xfe80) return true;
+  if (groups.slice(0, 5).some(Boolean)) return false;
+  // ::, ::1 and the IPv4-compatible ::/96; ::ffff:0:0/96 maps an IPv4 address.
+  if (groups[5] === 0) return true;
+  if (groups[5] !== 0xffff) return false;
+  const [hi, lo] = [groups[6]!, groups[7]!];
+  return localIPv4(`${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`);
+}
+
+/** A URL rewrite from git config: `url.<to>.insteadOf <from>`. */
+export interface UrlRewrite {
+  from: string;
+  to: string;
+  push: boolean;
+}
+
+/**
+ * The `url.<base>.insteadOf` and `pushInsteadOf` rules git reads in `cwd`: from the system,
+ * global and repository config, and from the environment (GIT_CONFIG_COUNT, GIT_CONFIG_PARAMETERS).
+ */
+export async function urlRewrites(cwd = tmpdir()): Promise<UrlRewrite[]> {
+  const run = await git(
+    ["config", "--includes", "-z", "--get-regexp", "^url\\..*\\.(insteadof|pushinsteadof)$"],
+    { cwd, allowFail: true },
+  );
+  if (run.code !== 0) return [];
+  return run.stdout
+    .split("\0")
+    .filter(Boolean)
+    .map((entry) => {
+      const newline = entry.indexOf("\n");
+      const key = entry.slice(0, newline);
+      const dot = key.lastIndexOf(".");
+      return {
+        to: key.slice("url.".length, dot),
+        from: entry.slice(newline + 1),
+        push: key.slice(dot + 1).toLowerCase() === "pushinsteadof",
+      };
+    });
+}
+
+/**
+ * `url` as git rewrites it with `rules` to fetch, or to push: the longest matching prefix wins, and
+ * a push URL that no `pushInsteadOf` matches is rewritten as a fetch URL, as in git.
+ */
+export function rewriteUrl(url: string, rules: readonly UrlRewrite[], push = false): string {
+  const longest = (pushRules: boolean) => {
+    let best: UrlRewrite | undefined;
+    for (const rule of rules)
+      if (
+        rule.push === pushRules &&
+        url.startsWith(rule.from) &&
+        rule.from.length > (best?.from.length ?? -1)
+      )
+        best = rule;
+    return best;
+  };
+  const best = (push ? longest(true) : undefined) ?? longest(false);
+  return best ? best.to + url.slice(best.from.length) : url;
+}
+
+/**
+ * Whether a git source names a repository on another machine: an http, https, git or ssh URL,
+ * `[user@]host:path`, or a GitHub or GitLab shorthand, after the user's `insteadOf` and
+ * `pushInsteadOf` rules rewrite it. Not a path, a file: URL or a transport such as ext::, which
+ * reach this machine's files or run a command, under any alias.
+ */
+export function isRemoteGit(spec: string, rules: readonly UrlRewrite[] = []): boolean {
+  const url = gitUrl(spec);
+  return [rewriteUrl(url, rules), rewriteUrl(url, rules, true)].every(otherMachine);
+}
+
+/** A URL git fetches over the network from another machine. */
+const otherMachine = (url: string) => remoteTransport(url) && !isLocalHost(url);
+
+/**
+ * Why a team manifest may not name the repository `spec`, or undefined when it names one on
+ * another machine. Git is asked in `cwd` which URL it fetches, so every rewrite it would apply
+ * counts, wherever it is configured; `pushInsteadOf` rules count too.
+ */
+export async function teamGitProblem(spec: string, cwd = tmpdir()): Promise<string | undefined> {
+  const url = gitUrl(spec);
+  const asked = url.startsWith("-")
+    ? undefined
+    : await git(["ls-remote", "--get-url", "--", url], { cwd, allowFail: true });
+  const fetched = asked?.code === 0 ? asked.stdout.trim() : undefined;
+  const pushed = rewriteUrl(url, await urlRewrites(cwd), true);
+  const to = [fetched, pushed].find((rewritten) => rewritten !== url);
+  const rewrite = to ? `, which your git config rewrites to ${to}` : "";
+  const urls = [url, fetched, pushed];
+  if (urls.some((each) => each === undefined || !remoteTransport(each)))
+    return `a team manifest names only remote repositories (http, https, git, ssh or owner/repo), not ${spec}${rewrite}`;
+  if (urls.some((each) => isLocalHost(each!)))
+    return `a team manifest names only repositories on another machine, not ${spec}${rewrite}, which is this machine`;
+  if (fetched && /^https?:\/\//i.test(fetched)) {
+    const targets = new Set([fetched, `${fetched.replace(/\/$/, "")}/`]);
+    for (const target of targets) {
+      const config = ["config", "--type=bool", "--get-urlmatch", "http.followRedirects", target];
+      const redirects = await git([...NO_GIT_REDIRECTS, ...config], { cwd, allowFail: true });
+      if (redirects.code !== 0 || redirects.stdout.trim() !== "false")
+        return `cannot fetch team repository ${spec}${rewrite} with Git redirects disabled; check URL-specific http.followRedirects settings`;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Why a team manifest's source may not fetch `url`, or undefined when it may: an http or https
+ * URL on another machine, by the rule `isLocalHost` applies to git. This holds for an index or an
+ * npm registry a team manifest names, for every download either sends skillfleet to, and for
+ * each redirect on the way.
+ */
+export function teamUrlProblem(url: string): string | undefined {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    parsed = new URL("invalid:");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:")
+    return `a team manifest fetches only http or https URLs, not ${url}`;
+  // The host as fetch reads it, which a backslash or `user@` in the URL cannot disguise.
+  if (localHost(canonicalHost(parsed.hostname)))
+    return `a team manifest fetches only from another machine, not ${url}, which is this machine`;
+  return undefined;
+}
+
+/** Why a team manifest may not declare this source, or undefined when it may. */
+async function teamSourceProblem(source: VendoredSource): Promise<string | undefined> {
+  switch (source.kind) {
+    case "git":
+      return teamGitProblem(source.git);
+    case "index":
+      return teamUrlProblem(source.index);
+    case "npm":
+      // Without a registry, the package comes from the registry the user configured.
+      return source.registry === undefined ? undefined : teamUrlProblem(source.registry);
+  }
+}
+
+/** Reads and validates a manifest file; `prepare` may change its JSON first. */
+function readManifestFile(file: string, prepare?: (raw: unknown) => void): Manifest {
   if (!existsSync(file)) throw new ManifestError(`${file}: no such manifest`);
   let raw: unknown;
   try {
@@ -550,8 +883,12 @@ function readManifestFile(file: string): Manifest {
   } catch (error) {
     throw new ManifestError(`${file}: ${(error as Error).message}`);
   }
+  prepare?.(raw);
   return parseManifest(file, raw);
 }
+
+/** Fields a source may set only in the root manifest, which an extended one's sources lose. */
+const ROOT_ONLY_SOURCE_KEYS = ["followLinks"] as const;
 
 /**
  * Loads the root manifest and everything it extends. Extended manifests add sources only:
@@ -567,7 +904,6 @@ export async function loadManifest(
   const warnings: string[] = [];
   const failed: string[] = [];
   const sources = [...root.sources];
-  const seen = new Set([rootFile]);
   const ids = new Set(sources.map((source) => nameKey(source.id)));
   // NPM_TOKEN goes to the registry the user configured and to registries the root manifest names.
   const tokenOrigins = new Set([
@@ -576,64 +912,145 @@ export async function loadManifest(
       source.kind === "npm" && source.registry ? [urlOrigin(source.registry)] : [],
     ),
   ]);
-  const visit = async (manifest: Manifest) => {
-    for (const parent of manifest.extends) {
-      let file: string;
-      try {
-        file = await locateManifest(parent, { ...options, base: dirname(manifest.file) });
-      } catch (error) {
-        warnings.push(`extends ${parent}: ${(error as Error).message}`);
-        failed.push(parent);
-        continue;
+  /**
+   * What the `extends` entries on one path from the root to a manifest leave out: every entry's
+   * `exclude` and `excludeSources` on the path count, and `via` is the root's entry it starts at.
+   */
+  interface Through {
+    via: number;
+    exclude: string[];
+    excludeSources: Set<string>;
+  }
+  /** Each manifest extended, once, with every path it was reached by, in the order first reached. */
+  const extended = new Map<string, { manifest: Manifest; parent: string; paths: Through[] }>();
+  /** Where each `extends` entry led, by the manifest that has it and its index; null when it failed. */
+  const located = new Map<string, { file: string; root: string } | null>();
+  const unreadable = new Set<string>();
+  const sameThrough = (a: Through, b: Through) =>
+    a.via === b.via &&
+    a.exclude.join("\0") === b.exclude.join("\0") &&
+    [...a.excludeSources].join("\0") === [...b.excludeSources].join("\0");
+  /**
+   * `within` is the folder an extended manifest came in, which its own `extends` stays in; `path`
+   * is the manifests on the way to it, so a cycle ends.
+   */
+  const visit = async (
+    manifest: Manifest,
+    through: Through | undefined,
+    within: string | undefined,
+    path: readonly string[],
+  ) => {
+    for (const [i, entry] of manifest.extends.entries()) {
+      const parent = entry.manifest;
+      const filter: Through = {
+        via: through?.via ?? i,
+        exclude: [...new Set([...(through?.exclude ?? []), ...entry.exclude])],
+        excludeSources: new Set([
+          ...(through?.excludeSources ?? []),
+          ...entry.excludeSources.map(nameKey),
+        ]),
+      };
+      const key = `${manifest.file}\0${i}`;
+      let at = located.get(key);
+      if (at === undefined) {
+        try {
+          at = await locate(parent, {
+            ...options,
+            base: dirname(manifest.file),
+            // An extended manifest's own `extends` follows the rules of its sources.
+            ...(within === undefined ? {} : { team: { within } }),
+          });
+        } catch (error) {
+          warnings.push(`extends ${parent}: ${(error as Error).message}`);
+          failed.push(parent);
+          at = null;
+        }
+        located.set(key, at);
       }
-      if (seen.has(file)) continue;
-      seen.add(file);
-      let team: Manifest;
-      try {
-        team = readManifestFile(file);
-      } catch (error) {
-        warnings.push(`extends ${parent}: ${(error as Error).message}`);
-        failed.push(parent);
+      if (!at || at.file === rootFile || path.includes(at.file) || unreadable.has(at.file))
         continue;
-      }
-      const ignored = [
-        team.hooks.length > 0 && "hooks",
-        team.fleet.length > 0 && "fleet",
-        team.hub && "hub",
-        team.report && "report",
-      ].filter(Boolean);
-      if (ignored.length > 0)
-        warnings.push(
-          `extends ${parent}: ignored ${ignored.join(", ")}; only the root manifest can run commands or name machines`,
-        );
-      for (const source of team.sources) {
-        if (source.kind === "clone" || source.kind === "local") {
-          warnings.push(
-            `extends ${parent}: ignored source "${source.id}"; only the root manifest can name a folder on this machine (${source.kind === "clone" ? "path" : "local"})`,
-          );
+      let known = extended.get(at.file);
+      if (!known) {
+        let team: Manifest;
+        try {
+          team = readManifestFile(at.file, (raw) => {
+            if (!isRecord(raw) || !Array.isArray(raw.sources)) return;
+            for (const [i, source] of raw.sources.entries()) {
+              if (!isRecord(source)) continue;
+              for (const key of ROOT_ONLY_SOURCE_KEYS) {
+                if (source[key] === undefined) continue;
+                delete source[key];
+                warnings.push(
+                  `extends ${parent}: ignored "${key}" of source "${typeof source.id === "string" ? source.id : `sources[${i}]`}"; only the root manifest can follow links out of a source`,
+                );
+              }
+            }
+          });
+        } catch (error) {
+          warnings.push(`extends ${parent}: ${(error as Error).message}`);
+          failed.push(parent);
+          unreadable.add(at.file);
           continue;
         }
-        if (ids.has(nameKey(source.id))) {
+        const ignored = [
+          team.hooks.length > 0 && "hooks",
+          team.fleet.length > 0 && "fleet",
+          team.hub && "hub",
+          team.report && "report",
+        ].filter(Boolean);
+        if (ignored.length > 0)
           warnings.push(
-            `extends ${parent}: source "${source.id}" is already declared; the first one is used`,
+            `extends ${parent}: ignored ${ignored.join(", ")}; only the root manifest can run commands or name machines`,
           );
-          continue;
-        }
-        ids.add(nameKey(source.id));
-        if (source.kind === "npm")
-          source.sendToken = !source.registry || tokenOrigins.has(urlOrigin(source.registry));
-        sources.push(source);
+        known = { manifest: team, parent, paths: [] };
+        extended.set(at.file, known);
       }
-      await visit(team);
+      if (known.paths.some((seen) => sameThrough(seen, filter))) continue;
+      known.paths.push(filter);
+      await visit(known.manifest, filter, at.root, [...path, at.file]);
     }
   };
-  await visit(root);
+  await visit(root, undefined, undefined, []);
+  // A manifest reached by several paths gets what any of them leaves out: a source one path
+  // excludes is left out, and a skill's exclusions are those of every path.
+  for (const { manifest: team, parent, paths: through } of extended.values()) {
+    for (const source of team.sources) {
+      if (through.some((filter) => filter.excludeSources.has(nameKey(source.id)))) continue;
+      source.via = through[0]!.via;
+      const exclude = through.flatMap((filter) => filter.exclude);
+      if (exclude.length > 0)
+        source.exclude = [...new Set([...(source.exclude ?? []), ...exclude])];
+      if (source.kind === "clone" || source.kind === "local") {
+        warnings.push(
+          `extends ${parent}: ignored source "${source.id}"; only the root manifest can name a folder on this machine (${source.kind === "clone" ? "path" : "local"})`,
+        );
+        continue;
+      }
+      const problem = await teamSourceProblem(source);
+      if (problem) {
+        warnings.push(`extends ${parent}: ignored source "${source.id}"; ${problem}`);
+        continue;
+      }
+      if (ids.has(nameKey(source.id))) {
+        warnings.push(
+          `extends ${parent}: source "${source.id}" is already declared; the first one is used`,
+        );
+        continue;
+      }
+      ids.add(nameKey(source.id));
+      if (source.kind === "npm")
+        source.sendToken = !source.registry || tokenOrigins.has(urlOrigin(source.registry));
+      sources.push(source);
+    }
+  }
   return { root, sources, warnings, failed };
 }
 
 /**
  * Reads, changes and writes back the root manifest's JSON, keeping fields skillfleet does not know.
- * A dry run checks that the changed manifest is valid and writes nothing.
+ * Only the parts that change are rewritten, so the file keeps its layout; a file the text edit
+ * can't follow is written out whole. A dry run checks that the changed manifest is valid and
+ * writes nothing.
  */
 export function editManifest(
   file: string,
@@ -642,7 +1059,18 @@ export function editManifest(
 ) {
   const raw = readJson(file);
   if (!isRecord(raw)) throw new ManifestError(`${file}: the manifest must be a JSON object`);
+  const before = readJson(file);
   change(raw);
   parseManifest(file, raw);
-  if (!dryRun) writeJson(file, raw);
+  if (dryRun) return;
+  const notes: string[] = [];
+  const edited = editJsonText(readFileSync(file, "utf8"), before, raw, notes);
+  for (const note of notes) process.stderr.write(`skillfleet: ${tildify(file)}: ${note}\n`);
+  if (edited === undefined) {
+    writeJson(file, raw);
+    return;
+  }
+  const temp = `${file}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`;
+  writeFileSync(temp, edited);
+  renameSync(temp, file);
 }
