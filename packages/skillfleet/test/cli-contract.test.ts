@@ -1,6 +1,7 @@
 // What the CLI promises in its help and the README: errors as one line, --dry-run that writes
 // nothing, --json that prints one document, --copy that sticks, and the commands and messages the
 // docs name (D1, D3, D4, D5, D7, D11, D12, MAC10).
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   existsSync,
@@ -9,13 +10,15 @@ import {
   readdirSync,
   readFileSync,
   readlinkSync,
+  rmSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vite-plus/test";
 import { listedPath } from "../src/linker.ts";
+import type { SkillList } from "../src/list.ts";
 import {
   clone,
   isLink,
@@ -277,6 +280,129 @@ describe("--json prints one JSON document", () => {
         `${args.join(" ")} --json:\n${run.stdout}\n${run.stderr}`,
       ).not.toThrow();
     }
+  });
+});
+
+describe("list --json, the API programs built on skillfleet read", () => {
+  it.skipIf(isWindows)("lists the state a custom installed launcher just synced", async () => {
+    const m = machine({ agents: false });
+    const mine = join(m.root, "mine");
+    const add = (name: string) => {
+      mkdirSync(join(mine, "skills", name), { recursive: true });
+      writeFileSync(join(mine, "skills", name, "SKILL.md"), skillMd(name));
+    };
+    add("alpha");
+    const manifest = m.manifest({ sources: [{ id: "mine", local: mine, skills: "skills/*" }] });
+    const custom = join(m.root, "custom-state");
+    const init = await m.runWith(
+      { env: { XDG_STATE_HOME: custom } },
+      "init",
+      manifest,
+      "--no-hooks",
+    );
+    expect(init.code, init.stderr).toBe(0);
+    const launcher = join(custom, "skillfleet", "bin", "skillfleet");
+    const run = <T>(override: string | undefined, ...args: string[]): T => {
+      const result = spawnSync(launcher, args, {
+        cwd: m.home,
+        env: { ...m.env, XDG_STATE_HOME: override },
+        encoding: "utf8",
+      });
+      expect(result.status, result.stderr).toBe(0);
+      return JSON.parse(result.stdout) as T;
+    };
+
+    add("zeta");
+    expect(run(undefined, "sync", "--json")).toMatchObject({ skills: { total: 2 } });
+    const list = (override?: string) => run<SkillList>(override, "list", "--json").skills;
+    expect(list().map(({ name }) => name)).toEqual(["alpha", "zeta"]);
+    expect(existsSync(join(m.stateDir, "state.json"))).toBe(false);
+    expect(list(m.env.XDG_STATE_HOME)).toEqual([]);
+    expect(run(m.env.XDG_STATE_HOME, "sync", "--json")).toMatchObject({ skills: { total: 2 } });
+    expect(list(m.env.XDG_STATE_HOME)).toHaveLength(2);
+    expect(existsSync(join(m.stateDir, "state.json"))).toBe(true);
+  });
+
+  it("prints version 1, lastChange and the skills sorted by name, each with its real folder", async () => {
+    const fresh = machine({ agents: false });
+    const empty = await fresh.run("list", "--json");
+    expect(empty.code, empty.stderr).toBe(0);
+    expect(JSON.parse(empty.stdout)).toEqual({ version: 1, lastChange: null, skills: [] });
+    expect(existsSync(fresh.stateDir)).toBe(false);
+    expect(existsSync(fresh.at(".cache"))).toBe(false);
+
+    // No agent folder here: state.json still records each skill's folder.
+    const m = machine({ agents: false });
+    const mine = join(m.root, "mine");
+    for (const name of ["zeta", "alpha"]) {
+      mkdirSync(join(mine, "skills", name), { recursive: true });
+      writeFileSync(join(mine, "skills", name, "SKILL.md"), skillMd(name));
+    }
+    const manifest = m.manifest({ sources: [{ id: "mine", local: mine, skills: "skills/*" }] });
+    expect((await m.run("init", manifest, "--no-hooks")).code).toBe(0);
+    // It reads the state alone: a manifest that no longer loads changes nothing.
+    rmSync(dirname(manifest), { recursive: true });
+    const run = await m.run("list", "--json");
+    expect(run.code, run.stderr).toBe(0);
+    const listed = JSON.parse(run.stdout) as {
+      version: number;
+      lastChange: string;
+      skills: { name: string; source: string; dir: string; changedAt: string }[];
+    };
+    expect(Object.keys(listed)).toEqual(["version", "lastChange", "skills"]);
+    expect(listed.version).toBe(1);
+    expect(Date.parse(listed.lastChange)).not.toBeNaN();
+    expect(listed.skills.map((skill) => skill.name)).toEqual(["alpha", "zeta"]);
+    for (const skill of listed.skills) {
+      expect(Object.keys(skill)).toEqual(["name", "source", "dir", "changedAt"]);
+      expect(skill.source).toBe("mine");
+      expect(read(join(skill.dir, "SKILL.md"))).toBe(skillMd(skill.name));
+      expect(Date.parse(skill.changedAt)).not.toBeNaN();
+    }
+    // Removing a skill file does not change the recorded snapshot.
+    rmSync(join(listed.skills[0]!.dir, "SKILL.md"));
+    expect(JSON.parse((await m.run("list", "--json")).stdout)).toEqual(listed);
+    // The CLI's own path, which flags in another order take, prints the same document.
+    expect(JSON.parse((await m.run("--json", "list")).stdout)).toEqual(listed);
+  });
+
+  it("keeps legacy version-1 skill records without changedAt in both list formats", async () => {
+    const m = machine({ agents: false });
+    const dir = m.at("mine");
+    const addedAt = "2026-11-19T07:00:00.000Z";
+    mkdirSync(m.stateDir, { recursive: true });
+    writeFileSync(
+      join(m.stateDir, "state.json"),
+      JSON.stringify({
+        version: 1,
+        sources: {},
+        skills: {
+          legacy: { source: "mine", dir, addedAt },
+          epoch: { source: "mine", dir },
+          invalid: { source: "", dir, changedAt: addedAt },
+        },
+      }),
+    );
+    for (const args of [
+      ["list", "--json"],
+      ["--json", "list"],
+    ]) {
+      const run = await m.run(...args);
+      expect(run.code, run.stderr).toBe(0);
+      expect(JSON.parse(run.stdout)).toEqual({
+        version: 1,
+        lastChange: null,
+        skills: [
+          { name: "epoch", source: "mine", dir, changedAt: "1970-01-01T00:00:00.000Z" },
+          { name: "legacy", source: "mine", dir, changedAt: addedAt },
+        ],
+      });
+    }
+    const text = await m.run("list");
+    expect(text.code, text.stderr).toBe(0);
+    expect(text.stdout).toBe(
+      `epoch  mine  ${join("~", "mine")}\nlegacy  mine  ${join("~", "mine")}\n`,
+    );
   });
 });
 
