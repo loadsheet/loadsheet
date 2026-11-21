@@ -60,6 +60,20 @@ With Tailscale, tag the server and run `skillfleet fleet init tag:servers`: ever
 
 If setup failed, run the same command again after fixing the cause. If SSH timed out after the host answered, check whether setup is still running there before retrying. With `--json`, successful enrollment returns the host result array; if editing the manifest fails after setup, the command exits 1 and returns an object with `hosts` and `error`.
 
+### Or take the manifest from your tailnet
+
+On Tailscale, your tailnet policy can name the manifest once for all your machines. Add this to the policy in the admin console:
+
+```jsonc
+"nodeAttrs": [
+  { "target": ["*"], "app": { "github.com/onmax/skillfleet": [{ "manifest": "me/skills" }] } },
+],
+```
+
+**Only follow the policy if you trust its editors.** They choose the root manifest, whose `hooks` and `report.run` can run commands as your local user, including during background syncs. To choose a repository yourself on a new machine, run `npx skillfleet init github:me/skills` instead. On a machine already following policy, initializing with a different manifest stops following it; naming the same one keeps following enabled.
+
+Then a bare `npx skillfleet init` on a new machine, or on one already following the tailnet, uses the policy manifest. Normal syncs ask Tailscale again and save a replacement only after it loads. If Tailscale can't answer, the machine keeps its last manifest and the sync says why. The policy value must name a repository, such as `me/skills` or `github:me/skills//<file>`. Git still delivers the manifest; Tailscale tells skillfleet where to find it.
+
 ### Commands
 
 `skillfleet <command> --help` prints a command's options. Commands that read the manifest take `--manifest <m>` to use another one than the one `init` configured.

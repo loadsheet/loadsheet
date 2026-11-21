@@ -62,6 +62,20 @@ skillfleet connects over SSH and runs `npx skillfleet init` there with the same 
 
 With Tailscale, tag the server and run `skillfleet fleet init tag:servers`: every machine with the tag gets set up, and `fleet` gets `tag:servers`, so the next server you tag is in the fleet too. A machine that already has the manifest only syncs, unless you pass an option for its `init`, such as `--timer`. One that has another manifest, or the same repository spelled in a way skillfleet can't be sure of, is left alone unless you pass `--force`. Hosts install the version of skillfleet you run; to set them up with a preview build, set `SKILLFLEET_PACKAGE` to what npx should install, such as a pkg.pr.new URL or a tarball path on the host.
 
+### Or take the manifest from your tailnet
+
+On Tailscale, your tailnet policy can name the manifest once for all your machines. Add this to the policy in the admin console:
+
+```jsonc
+"nodeAttrs": [
+  { "target": ["*"], "app": { "github.com/onmax/skillfleet": [{ "manifest": "me/skills" }] } },
+],
+```
+
+**Only follow the policy if you trust its editors.** They choose the root manifest, whose `hooks` and `report.run` can run commands as your local user, including during background syncs. To choose a repository yourself on a new machine, run `npx skillfleet init github:me/skills` instead. On a machine already following policy, initializing with a different manifest stops following it; naming the same one keeps following enabled.
+
+Then a bare `npx skillfleet init` on a new machine, or on one already following the tailnet, uses the policy manifest. Normal syncs ask Tailscale again and save a replacement only after it loads. If Tailscale can't answer, the machine keeps its last manifest and the sync says why. The policy value must name a repository, such as `me/skills` or `github:me/skills//<file>`. Git still delivers the manifest; Tailscale tells skillfleet where to find it.
+
 ### Commands
 
 `skillfleet <command> --help` prints a command's options. Commands that read the manifest take `--manifest <m>` to use another one than the one `init` configured.

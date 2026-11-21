@@ -47,6 +47,9 @@ import {
   ManifestError,
   readConfig,
   remoteManifest,
+  stagePolicyManifest,
+  tailnetManifestSpec,
+  writeConfig,
 } from "./manifest.ts";
 import { nameKey } from "./names.ts";
 import { paths, tildify } from "./paths.ts";
@@ -407,6 +410,20 @@ async function postToHub(hub: string, report: Report): Promise<string | undefine
   }
 }
 
+/**
+ * `spec`, or on a machine that took its manifest from the tailnet, the one the tailnet policy names
+ * now. When Tailscale can't say, use the saved spec.
+ */
+async function followTailnet(spec: string, warnings: string[]): Promise<string> {
+  if (readConfig()?.tailscale !== true) return spec;
+  const found = await tailnetManifestSpec();
+  if ("error" in found) {
+    warnings.push(`kept the manifest ${spec}: ${found.error}`);
+    return spec;
+  }
+  return found.spec;
+}
+
 export async function sync(options: SyncOptions = {}): Promise<Report> {
   const startedAt = new Date().toISOString();
   const dryRun = options.dryRun ?? false;
@@ -430,15 +447,29 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
   watchdog.unref();
   try {
     // A remote manifest's file is a cache copy (a scratch one in a dry run), so reports name its spec.
-    const spec = options.loaded ? options.loaded.root.file : manifestSpec(options.manifest);
+    const savedSpec = options.loaded?.root.file ?? manifestSpec(options.manifest);
+    const spec =
+      options.loaded || options.manifest || offline
+        ? savedSpec
+        : await followTailnet(savedSpec, warnings);
+    const candidate =
+      spec !== savedSpec && !dryRun ? await stagePolicyManifest(spec, savedSpec) : undefined;
     const loaded =
       options.loaded ??
+      candidate?.loaded ??
       (await loadManifest(spec, {
         offline,
         ...(scratch ? { cacheRoot: join(scratch, "manifests") } : {}),
       }));
     if (options.only && !loaded.sources.some((source) => source.id === options.only))
       throw new ManifestError(`no source "${options.only}" in the manifest`);
+    if (spec !== savedSpec) {
+      if (candidate) {
+        candidate.accept();
+        writeConfig({ manifest: spec });
+      }
+      warnings.push(`the tailnet policy now names the manifest ${spec}, not ${savedSpec}`);
+    }
     const stateFile = new StateFile(loadState(dryRun ? undefined : warnings));
     const state = stateFile.state;
     if (!dryRun && !options.skipTimerCheck) {
