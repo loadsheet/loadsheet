@@ -1,6 +1,8 @@
 import { chmodSync, copyFileSync, mkdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { dict, type Hashes, isRecord, JsonFileError, readJson, writeJson } from "./fs.ts";
+import type { EntryRecord } from "./entries.ts";
+import { FILE_KINDS, type FileKind, ITEM_KINDS, type ItemKind } from "./kinds.ts";
 import { isVendoredKind, type Source } from "./manifest.ts";
 import { paths, tildify } from "./paths.ts";
 import { skillRecord, type SkillRecord } from "./skill-record.ts";
@@ -31,6 +33,35 @@ export interface SourceState {
   fetchedAt?: string;
   skills: Record<string, InstalledCopy>;
   pending: Record<string, PendingUpdate>;
+  /**
+   * Files of each kind (instructions, subagents, commands, and the `mcp` and `agentHooks`
+   * definitions), by item name; see files.ts.
+   */
+  files?: Partial<Record<ItemKind, FileItems>>;
+}
+
+/** A source's files of one kind, kept as its skills are: install records and held updates. */
+export interface FileItems {
+  items: Record<string, InstalledCopy>;
+  pending: Record<string, PendingUpdate>;
+  /** Validated agents for approved review-mode items, even if no link was made. */
+  selected?: Record<string, string[]>;
+  /** Instruction globs validated against the source when the selections were recorded. */
+  instructionGlobs?: Record<string, string>;
+}
+
+/** A file fleetrc linked (or copied) into an agent's folder, by the path it is at. */
+export interface FileLink {
+  source: string;
+  kind: FileKind;
+  /** The item, `<kind>/<path in the source>`. */
+  item: string;
+  agent: string;
+  /** The file it links to. */
+  target: string;
+  link: "symlink" | "copy";
+  /** For a copy: its hash as written, to tell an edited copy from a stale one. */
+  hash?: string;
 }
 
 /** What the last sync found upstream of a fork (the manifest's `forks`). */
@@ -62,6 +93,26 @@ export interface State {
    */
   hooksDue?: string[];
   skillChanges?: Record<string, SkillChanges>;
+  /** Files linked into agent folders, by their path there. */
+  links?: Record<string, FileLink>;
+  /**
+   * Entries fleetrc merged into agents' config files (MCP servers, hooks), by id, such as
+   * `mcp/codex/github`; see entrysync.ts.
+   */
+  entries?: Record<string, OwnedEntry>;
+  /** MCP records outside the current config file, grouped by file and then entry id. */
+  otherMcpEntries?: Record<string, Record<string, OwnedEntry>>;
+  otherHookEntries?: Record<string, Record<string, OwnedEntry>>;
+}
+
+/** An entry fleetrc wrote, and the source it came from. */
+export interface OwnedEntry extends EntryRecord {
+  /** Resolved OpenCode config path, used to recover ownership through a surviving alias. */
+  configTarget?: string;
+  /** The source that defined it; undefined for a file built from several (Claude's hook plugin). */
+  source?: string;
+  /** For a file built from several definitions: the sources whose definitions it holds. */
+  sources?: string[];
 }
 
 interface SkillChanges {
@@ -128,6 +179,83 @@ export function loadState(warnings?: string[]): State {
     ...(isRecord(raw.skillChanges)
       ? { skillChanges: records(raw.skillChanges, skillChanges) }
       : {}),
+    ...(isRecord(raw.links) ? { links: records(raw.links, fileLink) } : {}),
+    ...(isRecord(raw.entries) ? { entries: records(raw.entries, ownedEntry) } : {}),
+    ...(isRecord(raw.otherMcpEntries)
+      ? {
+          otherMcpEntries: records(raw.otherMcpEntries, (value) =>
+            isRecord(value) ? records(value, ownedEntry) : undefined,
+          ),
+        }
+      : {}),
+    ...(isRecord(raw.otherHookEntries)
+      ? {
+          otherHookEntries: records(raw.otherHookEntries, (value) =>
+            isRecord(value) ? records(value, ownedEntry) : undefined,
+          ),
+        }
+      : {}),
+  };
+}
+
+function ownedEntry(record: unknown): OwnedEntry | undefined {
+  if (!isRecord(record)) return undefined;
+  const { file, key, hash } = record;
+  if (typeof file !== "string" || typeof key !== "string" || typeof hash !== "string")
+    return undefined;
+  const sources = Array.isArray(record.sources)
+    ? record.sources.filter((source): source is string => typeof source === "string")
+    : undefined;
+  return {
+    file,
+    key,
+    hash,
+    ...strings(record, "source", "configTarget"),
+    ...(sources ? { sources } : {}),
+  };
+}
+
+function fileLink(record: unknown): FileLink | undefined {
+  if (!isRecord(record)) return undefined;
+  const { source, kind, item, agent, target } = record;
+  if (
+    typeof source !== "string" ||
+    !FILE_KINDS.includes(kind as FileKind) ||
+    typeof item !== "string" ||
+    typeof agent !== "string" ||
+    typeof target !== "string"
+  )
+    return undefined;
+  return {
+    source,
+    kind: kind as FileKind,
+    item,
+    agent,
+    target,
+    link: record.link === "copy" ? "copy" : "symlink",
+    ...strings(record, "hash"),
+  };
+}
+
+function fileItems(record: unknown): FileItems | undefined {
+  if (!isRecord(record)) return undefined;
+  return {
+    items: records(record.items, installedCopy),
+    pending: records(record.pending, pendingUpdate),
+    ...(isRecord(record.selected)
+      ? {
+          selected: records(record.selected, (agents) =>
+            Array.isArray(agents) ? agents.filter((agent) => typeof agent === "string") : undefined,
+          ),
+        }
+      : {}),
+    ...(isRecord(record.instructionGlobs)
+      ? {
+          instructionGlobs: records(record.instructionGlobs, (glob) =>
+            typeof glob === "string" ? glob : undefined,
+          ),
+        }
+      : {}),
   };
 }
 
@@ -173,6 +301,15 @@ function sourceRecord(record: unknown): SourceState | undefined {
     ...strings(record, "commit", "version", "fetchedAt"),
     skills: records(record.skills, installedCopy),
     pending: records(record.pending, pendingUpdate),
+    ...(isRecord(record.files)
+      ? {
+          files: dict(
+            Object.entries(records(record.files, fileItems)).filter(([kind]) =>
+              ITEM_KINDS.includes(kind as ItemKind),
+            ),
+          ) as Partial<Record<ItemKind, FileItems>>,
+        }
+      : {}),
   };
 }
 
@@ -323,6 +460,7 @@ export function sourceState(state: State, source: Source): SourceState {
       kind: source.kind,
       skills: existing.skills,
       pending: existing.pending,
+      ...(existing.files ? { files: existing.files } : {}),
     };
     state.sources[source.id] = moved;
     return moved;

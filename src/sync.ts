@@ -14,6 +14,9 @@ import { agentTargets, formerTargets } from "./agents.ts";
 import { UserError } from "./errors.ts";
 import { checkForks, unresolvedFiles } from "./edits.ts";
 import { exec, stopAll } from "./exec.ts";
+import { syncEntries } from "./entrysync.ts";
+import { adoptFileCopyEdits, itemId, itemName, itemPath, linkFiles, parseItemId } from "./files.ts";
+import { ITEM_KINDS } from "./kinds.ts";
 import {
   changedFiles,
   dict,
@@ -41,16 +44,16 @@ import {
   type TargetReport,
 } from "./linker.ts";
 import {
+  checkedOutPath,
+  DEFAULT_MANIFEST,
   isVendoredKind,
   type LoadedManifest,
   loadManifest,
   ManifestError,
   readConfig,
   remoteManifest,
-  stagePolicyManifest,
-  checkedOutPath,
-  DEFAULT_MANIFEST,
   sameManifest,
+  stagePolicyManifest,
   tailnetManifestSpec,
   writeConfig,
 } from "./manifest.ts";
@@ -58,6 +61,7 @@ import { nameKey } from "./names.ts";
 import { paths, tildify } from "./paths.ts";
 import { LOCK_MAX_AGE_MS, LockHeldError, lockText, readLock, takeLock } from "./lock.ts";
 import type { HookRun, Report } from "./report.ts";
+import { CLAUDE_PLUGIN_NAME } from "./hookdefs.ts";
 import { failedResult, type SourceResult, sourceFiles, syncSource } from "./sources.ts";
 import { loadState, sourceState, type State, StateFile } from "./state.ts";
 import { scheduleDrift } from "./timer.ts";
@@ -515,6 +519,7 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
         dryRun,
         adoptionErrors,
       ),
+      ...adoptFileCopyEdits(state, dryRun),
     );
     // Skills linked last time, by source: what a source that fails, or can't be read, keeps.
     const lastLinked = (id: string) =>
@@ -545,6 +550,7 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
         cacheDir: scratch ?? paths.cache(),
         storeDir: paths.store(source.id),
         now: startedAt,
+        fileLinks: state.links,
       };
       doing = `fetching ${source.id}`;
       try {
@@ -566,14 +572,18 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
 
     // Sources in the state that the manifest no longer declares.
     const carried: DesiredLink[] = [];
+    /** Sources whose files stay linked as last synced. */
+    const keepFiles = new Set<string>();
     const missing = Object.keys(state.sources).filter(
       (id) => !loaded.sources.some((source) => source.id === id),
     );
     if (missing.length > 0 && loaded.failed?.length) {
       // An extended manifest did not load, so these may still be declared there: keep them.
-      for (const id of missing)
+      for (const id of missing) {
+        keepFiles.add(id);
         for (const skill of lastLinked(id))
           carried.push({ name: skill.name, target: skill.dir, source: id });
+      }
       warnings.push(
         `kept ${missing.join(", ")} as last synced, because ${loaded.failed.join(", ")} did not load`,
       );
@@ -597,6 +607,13 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
     const shadowed: Report["shadowed"] = [];
     for (const result of results) {
       for (const skill of result.skills) {
+        // ~/.claude/skills/fleetrc is the plugin that carries Claude Code's hooks (entrysync.ts).
+        if (nameKey(skill.name) === nameKey(CLAUDE_PLUGIN_NAME)) {
+          warnings.push(
+            `${result.id}: the skill ${skill.name} is not linked: fleetrc keeps that name for the plugin that carries Claude Code's hooks`,
+          );
+          continue;
+        }
         const winner = byKey.get(nameKey(skill.name));
         if (winner) {
           if (winner.source !== result.id)
@@ -668,6 +685,24 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
         rmSync(join(dir, MANIFEST_FILE), { force: true });
     }
 
+    doing = "linking files into agent folders";
+    const fileLinks = linkFiles(
+      results,
+      targets.flatMap((target) => target.agents),
+      state,
+      { copy: options.copy, dryRun, keep: keepFiles },
+    );
+    doing = "merging MCP servers and hooks into agent configs";
+    const rootSources = new Set(loaded.root.sources.map((source) => source.id));
+    const entries = syncEntries(
+      results.filter((source) => rootSources.has(source.id)),
+      targets.flatMap((target) => target.agents),
+      state,
+      { dryRun },
+    );
+    const linkedItem = (source: string, item: string) =>
+      fileLinks.links.some((link) => link.source === source && link.item === item);
+
     // Skills linked in place keep their SKILL.md as it is, and a link there is skipped by these.
     const strict = Object.entries(SKIP_LINKED_SKILL_MD)
       .filter(([id]) => targets.some((target) => target.agents.includes(id)))
@@ -703,7 +738,7 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
       dryRun,
       offline,
       ok: true,
-      sources: results.map(({ skills: _skills, ...rest }) => rest),
+      sources: results.map(({ skills: _skills, files: _files, ...rest }) => rest),
       skills: {
         total: winners.size,
         names: [...winners.keys()].sort(),
@@ -715,7 +750,40 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
           ),
         ].sort(),
       },
-      shadowed: shadowed.filter((entry) => !forked.has(nameKey(entry.skill))),
+      files: {
+        total: fileLinks.links.length,
+        links: fileLinks.links,
+        added: fileLinks.created,
+        updated: [
+          ...new Set(
+            results.flatMap((result) =>
+              result.files
+                .filter((entry) => entry.updated)
+                .map((entry) => itemId(entry.kind, entry.path))
+                .filter((item) => linkedItem(result.id, item)),
+            ),
+          ),
+        ].sort(),
+        removed: fileLinks.removed,
+        adopted: fileLinks.adopted,
+        foreign: fileLinks.foreign,
+      },
+      entries: {
+        total: entries.total,
+        added: entries.added,
+        updated: entries.updated,
+        removed: entries.removed,
+        adopted: entries.adopted,
+        held: entries.held,
+        foreign: entries.foreign,
+        review: entries.review,
+        skipped: entries.skipped,
+      },
+      shadowed: [
+        ...shadowed.filter((entry) => !forked.has(nameKey(entry.skill))),
+        ...fileLinks.shadowed,
+        ...entries.shadowed,
+      ],
       renamed: [...winners.keys()].flatMap((name) => {
         const from = renamedFrom(state, winners, name);
         return from === undefined ? [] : [{ from, to: name }];
@@ -739,12 +807,16 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
         ...forks.warnings,
         ...loaded.warnings,
         ...results.flatMap((result) => result.warnings),
+        ...fileLinks.warnings,
+        ...entries.warnings,
         ...(await unmatchedHooks(loaded, results)),
       ],
       errors: [
         ...adoptionErrors,
         ...results.flatMap((result) => (result.error ? [`${result.id}: ${result.error}`] : [])),
         ...targetReports.flatMap((target) => target.errors),
+        ...fileLinks.errors,
+        ...entries.errors,
       ],
     };
     if (options.only) carryOver(report, options.only);
@@ -754,7 +826,7 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
       const files = unresolvedFiles(conflict);
       if (files.length > 0)
         report.held.push({
-          source: state.skills[name]?.source ?? name,
+          source: state.skills[name]?.source ?? itemSource(state, loaded, name) ?? name,
           reason: `${name} has unresolved merge conflicts; resolve them, then run \`fleetrc merge ${name}\``,
           files,
         });
@@ -884,24 +956,52 @@ function adoptCopyEdits(dirs: readonly string[], dryRun: boolean, errors: string
 function retireStore(id: string, state: State, backupRoot: string, why: string): string[] {
   const said: string[] = [];
   const store = paths.store(id);
-  const records = state.sources[id]?.skills ?? {};
-  const liveDir = join(store, "live");
-  const onDisk = existsSync(liveDir) ? readdirSync(liveDir) : [];
-  for (const name of onDisk) {
-    const live = join(liveDir, name);
-    if (!lstat(live)?.isDirectory()) continue;
-    const record = Object.hasOwn(records, name) ? records[name] : undefined;
-    const files = record ? changedFiles(record.hashes, hashDir(live)) : [];
-    if (record && files.length === 0) continue;
-    const to = join(backupRoot, id, name);
-    moveDir(live, to);
-    said.push(
-      record
-        ? `${why}; ${name} had local edits (${files.join(", ")}), so it was moved to ${tildify(to)}`
-        : `${why}; ${name} had no install record to tell whether it was edited, so it was moved to ${tildify(to)}`,
-    );
+  const sourceState = state.sources[id];
+  // Skills, then each kind of file, whose folders in the store hold one file each.
+  const parts = [
+    {
+      dir: store,
+      records: sourceState?.skills ?? {},
+      backup: join(backupRoot, id),
+      name: (n: string) => n,
+    },
+    ...ITEM_KINDS.map((kind) => ({
+      dir: join(store, kind),
+      records: sourceState?.files?.[kind]?.items ?? {},
+      backup: join(backupRoot, id, kind),
+      name: (n: string) => itemId(kind, itemPath(n)),
+    })),
+  ];
+  for (const part of parts) {
+    const liveDir = join(part.dir, "live");
+    const onDisk = existsSync(liveDir) ? readdirSync(liveDir) : [];
+    for (const name of onDisk) {
+      const live = join(liveDir, name);
+      if (!lstat(live)?.isDirectory()) continue;
+      const record = Object.hasOwn(part.records, name) ? part.records[name] : undefined;
+      const files = record ? changedFiles(record.hashes, hashDir(live)) : [];
+      if (record && files.length === 0) continue;
+      const to = join(part.backup, name);
+      moveDir(live, to);
+      said.push(
+        record
+          ? `${why}; ${part.name(name)} had local edits (${files.join(", ")}), so it was moved to ${tildify(to)}`
+          : `${why}; ${part.name(name)} had no install record to tell whether it was edited, so it was moved to ${tildify(to)}`,
+      );
+    }
   }
   rmSync(store, { recursive: true, force: true });
   delete state.sources[id];
   return said;
+}
+
+/** The source a file's item id names in the store, the first in the manifest that keeps it. */
+function itemSource(state: State, loaded: LoadedManifest, id: string): string | undefined {
+  const item = parseItemId(id);
+  if (!item) return undefined;
+  const key = itemName(item.path);
+  return loaded.sources.find((source) => {
+    const files = state.sources[source.id]?.files?.[item.kind];
+    return files && (Object.hasOwn(files.items, key) || Object.hasOwn(files.pending, key));
+  })?.id;
 }
