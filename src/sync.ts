@@ -48,6 +48,9 @@ import {
   readConfig,
   remoteManifest,
   stagePolicyManifest,
+  checkedOutPath,
+  DEFAULT_MANIFEST,
+  sameManifest,
   tailnetManifestSpec,
   writeConfig,
 } from "./manifest.ts";
@@ -59,6 +62,7 @@ import { failedResult, type SourceResult, sourceFiles, syncSource } from "./sour
 import { loadState, sourceState, type State, StateFile } from "./state.ts";
 import { scheduleDrift } from "./timer.ts";
 import { version } from "./version.ts";
+import { LEGACY_MANIFEST_DIR, legacyHookEnv, legacyHookNote, legacyWarning } from "./legacy.ts";
 
 export interface SyncOptions {
   /** Fetch only this source; the others are linked from what is already on disk. */
@@ -66,7 +70,7 @@ export interface SyncOptions {
   offline?: boolean;
   dryRun?: boolean;
   copy?: boolean;
-  /** Apply review-mode updates of this source (`skillfleet update <source>`). */
+  /** Apply review-mode updates of this source (`fleetrc update <source>`). */
   apply?: string;
   /** Manifest spec, instead of the one in config.json. */
   manifest?: string;
@@ -96,7 +100,7 @@ function timerDrift(timer: { cron: string; timeZone?: string }, state: State): s
 export function manifestSpec(override?: string): string {
   if (override) return override;
   const config = readConfig();
-  if (!config) throw new ManifestError("no manifest yet: run `skillfleet init <manifest>` first");
+  if (!config) throw new ManifestError("no manifest yet: run `fleetrc init <manifest>` first");
   return config.manifest;
 }
 
@@ -121,10 +125,10 @@ function acquireLock(command = "sync"): { release: () => void; note?: string } {
   return { release, note: takeLock(file, mine) };
 }
 
-/** How long a command waits for a running sync to let go of the lock; SKILLFLEET_LOCK_WAIT_MS sets it, for tests. */
+/** How long a command waits for a running sync to let go of the lock; FLEETRC_LOCK_WAIT_MS sets it, for tests. */
 function lockWaitMs(): number {
-  const set = Number(process.env.SKILLFLEET_LOCK_WAIT_MS);
-  return set >= 0 && process.env.SKILLFLEET_LOCK_WAIT_MS ? set : 10_000;
+  const set = Number(process.env.FLEETRC_LOCK_WAIT_MS);
+  return set >= 0 && process.env.FLEETRC_LOCK_WAIT_MS ? set : 10_000;
 }
 
 /**
@@ -187,10 +191,10 @@ export function sweepJsonTemps(dir = dirname(paths.state())) {
 
 /**
  * The longest a whole sync may take: well under `LOCK_MAX_AGE_MS`, so a lock this old is never a
- * live sync's. SKILLFLEET_SYNC_TIMEOUT_MS sets it, for tests.
+ * live sync's. FLEETRC_SYNC_TIMEOUT_MS sets it, for tests.
  */
 function syncTimeoutMs(): number {
-  const set = Number(process.env.SKILLFLEET_SYNC_TIMEOUT_MS);
+  const set = Number(process.env.FLEETRC_SYNC_TIMEOUT_MS);
   return set > 0 && set < LOCK_MAX_AGE_MS ? set : 60 * 60_000;
 }
 
@@ -312,10 +316,18 @@ async function runHooks(
       continue;
     }
     if (matched.length === 0) continue;
+    const note = legacyHookNote(hook.name, hook.run);
+    if (note) legacyWarning(note);
     const run = await exec(hook.run, [], {
       shell: true,
       input: JSON.stringify(report),
-      env: { ...process.env, SKILLFLEET_HOOK: hook.name, SKILLFLEET_CHANGED: matched.join("\n") },
+      env: {
+        ...process.env,
+        FLEETRC_HOOK: hook.name,
+        FLEETRC_CHANGED: matched.join("\n"),
+        // The old name's, for one release.
+        ...legacyHookEnv(hook.name, matched.join("\n")),
+      },
       timeoutMs: HOOK_TIMEOUT_MS,
       maxOutput: 8000,
     });
@@ -414,21 +426,31 @@ async function postToHub(hub: string, report: Report): Promise<string | undefine
  * `spec`, or on a machine that took its manifest from the tailnet, the one the tailnet policy names
  * now. When Tailscale can't say, use the saved spec.
  */
-async function followTailnet(spec: string, warnings: string[]): Promise<string> {
-  if (readConfig()?.tailscale !== true) return spec;
+async function followTailnet(
+  spec: string,
+  warnings: string[],
+): Promise<{ spec: string; legacyPath?: string }> {
+  if (readConfig()?.tailscale !== true) return { spec };
   const found = await tailnetManifestSpec();
   if ("error" in found) {
     warnings.push(`kept the manifest ${spec}: ${found.error}`);
-    return spec;
+    return { spec };
   }
-  return found.spec;
+  // The policy names a repository alone, and this machine reads its manifest from the old name's
+  // default place: that is the same manifest, not a new one, until the repository moves it.
+  if (found.defaultPath) {
+    const legacyPath = `${LEGACY_MANIFEST_DIR}/manifest.json`;
+    const legacy = `${found.spec.slice(0, -DEFAULT_MANIFEST.length)}${legacyPath}`;
+    if (sameManifest(legacy, spec)) return { spec: found.spec, legacyPath };
+  }
+  return { spec: found.spec };
 }
 
 export async function sync(options: SyncOptions = {}): Promise<Report> {
   const startedAt = new Date().toISOString();
   const dryRun = options.dryRun ?? false;
   const offline = options.offline ?? false;
-  const scratch = dryRun ? mkdtempSync(join(tmpdir(), "skillfleet-dry-")) : undefined;
+  const scratch = dryRun ? mkdtempSync(join(tmpdir(), "fleetrc-dry-")) : undefined;
   const lock = dryRun ? { release: () => {} } : acquireLock();
   if (!dryRun) sweepJsonTemps();
   const warnings: string[] = lock.note ? [lock.note] : [];
@@ -440,7 +462,7 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
     stopAll();
     lock.release();
     process.stderr.write(
-      `skillfleet: the sync was stopped after ${limit >= 60_000 ? `${Math.round(limit / 60_000)} minutes` : `${limit / 1000} s`} while ${doing}; its lock is released, and the next sync starts over\n`,
+      `fleetrc: the sync was stopped after ${limit >= 60_000 ? `${Math.round(limit / 60_000)} minutes` : `${limit / 1000} s`} while ${doing}; its lock is released, and the next sync starts over\n`,
     );
     process.exit(1);
   }, limit);
@@ -448,26 +470,34 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
   try {
     // A remote manifest's file is a cache copy (a scratch one in a dry run), so reports name its spec.
     const savedSpec = options.loaded?.root.file ?? manifestSpec(options.manifest);
-    const spec =
+    const policy =
       options.loaded || options.manifest || offline
-        ? savedSpec
+        ? { spec: savedSpec }
         : await followTailnet(savedSpec, warnings);
     const candidate =
-      spec !== savedSpec && !dryRun ? await stagePolicyManifest(spec, savedSpec) : undefined;
-    const loaded =
+      policy.spec !== savedSpec && !dryRun
+        ? await stagePolicyManifest(policy.spec, savedSpec)
+        : undefined;
+    let loaded =
       options.loaded ??
       candidate?.loaded ??
-      (await loadManifest(spec, {
+      (await loadManifest(policy.spec, {
         offline,
         ...(scratch ? { cacheRoot: join(scratch, "manifests") } : {}),
       }));
+    // The repository has no manifest at the new default place yet, so the policy's spec loaded the
+    // one this machine already reads. Keep the saved spec, and read it through its own checkout,
+    // which is the one later offline syncs and one-off `--manifest` reads use.
+    const unmoved =
+      policy.legacyPath !== undefined &&
+      checkedOutPath(DEFAULT_MANIFEST, loaded.root.file) === policy.legacyPath;
+    if (unmoved && candidate) loaded = await loadManifest(savedSpec);
     if (options.only && !loaded.sources.some((source) => source.id === options.only))
       throw new ManifestError(`no source "${options.only}" in the manifest`);
+    const spec = unmoved ? savedSpec : policy.spec;
     if (spec !== savedSpec) {
-      if (candidate) {
-        candidate.accept();
-        writeConfig({ manifest: spec });
-      }
+      candidate?.accept();
+      if (candidate) writeConfig({ manifest: spec });
       warnings.push(`the tailnet policy now names the manifest ${spec}, not ${savedSpec}`);
     }
     const stateFile = new StateFile(loadState(dryRun ? undefined : warnings));
@@ -592,7 +622,7 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
     if (targets.length === 0)
       warnings.push(
         loaded.root.agents === "all"
-          ? 'no agent is installed here, so no skills were linked: "agents": "all" means every agent whose folder is in your home, such as ~/.claude for Claude Code. Install one, or name agents in the manifest (`skillfleet agents` lists the ids)'
+          ? 'no agent is installed here, so no skills were linked: "agents": "all" means every agent whose folder is in your home, such as ~/.claude for Claude Code. Install one, or name agents in the manifest (`fleetrc agents` lists the ids)'
           : "none of the manifest's agents has a global skills folder, so no skills were linked",
       );
     const desired = [...winners.values()];
@@ -615,7 +645,7 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
     };
     const targetReports = targets.map((target) => linkInto(target.dir, desired));
     const publishedAt = new Date().toISOString();
-    // Links skillfleet made in folders it no longer links into are removed. A folder that is a
+    // Links fleetrc made in folders it no longer links into are removed. A folder that is a
     // link, or another path to a current target, is left alone.
     const real = (dir: string) => {
       let path = dir;
@@ -666,7 +696,7 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
     const report: Report = {
       version: 1,
       host: hostname(),
-      skillfleet: version,
+      fleetrc: version,
       manifest: remoteManifest(spec) ? spec : loaded.root.file,
       startedAt,
       finishedAt: startedAt,
@@ -725,7 +755,7 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
       if (files.length > 0)
         report.held.push({
           source: state.skills[name]?.source ?? name,
-          reason: `${name} has unresolved merge conflicts; resolve them, then run \`skillfleet merge ${name}\``,
+          reason: `${name} has unresolved merge conflicts; resolve them, then run \`fleetrc merge ${name}\``,
           files,
         });
     }

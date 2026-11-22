@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative } from "node:path";
 import { listSkills } from "skills";
@@ -6,7 +6,7 @@ import { agentTargets, aliasOf, codexLegacyDir } from "./agents.ts";
 import { confine, personalSkillsDir, personalSource } from "./edits.ts";
 import { UserError } from "./errors.ts";
 import { dict, isRecord, lstat, moveDir, readJsonFile } from "./fs.ts";
-import { linkTarget, MANIFEST_FILE, removeLink } from "./linker.ts";
+import { linkTarget, readTargetManifest, removeLink } from "./linker.ts";
 import {
   defaultSourceId,
   editManifest,
@@ -47,7 +47,7 @@ export interface Imports {
 export interface InitPlan {
   manifestSpec: string;
   manifestFile: string;
-  /** False when the manifest lives in a remote repository skillfleet only reads. */
+  /** False when the manifest lives in a remote repository fleetrc only reads. */
   editable: boolean;
   /** Skill names any agent folder shows today, and after init. */
   before: string[];
@@ -181,7 +181,7 @@ export async function planInit(
     checkout?: ReturnType<typeof manifestCheckoutRoute>["checkout"];
   } = {},
 ): Promise<InitPlan> {
-  const scratch = mkdtempSync(join(tmpdir(), "skillfleet-init-"));
+  const scratch = mkdtempSync(join(tmpdir(), "fleetrc-init-"));
   try {
     // A dry run fetches a remote manifest into a scratch folder, so it leaves the state folder alone.
     const cache = dryRun ? { cacheRoot: join(scratch, "manifests") } : { checkout };
@@ -268,7 +268,7 @@ export async function planInit(
         for (const name of entries(dir)) if (!provided.has(name)) kept.delete(name);
         continue;
       }
-      const ours = new Set(Object.keys(readOwnLinks(dir)));
+      const ours = new Set(Object.keys(readTargetManifest(dir).links));
       for (const name of entries(dir)) {
         const path = join(dir, name);
         const entry = lstat(path);
@@ -328,19 +328,10 @@ export async function planInit(
   }
 }
 
-function readOwnLinks(dir: string): Record<string, unknown> {
-  try {
-    const raw: unknown = JSON.parse(readFileSync(join(dir, MANIFEST_FILE), "utf8"));
-    return isRecord(raw) && isRecord(raw.links) ? raw.links : {};
-  } catch {
-    return {};
-  }
-}
-
 /** The plan as text. `errors: false` leaves out the sync's errors, for when the real sync prints them next. */
 export function formatPlan(plan: InitPlan, { errors = true } = {}): string {
   const lines = [
-    `skillfleet init: manifest ${plan.editable ? tildify(plan.manifestFile) : plan.manifestSpec}`,
+    `fleetrc init: manifest ${plan.editable ? tildify(plan.manifestFile) : plan.manifestSpec}`,
   ];
   for (const migration of plan.migrations) {
     switch (migration.kind) {
@@ -480,9 +471,7 @@ function checkMoves(migrations: readonly Migration[]) {
     taken.add(key);
   }
   if (problems.length > 0)
-    throw new UserError(
-      `init changed nothing: ${problems.join("; ")}; run \`skillfleet init\` again`,
-    );
+    throw new UserError(`init changed nothing: ${problems.join("; ")}; run \`fleetrc init\` again`);
 }
 
 /** Carries out a plan: back up, adopt, unfold folder links, write config and imports. Sync runs after. */
