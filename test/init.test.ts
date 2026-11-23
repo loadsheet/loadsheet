@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -9,7 +10,9 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join, relative } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vite-plus/test";
+import type { Report } from "../src/report.ts";
 import {
   AGENT_DIRS,
   clone,
@@ -93,6 +96,323 @@ function legacyLayout(m: Machine) {
 }
 
 describe("init", () => {
+  it("previews skill replacements using saved copy mode and explicit overrides", async () => {
+    const m = machine();
+    const repo = remote(m, "mine", skills("skills/", "example"));
+    const working = clone(m, repo, "mine");
+    const manifest = m.manifest({
+      agents: ["claude-code"],
+      sources: [{ id: "mine", git: repo.url, path: working }],
+    });
+    await m.json("init", manifest, "--no-hooks", "--copy");
+    const replaced = (sync: Report) => sync.targets.flatMap((target) => target.replaced);
+    for (const flags of [[], ["--copy"], ["--no-copy"]]) {
+      const preview = await m.json<{ sync: Report }>(
+        "init",
+        manifest,
+        "--no-hooks",
+        "--dry-run",
+        ...flags,
+      );
+      expect(preview.sync.ok).toBe(true);
+      expect(replaced(preview.sync)).toEqual(flags.includes("--no-copy") ? ["example"] : []);
+    }
+    const applied = await m.json<{ sync: Report }>("init", manifest, "--no-hooks");
+    expect(replaced(applied.sync)).toEqual([]);
+  });
+
+  it("flags a copied skill update whose destinations the preview cannot establish", async () => {
+    const machineSetup = machine();
+    const repo = remote(machineSetup, "upstream-skills", skills("skills/", "example"));
+    const manifest = machineSetup.manifest({
+      agents: ["claude-code", "codex"],
+      sources: [{ id: "shared", git: repo.url }],
+    });
+    await machineSetup.json("init", manifest, "--no-hooks", "--copy");
+    const preview = async () => {
+      const { sync } = await machineSetup.json<{ sync: Report }>(
+        "init",
+        manifest,
+        "--no-hooks",
+        "--dry-run",
+      );
+      return sync;
+    };
+    expect(await preview()).toMatchObject({ ok: true, previewLimitations: [] });
+
+    const updated = skillMd("example", "incoming update");
+    repo.commit({ "skills/example/SKILL.md": updated });
+    const destinations = [
+      machineSetup.at(".claude/skills/example/SKILL.md"),
+      machineSetup.at(".agents/skills/example/SKILL.md"),
+    ];
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const report = await preview();
+      expect(report.ok).toBe(true);
+      expect(report.skills.updated).toEqual(["example"]);
+      expect(report.targets.flatMap((target) => target.replaced)).toEqual([]);
+      expect(report).toMatchObject({ previewLimitations: [expect.stringContaining("example")] });
+      for (const path of destinations) expect(read(path)).not.toBe(updated);
+    }
+    await machineSetup.json("init", manifest, "--no-hooks");
+    for (const path of destinations) expect(read(path)).toBe(updated);
+    expect(await preview()).toMatchObject({ ok: true, previewLimitations: [] });
+  });
+
+  it("flags copy-edit adoption that would propagate to another agent", async () => {
+    const machineSetup = machine();
+    const repo = remote(machineSetup, "mine", { "instructions.md": "original\n" });
+    const working = clone(machineSetup, repo, "mine");
+    const manifest = machineSetup.manifest({
+      agents: ["claude-code", "codex"],
+      sources: [{ id: "mine", git: repo.url, path: working, instructions: "instructions.md" }],
+    });
+    await machineSetup.json("init", manifest, "--no-hooks", "--copy");
+    const edited = machineSetup.at(".claude/CLAUDE.md");
+    const other = machineSetup.at(".codex/AGENTS.md");
+    writeFileSync(edited, "local edit\n");
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const { sync } = await machineSetup.json<{ sync: Report }>(
+        "init",
+        manifest,
+        "--no-hooks",
+        "--dry-run",
+      );
+      expect(sync.ok).toBe(true);
+      expect(sync.files.replaced).toEqual([]);
+      expect(sync).toMatchObject({ previewLimitations: [expect.stringContaining("CLAUDE.md")] });
+      expect(read(join(working, "instructions.md"))).toBe("original\n");
+      expect(read(other)).toBe("original\n");
+    }
+    const { sync } = await machineSetup.json<{ sync: Report }>("init", manifest, "--no-hooks");
+    expect(sync.files.replaced).toEqual([other]);
+    expect(read(other)).toBe("local edit\n");
+  });
+
+  it("flags a working clone update before and after fetching it", async () => {
+    const setup = machine();
+    const originalSkill = skillMd("example");
+    const repo = remote(setup, "mine", {
+      "skills/example/SKILL.md": originalSkill,
+      "instructions.md": "original\n",
+    });
+    const working = clone(setup, repo, "mine");
+    const manifest = setup.manifest({
+      agents: ["claude-code", "codex"],
+      sources: [{ id: "mine", git: repo.url, path: working, instructions: "instructions.md" }],
+    });
+    await setup.json("init", manifest, "--no-hooks", "--copy");
+    const preview = async () => {
+      const { sync } = await setup.json<{ sync: Report }>(
+        "init",
+        manifest,
+        "--no-hooks",
+        "--dry-run",
+      );
+      return sync;
+    };
+    expect(await preview()).toMatchObject({ ok: true, previewLimitations: [] });
+    const before = setup.git(working, "rev-parse", "HEAD");
+    const updatedSkill = skillMd("example", "incoming update");
+    const incoming = repo.commit({
+      "skills/example/SKILL.md": updatedSkill,
+      "instructions.md": "updated\n",
+    });
+    const skillCopies = [
+      setup.at(".claude/skills/example/SKILL.md"),
+      setup.at(".agents/skills/example/SKILL.md"),
+    ];
+    const fileCopies = [setup.at(".claude/CLAUDE.md"), setup.at(".codex/AGENTS.md")];
+    for (const trackingTip of [before, incoming]) {
+      expect(await preview()).toMatchObject({
+        ok: true,
+        previewLimitations: [expect.stringContaining("working clone")],
+      });
+      expect(setup.git(working, "rev-parse", "HEAD")).toBe(before);
+      expect(setup.git(working, "rev-parse", "@{u}")).toBe(trackingTip);
+      for (const path of skillCopies) expect(read(path)).toBe(originalSkill);
+      for (const path of fileCopies) expect(read(path)).toBe("original\n");
+      if (trackingTip === before) setup.git(working, "fetch", "--quiet");
+    }
+    await setup.json("init", manifest, "--no-hooks");
+    expect(setup.git(working, "rev-parse", "HEAD")).toBe(incoming);
+    for (const path of skillCopies) expect(read(path)).toBe(updatedSkill);
+    for (const path of fileCopies) expect(read(path)).toBe("updated\n");
+    expect(await preview()).toMatchObject({ ok: true, previewLimitations: [] });
+  });
+
+  it("previews a published working clone without refreshing its stale tracking ref", async () => {
+    const setup = machine();
+    const repo = remote(setup, "mine", { "instructions.md": "original\n" });
+    const working = clone(setup, repo, "mine");
+    const manifest = setup.manifest({
+      agents: ["claude-code"],
+      sources: [{ id: "mine", git: repo.url, path: working, instructions: "instructions.md" }],
+    });
+    const cached = setup.git(working, "rev-parse", "@{u}");
+    writeFileSync(join(working, "instructions.md"), "published\n");
+    setup.git(working, "add", "instructions.md");
+    setup.git(working, "commit", "--quiet", "-m", "Publish setup");
+    const published = setup.git(working, "rev-parse", "HEAD");
+    setup.git(working, "push", "--quiet", pathToFileURL(repo.url).href, "HEAD:refs/heads/main");
+
+    const args = ["init", manifest, "--no-hooks", "--copy"];
+    const { sync: preview } = await setup.json<{ sync: Report }>(...args, "--dry-run");
+    expect(setup.git(working, "rev-parse", "HEAD")).toBe(published);
+    expect(setup.git(working, "rev-parse", "@{u}")).toBe(cached);
+    expect(existsSync(setup.at(".claude/CLAUDE.md"))).toBe(false);
+
+    const { sync: applied } = await setup.json<{ sync: Report }>(...args);
+    expect(applied.ok).toBe(true);
+    expect(setup.git(working, "rev-parse", "HEAD")).toBe(published);
+    expect(setup.git(working, "rev-parse", "@{u}")).toBe(published);
+    expect(read(setup.at(".claude/CLAUDE.md"))).toBe("published\n");
+    expect(preview).toMatchObject({ ok: true, previewLimitations: [] });
+  });
+
+  it("previews an unchanged working clone with fetch-all and only its tracked remote", async () => {
+    const setup = machine();
+    const repo = remote(setup, "mine", { "instructions.md": "original\n" });
+    const working = clone(setup, repo, "mine");
+    const manifest = setup.manifest({
+      agents: ["claude-code"],
+      sources: [{ id: "mine", git: repo.url, path: working, instructions: "instructions.md" }],
+    });
+    const args = ["init", manifest, "--no-hooks", "--copy"];
+    await setup.json(...args);
+    setup.git(working, "config", "fetch.all", "true");
+    const before = repo.head();
+    const copy = setup.at(".claude/CLAUDE.md");
+    const expectUnchanged = () => {
+      expect(setup.git(working, "rev-parse", "HEAD")).toBe(before);
+      expect(setup.git(working, "rev-parse", "@{u}")).toBe(before);
+      expect(read(copy)).toBe("original\n");
+    };
+
+    const { sync: preview } = await setup.json<{ sync: Report }>(...args, "--dry-run");
+    expectUnchanged();
+    const { sync: applied } = await setup.json<{ sync: Report }>(...args);
+    expectUnchanged();
+    expect(applied).toMatchObject({ ok: true, files: { replaced: [] } });
+    expect(preview).toMatchObject({ ok: true, previewLimitations: [], files: { replaced: [] } });
+
+    setup.git(working, "remote", "add", "other", repo.url);
+    const { sync: multipleRemotes } = await setup.json<{ sync: Report }>(...args, "--dry-run");
+    expect(multipleRemotes).toMatchObject({
+      ok: true,
+      previewLimitations: [expect.stringContaining("working clone")],
+    });
+    expectUnchanged();
+  });
+
+  it("flags a newer cached upstream that fetch can skip even when the advertised tip matches HEAD", async () => {
+    const setup = machine();
+    const repo = remote(setup, "mine", { "instructions.md": "original\n" });
+    const working = clone(setup, repo, "mine");
+    const manifest = setup.manifest({
+      agents: ["claude-code"],
+      sources: [{ id: "mine", git: repo.url, path: working, instructions: "instructions.md" }],
+    });
+    await setup.json("init", manifest, "--no-hooks", "--copy");
+    const before = repo.head();
+    const incoming = repo.commit({ "instructions.md": "updated\n" });
+    setup.git(working, "fetch", "--quiet");
+    setup.git(repo.work, "push", "--quiet", "--force", "origin", `${before}:refs/heads/main`);
+    const expectIncompletePreview = async () => {
+      const { sync } = await setup.json<{ sync: Report }>(
+        "init",
+        manifest,
+        "--no-hooks",
+        "--dry-run",
+      );
+      expect(sync).toMatchObject({
+        ok: true,
+        previewLimitations: [expect.stringContaining("working clone")],
+      });
+      expect(setup.git(working, "rev-parse", "HEAD")).toBe(before);
+      expect(setup.git(working, "rev-parse", "@{u}")).toBe(incoming);
+      expect(read(setup.at(".claude/CLAUDE.md"))).toBe("original\n");
+    };
+
+    setup.git(working, "config", "fetch.all", "true");
+    for (const key of ["remote.origin.skipFetchAll", "remote.origin.skipDefaultUpdate"]) {
+      setup.git(working, "config", key, "true");
+      await expectIncompletePreview();
+      setup.git(working, "config", "--unset", key);
+    }
+    setup.git(working, "config", "--unset", "fetch.all");
+
+    setup.git(working, "config", "--add", "remote.origin.fetch", "^refs/heads/main");
+    await expectIncompletePreview();
+
+    await setup.json("init", manifest, "--no-hooks");
+    expect(setup.git(working, "rev-parse", "HEAD")).toBe(incoming);
+    expect(read(setup.at(".claude/CLAUDE.md"))).toBe("updated\n");
+  });
+
+  it("flags an unfetched tip without fetching missing objects into a partial clone", async () => {
+    const setup = machine();
+    const repo = remote(setup, "mine", skills("skills/", "example"));
+    setup.git(repo.url, "config", "uploadpack.allowFilter", "true");
+    setup.git(repo.url, "config", "uploadpack.allowReachableSHA1InWant", "true");
+    const url = pathToFileURL(repo.url).href;
+    const working = setup.at("mine");
+    setup.git(setup.home, "clone", "--quiet", "--filter=blob:none", url, working);
+    const manifest = setup.manifest({
+      agents: ["claude-code"],
+      sources: [{ id: "mine", git: url, path: working }],
+    });
+    repo.commit({ "skills/example/SKILL.md": skillMd("example", "incoming update") });
+    const packDir = join(working, ".git", "objects", "pack");
+    const packs = readdirSync(packDir).sort();
+    expect(packs.some((name) => name.endsWith(".promisor"))).toBe(true);
+
+    const { sync } = await setup.json<{ sync: Report }>(
+      "init",
+      manifest,
+      "--no-hooks",
+      "--dry-run",
+    );
+    expect(sync).toMatchObject({
+      ok: true,
+      previewLimitations: [expect.stringContaining("working clone")],
+    });
+    expect(readdirSync(packDir).sort()).toEqual(packs);
+  });
+
+  it.skipIf(isWindows)(
+    "reports rewriting a managed copy from a different same-byte source",
+    async () => {
+      const m = machine();
+      const repo = remote(m, "mine", { "old.md": "instructions\n", "new.md": "instructions\n" });
+      const working = clone(m, repo, "mine");
+      chmodSync(join(working, "new.md"), 0o644);
+      const writeManifest = (instructions: string) =>
+        m.manifest({
+          agents: ["claude-code"],
+          sources: [{ id: "mine", git: repo.url, path: working, instructions }],
+        });
+      const manifest = writeManifest("old.md");
+      await m.json("init", manifest, "--no-hooks", "--copy");
+      const destination = m.at(".claude/CLAUDE.md");
+      chmodSync(destination, 0o600);
+      writeManifest("new.md");
+      const preview = await m.json<{ sync: Report }>("init", manifest, "--no-hooks", "--dry-run");
+      expect(preview.sync.ok).toBe(true);
+      expect(preview.sync.files).toMatchObject({
+        added: [],
+        updated: [],
+        removed: [],
+        replaced: [destination],
+      });
+      expect(statSync(destination).mode & 0o777).toBe(0o600);
+      const applied = await m.json<{ sync: Report }>("init", manifest, "--no-hooks");
+      expect(applied.sync.files.replaced).toEqual([destination]);
+      expect(read(destination)).toBe("instructions\n");
+      expect(statSync(destination).mode & 0o777).toBe(0o644);
+    },
+  );
+
   it("9. migrates the legacy layout: a dry run changes nothing, the real run keeps every name and empties ~/.codex/skills", async () => {
     const m = machine();
     const { work, manifest, codex } = legacyLayout(m);

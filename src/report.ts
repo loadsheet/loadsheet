@@ -19,6 +19,8 @@ export interface Report {
   dryRun: boolean;
   offline: boolean;
   ok: boolean;
+  /** Changes whose full destination effects the dry run did not model. */
+  previewLimitations?: string[];
   sources: Omit<SourceResult, "skills" | "files">[];
   skills: {
     total: number;
@@ -36,6 +38,8 @@ export interface Report {
     added: string[];
     /** Items whose file changed upstream this sync. */
     updated: string[];
+    /** Destinations relinked or recopied, even if the source bytes didn't change. */
+    replaced?: string[];
     /** Paths unlinked this sync. */
     removed: string[];
     /** Links already where fleetrc would link, made by hand, which fleetrc now keeps. */

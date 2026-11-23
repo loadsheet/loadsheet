@@ -176,10 +176,12 @@ export async function planInit(
   {
     offline = false,
     dryRun = false,
+    copy = false,
     checkout,
   }: {
     offline?: boolean;
     dryRun?: boolean;
+    copy?: boolean;
     checkout?: ReturnType<typeof manifestCheckoutRoute>["checkout"];
   } = {},
 ): Promise<InitPlan> {
@@ -207,7 +209,7 @@ export async function planInit(
       warnings: loaded.warnings,
       failed: loaded.failed,
     };
-    const report = await sync({ loaded: augmented, dryRun: true, offline });
+    const report = await sync({ loaded: augmented, dryRun: true, offline, copy });
     // A remote manifest's file is a cache copy, or in a dry run a scratch one this function deletes.
     report.manifest = remoteManifest(spec) ? spec : manifestFile;
     const provided = new Set(report.skills.names);
@@ -371,6 +373,8 @@ export function formatPlan(plan: InitPlan, { errors = true } = {}): string {
   );
   for (const shadow of plan.sync.shadowed)
     lines.push(`  shadowed: ${shadow.skill} from ${shadow.loser} (${shadow.winner} wins)`);
+  for (const reason of plan.sync.previewLimitations ?? [])
+    lines.push(`  preview incomplete: ${reason}`);
   if (errors) for (const error of plan.sync.errors) lines.push(`  error: ${error}`);
   for (const warning of new Set(plan.warnings)) lines.push(`  warning: ${warning}`);
   lines.push(

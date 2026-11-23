@@ -513,14 +513,16 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
     const targets = await agentTargets(loaded.root.agents);
     const adoptionErrors: string[] = [];
     // Before the sources look for local edits, so they find the ones made in a copy.
-    warnings.push(
-      ...adoptCopyEdits(
-        targets.map((target) => target.dir),
-        dryRun,
-        adoptionErrors,
-      ),
-      ...adoptFileCopyEdits(state, dryRun),
+    const previewLimitations: string[] = [];
+    const adoptedSkillEdits = adoptCopyEdits(
+      targets.map((target) => target.dir),
+      dryRun,
+      adoptionErrors,
+      previewLimitations,
     );
+    const adoptedFileEdits = adoptFileCopyEdits(state, dryRun);
+    warnings.push(...adoptedSkillEdits, ...adoptedFileEdits);
+    if (dryRun) previewLimitations.push(...adoptedFileEdits);
     // Skills linked last time, by source: what a source that fails, or can't be read, keeps.
     const lastLinked = (id: string) =>
       Object.entries(state.skills)
@@ -728,6 +730,28 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
     const forked = new Set(Object.keys(loaded.root.forks).map(nameKey));
     const sourceWon = (result: SourceResult, skill: string) =>
       winners.get(skill)?.source === result.id;
+    if (dryRun)
+      for (const { previewLimitation } of results)
+        if (previewLimitation) previewLimitations.push(previewLimitation);
+    if (dryRun && options.copy) {
+      for (const result of results) {
+        if (!isVendoredKind(result.kind)) continue;
+        for (const skill of result.updated) {
+          const copyMayBeRefreshed = targetReports.some(
+            (target) =>
+              !target.former &&
+              !target.skipped &&
+              !target.created.includes(skill) &&
+              !target.replaced.includes(skill) &&
+              !target.foreign.includes(skill),
+          );
+          if (copyMayBeRefreshed && sourceWon(result, skill))
+            previewLimitations.push(
+              `the incoming update to ${skill} (${result.id}) may refresh skill copies not listed under replacements`,
+            );
+        }
+      }
+    }
     const report: Report = {
       version: 1,
       host: hostname(),
@@ -738,7 +762,11 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
       dryRun,
       offline,
       ok: true,
-      sources: results.map(({ skills: _skills, files: _files, ...rest }) => rest),
+      ...(dryRun ? { previewLimitations } : {}),
+      sources: results.map(
+        ({ skills: _skills, files: _files, previewLimitation: _previewLimitation, ...rest }) =>
+          rest,
+      ),
       skills: {
         total: winners.size,
         names: [...winners.keys()].sort(),
@@ -765,6 +793,7 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
           ),
         ].sort(),
         removed: fileLinks.removed,
+        replaced: fileLinks.replaced,
         adopted: fileLinks.adopted,
         foreign: fileLinks.foreign,
       },
@@ -881,7 +910,12 @@ export async function sync(options: SyncOptions = {}): Promise<Report> {
  * When that folder changed too since the copy was made, both stay as they are and the link step
  * warns. Returns what to tell the user.
  */
-function adoptCopyEdits(dirs: readonly string[], dryRun: boolean, errors: string[]): string[] {
+function adoptCopyEdits(
+  dirs: readonly string[],
+  dryRun: boolean,
+  errors: string[],
+  previewLimitations: string[],
+): string[] {
   const said: string[] = [];
   for (const dir of dirs) {
     if (!existsSync(join(dir, MANIFEST_FILE))) continue;
@@ -914,9 +948,9 @@ function adoptCopyEdits(dirs: readonly string[], dryRun: boolean, errors: string
             continue;
           }
           if (dryRun) {
-            said.push(
-              `would move the edits in ${tildify(copy)} (${files.join(", ")}) into ${tildify(record.target)}, which every agent shows`,
-            );
+            const note = `would move the edits in ${tildify(copy)} (${files.join(", ")}) into ${tildify(record.target)}, which every agent shows`;
+            said.push(note);
+            previewLimitations.push(note);
             continue;
           }
           for (const file of files) {

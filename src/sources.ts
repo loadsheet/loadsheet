@@ -115,6 +115,7 @@ export interface SourceResult {
   files: FileEntry[];
   error?: string;
   warnings: string[];
+  previewLimitation?: string;
 }
 
 export interface SourceContext {
@@ -733,6 +734,8 @@ async function updatePinned(
   if (before.startsWith(ref.toLowerCase())) return;
   if (ctx.dryRun) {
     out.warnings.push(`${source.id}: ${dir} is at ${before.slice(0, 7)}; sync checks out ${ref}`);
+    if (source.update !== "review" || ctx.apply)
+      out.previewLimitation = `${source.id}: checking out ${ref} in the working clone may change destinations not reflected in the preview`;
     return;
   }
   let commit = await findCommit(dir, ref);
@@ -776,6 +779,25 @@ async function updatePinned(
   out.changed = [...new Set([...out.changed, ...incoming])];
 }
 
+async function fetchAllUsesOnlyUpstream(dir: string, remote: string): Promise<boolean> {
+  const remotes = await git(["remote"], { cwd: dir, allowFail: true });
+  if (remotes.code !== 0 || remotes.stdout.trim() !== remote) return false;
+  const skip = await git(
+    ["config", "--type=bool", "--get-regexp", "^remote\\..*\\.(skipdefaultupdate|skipfetchall)$"],
+    { cwd: dir, allowFail: true },
+  );
+  if (skip.code !== 0) return skip.code === 1 && !skip.stderr.trim();
+  const effective = skip.stdout
+    .trim()
+    .split(/\r?\n/)
+    .findLast(
+      (line) =>
+        line.startsWith(`remote.${remote}.skipdefaultupdate `) ||
+        line.startsWith(`remote.${remote}.skipfetchall `),
+    );
+  return effective === undefined || effective.endsWith(" false");
+}
+
 async function updateClone(
   source: CloneSource,
   dir: string,
@@ -798,17 +820,63 @@ async function updateClone(
   }
   const tracking = upstream.stdout.trim();
   if (ctx.dryRun) {
-    const [remote, ...branch] = tracking.split("/");
-    const remoteHead = await git(["ls-remote", "--", remote!, `refs/heads/${branch.join("/")}`], {
-      cwd: dir,
-      allowFail: true,
-      timeoutMs: 30_000,
-    });
-    const head = remoteHead.stdout.split(/\s/)[0];
-    if (remoteHead.code !== 0)
-      out.warnings.push(`${source.id}: cannot reach ${remote}: ${remoteHead.stderr.trim()}`);
-    else if (head && head !== (await gitOut(["rev-parse", "@{u}"], dir)))
-      out.warnings.push(`${source.id}: ${tracking} has new commits; sync fetches them`);
+    const checkedOut = await gitOut(["symbolic-ref", "HEAD"], dir);
+    const [remote, remoteRef, trackingRef] = (
+      await gitOut(
+        [
+          "for-each-ref",
+          "--format=%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream)",
+          checkedOut,
+        ],
+        dir,
+      )
+    ).split("\0");
+    const remoteHead =
+      remote && remoteRef
+        ? await git(["ls-remote", "--refs", "--", remote, remoteRef], {
+            cwd: dir,
+            allowFail: true,
+            timeoutMs: 30_000,
+          })
+        : undefined;
+    const advertised =
+      remoteHead?.code === 0
+        ? remoteHead.stdout
+            .split(/\r?\n/)
+            .map((line) => line.split("\t"))
+            .find(([, ref]) => ref === remoteRef)?.[0]
+        : undefined;
+    if (advertised === before && remote && remoteRef?.startsWith("refs/heads/")) {
+      const prefix = `refs/remotes/${remote}/`;
+      const branch = remoteRef.slice("refs/heads/".length);
+      const fetch = await git(["config", "--get-all", `remote.${remote}.fetch`], {
+        cwd: dir,
+        allowFail: true,
+      });
+      if (fetch.code === 0 && trackingRef === `${prefix}${branch}`) {
+        const refspec = fetch.stdout.trim();
+        const mapping = refspec.replace(/^\+/, "");
+        if (mapping === `refs/heads/*:${prefix}*` || mapping === `${remoteRef}:${trackingRef}`) {
+          const fetchAll = await git(
+            ["config", "--type=bool", "--default=false", "--get", "fetch.all"],
+            { cwd: dir, allowFail: true },
+          );
+          if (
+            fetchAll.code === 0 &&
+            (fetchAll.stdout.trim() === "false" ||
+              (fetchAll.stdout.trim() === "true" &&
+                (await fetchAllUsesOnlyUpstream(dir, remote)))) &&
+            (refspec.startsWith("+") || (await gitOut(["rev-parse", "@{u}"], dir)) === before)
+          )
+            return;
+        }
+      }
+    }
+    const note = advertised
+      ? `${source.id}: ${tracking} may update the working clone; the preview uses its current checkout`
+      : `${source.id}: cannot verify the upstream of the working clone ${dir}`;
+    out.warnings.push(note);
+    if (source.update !== "review" || ctx.apply) out.previewLimitation = note;
     return;
   }
   const fetched = await git(["fetch", "--quiet"], {
