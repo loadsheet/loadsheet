@@ -13,7 +13,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { jsonTemp } from "../src/fs.ts";
 import { whereabouts } from "../src/process.ts";
@@ -387,7 +388,8 @@ describe("R7-22. self-install under a running build", () => {
 
   /** Another build of this bundle: its chunk under another name, as the next release has. */
   function otherBuild(m: Machine): string {
-    const dist = dirname(cli);
+    // @loadsheet/fleet's build, which self-install copies; fleetrc's bin only imports it.
+    const dist = fileURLToPath(new URL("../dist/", import.meta.url));
     const dir = join(m.root, "build-b");
     mkdirSync(dir);
     const chunks = readdirSync(dist).filter((name) => name !== "cli.mjs");

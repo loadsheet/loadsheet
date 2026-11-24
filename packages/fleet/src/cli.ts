@@ -1243,7 +1243,16 @@ async function fleetRunCommand(loaded: Awaited<ReturnType<typeof loadManifest>>)
   const lines = (host: string, text: string) =>
     text === "" ? "" : `${text.replace(/\r?\n$/, "").replace(/^/gm, `${host}: `)}\n`;
   for (const { host, stderr } of results) process.stderr.write(lines(host, stderr));
-  if (json) emit(results.map(({ stderr: _, ...result }) => result));
+  if (json)
+    emit(
+      results.map(({ host, reachable, exitCode, stdout, error }) => ({
+        host,
+        reachable,
+        exitCode,
+        stdout,
+        error,
+      })),
+    );
   else
     for (const { host, stdout, exitCode, error } of results) {
       process.stdout.write(lines(host, stdout));
