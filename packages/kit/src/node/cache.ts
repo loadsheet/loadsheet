@@ -56,6 +56,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isCount = (value: unknown): value is number =>
   Number.isSafeInteger(value) && (value as number) >= 0;
 
+const DAY = /^\d{4}-\d{2}-\d{2}$/u;
+
 /** Thrown while decoding a malformed entry, which then opens as a miss. */
 class Malformed extends Error {}
 
@@ -91,6 +93,13 @@ class Decoder {
   text(value: unknown): string {
     if (!this.isRef(value)) throw new Malformed();
     return this.strings[value]!;
+  }
+
+  /** A `YYYY-MM-DD` day, which the window filter compares as a string. */
+  day(value: unknown): string {
+    const text = this.text(value);
+    if (!DAY.test(text)) throw new Malformed();
+    return text;
   }
 
   count(value: unknown): number {
@@ -219,7 +228,7 @@ const decodeTally = (raw: unknown, decoder: Decoder): Tally => {
   const flatSessions = decoder.tuples(rawSessions, 6);
   for (let index = 0; index < flatSessions.length; index += 6) {
     sessions.push({
-      day: decoder.text(flatSessions[index]),
+      day: decoder.day(flatSessions[index]),
       harness: decoder.text(flatSessions[index + 1]),
       via: decoder.text(flatSessions[index + 2]),
       sessions: decoder.count(flatSessions[index + 3]),
@@ -231,7 +240,7 @@ const decodeTally = (raw: unknown, decoder: Decoder): Tally => {
   const cells: Cell[] = [];
   const groups = decoder.tuples(rawCells, 4);
   for (let index = 0; index < groups.length; index += 4) {
-    const day = decoder.text(groups[index]);
+    const day = decoder.day(groups[index]);
     const harness = decoder.text(groups[index + 1]);
     const via = decoder.text(groups[index + 2]);
     const items = decoder.tuples(groups[index + 3], 6);
@@ -255,7 +264,7 @@ const decodeTally = (raw: unknown, decoder: Decoder): Tally => {
   for (let index = 0; index < flatVersions.length; index += 3) {
     versions.push({
       harness: decoder.text(flatVersions[index]),
-      day: decoder.text(flatVersions[index + 1]),
+      day: decoder.day(flatVersions[index + 1]),
       version: decoder.text(flatVersions[index + 2]),
     });
   }

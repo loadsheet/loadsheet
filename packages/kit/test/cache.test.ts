@@ -166,6 +166,10 @@ describe("the scan cache file", () => {
       (entry) => (entry[6] = "NaN"),
       (entry) => (entry[6] = { a: ["01"] }),
       (entry) => (entry[7] = "tally"),
+      // A day that is a string but not YYYY-MM-DD, in sessions, a cell group and versions.
+      (entry, strings) => ((entry[7] as unknown[][])[0]![0] = strings.indexOf("fake")),
+      (entry, strings) => ((entry[7] as unknown[][])[1]![0] = strings.indexOf("cli")),
+      (entry, strings) => ((entry[7] as unknown[][])[2]![1] = strings.indexOf("1.2.0")),
     ];
     for (const damage of damages) {
       await (
