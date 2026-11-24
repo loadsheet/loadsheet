@@ -1,8 +1,19 @@
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { PROMPT_DOC } from "@loadsheet/core";
 import { parseReport } from "@loadsheet/schema";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 import pkg from "../package.json" with { type: "json" };
@@ -26,6 +37,7 @@ describe("loadsheet CLI", () => {
     expect(result.stdout).toContain("Usage: loadsheet");
     expect(result.stdout).toContain("--version");
     expect(result.stdout).toContain("--help");
+    expect(result.stdout).toContain(PROMPT_DOC);
   });
 
   it.each([
@@ -315,4 +327,74 @@ describe("loadsheet (this machine)", () => {
       expect(result.stderr).toContain("Usage: loadsheet");
     },
   );
+});
+
+// An invented home whose Report holds a fix of each kind an agent applies: a command to run, a key
+// in a SKILL.md's frontmatter and a key in settings.json. Copy it to a folder and run loadsheet
+// with HOME set to that folder to let an agent apply a fix there.
+describe("loadsheet on fixtures/home", () => {
+  const home = join(fixtures, "home");
+  let cache: string;
+  const inHome = (...args: string[]) =>
+    spawnSync(process.execPath, [cli, ...args], {
+      encoding: "utf8",
+      cwd: home,
+      env: { PATH: process.env.PATH ?? "", HOME: home, XDG_CACHE_HOME: cache },
+    });
+  /** Every file under the home and a digest of its content. */
+  const digests = () =>
+    readdirSync(home, { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => {
+        const path = join(entry.parentPath, entry.name);
+        return `${path} ${createHash("sha256").update(readFileSync(path)).digest("hex")}`;
+      })
+      .sort();
+
+  beforeAll(() => {
+    cache = mkdtempSync(join(tmpdir(), "loadsheet-home-"));
+  });
+  afterAll(() => rmSync(cache, { recursive: true, force: true }));
+
+  it("--json prints only the Report, with a run fix and two set fixes", () => {
+    const before = digests();
+    const result = inHome("--json");
+    expect(result.stderr).toBe("");
+    expect(result.status).toBe(0);
+    const report = parseReport(JSON.parse(result.stdout));
+    const fixes = Object.fromEntries(report.findings.map((finding) => [finding.id, finding.fixes]));
+    // The machine is this machine's hostname, so the fixes are matched without it.
+    expect(fixes["dead-skill:skill:old-notes"]).toMatchObject([
+      {
+        action: "remove",
+        path: "~/.claude/skills/old-notes",
+        run: "rm -r ~/.claude/skills/old-notes",
+      },
+    ]);
+    expect(fixes["manual-only:skill:release-steps"]).toMatchObject([
+      {
+        action: "hide-from-model",
+        path: "~/.claude/skills/release-steps/SKILL.md",
+        set: { key: "disable-model-invocation", value: true },
+      },
+    ]);
+    // The listing budget's key changes with Claude Code; the file and the action do not.
+    expect(fixes["invisible-skill:skill:tide-guide"]).toMatchObject([
+      { action: "set", path: "~/.claude/settings.json" },
+    ]);
+    expect(digests()).toEqual(before);
+  });
+
+  it("prints every fix as text and ends by naming the prompt", () => {
+    const result = inHome();
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain(
+      "remove ~/.claude/skills/old-notes  $ rm -r ~/.claude/skills/old-notes",
+    );
+    expect(result.stdout).toContain(
+      "hide-from-model ~/.claude/skills/release-steps/SKILL.md  disable-model-invocation = true",
+    );
+    expect(result.stdout).toContain("set ~/.claude/settings.json  ");
+    expect(result.stdout.trimEnd().endsWith(PROMPT_DOC)).toBe(true);
+  });
 });
