@@ -303,6 +303,29 @@ describe("OpenCode", () => {
     ]);
   });
 
+  it("settles a server in both config files on the merged one, opencode.jsonc's fields winning", async () => {
+    const items = await inventoryOf(opencode, {
+      "~/.config/opencode/opencode.json": JSON.stringify({
+        mcp: {
+          servers: { kettle: { command: ["k"] }, idle: { command: ["i"] } },
+          legacy: { type: "local", command: ["l"] },
+          kept: { type: "local", command: ["c"] },
+        },
+      }),
+      "~/.config/opencode/opencode.jsonc": JSON.stringify({
+        mcp: {
+          servers: { kettle: { command: ["k2"] }, idle: { disabled: true } },
+          legacy: { enabled: false },
+          stray: { enabled: true },
+        },
+      }),
+    });
+    expect(summary(items)).toEqual([
+      mcp("opencode", "kept", "~/.config/opencode/opencode.json"),
+      mcp("opencode", "kettle", "~/.config/opencode/opencode.jsonc"),
+    ]);
+  });
+
   it("falls back to ~/.claude/CLAUDE.md, and drops Claude's folders when told to", async () => {
     const record = {
       "~/.claude/CLAUDE.md": "Say thanks.\n",

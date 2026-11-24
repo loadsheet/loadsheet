@@ -2,10 +2,12 @@
 // it declares every usage signal `none`.
 //
 // Source: https://github.com/anomalyco/opencode (branch `dev`), the docs in
-// `services/site/src/docs/content/`: `config.mdx` (where config lives), `skills.mdx` (skill sources,
-// their order, ids, `opencode/autoinvoke`), `instructions.mdx` (the global AGENTS.md and its
-// CLAUDE.md fallback), `mcp-servers.mdx` and `migrate-v1.mdx` (V2 `mcp.servers` and V1 `mcp`), and
-// `packages/util/src/global-roots.ts` (`$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`).
+// `services/site/src/docs/content/`: `config.mdx` (where config lives, and that its files merge),
+// `skills.mdx` (skill sources, their order, ids, `opencode/autoinvoke`), `instructions.mdx` (the
+// global AGENTS.md and its CLAUDE.md fallback), `mcp-servers.mdx` and `migrate-v1.mdx` (V2
+// `mcp.servers` and V1 `mcp`); `packages/util/src/global-roots.ts` (`$XDG_CONFIG_HOME/opencode`,
+// else `~/.config/opencode`); and `packages/core/src/config.ts` with `config/discovery.ts` (a
+// folder's `opencode.json`, then its `opencode.jsonc`, loaded in that order).
 //
 // Left out: plugins (`<config>/plugins/`), which are JavaScript code rather than context loadsheet
 // tracks; the folders and files the config's `skills` and `instructions` arrays add, which a
@@ -21,8 +23,9 @@ import {
   instructionItem,
   instructionName,
   isRecord,
-  jsonMcpItems,
   keyOf,
+  mcpConfigDigest,
+  mcpItem,
   NO_USAGE,
   oneByKey,
   placeOr,
@@ -40,6 +43,7 @@ const HARNESS = "opencode";
 
 /** How deep OpenCode searches a skill source: six folders below it. */
 const DEPTH = 6;
+/** The global config files, in the order OpenCode merges them: a later one's fields win. */
 const CONFIG_FILES = ["opencode.json", "opencode.jsonc"];
 
 /** OpenCode's config folder: `$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`. */
@@ -52,32 +56,55 @@ const autoinvokeOff = (found: FoundSkill) => {
   return isRecord(metadata) && metadata["opencode/autoinvoke"] === false;
 };
 
-/** A config file's MCP servers: V2's `mcp.servers` but those `disabled`, and V1's `mcp.<name>` but those not `enabled`. */
-const mcpServers = async (files: Files, path: string): Promise<Item[]> => {
+interface ServerEntry {
+  readonly name: string;
+  readonly v1: boolean;
+  /** Whether it says how to run the server, which a V1 entry must for loadsheet to take it as one. */
+  readonly runs: boolean;
+  readonly config: Record<string, unknown>;
+}
+
+/** A config file's MCP servers by format and name: V2's `mcp.servers` and V1's `mcp.<name>`. */
+const configServers = async (files: Files, path: string) => {
+  const servers = new Map<string, ServerEntry>();
   const mcp = (await readJsonc(files, path)).mcp;
-  if (!isRecord(mcp)) return [];
-  const items = await jsonMcpItems(
-    HARNESS,
-    mcp.servers,
-    path,
-    (_name, config) => !isRecord(config) || config.disabled !== true,
-  );
-  const v1 = Object.fromEntries(
-    Object.entries(mcp).filter(
-      ([name, config]) =>
-        name !== "servers" &&
-        isRecord(config) &&
-        ("type" in config || "command" in config || "url" in config),
-    ),
-  );
-  items.push(
-    ...(await jsonMcpItems(
-      HARNESS,
-      v1,
-      path,
-      (_name, config) => !isRecord(config) || config.enabled !== false,
-    )),
-  );
+  if (!isRecord(mcp)) return servers;
+  for (const [name, config] of Object.entries(isRecord(mcp.servers) ? mcp.servers : {})) {
+    const entry = isRecord(config) ? config : {};
+    servers.set(`v2:${name}`, { name, v1: false, runs: true, config: entry });
+  }
+  for (const [name, config] of Object.entries(mcp)) {
+    if (name === "servers" || !isRecord(config)) continue;
+    const runs = "type" in config || "command" in config || "url" in config;
+    servers.set(`v1:${name}`, { name, v1: true, runs, config });
+  }
+  return servers;
+};
+
+/**
+ * The MCP servers of OpenCode's config files. OpenCode merges `opencode.json` and then
+ * `opencode.jsonc`, the later file's fields overriding, so a server is settled on its merged
+ * definition, at the last file that defines it, before a V2 one `disabled` or a V1 one not
+ * `enabled` is dropped.
+ */
+const mcpServers = async (files: Files, paths: readonly string[]): Promise<Item[]> => {
+  const merged = new Map<
+    string,
+    { name: string; v1: boolean; path: string; config: Record<string, unknown> }
+  >();
+  for (const path of paths) {
+    for (const [key, server] of await configServers(files, path)) {
+      const known = merged.get(key);
+      // A V1 entry that only overrides fields, such as `enabled`, of a server defined earlier.
+      if (!server.runs && !known) continue;
+      merged.set(key, { ...server, path, config: { ...known?.config, ...server.config } });
+    }
+  }
+  const items: Item[] = [];
+  for (const { name, v1, path, config } of merged.values()) {
+    if (v1 ? config.enabled === false : config.disabled === true) continue;
+    items.push(mcpItem(HARNESS, name, path, await mcpConfigDigest(config)));
+  }
   return items;
 };
 
@@ -120,7 +147,12 @@ const machineInventory = async (files: Files, given?: Place): Promise<Item[]> =>
     if (source !== undefined) items.push(await instructionItem(HARNESS, { name, path, source }));
   }
 
-  for (const name of CONFIG_FILES) items.push(...(await mcpServers(files, `${config}/${name}`)));
+  items.push(
+    ...(await mcpServers(
+      files,
+      CONFIG_FILES.map((name) => `${config}/${name}`),
+    )),
+  );
   return items;
 };
 
