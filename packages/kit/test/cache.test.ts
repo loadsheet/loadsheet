@@ -93,6 +93,9 @@ const cachedFile = (seed: number): CachedFile => ({
 const cacheFile = () => NodePath.join(dir, "fake.json");
 
 interface Stored {
+  layout: number;
+  tool: string;
+  format: string;
   salt: string;
   strings: string[];
   files: Record<string, unknown[]>;
@@ -108,7 +111,16 @@ const writeStored = (stored: Stored) =>
     JSON.stringify({
       ...stored,
       sum: NodeCrypto.createHash("sha256")
-        .update(JSON.stringify([stored.salt, stored.strings, stored.files]))
+        .update(
+          JSON.stringify([
+            stored.layout,
+            stored.tool,
+            stored.format,
+            stored.salt,
+            stored.strings,
+            stored.files,
+          ]),
+        )
         .digest("hex"),
     }),
   );
@@ -218,6 +230,25 @@ describe("the scan cache file", () => {
     // A well-formed entry with one counter changed, which no check of its shape would catch.
     (stored.files.one![8] as number[][])[0]![3] = 7;
     await NodeFSP.writeFile(cacheFile(), JSON.stringify(stored));
+    expect((await open()).get("one")).toBeUndefined();
+  });
+
+  it("opens empty a file another tool version saved, renamed to this one", async () => {
+    await openCache(dir, "fake", "loadsheet@0.0.0-older", format).then((cache) =>
+      cache.save(new Map([["one", cachedFile(1)]])),
+    );
+    await NodeFSP.writeFile(cacheFile(), JSON.stringify({ ...(await readStored()), tool: TOOL }));
+    expect((await open()).get("one")).toBeUndefined();
+  });
+
+  it("opens empty a file nested too deep to hash", async () => {
+    await (await open()).save(new Map([["one", cachedFile(1)]]));
+    const depth = 20_000;
+    const text = JSON.stringify(await readStored()).replace(
+      '"files":{',
+      `"files":{"deep":${"[".repeat(depth)}${"]".repeat(depth)},`,
+    );
+    await NodeFSP.writeFile(cacheFile(), text);
     expect((await open()).get("one")).toBeUndefined();
   });
 

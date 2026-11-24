@@ -48,9 +48,13 @@ export const defaultCacheDir = (place: {
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
 
-/** A hash of what a cache file holds, so one cut short or changed by anything else opens empty. */
-const checksum = (salt: unknown, strings: unknown, files: unknown) =>
-  sha256(JSON.stringify([salt, strings, files]));
+/** A hash of everything a cache file holds, so one cut short or changed by anything else opens empty. */
+const checksum = (document: Record<string, unknown>) =>
+  sha256(
+    JSON.stringify(
+      ["layout", "tool", "format", "salt", "strings", "files"].map((field) => document[field]),
+    ),
+  );
 
 /** Changes when the harness's parser does, so a new format starts cold. */
 const formatFingerprint = (format: TranscriptFormat<unknown>) =>
@@ -346,20 +350,24 @@ export const openCache = async (
   const stored: unknown = await readFile(file, "utf8")
     .then((text) => JSON.parse(text) as unknown)
     .catch(() => undefined);
-  if (
-    isRecord(stored) &&
-    stored.layout === CACHE_LAYOUT &&
-    stored.tool === tool &&
-    stored.format === fingerprint &&
-    typeof stored.salt === "string" &&
-    Array.isArray(stored.strings) &&
-    stored.strings.every((text) => typeof text === "string") &&
-    isRecord(stored.files) &&
-    stored.sum === checksum(stored.salt, stored.strings, stored.files)
-  ) {
-    salt = stored.salt;
-    entries = new Map(Object.entries(stored.files));
-    decoder = new Decoder(stored.strings as string[]);
+  try {
+    if (
+      isRecord(stored) &&
+      stored.layout === CACHE_LAYOUT &&
+      stored.tool === tool &&
+      stored.format === fingerprint &&
+      typeof stored.salt === "string" &&
+      Array.isArray(stored.strings) &&
+      stored.strings.every((text) => typeof text === "string") &&
+      isRecord(stored.files) &&
+      stored.sum === checksum(stored)
+    ) {
+      salt = stored.salt;
+      entries = new Map(Object.entries(stored.files));
+      decoder = new Decoder(stored.strings as string[]);
+    }
+  } catch {
+    // Nested too deep to hash, which nothing loadsheet saved is: the cache opens empty.
   }
   // A fresh salt per cold cache, so keys cannot be matched against a guessed path's hash.
   const keySalt = salt ?? randomBytes(16).toString("hex");
@@ -411,12 +419,13 @@ export const openCache = async (
           salt: keySalt,
           strings: table.strings,
           files,
-          sum: checksum(keySalt, table.strings, files),
         };
         await mkdir(dir, { recursive: true, mode: 0o700 });
         // A directory that was already there keeps its mode, so the names in it could be listed.
         await chmod(dir, 0o700);
-        await writeFile(temporary, JSON.stringify(document), { mode: 0o600 });
+        await writeFile(temporary, JSON.stringify({ ...document, sum: checksum(document) }), {
+          mode: 0o600,
+        });
         await rename(temporary, file);
       } catch {
         // The cache only saves time: a run that cannot write it still returns its Scan.

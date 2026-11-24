@@ -177,10 +177,14 @@ const appendTranscript = async (home: string, sid: string, text: string, mtime: 
 };
 
 /** A cache document with the sum of what it now holds, as loadsheet would have written it. */
-const summed = (stored: { salt: string; strings: string[]; files: object }) => ({
+const summed = (stored: Record<string, unknown>) => ({
   ...stored,
   sum: NodeCrypto.createHash("sha256")
-    .update(JSON.stringify([stored.salt, stored.strings, stored.files]))
+    .update(
+      JSON.stringify(
+        ["layout", "tool", "format", "salt", "strings", "files"].map((field) => stored[field]),
+      ),
+    )
     .digest("hex"),
 });
 
