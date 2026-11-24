@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { parseReport, resolveConfig, type Item } from "@loadsheet/schema";
 import { describe, expect, it } from "vite-plus/test";
 import { packReport, renderText } from "../src/index.ts";
@@ -143,6 +144,36 @@ describe("packReport", () => {
     expect(off.skipped.map((skip) => skip.rule)).not.toContain("dead-skill");
     const ignored = packReport({ ...input, config: resolveConfig({ ignore: ["skill:long"] }) });
     expect(ignored.findings).toEqual([]);
+  });
+});
+
+describe("examples/report.pack.example.json", () => {
+  it("is what packReport builds from its own lines", () => {
+    const { $schema: _, ...json } = JSON.parse(
+      readFileSync(new URL("../../../examples/report.pack.example.json", import.meta.url), "utf8"),
+    );
+    const example = parseReport(json);
+    const report = packReport({
+      items: example.sheet[0]!.lines.map((line) => ({
+        id: line.item,
+        ref: line.ref,
+        harnesses: ["claude-code"],
+        scope: line.scope!,
+        pack: line.pack,
+        managedBy: line.managedBy!,
+        path: line.path!,
+        digest: "0".repeat(64),
+        chars: line.chars,
+        modelInvocable: true,
+        description: line.description,
+      })),
+      harness: { id: "claude-code" },
+      source: example.source!,
+      config: example.config,
+      now: new Date(example.generatedAt),
+      tool: example.tool,
+    });
+    expect(report).toEqual(example);
   });
 });
 
