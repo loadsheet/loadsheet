@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { parseReport, resolveConfig, type Item } from "@loadsheet/schema";
 import { describe, expect, it } from "vite-plus/test";
-import { packReport, renderText } from "../src/index.ts";
+import { packReport } from "../src/index.ts";
 
 const item = (name: string, listed: number, body: number, extra: Partial<Item> = {}): Item => ({
   id: `skill:${name}`,
@@ -174,28 +174,5 @@ describe("examples/report.pack.example.json", () => {
       tool: example.tool,
     });
     expect(report).toEqual(example);
-  });
-});
-
-describe("renderText", () => {
-  it("prints an aligned table by tokens, a total and the findings", () => {
-    expect(renderText(packReport(input))).toBe(
-      [
-        "loadsheet: https://github.com/acme/skills",
-        "",
-        "tokens  listed   body  claude-code",
-        "   103     410  5,000  skill:long",
-        "    25     101    900  skill:small",
-        "     0       0    700  skill:manual",
-        "------  ------  -----",
-        "   128     511  6,600  total, 3 items",
-        "",
-        "Findings",
-        "  fix  expensive-description  skill:long, saves ~28 tokens: shorten skills/long/SKILL.md",
-        "",
-        "Not run without usage data: invisible-skill, dead-skill, manual-only, dead-pack, idle-mcp, harness-mismatch, short-history.",
-        "",
-      ].join("\n"),
-    );
   });
 });

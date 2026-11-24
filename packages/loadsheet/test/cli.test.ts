@@ -63,9 +63,10 @@ describe("loadsheet <dir>", () => {
   it("prints a table by default", () => {
     const result = run(fixtures + "pack");
     expect(result.status).toBe(0);
-    expect(result.stdout).toMatch(/^loadsheet: pack\n/u);
-    expect(result.stdout).toContain("total, 3 items");
-    expect(result.stdout).toContain("expensive-description  skill:log-digest");
+    expect(result.stdout).toMatch(/^loadsheet@[^:]+: pack pack\n/u);
+    expect(result.stdout).toContain("claude-code: 3 lines, ~124 tokens listed");
+    expect(result.stdout).toContain("~27  skill:log-digest  406 characters, over 300");
+    expect(result.stdout).toContain("    shorten skills/log-digest/SKILL.md\n");
   });
 });
 
