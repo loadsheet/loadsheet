@@ -6,15 +6,16 @@ loadsheet is a CLI (`npx loadsheet`) that reads coding agents' session transcrip
 
 Each package's dependencies in `package.json` are the layering. Keep imports inside its row.
 
-| Package                            | May import                   | Must not know                                                               |
-| ---------------------------------- | ---------------------------- | --------------------------------------------------------------------------- |
-| `@loadsheet/schema`                | nothing at runtime           | anything else in the repo, Node                                             |
-| `@loadsheet/kit`                   | schema, Node                 | rules or findings                                                           |
-| `@loadsheet/harnesses`             | schema, kit                  | rules; the filesystem: an adapter receives lines and virtual files from kit |
-| `@loadsheet/core`                  | schema                       | kit, harnesses, `node:*`; it is isomorphic and runs in the browser          |
-| `loadsheet` (`packages/loadsheet`) | schema, kit, harnesses, core | nothing; it is the only place that parses argv                              |
+| Package                            | May import                   | Must not know                                                                |
+| ---------------------------------- | ---------------------------- | ---------------------------------------------------------------------------- |
+| `@loadsheet/schema`                | nothing at runtime           | anything else in the repo, Node                                              |
+| `@loadsheet/kit` (`.`)             | schema                       | rules or findings; `node:*`, `@loadsheet/kit/node`; it runs in the browser   |
+| `@loadsheet/kit/node` (`src/node`) | schema, kit's `.`, Node      | rules or findings                                                            |
+| `@loadsheet/harnesses`             | schema, kit's `.`, tinyaml   | rules; `node:*`, `@loadsheet/kit/node`: an adapter receives `Files` from kit |
+| `@loadsheet/core`                  | schema                       | kit, harnesses, `node:*`; it is isomorphic and runs in the browser           |
+| `loadsheet` (`packages/loadsheet`) | schema, kit, harnesses, core | nothing; it is the only place that parses argv                               |
 
-`vp lint` fails when `packages/core/src` or `packages/schema/src` imports a Node builtin, kit, harnesses or `loadsheet`.
+`vp lint` fails when `packages/core/src` or `packages/schema/src` imports a Node builtin, kit, harnesses or `loadsheet`, and when `packages/harnesses/src` or `packages/kit/src` outside `node/` imports a Node builtin or `@loadsheet/kit/node`.
 
 ## Privacy
 
