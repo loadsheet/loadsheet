@@ -1,0 +1,40 @@
+{
+  "name": "loadsheet",
+  "version": "0.0.0",
+  "description": "The CLI.",
+  "homepage": "https://loadsheet.dev",
+  "license": "MIT",
+  "author": "onmax",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/loadsheet/loadsheet.git",
+    "directory": "packages/loadsheet"
+  },
+  "bin": {
+    "loadsheet": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsdown",
+    "prepack": "pnpm --filter loadsheet... build"
+  },
+  "dependencies": {
+    "@loadsheet/core": "workspace:*",
+    "@loadsheet/harnesses": "workspace:*",
+    "@loadsheet/kit": "workspace:*",
+    "@loadsheet/schema": "workspace:*"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

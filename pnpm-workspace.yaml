@@ -1,0 +1,16 @@
+packages:
+  - "packages/*"
+  - "apps/*"
+
+catalogMode: prefer
+
+catalog:
+  "@types/node": ^26.6.6
+  publint: ^0.3.25
+  tsdown: ^0.23.7
+  tsrs: 0.20.1-ts7.1.0-beta
+  typescript: ^7.0.2
+  vite-plus: ^1.4.0
+
+allowBuilds:
+  esbuild: false
