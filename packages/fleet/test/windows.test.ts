@@ -24,6 +24,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   cli,
   clone,
+  fleetDir,
   isLink,
   isWindows,
   linkOf,
@@ -814,9 +815,12 @@ describe.skipIf(!isWindows)(
           // `npm install -g fleetrc`: npm's cmd-shim runs "%dp0%\node_modules\...", and %dp0%
           // ends with a backslash, so node's command line has `npm\\node_modules`.
           const prefix = join(m.root, "npm");
-          cpSync(dirname(cli), join(prefix, "node_modules", "fleetrc", "dist"), {
-            recursive: true,
-          });
+          const installed = join(prefix, "node_modules", "fleetrc");
+          cpSync(dirname(cli), join(installed, "dist"), { recursive: true });
+          // npm puts the bin's one dependency, this package, under it.
+          const fleet = join(installed, "node_modules", "@loadsheet", "fleet");
+          cpSync(join(fleetDir, "dist"), join(fleet, "dist"), { recursive: true });
+          cpSync(join(fleetDir, "package.json"), join(fleet, "package.json"));
           writeFileSync(
             join(prefix, "fleetrc.cmd"),
             [

@@ -24,6 +24,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
 import { afterAll, afterEach } from "vite-plus/test";
 
+/** This package, which the fleetrc package depends on. */
+export const fleetDir = fileURLToPath(new URL("../", import.meta.url));
 /** The fleetrc package, whose bin runs this package's CLI under the name fleetrc. */
 export const fleetrcDir = fileURLToPath(new URL("../../fleetrc/", import.meta.url));
 const pkg = JSON.parse(readFileSync(join(fleetrcDir, "package.json"), "utf8")) as {
