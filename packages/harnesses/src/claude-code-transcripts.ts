@@ -65,7 +65,7 @@ const PROJECT = "project/";
 
 /**
  * An instruction file's name: `CLAUDE.md` and `rules/...` for the user's own, as the machine
- * inventory names them; `memory/MEMORY.md` for every project's auto memory; and for any project's
+ * inventory names them; the same under `managed/` for a managed policy's; `memory/MEMORY.md` for every project's auto memory; and for any project's
  * file, the home directory's included, `project/` and its file name, or `project/rules/` and its
  * file name for a rule under `.claude/rules`. No folder gets in: every worktree would be an id of
  * its own, and its name is the user's.
@@ -77,7 +77,8 @@ export const instructionName = (path: string, type: string): string | undefined 
   if (type === "AutoMem") return `memory/${file}`;
   if (type === "User" || type === "Managed") {
     const rules = parts.lastIndexOf("rules");
-    return rules !== -1 && rules < parts.length - 1 ? parts.slice(rules).join("/") : file;
+    const name = rules !== -1 && rules < parts.length - 1 ? parts.slice(rules).join("/") : file;
+    return type === "Managed" ? `managed/${name}` : name;
   }
   const dot = parts.lastIndexOf(".claude");
   if (dot !== -1 && parts[dot + 1] === "rules" && dot + 2 < parts.length) {

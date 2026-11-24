@@ -335,12 +335,12 @@ describe("claudeTranscripts", () => {
     ).toBe("memory/MEMORY.md");
   });
 
-  it("names a user's and a managed file as the machine inventory does", () => {
+  it("names a user's file as the machine inventory does, and a managed one apart", () => {
     expect(instructionName("/home/jo/.claude/CLAUDE.md", "User")).toBe("CLAUDE.md");
     expect(instructionName("/home/jo/.claude/rules/team/b.md", "User")).toBe("rules/team/b.md");
-    expect(instructionName("/etc/claude-code/CLAUDE.md", "Managed")).toBe("CLAUDE.md");
+    expect(instructionName("/etc/claude-code/CLAUDE.md", "Managed")).toBe("managed/CLAUDE.md");
     expect(instructionName("C:\\ProgramData\\ClaudeCode\\rules\\x.md", "Managed")).toBe(
-      "rules/x.md",
+      "managed/rules/x.md",
     );
   });
 
