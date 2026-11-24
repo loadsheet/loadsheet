@@ -52,9 +52,17 @@ export const packReport = ({
   const today = now.toISOString().slice(0, 10);
   const { findings, skipped } = runRules({
     mode: "pack",
-    harness: harness.id,
-    lines,
-    signals: NO_SIGNALS,
+    sheets: [
+      {
+        harness: harness.id,
+        sessions: 0,
+        days: 0,
+        signals: NO_SIGNALS,
+        lines,
+        installs: () => [],
+        itemsOn: () => [],
+      },
+    ],
     config,
   });
   return {

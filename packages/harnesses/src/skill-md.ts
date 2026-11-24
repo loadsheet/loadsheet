@@ -10,11 +10,22 @@ export interface SkillMd {
   firstLine?: string;
   /** The frontmatter's `when_to_use`, trimmed. */
   whenToUse?: string;
+  /** A subagent's frontmatter `tools`, as a list. */
+  tools?: string[];
+  /** A subagent's frontmatter `disallowedTools`, as a list. */
+  disallowedTools?: string[];
   /** Whether the frontmatter sets `disable-model-invocation` to true, yes, on or 1. */
   disableModelInvocation: boolean;
   /** Characters after the frontmatter: what a session loads when it invokes the file. */
   bodyChars: number;
 }
+
+/**
+ * A frontmatter name loadsheet will put in an id, as Claude Code allows it: words with one plain
+ * space between them, and no markup, quotes, path separators or invisible characters. Claude Code
+ * names an entry whose frontmatter name it refuses by its folder or file.
+ */
+export const SKILL_NAME = /^(?=.{1,128}$)[^\s<>"'`/\\\p{C}]+(?: [^\s<>"'`/\\\p{C}]+)*$/u;
 
 // The opening `---` must be the first line; the block ends at the next line that is exactly `---` (or `...`).
 const FRONTMATTER = /^---[ \t]*\n([\s\S]*?\n)?(?:---|\.\.\.)[ \t]*(?:\n|$)/u;
@@ -25,6 +36,14 @@ const text = (value: unknown) => {
     return undefined;
   }
   return String(value).trim() || undefined;
+};
+
+// A tool list is a YAML list or one comma-separated string.
+const list = (value: unknown) => {
+  const items = (Array.isArray(value) ? value.map(text) : (text(value)?.split(",") ?? []))
+    .map((item) => item?.trim())
+    .filter((item): item is string => Boolean(item));
+  return items.length > 0 ? items : undefined;
 };
 
 /** Reads a SKILL.md-style file. Frontmatter that is missing or not valid YAML counts as empty. */
@@ -53,7 +72,11 @@ export const readSkillMd = (source: string): SkillMd => {
   const description = text(data.description);
   const whenToUse = text(data.when_to_use);
   const firstLine = /\S.*/u.exec(body)?.[0].trim();
+  const tools = list(data.tools);
+  const disallowedTools = list(data.disallowedTools);
   if (name) skill.name = name;
+  if (tools) skill.tools = tools;
+  if (disallowedTools) skill.disallowedTools = disallowedTools;
   if (description) skill.description = description;
   if (firstLine) skill.firstLine = firstLine;
   if (whenToUse) skill.whenToUse = whenToUse;

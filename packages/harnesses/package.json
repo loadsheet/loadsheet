@@ -31,6 +31,9 @@
     "@loadsheet/schema": "workspace:*",
     "tinyaml": "catalog:"
   },
+  "devDependencies": {
+    "@loadsheet/fixtures": "workspace:*"
+  },
   "engines": {
     "node": ">=22.12.0"
   }

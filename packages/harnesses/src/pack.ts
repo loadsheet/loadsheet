@@ -1,7 +1,7 @@
 import type { Files } from "@loadsheet/kit";
 import { sha256 } from "@loadsheet/kit";
 import type { Item, Kind } from "@loadsheet/schema";
-import { readSkillMd, type SkillMd } from "./skill-md.ts";
+import { readSkillMd, SKILL_NAME, type SkillMd } from "./skill-md.ts";
 
 /** How a harness lists one entry, which decides what it costs every session. */
 export interface PackListing {
@@ -9,8 +9,8 @@ export interface PackListing {
   harness: string;
   /** The description the harness lists for an entry. */
   description(skill: SkillMd): string | undefined;
-  /** Characters the harness's listing spends on an entry with this name and frontmatter. */
-  listedChars(name: string, skill: SkillMd): number;
+  /** Characters the harness's listing spends on an entry of this kind, name and frontmatter. */
+  listedChars(name: string, skill: SkillMd, kind: Kind): number;
 }
 
 const PLUGIN_MANIFEST = ".claude-plugin/plugin.json";
@@ -33,10 +33,17 @@ const pluginName = async (files: Files) => {
  * Everything a pack installs: each `SKILL.md` anywhere in it, and, when it is a plugin
  * (`.claude-plugin/plugin.json`), its `commands/*.md` and `agents/*.md`, named `plugin:name`.
  * The pack's own root AGENTS.md and CLAUDE.md are its development instructions, not installed.
+ * `installed` names a plugin the harness installed, whose manifest is optional.
  */
-export const packInventory = async (files: Files, listing: PackListing): Promise<Item[]> => {
-  const isPlugin = files.paths.includes(PLUGIN_MANIFEST);
-  const plugin = isPlugin ? ((await pluginName(files)) ?? files.name?.split("/").pop()) : undefined;
+export const packInventory = async (
+  files: Files,
+  listing: PackListing,
+  installed?: string,
+): Promise<Item[]> => {
+  const isPlugin = installed !== undefined || files.paths.includes(PLUGIN_MANIFEST);
+  const plugin =
+    installed ??
+    (isPlugin ? ((await pluginName(files)) ?? files.name?.split("/").pop()) : undefined);
   const pack = files.name ?? plugin;
   const qualify = (name: string) => (plugin ? `${plugin}:${name}` : name);
 
@@ -65,12 +72,11 @@ export const packInventory = async (files: Files, listing: PackListing): Promise
     const source = await files.text(file);
     if (source === undefined) continue;
     const skill = readSkillMd(source);
-    // Commands are named after their file; skills and subagents by their frontmatter name. Claude
-    // Code refuses a name with a control character, `<` or `>`, and one with a slash would read as
-    // a path in the Report; the folder names those entries instead.
-    const named = skill.name !== undefined && !/[\\/<>\p{Cc}]/u.test(skill.name);
+    // Commands are named after their file; skills and subagents by their frontmatter name, and by
+    // their folder or file when that name is not one Claude Code takes.
+    const named = skill.name !== undefined && SKILL_NAME.test(skill.name);
     const name = qualify(named && !file.startsWith("commands/") ? skill.name! : fallback);
-    const listed = listing.listedChars(name, skill);
+    const listed = listing.listedChars(name, skill, kind);
     const item: Item = {
       id: `${kind}:${name}`,
       ref: { kind, name },
