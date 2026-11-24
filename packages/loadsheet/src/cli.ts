@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { buildReport, packReport, renderText } from "@loadsheet/core";
+import { buildReport, packReport, PROMPT_DOC, renderText } from "@loadsheet/core";
 import { claudeCode, findHarness, harnesses } from "@loadsheet/harnesses";
 import type { Files } from "@loadsheet/kit";
 import { dirFiles, githubFiles, githubUrl, scanMachine } from "@loadsheet/kit/node";
@@ -39,6 +39,9 @@ Options:
 
 Flags override the config file; --ignore adds to its list, the others replace it.
 Rules: ${RULES.join(", ")}.
+
+loadsheet changes none of your files. To have your agent apply the fixes you accept,
+paste it the prompt in ${PROMPT_DOC}
 `;
 
 /** A usage error: the reason and the usage, exit 2. */
