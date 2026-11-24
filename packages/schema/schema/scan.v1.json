@@ -190,16 +190,16 @@
               "listed": {
                 "type": "integer",
                 "minimum": 0,
-                "description": "Characters of its entry in the harness's listing: name and description."
+                "description": "Characters it puts in the context of every session that lists or loads it: a skill's or subagent's name and description, an instruction file's whole text, an MCP server's instructions."
               },
               "body": {
                 "type": "integer",
                 "minimum": 0,
-                "description": "Characters of the rest of the file."
+                "description": "Characters loaded only when it is invoked: the rest of a skill's or subagent's file; 0 for instruction files and MCP servers."
               }
             },
             "required": ["listed", "body"],
-            "description": "Its size in characters: listed is its entry in the harness's listing (name and description), body is the rest of the file."
+            "description": "Its size in characters: listed is paid by every session that lists or loads it, body only by a session that invokes it."
           },
           "modelInvocable": {
             "type": "boolean",
@@ -221,7 +221,7 @@
           "chars",
           "modelInvocable"
         ],
-        "description": "One installed piece of context found on disk (or in a pack). Two Items with the same id that the same harness loads are a duplicate."
+        "description": "One installed piece of context found on disk (or in a pack). The same id at two paths is two Items."
       },
       "description": "Installed pieces of context."
     },

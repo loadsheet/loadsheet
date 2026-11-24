@@ -56,7 +56,7 @@ const isCalendarDay = (day: string) => {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === day;
 };
 
-export const DaySchema = v.pipe(
+const DaySchema = v.pipe(
   v.string(),
   v.isoDate("must be a day written YYYY-MM-DD"),
   v.check(isCalendarDay, "must be a real calendar day"),
@@ -94,33 +94,33 @@ const version = (text: string) =>
     v.description(text),
   );
 
-export const SignalSchema = describe(
+const SignalSchema = describe(
   v.picklist(SIGNALS),
   "A kind of evidence a harness's transcripts can provide.",
 );
-export const GradeSchema = describe(
+const GradeSchema = describe(
   v.picklist(["exact", "inferred", "none"]),
   "How well a harness provides a signal: read directly, inferred from indirect evidence, or not at all.",
 );
-export const KindSchema = describe(
+const KindSchema = describe(
   v.picklist(KINDS),
   "What a piece of context is: a skill, an instruction file, an MCP server or a subagent.",
 );
-export const ScopeSchema = describe(
+const ScopeSchema = describe(
   v.picklist(["user", "project", "plugin"]),
   "Where it is installed: the user's home, a project, or a plugin.",
 );
-export const ManagedBySchema = describe(
+const ManagedBySchema = describe(
   v.picklist(["fleetrc", "skills", "plugin", "hand"]),
   "What installed it and should change it: fleetrc, the skills CLI, a plugin, or the user by hand.",
 );
-export const RuleIdSchema = describe(v.picklist(RULES), "A rule's id.");
-export const LevelSchema = describe(
+const RuleIdSchema = describe(v.picklist(RULES), "A rule's id.");
+const LevelSchema = describe(
   v.picklist(["cut", "fix", "info"]),
   "How strongly a finding asks for action: cut it, fix it, or know it.",
 );
 
-export const IdSchema = v.pipe(
+const IdSchema = v.pipe(
   v.string(),
   v.regex(
     new RegExp(`^(${KINDS.join("|")}):.+$`),
@@ -130,7 +130,7 @@ export const IdSchema = v.pipe(
 );
 const id = (text: string) => describe(IdSchema, text);
 
-export const RefSchema = v.pipe(
+const RefSchema = v.pipe(
   v.looseObject({
     kind: describe(KindSchema, "What the piece of context is."),
     name: nonEmpty("Its name, unique within its kind."),
@@ -138,7 +138,7 @@ export const RefSchema = v.pipe(
   v.description("Names one piece of context."),
 );
 
-export const TokensSchema = v.pipe(
+const TokensSchema = v.pipe(
   v.looseObject({
     value: count("The number of tokens."),
     basis: describe(
@@ -151,17 +151,21 @@ export const TokensSchema = v.pipe(
   ),
 );
 
-export const CharsSchema = v.pipe(
+const CharsSchema = v.pipe(
   v.looseObject({
-    listed: count("Characters of its entry in the harness's listing: name and description."),
-    body: count("Characters of the rest of the file."),
+    listed: count(
+      "Characters it puts in the context of every session that lists or loads it: a skill's or subagent's name and description, an instruction file's whole text, an MCP server's instructions.",
+    ),
+    body: count(
+      "Characters loaded only when it is invoked: the rest of a skill's or subagent's file; 0 for instruction files and MCP servers.",
+    ),
   }),
   v.description(
-    "A size in characters, split into the part a harness lists in every session and the rest.",
+    "A size in characters, split into what every session pays and what only a session that invokes it pays.",
   ),
 );
 
-export const ItemSchema = v.pipe(
+const ItemSchema = v.pipe(
   v.looseObject({
     id: id("Its id, `${kind}:${name}`."),
     ref: describe(RefSchema, "Its kind and name."),
@@ -184,7 +188,7 @@ export const ItemSchema = v.pipe(
     ),
     chars: describe(
       CharsSchema,
-      "Its size in characters: listed is its entry in the harness's listing (name and description), body is the rest of the file.",
+      "Its size in characters: listed is paid by every session that lists or loads it, body only by a session that invokes it.",
     ),
     modelInvocable: describe(v.boolean(), "Whether the model may invoke it on its own."),
     description: v.optional(describe(v.string(), "Its description, in pack mode only.")),
@@ -194,11 +198,11 @@ export const ItemSchema = v.pipe(
     "id must be ref.kind:ref.name",
   ),
   v.description(
-    "One installed piece of context found on disk (or in a pack). Two Items with the same id that the same harness loads are a duplicate.",
+    "One installed piece of context found on disk (or in a pack). The same id at two paths is two Items.",
   ),
 );
 
-export const CellSchema = v.pipe(
+const CellSchema = v.pipe(
   v.looseObject({
     day: day("The day the sessions started."),
     harness: nonEmpty("The harness id."),
@@ -218,7 +222,7 @@ export const CellSchema = v.pipe(
   ),
 );
 
-export const SessionCellSchema = v.pipe(
+const SessionCellSchema = v.pipe(
   v.looseObject({
     day: day("The day the sessions started."),
     harness: nonEmpty("The harness id."),
@@ -233,7 +237,7 @@ export const SessionCellSchema = v.pipe(
   ),
 );
 
-export const CoverageSchema = v.pipe(
+const CoverageSchema = v.pipe(
   v.looseObject({
     machine: nonEmpty("The machine's name."),
     harness: nonEmpty("The harness id."),
@@ -257,7 +261,7 @@ export const CoverageSchema = v.pipe(
   v.description("What one harness on one machine could tell."),
 );
 
-export const ScanSchema = v.pipe(
+const scanSchema = v.pipe(
   v.looseObject({
     schema: version("The schema version, 1."),
     tool: nonEmpty("The tool and version that wrote it, such as loadsheet@0.0.1."),
@@ -334,7 +338,7 @@ const resolvedRule = <E extends v.ObjectEntries>(entries: E, doc: string) =>
     doc,
   );
 
-export const ConfigSchema = v.pipe(
+const configSchema = v.pipe(
   strict({
     $schema: v.optional(describe(v.string(), "The JSON Schema this file follows.")),
     window: v.optional(
@@ -390,7 +394,7 @@ export const ConfigSchema = v.pipe(
   v.description("User config file. Every field is optional."),
 );
 
-export const ResolvedConfigSchema = v.pipe(
+const ResolvedConfigSchema = v.pipe(
   v.looseObject({
     window: v.pipe(v.number(), v.integer(), v.minValue(1), v.description("Days of history read.")),
     harnesses: v.optional(strings("Only these harness ids were read, when set.")),
@@ -434,17 +438,27 @@ export const ResolvedConfigSchema = v.pipe(
   v.description("Config with every default applied; this is what a Report carries."),
 );
 
-export const LineSchema = v.pipe(
+const LineSchema = v.pipe(
   v.looseObject({
     item: id("Its id."),
     ref: describe(RefSchema, "Its kind and name."),
-    scope: describe(ScopeSchema, "Where it is installed."),
+    scope: v.optional(
+      describe(
+        ScopeSchema,
+        "Where it is installed; absent when it is no longer installed on any machine read.",
+      ),
+    ),
     pack: v.optional(describe(v.string(), "Where it came from.")),
-    managedBy: describe(ManagedBySchema, "What installed it."),
+    managedBy: v.optional(
+      describe(
+        ManagedBySchema,
+        "What installed it; absent when it is no longer installed on any machine read.",
+      ),
+    ),
     machines: strings("Machines where it is installed or was seen."),
     path: v.optional(
       relativePath(
-        "Its file or folder, relative to the home directory or the project, when installed.",
+        "Its file or folder, relative to the home directory or the project; absent when it is no longer installed on any machine read.",
       ),
     ),
     chars: describe(CharsSchema, "Its size in characters."),
@@ -480,21 +494,28 @@ export const LineSchema = v.pipe(
   v.description("One piece of context on a harness's sheet, aggregated over machines."),
 );
 
-export const SheetSchema = v.pipe(
+const SheetSchema = v.pipe(
   v.looseObject({
     harness: nonEmpty("The harness id."),
     sessions: count("Its sessions in the window, over all machines."),
     fixedTokens: v.optional(
-      describe(TokensSchema, "Tokens every session starts with, when the harness reports them."),
+      describe(
+        TokensSchema,
+        "Tokens every session starts with, averaged over the sessions that reported them; absent when none did.",
+      ),
     ),
     lines: describe(v.array(LineSchema), "One line per piece of context."),
   }),
   v.description("What one harness loads, line by line."),
 );
 
-export const FixSchema = v.pipe(
+const FixSchema = v.pipe(
   v.looseObject({
-    machine: nonEmpty("The machine to change."),
+    machine: v.optional(
+      nonEmpty(
+        "The machine to change; absent in pack mode, where the change goes to the pack's source.",
+      ),
+    ),
     action: describe(
       v.picklist(["remove", "hide-from-model", "shorten", "dedupe", "set"]),
       "What to do.",
@@ -519,14 +540,17 @@ export const FixSchema = v.pipe(
   v.description("One change the user's agent should make."),
 );
 
-export const FindingSchema = v.pipe(
+const FindingSchema = v.pipe(
   v.looseObject({
-    id: nonEmpty("A stable id, `${rule}:${item ?? harness}`."),
+    id: nonEmpty("A stable id, `${rule}:${item ?? pack ?? harness}`."),
     rule: describe(RuleIdSchema, "The rule that found it."),
     level: describe(LevelSchema, "How strongly it asks for action."),
     item: v.optional(
-      id("The item it is about; absent for harness-level findings such as short-history."),
+      id(
+        "The item it is about; absent for pack-level and harness-level findings such as dead-pack and short-history.",
+      ),
     ),
+    pack: v.optional(nonEmpty("The pack it is about, for dead-pack.")),
     where: describe(
       v.array(
         v.pipe(
@@ -537,7 +561,7 @@ export const FindingSchema = v.pipe(
           v.description("A machine and harness."),
         ),
       ),
-      "Where it applies.",
+      "Where it applies; empty in pack mode.",
     ),
     evidence: describe(v.record(v.string(), v.number()), "The numbers the rule judged on."),
     savesTokens: v.optional(describe(TokensSchema, "Tokens it would save per session.")),
@@ -547,7 +571,7 @@ export const FindingSchema = v.pipe(
   v.description("Something a rule found."),
 );
 
-export const SkippedSchema = v.pipe(
+const SkippedSchema = v.pipe(
   v.looseObject({
     rule: describe(RuleIdSchema, "The rule."),
     harness: nonEmpty("The harness id."),
@@ -562,7 +586,7 @@ export const SkippedSchema = v.pipe(
   v.description("A rule that did not run on a harness, and why."),
 );
 
-export const ReportSchema = v.pipe(
+const reportSchema = v.pipe(
   v.looseObject({
     schema: version("The schema version, 1."),
     tool: nonEmpty("The tool and version that wrote it, such as loadsheet@0.0.1."),
@@ -584,11 +608,14 @@ export const ReportSchema = v.pipe(
           v.description("A machine a Report read from."),
         ),
       ),
-      "The machines read.",
+      "The machines read; empty in pack mode.",
     ),
     window: windowOf("The first and last day it covers, inclusive."),
     config: describe(ResolvedConfigSchema, "The config it ran with."),
-    coverage: describe(v.array(CoverageSchema), "What each harness on each machine could tell."),
+    coverage: describe(
+      v.array(CoverageSchema),
+      "What each harness on each machine could tell; empty in pack mode.",
+    ),
     sheet: describe(v.array(SheetSchema), "One sheet per harness, aggregated over machines."),
     findings: describe(v.array(FindingSchema), "What the rules found."),
     skipped: describe(v.array(SkippedSchema), "Rules that did not run, per harness."),
@@ -608,13 +635,22 @@ type Same<A, B> =
 type Assert<T extends true> = T;
 
 export type SchemasMatchTypes = [
-  Assert<Same<v.InferOutput<typeof ScanSchema>, Scan>>,
+  Assert<Same<v.InferOutput<typeof scanSchema>, Scan>>,
   Assert<Same<v.InferOutput<typeof ItemSchema>, Item>>,
   Assert<Same<v.InferOutput<typeof CellSchema>, Cell>>,
   Assert<Same<v.InferOutput<typeof SessionCellSchema>, SessionCell>>,
   Assert<Same<v.InferOutput<typeof CoverageSchema>, Coverage>>,
   Assert<Same<v.InferOutput<typeof LineSchema>, Line>>,
   Assert<Same<v.InferOutput<typeof ResolvedConfigSchema>, ResolvedConfig>>,
-  Assert<Same<v.InferOutput<typeof ConfigSchema>, Config>>,
-  Assert<Same<v.InferOutput<typeof ReportSchema>, Report>>,
+  Assert<Same<v.InferOutput<typeof configSchema>, Config>>,
+  Assert<Same<v.InferOutput<typeof reportSchema>, Report>>,
 ];
+
+// The exported schemas carry only their output type. Their inferred valibot types would put
+// ~100 KB of declarations in the package's d.ts; the assertions above check those types instead.
+/** Validates a Scan with valibot; see parseScan. */
+export const ScanSchema: v.GenericSchema<unknown, Scan> = scanSchema;
+/** Validates a Report with valibot; see parseReport. */
+export const ReportSchema: v.GenericSchema<unknown, Report> = reportSchema;
+/** Validates a config file with valibot; see parseConfig. */
+export const ConfigSchema: v.GenericSchema<unknown, Config> = configSchema;

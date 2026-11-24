@@ -56,7 +56,7 @@
         "required": ["name", "reachable"],
         "description": "A machine a Report read from."
       },
-      "description": "The machines read."
+      "description": "The machines read; empty in pack mode."
     },
     "window": {
       "type": "array",
@@ -403,7 +403,7 @@
         "required": ["machine", "harness", "installed", "sessions", "versions", "signals"],
         "description": "What one harness on one machine could tell."
       },
-      "description": "What each harness on each machine could tell."
+      "description": "What each harness on each machine could tell; empty in pack mode."
     },
     "sheet": {
       "type": "array",
@@ -435,7 +435,7 @@
               }
             },
             "required": ["value", "basis"],
-            "description": "Tokens every session starts with, when the harness reports them."
+            "description": "Tokens every session starts with, averaged over the sessions that reported them; absent when none did."
           },
           "lines": {
             "type": "array",
@@ -467,7 +467,7 @@
                 "scope": {
                   "enum": ["user", "project", "plugin"],
                   "type": "string",
-                  "description": "Where it is installed."
+                  "description": "Where it is installed; absent when it is no longer installed on any machine read."
                 },
                 "pack": {
                   "type": "string",
@@ -476,7 +476,7 @@
                 "managedBy": {
                   "enum": ["fleetrc", "skills", "plugin", "hand"],
                   "type": "string",
-                  "description": "What installed it."
+                  "description": "What installed it; absent when it is no longer installed on any machine read."
                 },
                 "machines": {
                   "type": "array",
@@ -489,7 +489,7 @@
                   "type": "string",
                   "minLength": 1,
                   "pattern": "^(?!\\/home\\/|\\/Users\\/|[A-Za-z]:)",
-                  "description": "Its file or folder, relative to the home directory or the project, when installed."
+                  "description": "Its file or folder, relative to the home directory or the project; absent when it is no longer installed on any machine read."
                 },
                 "chars": {
                   "type": "object",
@@ -497,12 +497,12 @@
                     "listed": {
                       "type": "integer",
                       "minimum": 0,
-                      "description": "Characters of its entry in the harness's listing: name and description."
+                      "description": "Characters it puts in the context of every session that lists or loads it: a skill's or subagent's name and description, an instruction file's whole text, an MCP server's instructions."
                     },
                     "body": {
                       "type": "integer",
                       "minimum": 0,
-                      "description": "Characters of the rest of the file."
+                      "description": "Characters loaded only when it is invoked: the rest of a skill's or subagent's file; 0 for instruction files and MCP servers."
                     }
                   },
                   "required": ["listed", "body"],
@@ -575,17 +575,7 @@
                   "description": "Its description, in pack mode only."
                 }
               },
-              "required": [
-                "item",
-                "ref",
-                "scope",
-                "managedBy",
-                "machines",
-                "chars",
-                "tokens",
-                "exposure",
-                "use"
-              ],
+              "required": ["item", "ref", "machines", "chars", "tokens", "exposure", "use"],
               "description": "One piece of context on a harness's sheet, aggregated over machines."
             },
             "description": "One line per piece of context."
@@ -604,7 +594,7 @@
           "id": {
             "type": "string",
             "minLength": 1,
-            "description": "A stable id, `${rule}:${item ?? harness}`."
+            "description": "A stable id, `${rule}:${item ?? pack ?? harness}`."
           },
           "rule": {
             "enum": [
@@ -631,7 +621,12 @@
           "item": {
             "type": "string",
             "pattern": "^(skill|instructions|mcp|subagent):.+$",
-            "description": "The item it is about; absent for harness-level findings such as short-history."
+            "description": "The item it is about; absent for pack-level and harness-level findings such as dead-pack and short-history."
+          },
+          "pack": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The pack it is about, for dead-pack."
           },
           "where": {
             "type": "array",
@@ -652,7 +647,7 @@
               "required": ["machine", "harness"],
               "description": "A machine and harness."
             },
-            "description": "Where it applies."
+            "description": "Where it applies; empty in pack mode."
           },
           "evidence": {
             "type": "object",
@@ -689,7 +684,7 @@
                 "machine": {
                   "type": "string",
                   "minLength": 1,
-                  "description": "The machine to change."
+                  "description": "The machine to change; absent in pack mode, where the change goes to the pack's source."
                 },
                 "action": {
                   "enum": ["remove", "hide-from-model", "shorten", "dedupe", "set"],
@@ -734,7 +729,7 @@
                   "description": "The key and value to set, for set and hide-from-model."
                 }
               },
-              "required": ["machine", "action", "path"],
+              "required": ["action", "path"],
               "description": "One change the user's agent should make."
             },
             "description": "Changes that resolve it."

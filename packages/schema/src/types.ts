@@ -38,7 +38,7 @@ export interface Tokens {
   basis: "measured" | "estimated";
 }
 
-/** One installed piece of context found on disk (or in a pack). Two Items with the same id that the same harness loads are a duplicate. */
+/** One installed piece of context found on disk (or in a pack). The same id at two paths is two Items. */
 export interface Item {
   /** Its id, `${kind}:${name}`. */
   id: Id;
@@ -56,7 +56,7 @@ export interface Item {
   path: string;
   /** The sha256 of its file content, as lowercase hex. */
   digest: string;
-  /** Its size in characters: listed is its entry in the harness's listing (name and description), body is the rest of the file. */
+  /** Its size in characters: listed is paid by every session that lists or loads it, body only by a session that invokes it. */
   chars: Chars;
   /** Whether the model may invoke it on its own. */
   modelInvocable: boolean;
@@ -64,11 +64,11 @@ export interface Item {
   description?: string;
 }
 
-/** A size in characters, split into the part a harness lists in every session and the rest. */
+/** A size in characters, split into what every session pays and what only a session that invokes it pays. */
 export interface Chars {
-  /** Characters of its entry in the harness's listing: name and description. */
+  /** Characters it puts in the context of every session that lists or loads it: a skill's or subagent's name and description, an instruction file's whole text, an MCP server's instructions. */
   listed: number;
-  /** Characters of the rest of the file. */
+  /** Characters loaded only when it is invoked: the rest of a skill's or subagent's file; 0 for instruction files and MCP servers. */
   body: number;
 }
 
@@ -277,15 +277,15 @@ export interface Line {
   item: Id;
   /** Its kind and name. */
   ref: Ref;
-  /** Where it is installed. */
-  scope: Scope;
+  /** Where it is installed; absent when it is no longer installed on any machine read. */
+  scope?: Scope;
   /** Where it came from. */
   pack?: string;
-  /** What installed it. */
-  managedBy: ManagedBy;
+  /** What installed it; absent when it is no longer installed on any machine read. */
+  managedBy?: ManagedBy;
   /** Machines where it is installed or was seen. */
   machines: string[];
-  /** Its file or folder, relative to the home directory or the project, when installed. */
+  /** Its file or folder, relative to the home directory or the project; absent when it is no longer installed on any machine read. */
   path?: string;
   /** Its size in characters. */
   chars: Chars;
@@ -325,7 +325,7 @@ export interface Sheet {
   harness: string;
   /** Its sessions in the window, over all machines. */
   sessions: number;
-  /** Tokens every session starts with, when the harness reports them. */
+  /** Tokens every session starts with, averaged over the sessions that reported them; absent when none did. */
   fixedTokens?: Tokens;
   /** One line per piece of context. */
   lines: Line[];
@@ -333,8 +333,8 @@ export interface Sheet {
 
 /** One change the user's agent should make. */
 export interface Fix {
-  /** The machine to change. */
-  machine: string;
+  /** The machine to change; absent in pack mode, where the change goes to the pack's source. */
+  machine?: string;
   /** What to do. */
   action: "remove" | "hide-from-model" | "shorten" | "dedupe" | "set";
   /** The file or folder to change, relative to the home directory or the project. */
@@ -352,15 +352,17 @@ export interface Fix {
 
 /** Something a rule found. */
 export interface Finding {
-  /** A stable id, `${rule}:${item ?? harness}`. */
+  /** A stable id, `${rule}:${item ?? pack ?? harness}`. */
   id: string;
   /** The rule that found it. */
   rule: RuleId;
   /** How strongly it asks for action. */
   level: Level;
-  /** The item it is about; absent for harness-level findings such as short-history. */
+  /** The item it is about; absent for pack-level and harness-level findings such as dead-pack and short-history. */
   item?: Id;
-  /** Where it applies. */
+  /** The pack it is about, for dead-pack. */
+  pack?: string;
+  /** Where it applies; empty in pack mode. */
   where: Where[];
   /** The numbers the rule judged on. */
   evidence: Record<string, number>;
@@ -414,13 +416,13 @@ export interface Report {
   mode: "local" | "fleet" | "pack";
   /** In pack mode, the directory name or GitHub URL read. */
   source?: string;
-  /** The machines read. */
+  /** The machines read; empty in pack mode. */
   machines: Machine[];
   /** The first and last day it covers, inclusive. */
   window: [Day, Day];
   /** The config it ran with. */
   config: ResolvedConfig;
-  /** What each harness on each machine could tell. */
+  /** What each harness on each machine could tell; empty in pack mode. */
   coverage: Coverage[];
   /** One sheet per harness, aggregated over machines. */
   sheet: Sheet[];
