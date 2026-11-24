@@ -309,7 +309,14 @@ describe("no canary leaves the machine", () => {
       "claude-code": 1,
       codex: 1,
     });
-    const items = report.sheet.flatMap((s) => s.lines.map((line) => line.item));
+    const lines = report.sheet.flatMap((s) => s.lines);
+    const items = lines.map((line) => line.item);
+    // The session listed both, so the attachments that carry their canaries were read.
+    expect(
+      ["mcp:quay", "subagent:dock-hand"].map(
+        (id) => lines.find((line) => line.item === id)?.exposure.sessions,
+      ),
+    ).toEqual([1, 1]);
     expect(items).toEqual(
       expect.arrayContaining([
         "skill:brew-notes",
