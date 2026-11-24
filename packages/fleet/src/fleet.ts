@@ -727,13 +727,14 @@ export interface RunResult {
  * offline, does not answer or cannot be tried is unreachable, with no exit code; a command still
  * running after `timeoutMs` has none either. Here it is stopped then, with what it started; over
  * ssh see `stoppable`. A command that exited keeps its code, even when something it left running
- * held its output open until then.
+ * held its output open until then. With `here` "leave out" the command runs on no host that is this
+ * machine, here or over ssh.
  */
 export async function fleetRun(
   targets: readonly FleetTarget[],
   argv: readonly [string, ...string[]],
   timeoutMs = 30_000,
-  { here = true }: { here?: boolean } = {},
+  { here = true }: { here?: boolean | "leave out" } = {},
 ): Promise<RunResult[]> {
   const after = `${Math.round(timeoutMs / 1000)} s`;
   const finished = (host: string, run: ExecResult): RunResult => ({
@@ -769,7 +770,7 @@ export async function fleetRun(
     return finished(hostname(), run);
   };
   const words = argv.map(quote).join(" ");
-  const own = here ? await mkdtemp(join(tmpdir(), "fleetrc-run-")) : undefined;
+  const own = here !== false ? await mkdtemp(join(tmpdir(), "fleetrc-run-")) : undefined;
   // What this run tells fleet on stderr carries a random word, so nothing the command or what it
   // left running writes there can pass for it.
   const note = `${NOTE} ${randomBytes(8).toString("hex")}`;
@@ -827,7 +828,10 @@ export async function fleetRun(
     };
   };
   try {
-    const results = await Promise.all([...(here ? [local()] : []), ...targets.map(remote)]);
+    const results = await Promise.all([
+      ...(here === true ? [local()] : []),
+      ...targets.map(remote),
+    ]);
     return results.filter((result) => result !== undefined);
   } finally {
     if (own !== undefined) await rm(own, { recursive: true, force: true });
