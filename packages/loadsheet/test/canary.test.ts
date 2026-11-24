@@ -33,6 +33,9 @@ const C = {
   hook: "CANARY-LS-hook-command",
   codexReply: "CANARY-LS-codex-reply",
   codexToolOutput: "CANARY-LS-codex-tool-output",
+  mcpInstructions: "CANARY-LS-mcp-instructions",
+  agentLine: "CANARY-LS-agent-line",
+  agentBody: "CANARY-LS-agent-body",
 } as const;
 const canaries = Object.values(C);
 
@@ -75,6 +78,10 @@ beforeAll(() => {
   skill(".claude/skills", "brew-notes");
   skill(".claude/skills", "kettle-log");
   skill(".agents/skills", "tide-table");
+  write(
+    join(home, ".claude", "agents", "dock-hand.md"),
+    `---\nname: dock-hand\ndescription: Use when a boat ties up.\n---\n\n${C.agentBody}\n`,
+  );
   write(join(home, ".claude", "CLAUDE.md"), `# House rules\n\n${C.instructionBody}\n`);
   write(
     join(home, ".claude", "settings.json"),
@@ -94,6 +101,7 @@ beforeAll(() => {
           args: [join(home, "servers", `${C.mcpArg}.js`)],
           env: { HARBOR_TOKEN: C.mcpEnv },
         },
+        quay: { command: "node", args: ["quay.js"] },
       },
     }),
   );
@@ -141,6 +149,26 @@ beforeAll(() => {
           type: "deferred_tools_delta",
           addedNames: ["mcp__harbor__lookup"],
           addedLines: [`mcp__harbor__lookup: ${C.toolInput} description`],
+        },
+      },
+      {
+        ...at,
+        type: "attachment",
+        timestamp: day(2),
+        attachment: {
+          type: "mcp_instructions_delta",
+          addedNames: ["quay"],
+          addedBlocks: [`## quay\n${C.mcpInstructions}`],
+        },
+      },
+      {
+        ...at,
+        type: "attachment",
+        timestamp: day(2),
+        attachment: {
+          type: "agent_listing_delta",
+          addedTypes: ["dock-hand"],
+          addedLines: [`- dock-hand: ${C.agentLine}`],
         },
       },
       {
@@ -288,6 +316,8 @@ describe("no canary leaves the machine", () => {
         "skill:kettle-log",
         "skill:tide-table",
         "mcp:harbor",
+        "mcp:quay",
+        "subagent:dock-hand",
         "instructions:CLAUDE.md",
         "instructions:~/.codex/AGENTS.md",
       ]),
