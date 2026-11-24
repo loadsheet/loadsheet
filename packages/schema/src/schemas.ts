@@ -143,7 +143,7 @@ const LevelSchema = describe(
 const IdSchema = v.pipe(
   v.string(),
   v.regex(
-    new RegExp(`^(${KINDS.join("|")}):(?!${HOME}).+$`),
+    new RegExp(String.raw`^(${KINDS.join("|")}):(?!\s*${HOME}).+$`),
     "must be kind:name, where kind is skill, instructions, mcp or subagent and name is not an absolute home path",
   ),
   v.description("A piece of context's id, `${kind}:${name}`."),

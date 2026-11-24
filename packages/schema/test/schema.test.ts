@@ -249,14 +249,32 @@ describe("parsing", () => {
         parseConfig({
           via: { include: ["/home/someone/private"], exclude: ["claude-vscode", "a/b"] },
           harnesses: ["claude-code", "Claude Code"],
-          ignore: ["mcp:@scope/server", "skill:/home/someone/private"],
+          ignore: [
+            "mcp:@scope/server",
+            "skill:/home/someone/private",
+            "skill: /home/someone/private",
+            "skill:\t/Users/someone/private",
+          ],
         }),
       ).map((issue) => issue.path),
-    ).toEqual(["$.harnesses[1]", "$.via.include[0]", "$.via.exclude[1]", "$.ignore[1]"]);
+    ).toEqual([
+      "$.harnesses[1]",
+      "$.via.include[0]",
+      "$.via.exclude[1]",
+      "$.ignore[1]",
+      "$.ignore[2]",
+      "$.ignore[3]",
+    ]);
     expect(() =>
       parseConfig({
         via: { include: ["sdk-ts", "codex_vscode", "Codex Desktop"] },
-        ignore: ["skill:my skill", "instructions:~/.codex/AGENTS.md", "instructions:CLAUDE.md"],
+        ignore: [
+          "skill:my skill",
+          "skill:team/deploy",
+          "instructions:~/.codex/AGENTS.md",
+          "instructions:CLAUDE.md",
+          "instructions:home/notes.md",
+        ],
       }),
     ).not.toThrow();
   });

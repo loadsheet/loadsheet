@@ -119,7 +119,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(skill|instructions|mcp|subagent):(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
+            "pattern": "^(skill|instructions|mcp|subagent):(?!\\s*(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
             "description": "A piece of context's id, `${kind}:${name}`."
           },
           "description": "Item ids never reported."
@@ -447,7 +447,7 @@
               "properties": {
                 "item": {
                   "type": "string",
-                  "pattern": "^(skill|instructions|mcp|subagent):(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
+                  "pattern": "^(skill|instructions|mcp|subagent):(?!\\s*(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
                   "description": "Its id."
                 },
                 "ref": {
@@ -614,7 +614,7 @@
           },
           "item": {
             "type": "string",
-            "pattern": "^(skill|instructions|mcp|subagent):(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
+            "pattern": "^(skill|instructions|mcp|subagent):(?!\\s*(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
             "description": "The item it is about; absent for pack-level and harness-level findings such as dead-pack and short-history."
           },
           "pack": {
