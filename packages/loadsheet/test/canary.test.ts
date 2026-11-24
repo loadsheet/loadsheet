@@ -24,6 +24,7 @@ const C = {
   toolInput: "CANARY-LS-tool-input",
   toolOutput: "CANARY-LS-tool-output",
   skillBody: "CANARY-LS-skill-body",
+  skillDescription: "CANARY-LS-skill-description",
   instructionBody: "CANARY-LS-instruction-body",
   codexInstructionBody: "CANARY-LS-codex-instruction-body",
   mcpEnv: "CANARY-LS-mcp-env",
@@ -73,7 +74,7 @@ beforeAll(() => {
   const skill = (dir: string, name: string) =>
     write(
       join(home, dir, name, "SKILL.md"),
-      `---\nname: ${name}\ndescription: Use when the ${name} task comes up.\n---\n\n${C.skillBody} for ${name}.\n`,
+      `---\nname: ${name}\ndescription: Use when the ${name} task comes up, ${C.skillDescription}.\n---\n\n${C.skillBody} for ${name}.\n`,
     );
   skill(".claude/skills", "brew-notes");
   skill(".claude/skills", "kettle-log");
@@ -122,8 +123,7 @@ beforeAll(() => {
         attachment: {
           type: "skill_listing",
           names: ["brew-notes", "kettle-log"],
-          content:
-            "- brew-notes: Use when the brew-notes task comes up.\n- kettle-log: Use when the kettle-log task comes up.",
+          content: `- brew-notes: Use when the brew-notes task comes up, ${C.skillDescription}.\n- kettle-log: Use when the kettle-log task comes up, ${C.skillDescription}.`,
         },
       },
       {
