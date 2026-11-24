@@ -77,14 +77,20 @@ export const runRules = ({ mode, sheets, config, unfiltered = NOTHING_UNFILTERED
       .filter((finding) => finding.level === "cut" && finding.item !== undefined)
       .flatMap((finding) => finding.where.map((where) => place(finding.item!, where))),
   );
-  // A cut for a pack holds for each of its skills where it holds.
+  // A cut for a pack holds for each of its skills where it holds and that machine's install of
+  // the skill is the pack's.
   const packed = new Set<string>();
   for (const finding of findings) {
     if (finding.level !== "cut" || finding.pack === undefined || finding.item !== undefined)
       continue;
     for (const where of finding.where) {
-      for (const line of visible.find((sheet) => sheet.harness === where.harness)?.lines ?? []) {
-        if (line.pack === finding.pack && line.machines.includes(where.machine))
+      const sheet = visible.find((one) => one.harness === where.harness);
+      if (!sheet) continue;
+      for (const line of sheet.lines) {
+        const installs = sheet
+          .installs(line.item)
+          .filter(({ machine }) => machine === where.machine);
+        if (installs.length && installs.every(({ item }) => item.pack === finding.pack))
           packed.add(place(line.item, where));
       }
     }

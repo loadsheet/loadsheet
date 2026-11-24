@@ -637,6 +637,29 @@ describe("dead-pack", () => {
     );
   });
 
+  it("holds only for the machines whose install is the pack's, whatever their names", () => {
+    for (const other of ["z-server", "a-server"]) {
+      const built = report(
+        [
+          { ...kit(), machine: "a-laptop" },
+          scan(other, { items: [skill("a")], cells: [cell("a", 30)] }),
+        ],
+        { rules: { ...only("dead-pack").rules, "dead-skill": {} } },
+      );
+      expect(
+        built.findings.map((f) => [
+          f.id,
+          f.where.map((w) => w.machine),
+          f.fixes.map((x) => x.machine),
+        ]),
+      ).toEqual([
+        // The server's own copy of `a` is not the pack's, so its dead-skill finding stays.
+        ["dead-skill:skill:a", ["a-laptop", other].sort(), ["a-laptop", other].sort()],
+        ["dead-pack:acme/kit", ["a-laptop"], NAMES.map(() => "a-laptop")],
+      ]);
+    }
+  });
+
   it("offers no fix for a plugin, whose hooks and commands loadsheet does not read", () => {
     const plugin = kit(NAMES, { managedBy: "plugin", scope: "plugin" });
     expect(both(plugin).map((f) => [f.id, f.fixes])).toEqual([["dead-pack:acme/kit", []]]);
