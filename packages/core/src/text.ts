@@ -13,6 +13,16 @@ const WIDTH = 100;
 /** The widest a finding's item is padded to; a longer one pushes its evidence along. */
 const ITEM_WIDTH = 32;
 
+/**
+ * Control characters and direction overrides made visible. Names, paths and commands come from
+ * files on the machine, and one of them must not move the cursor or recolour the terminal.
+ */
+const visible = (text: string) =>
+  text.replace(
+    /[\p{Cc}\u202a-\u202e\u2066-\u2069]/gu,
+    (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  );
+
 const num = (n: number) => n.toLocaleString("en-US");
 const plural = (n: number, one: string, many = `${one}s`) => `${num(n)} ${n === 1 ? one : many}`;
 const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
@@ -281,11 +291,7 @@ const entriesOf = (finding: Finding): FixEntry[] => {
     if (machine !== undefined && !entry.machines.includes(machine)) entry.machines.push(machine);
     entries.set(key, entry);
   }
-  // The machines are part of what the fix is: the same change on other machines is another fix.
-  return [...entries.values()].map((entry) => ({
-    ...entry,
-    key: JSON.stringify([entry.key, entry.machines]),
-  }));
+  return [...entries.values()];
 };
 
 /** A fix in full, on one line when it fits, else its command or key on the next. */
@@ -296,7 +302,7 @@ const fixLines = (entry: FixEntry, showMachine: boolean, indent: string): string
   const detail = fix.run
     ? `$ ${fix.run}`
     : fix.set
-      ? `${fix.set.key} = ${JSON.stringify(fix.set.value)}`
+      ? `${fix.set.key} = ${visible(JSON.stringify(fix.set.value))}`
       : undefined;
   if (!detail) return [head];
   const oneLine = `${head}  ${detail}`;
@@ -323,7 +329,7 @@ const noFixReason = (report: Report, finding: Finding): string => {
   const installer = line.managedBy && INSTALLER[line.managedBy];
   if (installer) {
     const names = [...harnesses].join(" and ") || "this harness";
-    return `${installer} manages its files, and ${names} has no setting loadsheet could change instead.`;
+    return `${installer} manages its files, and loadsheet has no safe change to offer for ${names}.`;
   }
   return "loadsheet has no safe change to offer.";
 };
@@ -349,11 +355,14 @@ const findingsBlocks = (report: Report): { details: string[]; summary: string[] 
   const showMachine = report.machines.length > 1;
   const label = (finding: Finding) => finding.item ?? finding.pack ?? finding.id;
 
-  // A fix several findings share is printed once, with the findings it covers.
+  // A fix several findings share is printed once, with the findings it covers and every machine
+  // one of them names: a finding on one machine and another on two share that machine's fix.
   const shared = new Map<string, { entry: FixEntry; covers: Finding[]; rule?: string }>();
   for (const finding of report.findings) {
     for (const entry of entriesOf(finding)) {
-      const known = shared.get(entry.key) ?? { entry, covers: [] };
+      const known = shared.get(entry.key) ?? { entry: { ...entry, machines: [] }, covers: [] };
+      for (const machine of entry.machines)
+        if (!known.entry.machines.includes(machine)) known.entry.machines.push(machine);
       known.covers.push(finding);
       shared.set(entry.key, known);
     }
@@ -472,7 +481,11 @@ const skippedBlock = (report: Report): string[] => {
  * The Report for a person at a terminal: a header, the heaviest lines per harness, what each harness
  * lets loadsheet see, the findings by rule with every fix in full, and the rules that did not run.
  */
-export const renderText = (report: Report): string => {
+export const renderText = (exact: Report): string => {
+  // Every string of the Report but a value to set, which is printed as JSON and escaped there.
+  const report = JSON.parse(JSON.stringify(exact), (key, value: unknown) =>
+    typeof value === "string" && key !== "value" ? visible(value) : value,
+  ) as Report;
   const findings = findingsBlocks(report);
   const blocks = [
     header(report),
@@ -483,7 +496,7 @@ export const renderText = (report: Report): string => {
     skippedBlock(report),
     findings.summary,
     [
-      "loadsheet changes none of your files. Every number and fix as JSON: loadsheet --json",
+      "loadsheet changes none of your files. Every number and fix as JSON: run it again with --json",
       "To have your agent apply the fixes you accept, paste it the prompt in",
       `  ${PROMPT_DOC}`,
     ],

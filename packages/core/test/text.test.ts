@@ -138,7 +138,7 @@ describe("renderText on the fleet example", () => {
   it("names the rules that did not run and why, and closes on --json and the prompt", () => {
     expect(text).toMatch(/dead-skill {7}codex: no userUse; cursor: no listing, modelUse, userUse/u);
     expect(text).toMatch(/idle-mcp {9}opencode: too little data/u);
-    expect(text).toContain("loadsheet --json");
+    expect(text).toContain("run it again with --json");
     expect(text.trimEnd().endsWith(PROMPT_DOC)).toBe(true);
   });
 
@@ -246,6 +246,60 @@ describe("renderText", () => {
     expect(text).toContain("remove ~/.claude/skills/c  $ rm -r ~/.claude/skills/c");
   });
 
+  it("prints a machine's fix once when findings name different machines", () => {
+    const budget = (machine: string): Fix => ({
+      machine,
+      action: "set",
+      path: "~/.claude/settings.json",
+      set: { key: "env.SLASH_COMMAND_TOOL_CHAR_BUDGET", value: "24000" },
+    });
+    const text = renderText(
+      report(
+        ["a", "b"].map((name) => line(name, 30)),
+        [
+          finding("invisible-skill", "a", [budget("desk"), budget("box")]),
+          finding("invisible-skill", "b", [budget("desk")]),
+        ],
+        {
+          machines: [
+            { name: "desk", reachable: true },
+            { name: "box", reachable: true },
+          ],
+        },
+      ),
+    );
+    expect(occurrences(text, "env.SLASH_COMMAND_TOOL_CHAR_BUDGET")).toBe(1);
+    expect(text).toContain("on desk, box: set ~/.claude/settings.json");
+  });
+
+  it("shows a control character in a name, path or command instead of sending it", () => {
+    const text = renderText(
+      report(
+        [line("a\u001b[2J", 30)],
+        [
+          finding("dead-skill", "a\u001b[2J", [
+            {
+              machine: "desk",
+              action: "remove",
+              path: "~/.claude/skills/a\tb",
+              run: "rm -r ~/.claude/skills/a\u009bb",
+            },
+            {
+              machine: "desk",
+              action: "set",
+              path: "~/.claude/settings.json",
+              set: { key: "env.X", value: "a\u007fb\n" },
+            },
+          ]),
+        ],
+      ),
+    );
+    expect(text).not.toMatch(/[\p{Cc}--\n]/v);
+    expect(text).toContain("remove ~/.claude/skills/a\\u0009b  $ rm -r ~/.claude/skills/a\\u009bb");
+    expect(text).toContain('env.X = "a\\u007fb\\n"');
+    expect(text).toContain("skill:a\\u001b[2J");
+  });
+
   it("names the machine only when the report has more than one", () => {
     const fix: Fix = { machine: "desk", action: "shorten", path: "~/.claude/skills/a/SKILL.md" };
     const one = renderText(
@@ -303,7 +357,7 @@ describe("renderText", () => {
     );
     expect(text).toContain("invoked by you 3 times, never by the model");
     expect(text).toContain(
-      "No fix: fleetrc manages its files, and codex has no setting loadsheet could change instead.",
+      "No fix: fleetrc manages its files, and loadsheet has no safe change to offer for codex.",
     );
     expect(text).toContain(
       "No fix for 1: loadsheet has no safe change to offer.\n  ~50  skill:by-hand",
