@@ -28,8 +28,7 @@ Change nothing until I accept a fix.
      string "24000" stays a string). `key` is a dotted path in the file's own format:
      - `settings.json` (JSON): `skillOverrides.<name>` is the `<name>` entry of the
        `skillOverrides` object; `env.NAME`, such as `env.SLASH_COMMAND_TOOL_CHAR_BUDGET`, is a
-       key of the `env` object; a key without a dot, such as `skillListingBudgetFraction`, is
-       top-level.
+       key of the `env` object.
      - `config.toml` (TOML): `skills.config[path="~/x/SKILL.md"].enabled` is `enabled` in the
        `[[skills.config]]` entry whose `path` is exactly that value. Add the entry, with that
        `path`, when there is none.
