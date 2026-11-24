@@ -56,6 +56,8 @@ const skill = (name: string, extra: Partial<Item> = {}): Item => {
     digest: digestOf(path),
     chars: { listed: 120, body: 900 },
     modelInvocable: true,
+    // The Scan worked out what a removal reaches: nothing, unless a test says otherwise.
+    reaches: [],
     ...extra,
   };
 };
@@ -663,12 +665,12 @@ describe("fixes", () => {
   });
 
   it("keeps a folder another harness reaches through a link", () => {
-    const mine = skill("weekly");
     // `~/.agents/skills/weekly` links to it. Codex reads its name its own way, and uses it.
+    const mine = skill("weekly", { reaches: ["~/.agents/skills/weekly"] });
     const link = skill("weekly report", {
       harnesses: ["codex"],
       path: "~/.agents/skills/weekly",
-      target: mine.path,
+      reaches: [mine.path],
     });
     const fixes = dead([mine, link], {
       coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
@@ -681,12 +683,8 @@ describe("fixes", () => {
   it("keeps a folder holding a skill another harness reaches through a link to it", () => {
     // `~/.agents/skills/child` links to a folder inside `weekly`, and Codex uses it: `rm -r` of
     // `weekly` would take it.
-    const mine = skill("weekly");
-    const child = skill("child", {
-      harnesses: ["codex"],
-      path: "~/.agents/skills/child",
-      target: `${mine.path}/child`,
-    });
+    const child = skill("child", { harnesses: ["codex"], path: "~/.agents/skills/child" });
+    const mine = skill("weekly", { reaches: [child.path] });
     const findings = report([
       scan("laptop", {
         coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
@@ -703,6 +701,42 @@ describe("fixes", () => {
         set: { key: "disable-model-invocation", value: true },
       },
     ]);
+  });
+
+  it("removes nothing when the Scan does not say what the removal reaches", () => {
+    const actions = (items: Item[], scans: Scan[] = []) =>
+      report([scan("laptop", { items, cells: [cell("idle", 25)] }), ...scans])
+        .findings.find((f) => f.rule === "dead-skill")!
+        .fixes.map((fix) => [fix.action, fix.run]);
+    const hidden = [["hide-from-model", undefined]];
+    expect(actions([skill("idle")])).toEqual([["remove", "rm -r ~/.claude/skills/idle"]]);
+    // A Scan written without it.
+    expect(actions([skill("idle", { reaches: undefined })])).toEqual(hidden);
+    // It names a path none of the Scan's Items is at.
+    expect(actions([skill("idle", { reaches: ["~/.agents/skills/gone"] })])).toEqual(hidden);
+    // fleetrc unlinks the name on every machine, and one machine's Scan does not say.
+    const linked = skill("idle", { managedBy: "fleetrc", pack: "mine" });
+    const removed = [["remove", "fleetrc remove idle"]];
+    expect(actions([linked], [scan("server", { items: [linked] })])).toEqual([
+      ...removed,
+      ...removed,
+    ]);
+    expect(
+      actions([linked], [scan("server", { items: [{ ...linked, reaches: undefined }] })]),
+    ).toEqual([...hidden, ...hidden]);
+  });
+
+  it("keeps a folder holding another skill this harness uses", () => {
+    const child = skill("child", { path: "~/.claude/skills/idle/child" });
+    const fixes = dead([skill("idle", { reaches: [child.path] }), child], {
+      cells: [cell("idle", 25), cell("child", 25, { byModel: 2 })],
+    }).find((f) => f.id === "dead-skill:skill:idle")!.fixes;
+    expect(fixes.map((fix) => [fix.action, fix.run])).toEqual([["hide-from-model", undefined]]);
+  });
+
+  it("writes `rm -r` without a trailing slash, which would empty a link's folder", () => {
+    const [finding] = dead([skill("idle", { path: "~/.claude/skills/idle/" })]);
+    expect(finding!.fixes.map((fix) => fix.run)).toEqual(["rm -r ~/.claude/skills/idle"]);
   });
 
   it("removes a dead skill whose content another, used skill at another place shares", () => {
@@ -865,10 +899,12 @@ describe("fixes", () => {
   it("hides a hand-made skill whose folder holds another skill, which `rm -r` would delete too", () => {
     const [finding] = dead(
       [
-        skill("idle", { harnesses: ["codex"], path: "~/.agents/skills/idle" }),
+        skill("idle", {
+          harnesses: ["codex"],
+          path: "~/.agents/skills/idle",
+          reaches: ["~/.agents/skills/idle/child"],
+        }),
         skill("child", { harnesses: ["codex"], path: "~/.agents/skills/idle/child" }),
-        // A sibling whose name starts the same is not inside the folder.
-        skill("idle-two", { harnesses: ["codex"], path: "~/.agents/skills/idle-two" }),
       ],
       {
         coverage: [coverage("laptop", "codex")],
@@ -1054,16 +1090,11 @@ describe("fixes", () => {
     expect(fixesOf([laptop, renamed])).toEqual(hidden);
     // Codex on the server uses `~/.agents/skills/child`, a link through the linked folder to a
     // skill inside its source, which the unlink would take too.
-    const source = "~/.config/fleetrc/sources/mine/idle";
     const nested = scan("server", {
       coverage: [coverage("server", "claude-code"), coverage("server", "codex")],
       items: [
-        { ...linked, target: source },
-        skill("child", {
-          harnesses: ["codex"],
-          path: "~/.agents/skills/child",
-          target: `${source}/child`,
-        }),
+        { ...linked, reaches: ["~/.agents/skills/child"] },
+        skill("child", { harnesses: ["codex"], path: "~/.agents/skills/child" }),
       ],
       sessions: [...sessions(30), ...sessions(30, {}, "codex")],
       cells: [cell("child", 25, { harness: "codex", byModel: 3 })],

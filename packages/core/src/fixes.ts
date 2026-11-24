@@ -167,33 +167,18 @@ const fleetrcKey = (name: string) =>
     .toLowerCase()
     .replace(/[. ]+$/u, "");
 
-/** Whether a path is a folder or inside it. */
-const within = (folder: string, path: string) =>
-  path === folder || path.startsWith(`${folder.replace(/\/+$/u, "")}/`);
-
-/** Where an Item really is: its link's target, or its path when no link is on the way. */
-const realOf = (item: Item) => item.target ?? item.path;
-
 /**
- * The Items among `items` that are `item`'s folder under another view: at its path, at its real
- * location, or with its id, since two harnesses can read one folder under two names, and use is
- * counted per id, not per path.
+ * The Items among `items`, one machine's, that removing `item` reaches: those at its path, those
+ * the Scan says it would take or break, and those with its id, since use is counted per id and
+ * cannot be placed on one copy. Undefined when the Scan does not say what it reaches, or names a
+ * path none of its Items is at: then nothing is known, and nothing is removed.
  */
-const copiesOf = (items: Item[], item: Item) =>
-  items.filter(
-    (other) => other.path === item.path || realOf(other) === realOf(item) || other.id === item.id,
-  );
-
-/**
- * The Items among `items` that removing `item` reaches: its copies, and every Item whose path is
- * inside its path or whose real location is inside its real location, as a skill nested in the
- * folder is (Codex reads `parent/child/SKILL.md` as one), however a link leads to it.
- */
-const reachOf = (items: Item[], item: Item) =>
-  items.filter(
-    (other) =>
-      within(item.path, other.path) || within(realOf(item), realOf(other)) || other.id === item.id,
-  );
+const reachOf = (items: Item[], item: Item) => {
+  const paths = new Set(items.map((other) => other.path));
+  if (!item.reaches?.every((path) => paths.has(path))) return undefined;
+  const reached = new Set([item.path, ...item.reaches]);
+  return items.filter((other) => reached.has(other.path) || other.id === item.id);
+};
 
 const removeOne = (
   sheet: RuleSheet,
@@ -203,24 +188,20 @@ const removeOne = (
   const table = HARNESSES[sheet.harness];
   const hide = () =>
     table ? withMachine(machine, table.hide(item) ?? table.off?.(item, sheet, machine)) : undefined;
-  // A remove is offered only when nothing it reaches is in use or out of sight; everything else
-  // is hidden or turned off. What it reaches is read from every Item of the machine.
-  const items = unfiltered.items(machine);
-  const reach = reachOf(items, item);
   // This harness used it in sessions the filters left out, so nothing about it is dead there.
-  if (copiesOf(items, item).some((copy) => unfiltered.usedBy(copy.id).includes(sheet.harness))) {
-    return undefined;
-  }
-  // Another harness loads something the removal reaches and uses it or cannot tell whether it
-  // does on this machine: hide it from this one, or turn it off here.
-  const kept = reach.some((other) =>
+  if (unfiltered.usedBy(item.id).includes(sheet.harness)) return undefined;
+  // A remove is offered only when what it reaches is known and none of it is in use or out of
+  // sight; everything else is hidden or turned off.
+  const reach = reachOf(unfiltered.items(machine), item);
+  // A harness loads something the removal reaches and uses it, or cannot tell whether it does on
+  // this machine: hide the skill from this one, or turn it off here.
+  const kept = reach?.some((other) =>
     other.harnesses.some(
       (harness) =>
-        harness !== sheet.harness &&
-        (unfiltered.usedBy(other.id).includes(harness) || !unfiltered.tellsUse(machine, harness)),
+        unfiltered.usedBy(other.id).includes(harness) || !unfiltered.tellsUse(machine, harness),
     ),
   );
-  if (kept) return hide();
+  if (kept !== false) return hide();
   const remove: Fix = { machine, action: "remove", path: item.path };
   // A harness loadsheet has no table for gets the path and no command.
   if (!table) return remove;
@@ -250,11 +231,13 @@ const removeOne = (
           .filter(
             (start) => start.managedBy === "fleetrc" && fleetrcKey(baseName(start.path)) === key,
           )
-          .flatMap((start) => reachOf(all, start))
           .some(
-            (reached) =>
-              unfiltered.usedBy(reached.id).length > 0 ||
-              reached.harnesses.some((harness) => !unfiltered.tellsUse(other, harness)),
+            (start) =>
+              reachOf(all, start)?.some(
+                (reached) =>
+                  unfiltered.usedBy(reached.id).length > 0 ||
+                  reached.harnesses.some((harness) => !unfiltered.tellsUse(other, harness)),
+              ) !== false,
           );
       });
       if (!unfiltered.wholeFleet || inUse) return hide();
@@ -266,11 +249,12 @@ const removeOne = (
     // A plugin's skills come and go with the plugin, and an update replaces its files.
     case "plugin":
       return undefined;
-    // `rm -r` would take whatever else it reaches too, so such a folder is hidden instead.
+    // `rm -r` would take whatever else it reaches too, so such a folder is hidden instead. The
+    // path goes without a trailing slash: with one, `rm -r` of a link empties the folder it leads to.
     case "hand":
-      return reach.some((other) => other.id !== item.id || other.path !== item.path)
+      return reach!.some((other) => other.id !== item.id || other.path !== item.path)
         ? hide()
-        : { ...remove, run: `rm -r ${shellPath(item.path)}` };
+        : { ...remove, run: `rm -r ${shellPath(item.path.replace(/\/+$/u, ""))}` };
   }
 };
 
