@@ -30,6 +30,9 @@ interface Manifest {
   private?: boolean;
   bin?: string | Record<string, string>;
   exports?: unknown;
+  dependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
 }
 
 /** Every path an `exports` or `bin` field names, without its `./`. */
@@ -47,6 +50,8 @@ const named = (manifest: Manifest): string[] => {
 const ALWAYS = /^(?:package\.json|README(?:\.md)?|LICENSE(?:\.md)?)$/iu;
 const TEST = /(?:^|\/)(?:tests?|__tests__|fixtures?)(?:\/|$)|\.(?:test|spec)\.[cm]?[jt]sx?$/iu;
 const ENV = /(?:^|\/)\.env(?:\.|$)/u;
+/** A path a source map should not hold: one from the root of the disk that built it. */
+const ABSOLUTE = /^(?:[/\\]|[a-z]:[/\\]|file:)/iu;
 
 const run = (command: string, args: string[], options: SpawnSyncOptions = {}) => {
   const result = spawnSync(command, args, { encoding: "utf8", ...options });
@@ -81,15 +86,30 @@ try {
   }
 
   // 2. What each tarball holds.
+  const packed = new Map<string, { text: string; manifest: Manifest }>();
+  for (const [name, file] of tarballs) {
+    const text = execFileSync("tar", ["-xOzf", file, "package/package.json"], { encoding: "utf8" });
+    packed.set(name, { text, manifest: JSON.parse(text) as Manifest });
+  }
   for (const [name, file] of tarballs) {
     const files = execFileSync("tar", ["-tzf", file], { encoding: "utf8" })
       .split("\n")
       .filter((line) => line && !line.endsWith("/"))
       .map((line) => line.replace(/^package\//u, ""));
-    const text = execFileSync("tar", ["-xOzf", file, "package/package.json"], { encoding: "utf8" });
-    const manifest = JSON.parse(text) as Manifest;
+    const { text, manifest } = packed.get(name)!;
     for (const protocol of ["workspace:", "catalog:"]) {
       if (text.includes(protocol)) problem(`${name}: package.json still holds ${protocol}`);
+    }
+    // The install below points every package at its tarball, whatever range asks for it, so the
+    // range is checked here: npm must find in it the version published alongside.
+    for (const [dependency, range] of Object.entries({
+      ...manifest.dependencies,
+      ...manifest.peerDependencies,
+      ...manifest.optionalDependencies,
+    })) {
+      const beside = packed.get(dependency)?.manifest.version;
+      if (beside !== undefined && ![beside, `^${beside}`, `~${beside}`].includes(range))
+        problem(`${name}: asks for ${dependency}@${range}, and ${beside} is what ships with it`);
     }
     const exported = named(manifest);
     for (const path of exported) {
@@ -107,17 +127,18 @@ try {
       if (ENV.test(path)) problem(`${name}: ${path} is an env file`);
       if (path.endsWith(".map")) {
         const map = execFileSync("tar", ["-xOzf", file, `package/${path}`], { encoding: "utf8" });
-        const sources = (JSON.parse(map) as { sources?: string[] }).sources ?? [];
+        const { sources = [], sourceRoot = "" } = JSON.parse(map) as {
+          sources?: string[];
+          sourceRoot?: string;
+        };
         if (sources.some((source) => TEST.test(source))) problem(`${name}: ${path} maps test code`);
+        if ([sourceRoot, ...sources].some((source) => ABSOLUTE.test(source)))
+          problem(`${name}: ${path} holds a path of the disk it was built on`);
       }
     }
   }
   if (problems.length) throw new Error("the tarballs hold what they should not");
-  const version = JSON.parse(
-    execFileSync("tar", ["-xOzf", tarballs.get("loadsheet")!, "package/package.json"], {
-      encoding: "utf8",
-    }),
-  ).version as string;
+  const { version } = packed.get("loadsheet")!.manifest;
   console.log(
     `${tarballs.size} tarballs: no workspace: or catalog:, only dist, package.json, README, LICENSE and exports, every bin and export present`,
   );
@@ -202,9 +223,14 @@ try {
   let harnesses = "";
   try {
     const report = parseReport(JSON.parse(json.stdout));
-    harnesses = report.sheet.map((sheet) => `${sheet.harness} ${sheet.sessions}`).join(", ");
-    if (!report.sheet.every((sheet) => sheet.sessions === 1))
-      problem(`npx loadsheet --json read ${harnesses} sessions`);
+    harnesses = report.sheet
+      .map((sheet) => `${sheet.harness} ${sheet.sessions}`)
+      .sort()
+      .join(", ");
+    if (json.status !== 0 || harnesses !== "claude-code 1, codex 1")
+      problem(
+        `npx loadsheet --json read ${harnesses || "no"} sessions, exit ${json.status}; the home holds one of Claude Code and one of Codex`,
+      );
   } catch (error) {
     problem(
       `npx loadsheet --json printed no Report (exit ${json.status}): ${(error as Error).message}\n${json.stderr}`,
