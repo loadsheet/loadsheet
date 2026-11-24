@@ -1,0 +1,35 @@
+{
+  "name": "@loadsheet/kit",
+  "version": "0.0.0",
+  "description": "Transcript reader, scan fold and the test kit for writing harness adapters.",
+  "homepage": "https://loadsheet.dev",
+  "license": "MIT",
+  "author": "onmax",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/loadsheet/loadsheet.git",
+    "directory": "packages/kit"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsdown",
+    "prepack": "pnpm --filter @loadsheet/kit... build"
+  },
+  "dependencies": {
+    "@loadsheet/schema": "workspace:*"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

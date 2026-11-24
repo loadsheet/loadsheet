@@ -1,0 +1,31 @@
+{
+  "name": "loadsheet-workspace",
+  "private": true,
+  "description": "loadsheet reads coding agents' session transcripts locally and reports which skills, instruction files and MCP servers cost context without being used.",
+  "homepage": "https://loadsheet.dev",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/loadsheet/loadsheet.git"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "vp run packages:build",
+    "lint": "vp lint",
+    "fmt": "vp fmt",
+    "typecheck": "tsrs --noEmit",
+    "test": "vp test",
+    "check": "vp check && pnpm typecheck",
+    "ready": "vp fmt && pnpm build && pnpm check && pnpm test",
+    "prepare": "vp config"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "publint": "catalog:",
+    "tsdown": "catalog:",
+    "tsrs": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "packageManager": "pnpm@12.16.1"
+}
