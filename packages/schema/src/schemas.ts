@@ -461,7 +461,10 @@ const LineSchema = v.pipe(
         "Its file or folder, relative to the home directory or the project; absent when it is no longer installed on any machine read.",
       ),
     ),
-    chars: describe(CharsSchema, "Its size in characters."),
+    chars: describe(
+      CharsSchema,
+      "Its size in characters; body is 0 when it is no longer installed, because nothing is left to measure.",
+    ),
     tokens: describe(TokensSchema, "What it adds to every session's context."),
     exposure: v.pipe(
       v.looseObject({

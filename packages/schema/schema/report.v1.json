@@ -506,7 +506,7 @@
                     }
                   },
                   "required": ["listed", "body"],
-                  "description": "Its size in characters."
+                  "description": "Its size in characters; body is 0 when it is no longer installed, because nothing is left to measure."
                 },
                 "tokens": {
                   "type": "object",

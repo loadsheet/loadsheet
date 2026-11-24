@@ -287,7 +287,7 @@ export interface Line {
   machines: string[];
   /** Its file or folder, relative to the home directory or the project; absent when it is no longer installed on any machine read. */
   path?: string;
-  /** Its size in characters. */
+  /** Its size in characters; body is 0 when it is no longer installed, because nothing is left to measure. */
   chars: Chars;
   /** What it adds to every session's context. */
   tokens: Tokens;
