@@ -85,6 +85,7 @@ const unfilteredOf = (
   const byMachine = new Map(scans.map((scan) => [scan.machine, scan]));
   return {
     wholeFleet,
+    machines: scans.map((scan) => scan.machine),
     usedBy: (item) => [...(users.get(item) ?? [])].sort(compare),
     tellsUse: (machine, harness) => tells.has(JSON.stringify([machine, harness])),
     items: (machine) =>
@@ -266,7 +267,8 @@ export const buildReport = ({
     .map((harness) => buildSheet(harness, scans, keep));
 
   const reportMode = mode ?? (names.length > 1 ? "fleet" : "local");
-  const wholeFleet = reportMode === "fleet" && machines.every((machine) => machine.reachable);
+  // Every machine the report names has a Scan: one listed without, reachable or not, is unknown.
+  const wholeFleet = reportMode === "fleet" && machines.length === 0;
   const { findings, skipped } = runRules({
     mode: reportMode,
     sheets: built.map(({ rules }) => rules),

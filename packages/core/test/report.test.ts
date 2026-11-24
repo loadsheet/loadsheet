@@ -928,6 +928,17 @@ describe("fixes", () => {
     expect(fixesOf([laptop], [{ name: "mini", reachable: false, error: "timed out" }])).toEqual(
       hidden,
     );
+    // A machine listed as reachable with no Scan: its use is unknown too.
+    expect(fixesOf([laptop, scan("server")], [{ name: "mini", reachable: true }])).toEqual(hidden);
+    // The server's copy is loaded by Codex too, which cannot tell use there.
+    const blind = scan("server", {
+      coverage: [
+        coverage("server", "claude-code"),
+        coverage("server", "codex", { signals: { ...EXACT, modelUse: "none" } }),
+      ],
+      items: [{ ...linked, harnesses: ["claude-code", "codex"] }],
+    });
+    expect(fixesOf([laptop, blind])).toEqual([...hidden, { ...hidden[0]!, machine: "server" }]);
     // Codex on the server used it, which the sheet of the harnesses read does not show.
     const server = scan("server", {
       coverage: [coverage("server", "codex")],

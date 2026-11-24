@@ -200,11 +200,21 @@ const removeOne = (
     // `fleetrc remove` adds the skill to its source's `exclude` in the manifest and syncs, which
     // unlinks it from every agent; other machines follow at their next sync, after a commit and
     // push when the manifest lives in a repository. So only a fleet Report that read every machine
-    // and found no use of the skill anywhere gives it; otherwise it is hidden or turned off here.
-    // It takes a name that matches a source id as that whole source, so a skill named like a
-    // source any machine links from gets no command.
+    // and found no use of the skill anywhere, where every harness that loads a copy of it can tell
+    // use, gives it; otherwise it is hidden or turned off here. It takes a name that matches a
+    // source id as that whole source, so a skill named like a source any machine links from gets
+    // no command.
     case "fleetrc": {
-      if (!unfiltered.wholeFleet || usedBy.length) return hide();
+      const blind = unfiltered.machines.some((other) =>
+        unfiltered
+          .items(other)
+          .some(
+            (copy) =>
+              copy.id === item.id &&
+              copy.harnesses.some((harness) => !unfiltered.tellsUse(other, harness)),
+          ),
+      );
+      if (!unfiltered.wholeFleet || usedBy.length || blind) return hide();
       const key = fleetrcKey(baseName(item.path));
       const source = unfiltered
         .items()

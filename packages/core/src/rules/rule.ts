@@ -44,6 +44,8 @@ export interface RuleSheet {
 export interface Unfiltered {
   /** Whether the Report is in fleet mode and read every machine it names. */
   wholeFleet: boolean;
+  /** The machines that have a Scan. */
+  machines: string[];
   /** The harnesses, on any machine and through any entrypoint, whose model or user invoked the item. */
   usedBy: (item: Id) => string[];
   /** Whether a harness on a machine can tell use: the machine covers it and grades modelUse and userUse above none. */
@@ -57,6 +59,7 @@ export interface Unfiltered {
 /** What a pack, read without Scans, holds. */
 export const NOTHING_UNFILTERED: Unfiltered = {
   wholeFleet: false,
+  machines: [],
   usedBy: () => [],
   tellsUse: () => false,
   items: () => [],
