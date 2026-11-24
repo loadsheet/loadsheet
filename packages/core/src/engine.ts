@@ -1,7 +1,7 @@
 import type {
   Finding,
   Grade,
-  Line,
+  Id,
   ResolvedConfig,
   RuleId,
   Signal,
@@ -9,7 +9,7 @@ import type {
 } from "@loadsheet/schema";
 import { RULES } from "@loadsheet/schema";
 import { pendingRules, rules } from "./rules/index.ts";
-import type { RuleContext } from "./rules/rule.ts";
+import type { Rule, RuleContext, RuleSheet } from "./rules/rule.ts";
 
 /** Every signal graded none: what a pack, read without transcripts, can tell. */
 export const NO_SIGNALS: Record<Signal, Grade> = {
@@ -21,38 +21,61 @@ export const NO_SIGNALS: Record<Signal, Grade> = {
   tokens: "none",
 };
 
-/** Input for one harness's run of the rules. */
+/** Input for one run of the rules over a Report's sheets. */
 export interface RuleInput {
   mode: RuleContext["mode"];
-  harness: string;
-  lines: Line[];
-  signals: Record<Signal, Grade>;
+  /** Every sheet, ignored items included; the engine leaves those out of what rules see. */
+  sheets: RuleSheet[];
   config: ResolvedConfig;
 }
 
 /**
- * Runs every enabled rule on one harness's sheet. A rule that needs a signal graded none is skipped
- * as missing-signal; a disabled rule, or one not written yet whose signals are all there, is left out.
+ * Runs every enabled rule once over the sheets that can answer it. A sheet whose harness grades a
+ * needed signal none is skipped as missing-signal, one with too little history as not-enough-data;
+ * a disabled rule, or one not written yet whose signals are all there, is left out. An item with a
+ * cut finding keeps no fix-level finding.
  */
-export const runRules = ({ mode, harness, lines, signals, config }: RuleInput) => {
+export const runRules = ({ mode, sheets, config }: RuleInput) => {
   const findings: Finding[] = [];
   const skipped: Skipped[] = [];
   const ignored = new Set(config.ignore);
-  const visible = lines.filter((line) => !ignored.has(line.item));
+  const visible = sheets.map((sheet) => ({
+    ...sheet,
+    lines: sheet.lines.filter((line) => !ignored.has(line.item)),
+  }));
+  const users = new Map<Id, string[]>();
+  for (const sheet of sheets) {
+    for (const line of sheet.lines) {
+      if (line.use.byModel + line.use.byUser === 0) continue;
+      users.set(line.item, [...(users.get(line.item) ?? []), sheet.harness]);
+    }
+  }
+  const usedBy = (item: Id) => users.get(item) ?? [];
   const byId = new Map(rules.map((rule) => [rule.id, rule]));
   for (const id of RULES as readonly RuleId[]) {
     if (!config.rules[id].enabled) continue;
-    const rule = byId.get(id);
+    const rule = byId.get(id) as Rule | undefined;
     const needs = rule?.needs ?? pendingRules[id] ?? [];
-    const missing = needs.filter((signal) => signals[signal] === "none");
-    if (missing.length) {
-      skipped.push({ rule: id, harness, reason: "missing-signal", missing });
-      continue;
+    const options = config.rules[id];
+    const ready: RuleSheet[] = [];
+    for (const sheet of visible) {
+      const missing = needs.filter((signal) => sheet.signals[signal] === "none");
+      if (missing.length) {
+        skipped.push({ rule: id, harness: sheet.harness, reason: "missing-signal", missing });
+      } else if (rule?.enough && !rule.enough(sheet, options)) {
+        skipped.push({ rule: id, harness: sheet.harness, reason: "not-enough-data" });
+      } else ready.push(sheet);
     }
-    if (!rule) continue;
-    findings.push(
-      ...rule.run({ mode, harness, lines: visible, signals, options: config.rules[id], config }),
-    );
+    if (!rule || !ready.length) continue;
+    findings.push(...rule.run({ mode, sheets: ready, options, config, usedBy }));
   }
-  return { findings, skipped };
+  const cut = new Set(
+    findings.filter((finding) => finding.level === "cut").map((finding) => finding.item),
+  );
+  return {
+    findings: findings.filter(
+      (finding) => finding.level !== "fix" || finding.item === undefined || !cut.has(finding.item),
+    ),
+    skipped,
+  };
 };
