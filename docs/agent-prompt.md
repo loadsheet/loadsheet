@@ -31,7 +31,8 @@ Change nothing until I accept a fix.
        key of the `env` object.
      - `config.toml` (TOML): `skills.config[path="~/x/SKILL.md"].enabled` is `enabled` in the
        `[[skills.config]]` entry whose `path` is exactly that value. Add the entry, with that
-       `path`, when there is none.
+       `path`, when there is none. The last entry that matches a skill wins, so put it after
+       every other `[[skills.config]]` entry.
      - `agents/openai.yaml` (YAML): `policy.allow_implicit_invocation` is
        `allow_implicit_invocation` under `policy`.
      - `SKILL.md`: `disable-model-invocation` goes in the YAML frontmatter between the `---`
@@ -45,7 +46,8 @@ Change nothing until I accept a fix.
      `config.rules`). Show me the new text and wait for my approval. First find the item's line
      in `sheet[].lines` (same `item`): if its `managedBy` is not `hand`, the file belongs to an
      installer or plugin (`pack` names it) and my edit would be overwritten; say so and suggest
-     raising it with its author instead.
+     raising it with its author instead. Not in a pack's Report (`mode` is `pack`): there the
+     files are the pack's own source, so edit them.
    - `remove` with no `run`: ask me how to remove it; never guess a command.
    - `dedupe`: the same item is installed more than once; remove the copy at `path` with its
      `run` command, or ask me how when there is none.
