@@ -311,6 +311,9 @@ importers:
       '@loadsheet/core':
         specifier: workspace:*
         version: link:../core
+      '@loadsheet/fleet':
+        specifier: workspace:*
+        version: link:../fleet
       '@loadsheet/harnesses':
         specifier: workspace:*
         version: link:../harnesses
