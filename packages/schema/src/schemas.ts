@@ -85,6 +85,7 @@ const windowOf = (text: string) =>
 const SEP = String.raw`(?:/(?:\.{1,2}(?=/))?)+`;
 const HOME = String.raw`(?:${SEP}(?:home|Users|var${SEP}home)${SEP}|${SEP}root(?:/|$)|[A-Za-z]:[\\/])`;
 const NOT_HOME = new RegExp(`^(?!${HOME})`);
+const RULE_SLUG = "[a-z][a-z0-9-]*";
 const relativePath = (text: string) =>
   v.pipe(
     v.string(),
@@ -95,7 +96,10 @@ const relativePath = (text: string) =>
 const ruleId = (text: string) =>
   v.pipe(
     v.string(),
-    v.regex(/^[a-z][a-z0-9-]*$/, "must be a rule id: lowercase letters, digits and hyphens"),
+    v.regex(
+      new RegExp(`^${RULE_SLUG}$`),
+      "must be a rule id: lowercase letters, digits and hyphens",
+    ),
     v.description(text),
   );
 const name = (text: string) =>
@@ -522,7 +526,7 @@ const LineSchema = v.pipe(
         "What installed it; absent when it is no longer installed on any machine read.",
       ),
     ),
-    machines: strings("Machines where it is installed or was seen."),
+    machines: strings("Machines where it is installed or was seen; empty in pack mode."),
     path: v.optional(
       relativePath(
         "Its file or folder, relative to the home directory or the project; absent when it is no longer installed on any machine read.",
@@ -619,7 +623,14 @@ const FixSchema = v.pipe(
 
 const FindingSchema = v.pipe(
   v.looseObject({
-    id: nonEmpty("A stable id, `${rule}:${item ?? pack ?? harness}`."),
+    id: v.pipe(
+      v.string(),
+      v.regex(
+        new RegExp(String.raw`^${RULE_SLUG}:(?!(?:(?:${KINDS.join("|")}):)?${HOME})[\s\S]+`),
+        "must be rule:target, where the target is not an absolute home path",
+      ),
+      v.description("A stable id, `${rule}:${item ?? pack ?? harness}`."),
+    ),
     rule: ruleId("The rule that found it: a RuleId, or the id of a rule a newer loadsheet added."),
     level: describe(LevelSchema, "How strongly it asks for action."),
     item: v.optional(
@@ -705,6 +716,46 @@ const reportSchema = v.pipe(
       "a line carries a description only in pack mode",
     ),
     ["sheet"],
+  ),
+  v.forward(
+    v.check(
+      (report) => report.mode !== "pack" || report.machines.length === 0,
+      "a pack report does not name machines",
+    ),
+    ["machines"],
+  ),
+  v.forward(
+    v.check(
+      (report) => report.mode !== "pack" || report.coverage.length === 0,
+      "a pack report does not carry machine coverage",
+    ),
+    ["coverage"],
+  ),
+  v.forward(
+    v.check(
+      (report) =>
+        report.mode !== "pack" ||
+        report.sheet.every((sheet) => sheet.lines.every((line) => line.machines.length === 0)),
+      "a pack line does not name machines",
+    ),
+    ["sheet"],
+  ),
+  v.forward(
+    v.check(
+      (report) =>
+        report.mode !== "pack" || report.findings.every((finding) => finding.where.length === 0),
+      "a pack finding does not name machines in where",
+    ),
+    ["findings"],
+  ),
+  v.forward(
+    v.check(
+      (report) =>
+        report.mode !== "pack" ||
+        report.findings.every((finding) => finding.fixes.every((fix) => fix.machine === undefined)),
+      "a pack fix does not name a machine",
+    ),
+    ["findings"],
   ),
   v.forward(
     v.check(
