@@ -1,0 +1,902 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://loadsheet.dev/schema/v1.json",
+  "title": "loadsheet Report",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": 1,
+      "description": "The schema version, 1."
+    },
+    "tool": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The tool and version that wrote it, such as loadsheet@0.0.1."
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When it was generated, as an ISO 8601 timestamp."
+    },
+    "mode": {
+      "enum": ["local", "fleet", "pack"],
+      "type": "string",
+      "description": "local: this machine; fleet: several machines; pack: a public pack, without usage."
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
+      "description": "In pack mode, the directory name or GitHub URL read."
+    },
+    "machines": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The machine's name."
+          },
+          "reachable": {
+            "type": "boolean",
+            "description": "Whether its Scan was read."
+          },
+          "scannedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was scanned."
+          },
+          "error": {
+            "type": "string",
+            "description": "Why it could not be read."
+          }
+        },
+        "required": ["name", "reachable"],
+        "description": "A machine a Report read from."
+      },
+      "description": "The machines read; empty in pack mode."
+    },
+    "window": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string",
+          "format": "date",
+          "description": "A UTC calendar day, written YYYY-MM-DD."
+        },
+        {
+          "type": "string",
+          "format": "date",
+          "description": "A UTC calendar day, written YYYY-MM-DD."
+        }
+      ],
+      "minItems": 2,
+      "additionalItems": false,
+      "description": "The first and last day it covers, inclusive."
+    },
+    "config": {
+      "type": "object",
+      "properties": {
+        "window": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Days of history read."
+        },
+        "harnesses": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "description": "Only these harness ids were read, when set."
+        },
+        "via": {
+          "type": "object",
+          "properties": {
+            "include": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^(?=.{1,128}$)[^\\s<>\"'\\x60/\\\\\\x00-\\x1f\\x7f-\\x9f\\xad\\u061c\\u180e\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u206f\\ufeff\\ufff9-\\ufffb]+(?: [^\\s<>\"'\\x60/\\\\\\x00-\\x1f\\x7f-\\x9f\\xad\\u061c\\u180e\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u206f\\ufeff\\ufff9-\\ufffb]+)*$"
+              },
+              "description": "Only sessions from these entrypoints were read, when not empty."
+            },
+            "exclude": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^(?=.{1,128}$)[^\\s<>\"'\\x60/\\\\\\x00-\\x1f\\x7f-\\x9f\\xad\\u061c\\u180e\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u206f\\ufeff\\ufff9-\\ufffb]+(?: [^\\s<>\"'\\x60/\\\\\\x00-\\x1f\\x7f-\\x9f\\xad\\u061c\\u180e\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u206f\\ufeff\\ufff9-\\ufffb]+)*$"
+              },
+              "description": "Sessions from these entrypoints were skipped."
+            }
+          },
+          "required": ["include", "exclude"],
+          "description": "The entrypoint filter."
+        },
+        "ignore": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(skill|instructions|mcp|subagent):(?!\\s*(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
+            "description": "A piece of context's id, `${kind}:${name}`."
+          },
+          "description": "Item ids never reported."
+        },
+        "rules": {
+          "type": "object",
+          "properties": {
+            "invisible-skill": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Whether the rule runs."
+                },
+                "minSessions": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Least sessions that listed it, default 5."
+                },
+                "bareShare": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Least share of those that listed it bare, default 0.5."
+                }
+              },
+              "required": ["enabled", "minSessions", "bareShare"],
+              "description": "A skill listed without its description in most sessions."
+            },
+            "dead-skill": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Whether the rule runs."
+                },
+                "minSessions": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Least sessions that listed it, default 20."
+                },
+                "minDays": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Least days of history, default 14."
+                }
+              },
+              "required": ["enabled", "minSessions", "minDays"],
+              "description": "A skill listed for weeks and never invoked."
+            },
+            "manual-only": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Whether the rule runs."
+                },
+                "minUserUses": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Least user invocations, default 3."
+                }
+              },
+              "required": ["enabled", "minUserUses"],
+              "description": "A model-invocable skill only the user invokes."
+            },
+            "expensive-description": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Whether the rule runs."
+                },
+                "maxChars": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Most listed characters, default 300."
+                }
+              },
+              "required": ["enabled", "maxChars"],
+              "description": "A skill whose listing entry is longer than it should be."
+            },
+            "dead-pack": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Whether the rule runs."
+                },
+                "minSkills": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Least skills in the pack, default 5."
+                }
+              },
+              "required": ["enabled", "minSkills"],
+              "description": "A pack none of whose skills is used."
+            },
+            "duplicate": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Whether the rule runs."
+                }
+              },
+              "required": ["enabled"],
+              "description": "The same piece of context installed more than once."
+            },
+            "heavy-instructions": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Whether the rule runs."
+                },
+                "maxChars": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Most characters, default 12000."
+                }
+              },
+              "required": ["enabled", "maxChars"],
+              "description": "An instruction file larger than it should be."
+            },
+            "idle-mcp": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Whether the rule runs."
+                },
+                "minSessions": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Least sessions that listed it, default 20."
+                }
+              },
+              "required": ["enabled", "minSessions"],
+              "description": "An MCP server listed and never called."
+            },
+            "harness-mismatch": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Whether the rule runs."
+                },
+                "minSessions": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "A harness with fewer sessions in the window counts as unused, default 1."
+                }
+              },
+              "required": ["enabled", "minSessions"],
+              "description": "Context installed for a harness that is not used."
+            },
+            "drift": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Whether the rule runs."
+                }
+              },
+              "required": ["enabled"],
+              "description": "The same piece of context differs between machines."
+            },
+            "short-history": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Whether the rule runs."
+                },
+                "minDays": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Least days of history, default 30."
+                }
+              },
+              "required": ["enabled", "minDays"],
+              "description": "Too little history to judge."
+            }
+          },
+          "required": [
+            "invisible-skill",
+            "dead-skill",
+            "manual-only",
+            "expensive-description",
+            "dead-pack",
+            "duplicate",
+            "heavy-instructions",
+            "idle-mcp",
+            "harness-mismatch",
+            "drift",
+            "short-history"
+          ],
+          "description": "Each rule, whether it runs, and its thresholds."
+        }
+      },
+      "required": ["window", "via", "ignore", "rules"],
+      "description": "The config it ran with."
+    },
+    "coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "machine": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The machine's name."
+          },
+          "harness": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The harness id."
+          },
+          "installed": {
+            "type": "boolean",
+            "description": "Whether the harness's home exists on that machine."
+          },
+          "sessions": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Sessions found in the window."
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Harness versions seen in those sessions."
+          },
+          "firstDay": {
+            "type": "string",
+            "format": "date",
+            "description": "The first day with a session."
+          },
+          "lastDay": {
+            "type": "string",
+            "format": "date",
+            "description": "The last day with a session."
+          },
+          "signals": {
+            "type": "object",
+            "properties": {
+              "listing": {
+                "enum": ["exact", "inferred", "none"],
+                "type": "string",
+                "description": "How well a harness provides a signal: read directly, inferred from indirect evidence, or not at all."
+              },
+              "modelUse": {
+                "enum": ["exact", "inferred", "none"],
+                "type": "string",
+                "description": "How well a harness provides a signal: read directly, inferred from indirect evidence, or not at all."
+              },
+              "userUse": {
+                "enum": ["exact", "inferred", "none"],
+                "type": "string",
+                "description": "How well a harness provides a signal: read directly, inferred from indirect evidence, or not at all."
+              },
+              "instructions": {
+                "enum": ["exact", "inferred", "none"],
+                "type": "string",
+                "description": "How well a harness provides a signal: read directly, inferred from indirect evidence, or not at all."
+              },
+              "mcp": {
+                "enum": ["exact", "inferred", "none"],
+                "type": "string",
+                "description": "How well a harness provides a signal: read directly, inferred from indirect evidence, or not at all."
+              },
+              "tokens": {
+                "enum": ["exact", "inferred", "none"],
+                "type": "string",
+                "description": "How well a harness provides a signal: read directly, inferred from indirect evidence, or not at all."
+              }
+            },
+            "required": ["listing", "modelUse", "userUse", "instructions", "mcp", "tokens"],
+            "description": "How well each signal is provided."
+          }
+        },
+        "required": ["machine", "harness", "installed", "sessions", "versions", "signals"],
+        "description": "What one harness on one machine could tell."
+      },
+      "description": "What each harness on each machine could tell; empty in pack mode."
+    },
+    "sheet": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "harness": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The harness id."
+          },
+          "sessions": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Its sessions in the window, over all machines."
+          },
+          "fixedTokens": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "The number of tokens."
+              },
+              "basis": {
+                "enum": ["measured", "estimated"],
+                "type": "string",
+                "description": "measured: from usage a harness reported; estimated: from a character count."
+              }
+            },
+            "required": ["value", "basis"],
+            "description": "Tokens every session starts with, averaged over the sessions that reported them; absent when none did."
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "item": {
+                  "type": "string",
+                  "pattern": "^(skill|instructions|mcp|subagent):(?!\\s*(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
+                  "description": "Its id."
+                },
+                "ref": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "enum": ["skill", "instructions", "mcp", "subagent"],
+                      "type": "string",
+                      "description": "What the piece of context is."
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^(?!(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
+                      "description": "Its name, unique within its kind."
+                    }
+                  },
+                  "required": ["kind", "name"],
+                  "description": "Its kind and name."
+                },
+                "scope": {
+                  "enum": ["user", "project", "plugin"],
+                  "type": "string",
+                  "description": "Where it is installed; absent when it is no longer installed on any machine read."
+                },
+                "pack": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^(?!(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
+                  "description": "Where it came from."
+                },
+                "managedBy": {
+                  "enum": ["fleetrc", "skills", "plugin", "hand"],
+                  "type": "string",
+                  "description": "What installed it; absent when it is no longer installed on any machine read."
+                },
+                "machines": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Machines where it is installed or was seen; empty in pack mode."
+                },
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^(?!(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
+                  "description": "Its file or folder, relative to the home directory or the project; absent when it is no longer installed on any machine read."
+                },
+                "chars": {
+                  "type": "object",
+                  "properties": {
+                    "listed": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Characters it puts in the context of every session that lists or loads it: a skill's or subagent's name and description, an instruction file's whole text, an MCP server's instructions."
+                    },
+                    "body": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Characters loaded only when it is invoked: the rest of a skill's or subagent's file; 0 for instruction files and MCP servers."
+                    }
+                  },
+                  "required": ["listed", "body"],
+                  "description": "Its size in characters; body is 0 when it is no longer installed, because nothing is left to measure."
+                },
+                "tokens": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "The number of tokens."
+                    },
+                    "basis": {
+                      "enum": ["measured", "estimated"],
+                      "type": "string",
+                      "description": "measured: from usage a harness reported; estimated: from a character count."
+                    }
+                  },
+                  "required": ["value", "basis"],
+                  "description": "What it adds to every session's context."
+                },
+                "exposure": {
+                  "type": "object",
+                  "properties": {
+                    "sessions": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Sessions that listed or loaded it."
+                    },
+                    "share": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1,
+                      "description": "Those sessions as a share, 0 to 1, of the harness's sessions."
+                    },
+                    "bare": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Of those sessions, how many listed it without its description."
+                    }
+                  },
+                  "required": ["sessions", "share", "bare"],
+                  "description": "How many sessions it was in."
+                },
+                "use": {
+                  "type": "object",
+                  "properties": {
+                    "byModel": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Times the model invoked it."
+                    },
+                    "byUser": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Times the user invoked it."
+                    },
+                    "lastUsed": {
+                      "type": "string",
+                      "format": "date",
+                      "description": "The start day of the last session that invoked it."
+                    }
+                  },
+                  "required": ["byModel", "byUser"],
+                  "description": "How often it was invoked."
+                },
+                "description": {
+                  "type": "string",
+                  "description": "Its description, in pack mode only."
+                }
+              },
+              "required": ["item", "ref", "machines", "chars", "tokens", "exposure", "use"],
+              "description": "One piece of context on a harness's sheet, aggregated over machines."
+            },
+            "description": "One line per piece of context."
+          }
+        },
+        "required": ["harness", "sessions", "lines"],
+        "description": "What one harness loads, line by line."
+      },
+      "description": "One sheet per harness, aggregated over machines."
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*:(?!(?:(?:skill|instructions|mcp|subagent):)?(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))[\\s\\S]+",
+            "description": "A stable id, `${rule}:${item ?? pack ?? harness}`."
+          },
+          "rule": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$",
+            "description": "The rule that found it: a RuleId, or the id of a rule a newer loadsheet added."
+          },
+          "level": {
+            "enum": ["cut", "fix", "info"],
+            "type": "string",
+            "description": "How strongly it asks for action."
+          },
+          "item": {
+            "type": "string",
+            "pattern": "^(skill|instructions|mcp|subagent):(?!\\s*(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
+            "description": "The item it is about; absent for pack-level and harness-level findings such as dead-pack and short-history."
+          },
+          "pack": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
+            "description": "The pack it is about, for dead-pack."
+          },
+          "where": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "machine": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The machine's name."
+                },
+                "harness": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The harness id."
+                }
+              },
+              "required": ["machine", "harness"],
+              "description": "A machine and harness."
+            },
+            "description": "Where it applies; empty in pack mode."
+          },
+          "evidence": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "The numbers the rule judged on."
+          },
+          "savesTokens": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "The number of tokens."
+              },
+              "basis": {
+                "enum": ["measured", "estimated"],
+                "type": "string",
+                "description": "measured: from usage a harness reported; estimated: from a character count."
+              }
+            },
+            "required": ["value", "basis"],
+            "description": "Tokens it would save per session."
+          },
+          "fixes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "machine": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The machine to change; absent in pack mode, where the change goes to the pack's source."
+                },
+                "action": {
+                  "enum": ["remove", "hide-from-model", "shorten", "dedupe", "set"],
+                  "type": "string",
+                  "description": "What to do."
+                },
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^(?!(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
+                  "description": "The file or folder to change, relative to the home directory or the project."
+                },
+                "run": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The exact command, when one exists."
+                },
+                "set": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The key to set."
+                    },
+                    "value": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ],
+                      "description": "The value to set it to."
+                    }
+                  },
+                  "required": ["key", "value"],
+                  "description": "The key and value to set, for set and hide-from-model."
+                }
+              },
+              "required": ["action", "path"],
+              "description": "One change the user's agent should make.",
+              "anyOf": [
+                {
+                  "not": {
+                    "properties": {
+                      "action": {
+                        "enum": ["set", "hide-from-model"]
+                      }
+                    }
+                  }
+                },
+                {
+                  "required": ["set"]
+                },
+                {
+                  "required": ["run"]
+                }
+              ]
+            },
+            "description": "Changes that resolve it."
+          }
+        },
+        "required": ["id", "rule", "level", "where", "evidence", "fixes"],
+        "description": "Something a rule found."
+      },
+      "description": "What the rules found."
+    },
+    "skipped": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "rule": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$",
+            "description": "The rule: a RuleId, or the id of a rule a newer loadsheet added."
+          },
+          "harness": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The harness id."
+          },
+          "reason": {
+            "enum": ["missing-signal", "not-enough-data"],
+            "type": "string",
+            "description": "missing-signal: the harness does not provide a signal the rule needs; not-enough-data: too few sessions."
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "enum": ["listing", "modelUse", "userUse", "instructions", "mcp", "tokens"],
+              "type": "string",
+              "description": "A kind of evidence a harness's transcripts can provide."
+            },
+            "description": "The signals it needs and the harness does not provide."
+          }
+        },
+        "required": ["rule", "harness", "reason"],
+        "description": "A rule that did not run on a harness, and why."
+      },
+      "description": "Rules that did not run, per harness."
+    }
+  },
+  "required": [
+    "schema",
+    "tool",
+    "generatedAt",
+    "mode",
+    "machines",
+    "window",
+    "config",
+    "coverage",
+    "sheet",
+    "findings",
+    "skipped"
+  ],
+  "description": "What loadsheet found: one sheet per harness and the findings, with no text.",
+  "if": {
+    "properties": {
+      "mode": {
+        "const": "pack"
+      }
+    },
+    "required": ["mode"]
+  },
+  "then": {
+    "properties": {
+      "machines": {
+        "type": "array",
+        "maxItems": 0
+      },
+      "coverage": {
+        "type": "array",
+        "maxItems": 0
+      },
+      "sheet": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "lines": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "machines": {
+                    "type": "array",
+                    "maxItems": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "findings": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "where": {
+              "type": "array",
+              "maxItems": 0
+            },
+            "fixes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "machine": false
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "else": {
+    "properties": {
+      "sheet": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "lines": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "description": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "findings": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "fixes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["machine"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

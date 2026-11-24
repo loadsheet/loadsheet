@@ -1,0 +1,17 @@
+{
+  "$schema": "https://loadsheet.dev/schema/config.v1.json",
+  "window": 45,
+  "via": {
+    "exclude": ["t3code"]
+  },
+  "ignore": ["mcp:linear"],
+  "rules": {
+    "dead-skill": {
+      "minSessions": 40
+    },
+    "expensive-description": {
+      "maxChars": 400
+    },
+    "short-history": false
+  }
+}

@@ -1,0 +1,1172 @@
+{
+  "$schema": "https://loadsheet.dev/schema/scan.v1.json",
+  "schema": 1,
+  "tool": "loadsheet@0.0.1",
+  "machine": "laptop",
+  "scannedAt": "2026-11-24T09:14:03.551Z",
+  "window": ["2026-11-21", "2026-11-23"],
+  "coverage": [
+    {
+      "machine": "laptop",
+      "harness": "claude-code",
+      "installed": true,
+      "sessions": 29,
+      "versions": ["2.4.1", "2.4.3"],
+      "firstDay": "2026-11-21",
+      "lastDay": "2026-11-23",
+      "signals": {
+        "listing": "exact",
+        "modelUse": "exact",
+        "userUse": "exact",
+        "instructions": "exact",
+        "mcp": "exact",
+        "tokens": "exact"
+      }
+    },
+    {
+      "machine": "laptop",
+      "harness": "codex",
+      "installed": true,
+      "sessions": 25,
+      "versions": ["0.71.0", "0.72.2"],
+      "firstDay": "2026-11-21",
+      "lastDay": "2026-11-23",
+      "signals": {
+        "listing": "exact",
+        "modelUse": "inferred",
+        "userUse": "none",
+        "instructions": "exact",
+        "mcp": "exact",
+        "tokens": "exact"
+      }
+    }
+  ],
+  "items": [
+    {
+      "id": "instructions:CLAUDE.md",
+      "ref": {
+        "kind": "instructions",
+        "name": "CLAUDE.md"
+      },
+      "harnesses": ["claude-code"],
+      "scope": "user",
+      "managedBy": "hand",
+      "path": "~/.claude/CLAUDE.md",
+      "digest": "c5c96dcf191ec38c6f7be105b148e86c88fd8cdcd050c5a773f11a4d142245cf",
+      "chars": {
+        "listed": 5420,
+        "body": 0
+      },
+      "modelInvocable": true
+    },
+    {
+      "id": "instructions:monorepo/CLAUDE.md",
+      "ref": {
+        "kind": "instructions",
+        "name": "monorepo/CLAUDE.md"
+      },
+      "harnesses": ["claude-code"],
+      "scope": "project",
+      "managedBy": "hand",
+      "path": "~/work/monorepo/CLAUDE.md",
+      "digest": "4dec6bc32cb6430a81eaf3751355765b12cd07c1a14dc55d3931977e15c5f040",
+      "chars": {
+        "listed": 18460,
+        "body": 0
+      },
+      "modelInvocable": true
+    },
+    {
+      "id": "skill:commit-style",
+      "ref": {
+        "kind": "skill",
+        "name": "commit-style"
+      },
+      "harnesses": ["claude-code"],
+      "scope": "user",
+      "pack": "acme-labs/agent-skills",
+      "managedBy": "skills",
+      "path": "~/.claude/skills/commit-style",
+      "digest": "6efaaaba206489ffe33f78ad9df31dd7648de8aa2e04064020bc49a5b477df97",
+      "chars": {
+        "listed": 142,
+        "body": 1880
+      },
+      "modelInvocable": true
+    },
+    {
+      "id": "skill:k8s-debug",
+      "ref": {
+        "kind": "skill",
+        "name": "k8s-debug"
+      },
+      "harnesses": ["claude-code"],
+      "scope": "project",
+      "managedBy": "hand",
+      "path": "~/work/infra/.claude/skills/k8s-debug",
+      "digest": "6fcb482ecea4c993768dc06f674c2d862e406b863b50d671fa8914f2379147eb",
+      "chars": {
+        "listed": 236,
+        "body": 3900
+      },
+      "modelInvocable": true
+    },
+    {
+      "id": "skill:release-checklist",
+      "ref": {
+        "kind": "skill",
+        "name": "release-checklist"
+      },
+      "harnesses": ["claude-code"],
+      "scope": "user",
+      "managedBy": "hand",
+      "path": "~/.claude/skills/release-checklist",
+      "digest": "29ab2ded693c0cc5b81713e1f6e2d488fa1b940fc79d1e856971b3f68baa3d09",
+      "chars": {
+        "listed": 189,
+        "body": 2240
+      },
+      "modelInvocable": true
+    },
+    {
+      "id": "mcp:github",
+      "ref": {
+        "kind": "mcp",
+        "name": "github"
+      },
+      "harnesses": ["claude-code"],
+      "scope": "user",
+      "managedBy": "hand",
+      "path": "~/.claude.json",
+      "digest": "58b36b2e685caebac272a63057b4865eed213c6a804f1321d3d29f81b27b6868",
+      "chars": {
+        "listed": 6840,
+        "body": 0
+      },
+      "modelInvocable": true
+    },
+    {
+      "id": "mcp:linear",
+      "ref": {
+        "kind": "mcp",
+        "name": "linear"
+      },
+      "harnesses": ["claude-code"],
+      "scope": "user",
+      "managedBy": "hand",
+      "path": "~/.claude.json",
+      "digest": "2ecfaa2bdf38d16b14f56c580a3b01dfa1cf1bd69b1695c211b834dd67aa2c0c",
+      "chars": {
+        "listed": 4120,
+        "body": 0
+      },
+      "modelInvocable": true
+    },
+    {
+      "id": "subagent:code-reviewer",
+      "ref": {
+        "kind": "subagent",
+        "name": "code-reviewer"
+      },
+      "harnesses": ["claude-code"],
+      "scope": "user",
+      "managedBy": "fleetrc",
+      "path": "~/.claude/agents/code-reviewer.md",
+      "digest": "de99103beeab70e5696ff820b7e127c8d7ea227ffe4f35cbe070305ce14dd8a6",
+      "chars": {
+        "listed": 214,
+        "body": 3080
+      },
+      "modelInvocable": true
+    },
+    {
+      "id": "instructions:AGENTS.md",
+      "ref": {
+        "kind": "instructions",
+        "name": "AGENTS.md"
+      },
+      "harnesses": ["codex"],
+      "scope": "user",
+      "managedBy": "hand",
+      "path": "~/.codex/AGENTS.md",
+      "digest": "818da42c86b9f45e1754947ca6deada06de536e0b8d07850c12e5f9879f8ef42",
+      "chars": {
+        "listed": 4180,
+        "body": 0
+      },
+      "modelInvocable": true
+    },
+    {
+      "id": "skill:commit-style",
+      "ref": {
+        "kind": "skill",
+        "name": "commit-style"
+      },
+      "harnesses": ["codex"],
+      "scope": "user",
+      "pack": "acme-labs/agent-skills",
+      "managedBy": "skills",
+      "path": "~/.agents/skills/commit-style",
+      "digest": "a2ac61ae15722c2b2fac088ddc38ef3db1105faee0ec340d6043fc93e459b78e",
+      "chars": {
+        "listed": 142,
+        "body": 1880
+      },
+      "modelInvocable": true
+    },
+    {
+      "id": "skill:terraform-plan",
+      "ref": {
+        "kind": "skill",
+        "name": "terraform-plan"
+      },
+      "harnesses": ["codex"],
+      "scope": "project",
+      "managedBy": "hand",
+      "path": "~/work/infra/.agents/skills/terraform-plan",
+      "digest": "fb8e56c56c5267f2d218a2ef2726ca909038aa858b8a0a7d73543780fcd40566",
+      "chars": {
+        "listed": 226,
+        "body": 4410
+      },
+      "modelInvocable": true
+    },
+    {
+      "id": "mcp:sentry",
+      "ref": {
+        "kind": "mcp",
+        "name": "sentry"
+      },
+      "harnesses": ["codex"],
+      "scope": "user",
+      "managedBy": "hand",
+      "path": "~/.codex/config.toml",
+      "digest": "a25f5504e401e767c407567254590be91147ab0f4e4ddc86fdcb5ac71bde9b3b",
+      "chars": {
+        "listed": 3870,
+        "body": 0
+      },
+      "modelInvocable": true
+    },
+    {
+      "id": "subagent:explorer",
+      "ref": {
+        "kind": "subagent",
+        "name": "explorer"
+      },
+      "harnesses": ["codex"],
+      "scope": "user",
+      "managedBy": "hand",
+      "path": "~/.codex/agents/explorer.toml",
+      "digest": "a80ba3c69085e715ba1b5c83205c97f5d42c5ba36cc71db5728772447a15080a",
+      "chars": {
+        "listed": 164,
+        "body": 980
+      },
+      "modelInvocable": true
+    }
+  ],
+  "sessions": [
+    {
+      "day": "2026-11-21",
+      "harness": "claude-code",
+      "via": "cli",
+      "sessions": 9,
+      "fixedTokens": 149553,
+      "measured": 9
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "claude-code",
+      "via": "vscode",
+      "sessions": 1,
+      "fixedTokens": 16352,
+      "measured": 1
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "codex",
+      "via": "cli",
+      "sessions": 5,
+      "fixedTokens": 92915,
+      "measured": 5
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "codex",
+      "via": "t3code",
+      "sessions": 2,
+      "fixedTokens": 36560,
+      "measured": 2
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "claude-code",
+      "via": "cli",
+      "sessions": 8,
+      "fixedTokens": 146352,
+      "measured": 8
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "claude-code",
+      "via": "vscode",
+      "sessions": 4,
+      "fixedTokens": 75144,
+      "measured": 4
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "codex",
+      "via": "cli",
+      "sessions": 7,
+      "fixedTokens": 128464,
+      "measured": 7
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "codex",
+      "via": "t3code",
+      "sessions": 1,
+      "fixedTokens": 0,
+      "measured": 0
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "claude-code",
+      "via": "cli",
+      "sessions": 4,
+      "fixedTokens": 74948,
+      "measured": 4
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "claude-code",
+      "via": "vscode",
+      "sessions": 3,
+      "fixedTokens": 53823,
+      "measured": 3
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "codex",
+      "via": "cli",
+      "sessions": 6,
+      "fixedTokens": 108132,
+      "measured": 6
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "codex",
+      "via": "t3code",
+      "sessions": 4,
+      "fixedTokens": 48990,
+      "measured": 3
+    }
+  ],
+  "cells": [
+    {
+      "day": "2026-11-21",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "instructions:CLAUDE.md",
+      "sessions": 9,
+      "bare": 0,
+      "chars": 48780,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "instructions:monorepo/CLAUDE.md",
+      "sessions": 3,
+      "bare": 0,
+      "chars": 55380,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "skill:commit-style",
+      "sessions": 9,
+      "bare": 0,
+      "chars": 1278,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "skill:k8s-debug",
+      "sessions": 4,
+      "bare": 2,
+      "chars": 490,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "skill:release-checklist",
+      "sessions": 9,
+      "bare": 0,
+      "chars": 1701,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "mcp:github",
+      "sessions": 9,
+      "bare": 0,
+      "chars": 61560,
+      "byModel": 16,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "mcp:linear",
+      "sessions": 9,
+      "bare": 0,
+      "chars": 37080,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "subagent:code-reviewer",
+      "sessions": 9,
+      "bare": 0,
+      "chars": 1926,
+      "byModel": 3,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "claude-code",
+      "via": "vscode",
+      "item": "instructions:CLAUDE.md",
+      "sessions": 1,
+      "bare": 0,
+      "chars": 5420,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "claude-code",
+      "via": "vscode",
+      "item": "skill:commit-style",
+      "sessions": 1,
+      "bare": 0,
+      "chars": 142,
+      "byModel": 1,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "claude-code",
+      "via": "vscode",
+      "item": "skill:release-checklist",
+      "sessions": 1,
+      "bare": 0,
+      "chars": 189,
+      "byModel": 0,
+      "byUser": 2
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "claude-code",
+      "via": "vscode",
+      "item": "mcp:github",
+      "sessions": 1,
+      "bare": 0,
+      "chars": 6840,
+      "byModel": 3,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "claude-code",
+      "via": "vscode",
+      "item": "mcp:linear",
+      "sessions": 1,
+      "bare": 0,
+      "chars": 4120,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "claude-code",
+      "via": "vscode",
+      "item": "subagent:code-reviewer",
+      "sessions": 1,
+      "bare": 0,
+      "chars": 214,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "codex",
+      "via": "cli",
+      "item": "instructions:AGENTS.md",
+      "sessions": 5,
+      "bare": 0,
+      "chars": 20900,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "codex",
+      "via": "cli",
+      "item": "skill:commit-style",
+      "sessions": 5,
+      "bare": 0,
+      "chars": 710,
+      "byModel": 5,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "codex",
+      "via": "cli",
+      "item": "skill:terraform-plan",
+      "sessions": 2,
+      "bare": 1,
+      "chars": 240,
+      "byModel": 2,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "codex",
+      "via": "cli",
+      "item": "mcp:sentry",
+      "sessions": 5,
+      "bare": 0,
+      "chars": 19350,
+      "byModel": 12,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "codex",
+      "via": "cli",
+      "item": "subagent:explorer",
+      "sessions": 5,
+      "bare": 0,
+      "chars": 820,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "codex",
+      "via": "t3code",
+      "item": "instructions:AGENTS.md",
+      "sessions": 2,
+      "bare": 0,
+      "chars": 8360,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "codex",
+      "via": "t3code",
+      "item": "skill:commit-style",
+      "sessions": 2,
+      "bare": 0,
+      "chars": 284,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "codex",
+      "via": "t3code",
+      "item": "skill:terraform-plan",
+      "sessions": 1,
+      "bare": 1,
+      "chars": 14,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "codex",
+      "via": "t3code",
+      "item": "mcp:sentry",
+      "sessions": 2,
+      "bare": 0,
+      "chars": 7740,
+      "byModel": 4,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-21",
+      "harness": "codex",
+      "via": "t3code",
+      "item": "subagent:explorer",
+      "sessions": 2,
+      "bare": 0,
+      "chars": 328,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "instructions:CLAUDE.md",
+      "sessions": 8,
+      "bare": 0,
+      "chars": 43360,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "instructions:monorepo/CLAUDE.md",
+      "sessions": 1,
+      "bare": 0,
+      "chars": 18460,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "skill:commit-style",
+      "sessions": 8,
+      "bare": 0,
+      "chars": 1136,
+      "byModel": 1,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "skill:k8s-debug",
+      "sessions": 2,
+      "bare": 1,
+      "chars": 245,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "skill:release-checklist",
+      "sessions": 8,
+      "bare": 0,
+      "chars": 1512,
+      "byModel": 0,
+      "byUser": 2
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "mcp:github",
+      "sessions": 8,
+      "bare": 0,
+      "chars": 54720,
+      "byModel": 1,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "mcp:linear",
+      "sessions": 8,
+      "bare": 0,
+      "chars": 32960,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "subagent:code-reviewer",
+      "sessions": 8,
+      "bare": 0,
+      "chars": 1712,
+      "byModel": 3,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "claude-code",
+      "via": "vscode",
+      "item": "instructions:CLAUDE.md",
+      "sessions": 4,
+      "bare": 0,
+      "chars": 21680,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "claude-code",
+      "via": "vscode",
+      "item": "instructions:monorepo/CLAUDE.md",
+      "sessions": 2,
+      "bare": 0,
+      "chars": 36920,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "claude-code",
+      "via": "vscode",
+      "item": "skill:commit-style",
+      "sessions": 4,
+      "bare": 0,
+      "chars": 568,
+      "byModel": 3,
+      "byUser": 1
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "claude-code",
+      "via": "vscode",
+      "item": "skill:k8s-debug",
+      "sessions": 1,
+      "bare": 1,
+      "chars": 9,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "claude-code",
+      "via": "vscode",
+      "item": "skill:release-checklist",
+      "sessions": 4,
+      "bare": 0,
+      "chars": 756,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "claude-code",
+      "via": "vscode",
+      "item": "mcp:github",
+      "sessions": 4,
+      "bare": 0,
+      "chars": 27360,
+      "byModel": 12,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "claude-code",
+      "via": "vscode",
+      "item": "mcp:linear",
+      "sessions": 4,
+      "bare": 0,
+      "chars": 16480,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "claude-code",
+      "via": "vscode",
+      "item": "subagent:code-reviewer",
+      "sessions": 4,
+      "bare": 0,
+      "chars": 856,
+      "byModel": 1,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "codex",
+      "via": "cli",
+      "item": "instructions:AGENTS.md",
+      "sessions": 7,
+      "bare": 0,
+      "chars": 29260,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "codex",
+      "via": "cli",
+      "item": "skill:commit-style",
+      "sessions": 7,
+      "bare": 0,
+      "chars": 994,
+      "byModel": 4,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "codex",
+      "via": "cli",
+      "item": "skill:terraform-plan",
+      "sessions": 3,
+      "bare": 2,
+      "chars": 254,
+      "byModel": 3,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "codex",
+      "via": "cli",
+      "item": "mcp:sentry",
+      "sessions": 7,
+      "bare": 0,
+      "chars": 27090,
+      "byModel": 9,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "codex",
+      "via": "cli",
+      "item": "subagent:explorer",
+      "sessions": 7,
+      "bare": 0,
+      "chars": 1148,
+      "byModel": 1,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "codex",
+      "via": "t3code",
+      "item": "instructions:AGENTS.md",
+      "sessions": 1,
+      "bare": 0,
+      "chars": 4180,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "codex",
+      "via": "t3code",
+      "item": "skill:commit-style",
+      "sessions": 1,
+      "bare": 0,
+      "chars": 142,
+      "byModel": 1,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "codex",
+      "via": "t3code",
+      "item": "mcp:sentry",
+      "sessions": 1,
+      "bare": 0,
+      "chars": 3870,
+      "byModel": 3,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-22",
+      "harness": "codex",
+      "via": "t3code",
+      "item": "subagent:explorer",
+      "sessions": 1,
+      "bare": 0,
+      "chars": 164,
+      "byModel": 1,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "instructions:CLAUDE.md",
+      "sessions": 4,
+      "bare": 0,
+      "chars": 21680,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "skill:commit-style",
+      "sessions": 4,
+      "bare": 0,
+      "chars": 568,
+      "byModel": 4,
+      "byUser": 1
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "skill:k8s-debug",
+      "sessions": 1,
+      "bare": 1,
+      "chars": 9,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "skill:release-checklist",
+      "sessions": 4,
+      "bare": 0,
+      "chars": 756,
+      "byModel": 0,
+      "byUser": 1
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "mcp:github",
+      "sessions": 4,
+      "bare": 0,
+      "chars": 27360,
+      "byModel": 1,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "mcp:linear",
+      "sessions": 4,
+      "bare": 0,
+      "chars": 16480,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "claude-code",
+      "via": "cli",
+      "item": "subagent:code-reviewer",
+      "sessions": 4,
+      "bare": 0,
+      "chars": 856,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "claude-code",
+      "via": "vscode",
+      "item": "instructions:CLAUDE.md",
+      "sessions": 3,
+      "bare": 0,
+      "chars": 16260,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "claude-code",
+      "via": "vscode",
+      "item": "skill:commit-style",
+      "sessions": 3,
+      "bare": 0,
+      "chars": 426,
+      "byModel": 0,
+      "byUser": 1
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "claude-code",
+      "via": "vscode",
+      "item": "skill:k8s-debug",
+      "sessions": 1,
+      "bare": 1,
+      "chars": 9,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "claude-code",
+      "via": "vscode",
+      "item": "skill:release-checklist",
+      "sessions": 3,
+      "bare": 0,
+      "chars": 567,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "claude-code",
+      "via": "vscode",
+      "item": "mcp:github",
+      "sessions": 3,
+      "bare": 0,
+      "chars": 20520,
+      "byModel": 7,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "claude-code",
+      "via": "vscode",
+      "item": "mcp:linear",
+      "sessions": 3,
+      "bare": 0,
+      "chars": 12360,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "claude-code",
+      "via": "vscode",
+      "item": "subagent:code-reviewer",
+      "sessions": 3,
+      "bare": 0,
+      "chars": 642,
+      "byModel": 2,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "codex",
+      "via": "cli",
+      "item": "instructions:AGENTS.md",
+      "sessions": 6,
+      "bare": 0,
+      "chars": 25080,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "codex",
+      "via": "cli",
+      "item": "skill:commit-style",
+      "sessions": 6,
+      "bare": 0,
+      "chars": 852,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "codex",
+      "via": "cli",
+      "item": "skill:terraform-plan",
+      "sessions": 1,
+      "bare": 1,
+      "chars": 14,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "codex",
+      "via": "cli",
+      "item": "mcp:sentry",
+      "sessions": 6,
+      "bare": 0,
+      "chars": 23220,
+      "byModel": 7,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "codex",
+      "via": "cli",
+      "item": "subagent:explorer",
+      "sessions": 6,
+      "bare": 0,
+      "chars": 984,
+      "byModel": 3,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "codex",
+      "via": "t3code",
+      "item": "instructions:AGENTS.md",
+      "sessions": 4,
+      "bare": 0,
+      "chars": 16720,
+      "byModel": 0,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "codex",
+      "via": "t3code",
+      "item": "skill:commit-style",
+      "sessions": 4,
+      "bare": 0,
+      "chars": 568,
+      "byModel": 1,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "codex",
+      "via": "t3code",
+      "item": "skill:terraform-plan",
+      "sessions": 1,
+      "bare": 1,
+      "chars": 14,
+      "byModel": 1,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "codex",
+      "via": "t3code",
+      "item": "mcp:sentry",
+      "sessions": 4,
+      "bare": 0,
+      "chars": 15480,
+      "byModel": 2,
+      "byUser": 0
+    },
+    {
+      "day": "2026-11-23",
+      "harness": "codex",
+      "via": "t3code",
+      "item": "subagent:explorer",
+      "sessions": 4,
+      "bare": 0,
+      "chars": 656,
+      "byModel": 3,
+      "byUser": 0
+    }
+  ]
+}
