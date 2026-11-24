@@ -1,4 +1,5 @@
 import { claudeCode } from "./claude-code.ts";
+import { codex } from "./codex.ts";
 
 export {
   claudeCode,
@@ -15,11 +16,13 @@ export {
   skillsLockPath,
   type Manager,
 } from "./managed.ts";
+export { codex, codexDescription, codexListedChars, codexMcpName } from "./codex.ts";
+export { readCodexConfig, type CodexConfig } from "./codex-toml.ts";
+export { CODEX_INSTRUCTIONS, codexTranscripts, type CodexState } from "./codex-transcripts.ts";
 export { packInventory, type PackListing } from "./pack.ts";
 export { readSkillMd, type SkillMd } from "./skill-md.ts";
 
 /** Every built-in harness. */
-export const harnesses = [claudeCode] as const;
+export const harnesses = [claudeCode, codex] as const;
 
-/** The built-in harness with this id. */
 export const findHarness = (id: string) => harnesses.find((harness) => harness.id === id);
