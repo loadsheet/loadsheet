@@ -1,4 +1,5 @@
 import type { Fact, TranscriptFormat } from "@loadsheet/kit";
+import { SKILL_NAME } from "./skill-md.ts";
 
 /** The user instruction file's item name: Codex loads `AGENTS.md` (or `AGENTS.override.md`) from its home. */
 export const CODEX_INSTRUCTIONS = "~/.codex/AGENTS.md";
@@ -11,11 +12,16 @@ export interface CodexState {
   started: boolean;
   /** A fork or subagent whose copied history runs until its own first `task_started`. */
   copying: boolean;
+  /**
+   * When the session began, in whole seconds since the epoch. A copied `task_started` started
+   * before it; the session's own first one starts at or after it.
+   */
+  since?: number;
   tokens: boolean;
   skills: boolean;
   instructions: boolean;
   mcp: boolean;
-  /** Each listed skill: its name, a hash of its root, and its path in that root when not `<folder>/SKILL.md`. */
+  /** Each listed skill: its name, a hash of its root, and a hash of its path in that root when not `<folder>/SKILL.md`. */
   listed: [name: string, root: string, rel?: string][];
   /** Listed MCP server names, as their namespace after `mcp__`. */
   servers: string[];
@@ -28,7 +34,14 @@ const SKILL_LINE = new RegExp(`^- (.+?): (?:(.*) )?\\((?:${LOCATOR_KINDS}): (.+)
 const ROOT_LINE = /^- `(r\d+)` = `(.+)`$/u;
 const SKILL_REF = /[^\s"'`()<>;|&=\\]*SKILL\.md/gu;
 const MCP_REF = /\bmcp__([A-Za-z0-9_-]+)/gu;
-const USER_SKILL = /^<skill>\n<name>([^<\n]+)<\/name>/u;
+/** The whole fragment Codex injects for a `$skill` mention, tags and all. */
+const USER_SKILL =
+  /^<skill>\n<name>([^<\n]+)<\/name>\n<path>[^<\n]+<\/path>(?:\n<resource_access>[^\n]*<\/resource_access>)?\n[\s\S]*\n<\/skill>$/u;
+/** The tool whose input is code that can call MCP tools; shell tools are never scanned for `mcp__`. */
+const CODE_TOOL = "exec";
+/** An originator or source such as `codex_cli_rs` or `T3 Code`; anything else is not kept. */
+const CLIENT = /^(?=.{1,64}$)[A-Za-z0-9_.-]+(?: [A-Za-z0-9_.-]+)*$/u;
+const VERSION = /^[A-Za-z0-9_.+-]{1,32}$/u;
 const PROJECT_DOC = "\n\n--- project-doc ---\n\n";
 const INSTRUCTIONS_OPEN = "<INSTRUCTIONS>\n";
 const INSTRUCTIONS_CLOSE = "\n</INSTRUCTIONS>";
@@ -142,7 +155,7 @@ const readSkillListing = (body: string, state: CodexState, emit: (fact: ListedIn
       rel = parts.slice(-2).join("/");
     }
     const entry: CodexState["listed"][number] = [name, rootHash(root)];
-    if (rel !== `${baseOf(name)}/SKILL.md`) entry.push(rel);
+    if (rel !== `${baseOf(name)}/SKILL.md`) entry.push(rootHash(rel));
     state.listed.push(entry);
   }
   for (const [name, listed] of chars) emit({ item: `skill:${name}`, ...listed });
@@ -154,19 +167,26 @@ interface ListedInput {
   bare: boolean;
 }
 
-/** The listed skill a `SKILL.md` path names, by its root's hash, else by a unique `<rel>` suffix. */
+/**
+ * The listed skill a `SKILL.md` path names, by its root's hash. A path that is not absolute (relative,
+ * `~` or `$VAR`) may also name one by a unique `<rel>` suffix.
+ */
 const skillAt = (path: string, state: CodexState): string | undefined => {
-  const relOf = (entry: CodexState["listed"][number]) => entry[2] ?? `${baseOf(entry[0])}/SKILL.md`;
+  const relOf = (entry: CodexState["listed"][number]) =>
+    entry[2] ?? rootHash(`${baseOf(entry[0])}/SKILL.md`);
   for (let index = path.indexOf("/", 1); index !== -1; index = path.indexOf("/", index + 1)) {
     const hash = rootHash(path.slice(0, index));
-    const rest = path.slice(index + 1);
+    const rest = rootHash(path.slice(index + 1));
     const found = state.listed.find((entry) => entry[1] === hash && relOf(entry) === rest);
     if (found) return found[0];
   }
+  if (path.startsWith("/")) return undefined;
+  const suffixes = new Set([rootHash(path)]);
+  for (let index = path.indexOf("/"); index !== -1; index = path.indexOf("/", index + 1)) {
+    suffixes.add(rootHash(path.slice(index + 1)));
+  }
   const candidates = new Set(
-    state.listed
-      .filter((entry) => path === relOf(entry) || path.endsWith(`/${relOf(entry)}`))
-      .map((entry) => entry[0]),
+    state.listed.filter((entry) => suffixes.has(relOf(entry))).map((entry) => entry[0]),
   );
   return candidates.size === 1 ? [...candidates][0] : undefined;
 };
@@ -234,29 +254,29 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
 
     if (value.type === "session_meta") {
       if (state.started) return [];
-      const day = isoDay(payload.timestamp) ?? isoDay(value.timestamp);
+      const stamp = isoDay(payload.timestamp) ? payload.timestamp : value.timestamp;
+      const day = isoDay(stamp);
       if (day === undefined) return [];
       const source = payload.source;
+      const client = (text: unknown) =>
+        typeof text === "string" && CLIENT.test(text) ? text : undefined;
       const via =
-        typeof payload.originator === "string" && payload.originator
-          ? payload.originator
-          : typeof source === "string" && source
-            ? source
-            : record(source)?.subagent !== undefined
-              ? "subagent"
-              : "unknown";
+        client(payload.originator) ??
+        client(source) ??
+        (record(source)?.subagent !== undefined ? "subagent" : "unknown");
       state.started = true;
       state.day = day;
       state.via = via;
       state.copying =
         typeof payload.forked_from_id === "string" || record(source)?.subagent !== undefined;
+      state.since = Math.floor(Date.parse(stamp as string) / 1000);
       const version = payload.cli_version;
       return [
         {
           type: "session",
           day,
           via,
-          ...(typeof version === "string" && version ? { version } : {}),
+          ...(typeof version === "string" && VERSION.test(version) ? { version } : {}),
         },
       ];
     }
@@ -330,7 +350,15 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
     }
 
     if (value.type === "event_msg") {
-      if (payload.type === "task_started") state.copying = false;
+      // A fork's copy holds the parent's `task_started` events too, all started before the fork.
+      if (
+        payload.type === "task_started" &&
+        (typeof payload.started_at !== "number" ||
+          state.since === undefined ||
+          payload.started_at >= state.since)
+      ) {
+        state.copying = false;
+      }
       if (payload.type !== "token_count" || state.tokens || state.copying) return [];
       const usage = record(record(payload.info)?.last_token_usage);
       const tokens = usage?.input_tokens;
@@ -358,7 +386,7 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
           readInstructions(instructionsFromFragment(text));
         } else if (payload.role === "user" && !state.copying) {
           const name = USER_SKILL.exec(text)?.[1];
-          if (name !== undefined && !state.turn.includes(name)) {
+          if (name !== undefined && SKILL_NAME.test(name) && !state.turn.includes(name)) {
             state.turn.push(name);
             facts.push({ type: "used", day, via, item: `skill:${name}`, by: "user" });
           }
@@ -384,7 +412,8 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
       const server = serverOf(namespace.slice(5), state);
       if (server !== undefined) servers.add(server);
     }
-    const tokens = [text, typeof payload.name === "string" ? payload.name : ""];
+    const code = payload.type === "custom_tool_call" && payload.name === CODE_TOOL;
+    const tokens = [code ? text : "", typeof payload.name === "string" ? payload.name : ""];
     for (const source of tokens) {
       for (const match of source.matchAll(MCP_REF)) {
         const server = serverOf(match[1]!, state);

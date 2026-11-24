@@ -53,6 +53,13 @@ const exec = (input: string) => ({
 });
 const turn = { type: "turn_context", payload: {} };
 const taskStarted = { type: "event_msg", payload: { type: "task_started" } };
+/** The fragment Codex injects for a `$name` mention. */
+const skillMention = (name: string, path = `/home/u/.agents/skills/${name}/SKILL.md`) =>
+  user(`<skill>\n<name>${name}</name>\n<path>${path}</path>\nBody\n</skill>`);
+const tokenCount = (input_tokens: number) => ({
+  type: "event_msg",
+  payload: { type: "token_count", info: { last_token_usage: { input_tokens } } },
+});
 
 const skillsSection = (lines: string[], roots: string[]) =>
   [
@@ -181,14 +188,50 @@ describe("codex listing", () => {
       meta(),
       developer(skillsSection(lines, roots)),
       turn,
-      user(
-        "<skill>\n<name>review</name>\n<path>/home/u/.agents/skills/review/SKILL.md</path>\nBody",
-      ),
+      skillMention("review"),
       exec("cat /home/u/.agents/skills/review/SKILL.md"),
     ]);
     expect(facts.filter((fact) => fact.type === "used")).toEqual([
       { type: "used", day: "2026-11-09", via: "codex_cli_rs", item: "skill:review", by: "user" },
     ]);
+  });
+
+  it("counts only a whole `<skill>` fragment whose name is a skill name", () => {
+    const { facts } = parseAll([
+      meta(),
+      turn,
+      skillMention("/home/x/private"),
+      user("<skill>\n<name>review</name>\nwhat the user typed"),
+      skillMention("review"),
+    ]);
+    expect(facts.flatMap((fact) => (fact.type === "used" ? [fact.item] : []))).toEqual([
+      "skill:review",
+    ]);
+  });
+
+  it("matches an absolute SKILL.md path by its root only, a relative one by suffix too", () => {
+    const { facts } = parseAll([
+      meta(),
+      developer(skillsSection(lines, roots)),
+      turn,
+      exec("cat /other/review/SKILL.md"),
+      turn,
+      exec("cat review/SKILL.md"),
+    ]);
+    expect(facts.flatMap((fact) => (fact.type === "used" ? [fact.item] : []))).toEqual([
+      "skill:review",
+    ]);
+  });
+
+  it("keeps a skill's path in its root out of State, as a hash", () => {
+    const { facts, state } = parseAll([
+      meta(),
+      developer(skillsSection(lines, roots)),
+      turn,
+      exec("cat nested/notes/SKILL.md"),
+    ]);
+    expect(facts.some((fact) => fact.type === "used" && fact.item === "skill:notes")).toBe(true);
+    expect(JSON.stringify(state)).not.toContain("nested");
   });
 });
 
@@ -208,6 +251,19 @@ describe("codex sessions", () => {
       parseAll([meta({ originator: undefined, ...payload })]).facts[0];
     expect(via({ source: "exec" })).toMatchObject({ via: "exec" });
     expect(via({ source: { subagent: { thread_spawn: {} } } })).toMatchObject({ via: "subagent" });
+  });
+
+  it("keeps an originator or version only when it is a short identifier", () => {
+    const session = (payload: Record<string, unknown>) => parseAll([meta(payload)]).facts[0];
+    expect(session({ originator: "T3 Code" })).toMatchObject({ via: "T3 Code" });
+    expect(session({ originator: "/home/u/private", cli_version: "1.0 /home/u" })).toEqual({
+      type: "session",
+      day: "2026-11-09",
+      via: "cli",
+    });
+    expect(session({ originator: "x".repeat(65), source: "/home/u" })).toMatchObject({
+      via: "unknown",
+    });
   });
 
   describe("AGENTS.md", () => {
@@ -322,23 +378,58 @@ describe("codex sessions", () => {
     ]);
   });
 
-  it("skips the history a fork copied until its own first task, but keeps its listing", () => {
-    const tokens = (input_tokens: number) => ({
-      type: "event_msg",
-      payload: { type: "token_count", info: { last_token_usage: { input_tokens } } },
+  it("does not count an `mcp__` name in a shell command as a use", () => {
+    const shell = (name: string, cmd: string) => ({
+      type: "response_item",
+      payload: { type: "function_call", name, arguments: JSON.stringify({ cmd }) },
     });
+    const { facts } = parseAll([
+      meta(),
+      developer("<tools>\nDeferred tool namespaces:\n- mcp__search\n</tools>"),
+      turn,
+      shell("exec_command", "echo mcp__search__lookup"),
+      shell("shell", "grep -r mcp__search__lookup ."),
+    ]);
+    expect(facts.filter((fact) => fact.type === "used")).toEqual([]);
+  });
+
+  it("skips the history a fork copied until its own first task, but keeps its listing", () => {
     const { facts } = parseAll([
       meta({ forked_from_id: "parent" }),
       meta({ originator: "parent" }),
       developer(skillsSection(["- a: A. (file: r0/a/SKILL.md)"], ["/s"])),
       turn,
-      user("<skill>\n<name>a</name>"),
+      skillMention("a"),
       exec("cat /s/a/SKILL.md"),
-      tokens(900),
+      tokenCount(900),
       taskStarted,
       turn,
       exec("cat /s/a/SKILL.md"),
-      tokens(1000),
+      tokenCount(1000),
+    ]);
+    expect(count(facts)).toEqual({ session: 1, listed: 1, "used:model": 1, tokens: 1 });
+    expect(facts.find((fact) => fact.type === "tokens")).toMatchObject({ tokens: 1000 });
+  });
+
+  it("skips a fork's copied task_started, which started before the fork", () => {
+    // The fork began at 23:58:59.000Z; `started_at` is in whole seconds.
+    const startedAt = (iso: string) => ({
+      type: "event_msg",
+      payload: { type: "task_started", started_at: Math.floor(Date.parse(iso) / 1000) },
+    });
+    const { facts } = parseAll([
+      meta({ forked_from_id: "parent", source: { subagent: { thread_spawn: {} } } }),
+      meta({ originator: "parent" }),
+      developer(skillsSection(["- a: A. (file: r0/a/SKILL.md)"], ["/s"])),
+      startedAt("2026-11-09T23:50:00.000Z"),
+      turn,
+      skillMention("a", "/s/a/SKILL.md"),
+      exec("cat /s/a/SKILL.md"),
+      tokenCount(900),
+      startedAt("2026-11-09T23:58:59.000Z"),
+      turn,
+      exec("cat /s/a/SKILL.md"),
+      tokenCount(1000),
     ]);
     expect(count(facts)).toEqual({ session: 1, listed: 1, "used:model": 1, tokens: 1 });
     expect(facts.find((fact) => fact.type === "tokens")).toMatchObject({ tokens: 1000 });
@@ -621,6 +712,78 @@ describe("codex machine", () => {
       ["kit@market", true],
       ["off@market", false],
     ]);
+  });
+
+  it("keeps a skill installed in two roots as two Items", async () => {
+    const items = await machine.inventory(
+      memoryFiles({
+        "~/.codex/skills/review/SKILL.md": skillMd("review", "Reviews."),
+        "~/.agents/skills/review/SKILL.md": skillMd("review", "Reviews."),
+      }),
+    );
+    expect(items.map((item) => [item.id, item.path])).toEqual([
+      ["skill:review", "~/.codex/skills/review"],
+      ["skill:review", "~/.agents/skills/review"],
+    ]);
+  });
+
+  it("lists nothing for a skill `[[skills.config]]` turns off, by name or by path", async () => {
+    const items = await machine.inventory(
+      memoryFiles({
+        "~/.codex/config.toml": [
+          "[[skills.config]]",
+          'name = "kit:lint"',
+          "enabled = false",
+          "",
+          "[[skills.config]]",
+          "path = '/home/u/.agents/skills/shared/SKILL.md'",
+          "enabled = false",
+          "",
+          "[[skills.config]]",
+          'name = "mine"',
+          "enabled = false",
+          "[[skills.config]]",
+          'name = "mine"',
+          "enabled = true",
+          "",
+          '[plugins."kit@market"]',
+          "enabled = true",
+        ].join("\n"),
+        "~/.codex/skills/mine/SKILL.md": skillMd("mine", "Mine."),
+        "~/.agents/skills/shared/SKILL.md": skillMd("shared", "Shared."),
+        "~/.codex/plugins/cache/market/kit/1.0.0/skills/lint/SKILL.md": skillMd("lint", "Lints."),
+      }),
+    );
+    expect(items.map((item) => [item.id, item.chars.listed > 0, item.modelInvocable])).toEqual([
+      ["skill:mine", true, true],
+      ["skill:shared", false, false],
+      ["skill:kit:lint", false, false],
+    ]);
+    expect(JSON.stringify(items)).not.toContain("/home/u");
+  });
+
+  it("reads a plugin's skills from the roots its manifest declares, inside its folder", async () => {
+    const base = "~/.codex/plugins/cache/market/kit/1.0.0";
+    const items = await machine.inventory(
+      memoryFiles({
+        "~/.codex/config.toml": '[plugins."kit@market"]\nenabled = true\n',
+        [`${base}/.codex-plugin/plugin.json`]: JSON.stringify({
+          name: "kit",
+          skills: ["./recipes/", "../outside", "/abs"],
+        }),
+        [`${base}/recipes/cook/SKILL.md`]: skillMd("cook", "Cooks."),
+        [`${base}/skills/lint/SKILL.md`]: skillMd("lint", "Lints."),
+        "~/.codex/plugins/cache/market/outside/SKILL.md": skillMd("outside", "Out."),
+      }),
+    );
+    expect(items.map((item) => item.id)).toEqual(["skill:kit:cook"]);
+  });
+
+  it("skips a comment that holds a triple quote in config.toml", () => {
+    const { mcpServers } = readCodexConfig(
+      ['# a note with """ in it', "[mcp_servers.after]", 'command = "x"'].join("\n"),
+    );
+    expect([...mcpServers]).toEqual([["after", true]]);
   });
 
   it("reads a pack's skills with their descriptions, named after its Codex plugin", async () => {

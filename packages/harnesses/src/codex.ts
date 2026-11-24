@@ -1,7 +1,7 @@
 import { defineHarness, sha256, type Files, type Place } from "@loadsheet/kit";
 import type { Item } from "@loadsheet/schema";
 import { parse } from "tinyaml";
-import { readCodexConfig } from "./codex-toml.ts";
+import { readCodexConfig, type SkillRule } from "./codex-toml.ts";
 import { CODEX_INSTRUCTIONS, codexTranscripts } from "./codex-transcripts.ts";
 import { readManagers, skillsLockPath, type Manager } from "./managed.ts";
 import { readSkillMd, type SkillMd } from "./skill-md.ts";
@@ -56,14 +56,36 @@ const hiddenByPolicy = (source: string | undefined): boolean => {
   return record(yaml(source).policy)?.allow_implicit_invocation === false;
 };
 
-const pluginName = (manifest: string | undefined): string | undefined => {
+const readManifest = (manifest: string | undefined): Record<string, unknown> | undefined => {
   if (manifest === undefined) return undefined;
   try {
-    const name = record(JSON.parse(manifest))?.name;
-    return typeof name === "string" && name ? name : undefined;
+    return record(JSON.parse(manifest));
   } catch {
     return undefined;
   }
+};
+
+const pluginName = (manifest: Record<string, unknown> | undefined): string | undefined => {
+  const name = manifest?.name;
+  return typeof name === "string" && name ? name : undefined;
+};
+
+/**
+ * The skill roots a plugin manifest declares in `skills`, a path or a list of them, relative to the
+ * plugin's folder. Codex keeps a path that starts with `./`, is not `./` and has no `..`, and falls
+ * back to `skills/` when none is kept.
+ */
+const pluginSkillRoots = (manifest: Record<string, unknown> | undefined): string[] => {
+  const declared = manifest?.skills;
+  const paths = typeof declared === "string" ? [declared] : Array.isArray(declared) ? declared : [];
+  const roots = paths.flatMap((path) => {
+    if (typeof path !== "string" || !path.startsWith("./")) return [];
+    const segments = path.slice(2).split("/");
+    if (segments.includes("..")) return [];
+    const root = segments.filter((segment) => segment && segment !== ".").join("/");
+    return root ? [root] : [];
+  });
+  return roots.length > 0 ? [...new Set(roots)] : ["skills"];
 };
 
 interface SkillEntry {
@@ -80,6 +102,7 @@ const skillItem = async (
   alias: string,
   manager: Manager,
   pack: string | undefined,
+  disabled: Disabled,
 ): Promise<Item | undefined> => {
   const source = await files.text(entry.file);
   if (source === undefined) return undefined;
@@ -90,7 +113,8 @@ const skillItem = async (
   const folder = baseOf(dir) || baseOf(pack ?? "") || "skill";
   const own = skill.name ? singleLine(skill.name) : folder;
   const name = entry.plugin ? `${entry.plugin}:${own}` : own;
-  const hidden = hiddenByPolicy(await files.text(`${dir}/agents/openai.yaml`));
+  const hidden =
+    disabled(name, entry.file) || hiddenByPolicy(await files.text(`${dir}/agents/openai.yaml`));
   const rel = entry.root ? entry.file.slice(entry.root.length + 1) : entry.file;
   const item: Item = {
     id: `skill:${name}`,
@@ -115,11 +139,34 @@ const skillItem = async (
   return item;
 };
 
-/** Skills in Codex order, the first of a name winning, each with the `rN` alias of its root. */
-const skillItems = async (files: Files, entries: SkillEntry[], pack?: string) => {
+/** Whether `config.toml` turns off the skill of this name at this SKILL.md key. */
+type Disabled = (name: string, file: string) => boolean;
+
+/**
+ * Whether the last `[[skills.config]]` entry that selects a skill, by its name or its SKILL.md
+ * path, turns it off. A key under home (`~/…`) matches the absolute path that ends in it.
+ */
+const disabledBy =
+  (rules: readonly SkillRule[]): Disabled =>
+  (name, file) => {
+    const at = (path: string) =>
+      path === file || (file.startsWith("~/") && path.endsWith(file.slice(1)));
+    const rule = rules.findLast((entry) =>
+      entry.name === undefined ? at(entry.path!) : entry.name === name,
+    );
+    return rule?.enabled === false;
+  };
+
+/** Skills in Codex order, one Item per SKILL.md, each with the `rN` alias of its root. */
+const skillItems = async (
+  files: Files,
+  entries: SkillEntry[],
+  pack?: string,
+  disabled: Disabled = () => false,
+) => {
   const aliases = new Map<string, string>();
   const managers = new Map<string, (name: string) => Manager>();
-  const items = new Map<string, Item>();
+  const items: Item[] = [];
   for (const entry of entries) {
     if (!aliases.has(entry.root)) aliases.set(entry.root, `r${aliases.size}`);
     let manager: Manager = { managedBy: "hand" };
@@ -131,10 +178,10 @@ const skillItems = async (files: Files, entries: SkillEntry[], pack?: string) =>
       }
       manager = managers.get(entry.root)!(entry.file.slice(entry.root.length + 1).split("/")[0]!);
     }
-    const item = await skillItem(files, entry, aliases.get(entry.root)!, manager, pack);
-    if (item && !items.has(item.id)) items.set(item.id, item);
+    const item = await skillItem(files, entry, aliases.get(entry.root)!, manager, pack, disabled);
+    if (item) items.push(item);
   }
-  return [...items.values()];
+  return items;
 };
 
 /** A pack: every SKILL.md in it, named `plugin:skill` when it carries a Codex plugin manifest. */
@@ -142,7 +189,10 @@ const packInventory = async (files: Files): Promise<Item[]> => {
   let plugin: string | undefined;
   for (const manifest of PLUGIN_MANIFESTS) {
     if (!files.paths.includes(manifest)) continue;
-    plugin = pluginName(await files.text(manifest)) ?? files.name?.split("/").pop() ?? "plugin";
+    plugin =
+      pluginName(readManifest(await files.text(manifest))) ??
+      files.name?.split("/").pop() ??
+      "plugin";
     break;
   }
   const entries = files.paths
@@ -185,18 +235,21 @@ const pluginEntries = async (files: Files, enabled: (id: string) => boolean) => 
     }
   }
   const entries: SkillEntry[] = [];
+  const seen = new Set<string>();
   for (const { base, plugin: folder } of versions.values()) {
-    let name = folder;
-    for (const manifest of PLUGIN_MANIFESTS) {
-      const named = pluginName(await files.text(`${base}/${manifest}`));
-      if (named) {
-        name = named;
-        break;
-      }
+    let manifest: Record<string, unknown> | undefined;
+    for (const path of PLUGIN_MANIFESTS) {
+      manifest = readManifest(await files.text(`${base}/${path}`));
+      if (manifest) break;
     }
-    for (const path of files.paths) {
-      if (!path.startsWith(`${base}/skills/`) || baseOf(path) !== "SKILL.md") continue;
-      entries.push({ file: path, root: `${base}/skills`, plugin: name });
+    const name = pluginName(manifest) ?? folder;
+    for (const root of pluginSkillRoots(manifest)) {
+      for (const path of files.paths) {
+        if (!path.startsWith(`${base}/${root}/`) || baseOf(path) !== "SKILL.md") continue;
+        if (seen.has(path)) continue;
+        seen.add(path);
+        entries.push({ file: path, root: `${base}/${root}`, plugin: name });
+      }
     }
   }
   return entries;
@@ -225,7 +278,8 @@ const topFile = (files: Files, name: string) =>
 /**
  * What is installed for the user on a machine: skills in `$CODEX_HOME/skills` (its `.system` too)
  * and `~/.agents/skills`, the skills of each plugin `config.toml` enables, the user's `AGENTS.md`,
- * and the MCP servers `config.toml` names. Of `config.toml` only table names and `enabled` are read.
+ * and the MCP servers `config.toml` names. Of `config.toml` only table names, `enabled` and the
+ * `[[skills.config]]` selectors are read.
  */
 const machineInventory = async (files: Files): Promise<Item[]> => {
   const configPath = topFile(files, "config.toml")[0];
@@ -241,7 +295,12 @@ const machineInventory = async (files: Files): Promise<Item[]> => {
     root.endsWith("/.system") ? 2 : root.endsWith("/.agents/skills") ? 1 : 0;
   roots.sort((a, b) => order(a.root) - order(b.root));
   const plugins = await pluginEntries(files, (id) => config.plugins.get(id) === true);
-  const items = await skillItems(files, [...roots, ...plugins]);
+  const items = await skillItems(
+    files,
+    [...roots, ...plugins],
+    undefined,
+    disabledBy(config.skills),
+  );
 
   const instructionPaths = [
     ...topFile(files, "AGENTS.override.md"),
