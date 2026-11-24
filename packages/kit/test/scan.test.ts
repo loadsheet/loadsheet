@@ -482,6 +482,24 @@ describe("the scan cache", () => {
     expect(rewritten.sessions[0]!.fixedTokens).toBe(4321 + 800);
   });
 
+  it("reads a transcript from the start when resuming from its cached state fails", async () => {
+    const home = await makeHome("bad-state", SESSIONS.slice(0, 1));
+    await scan(home, cacheDir());
+    // The cached state's `listed` becomes null, so the next list line throws in the parser.
+    const file = NodePath.join(cacheDir(), "fake.json");
+    const stored = JSON.parse(await NodeFSP.readFile(file, "utf8"));
+    const state = (Object.values(stored.files)[0] as unknown[])[6] as unknown[];
+    state[state.indexOf(stored.strings.indexOf("listed")) + 1] = null;
+    await NodeFSP.writeFile(file, JSON.stringify(stored));
+
+    const sid = SESSIONS[0]!.sid;
+    const list = { t: "list", sid, items: [{ id: "skill:alpha", chars: 30, bare: false }] };
+    await appendTranscript(home, sid, `${JSON.stringify(list)}\n`, LATER);
+    const resumed = await scan(home, cacheDir());
+    expect(resumed.sessions).toHaveLength(1);
+    expect(resumed).toEqual(await cold(home));
+  });
+
   it("starts cold on a corrupt cache or a new tool version", async () => {
     const home = await makeHome("corrupt", SESSIONS);
     const expected = await cold(home);

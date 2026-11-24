@@ -136,7 +136,8 @@ const readTranscripts = async (
     }
     // A file that changed without growing may have been rewritten before the cached position.
     const resume = cached && (unchanged || file.size > cached.size) ? cached : undefined;
-    const read = await readTranscript<unknown, Fact>(file.path, format, resume?.position);
+    let read = await readTranscript<unknown, Fact>(file.path, format, resume?.position);
+    if (read === null && resume) read = await readTranscript<unknown, Fact>(file.path, format);
     if (read === null) return;
     const fresh = foldFacts(harness, read.records);
     const committed = read.resumed && resume ? sumTallies([resume.tally, fresh]) : fresh;
