@@ -55,7 +55,9 @@ interface Schema {
     };
   };
 }
-const schema = JSON.parse(readFileSync("schema.json", "utf8")) as Schema;
+const schema = JSON.parse(
+  readFileSync(new URL("../../fleetrc/schema.json", import.meta.url), "utf8"),
+) as Schema;
 
 const samples: Record<string, unknown> = {
   $schema: "https://unpkg.com/fleetrc/schema.json",

@@ -20,16 +20,18 @@ import {
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { basename, delimiter, dirname, join, relative, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
 import { afterAll, afterEach } from "vite-plus/test";
 
-const pkg = JSON.parse(readFileSync(resolve("package.json"), "utf8")) as {
+/** The fleetrc package, whose bin runs this package's CLI under the name fleetrc. */
+export const fleetrcDir = fileURLToPath(new URL("../../fleetrc/", import.meta.url));
+const pkg = JSON.parse(readFileSync(join(fleetrcDir, "package.json"), "utf8")) as {
   version: string;
   bin: { fleetrc: string };
 };
 export const version = pkg.version;
-export const cli = resolve(pkg.bin.fleetrc);
+export const cli = resolve(fleetrcDir, pkg.bin.fleetrc);
 export const isWindows = process.platform === "win32";
 
 const made: string[] = [];
@@ -105,7 +107,7 @@ export const UNIVERSAL_DIRS = [
  */
 export type Scheduler = "forbid" | "refuse" | "empty" | "absent";
 
-const guardDir = resolve("test", "guard");
+const guardDir = fileURLToPath(new URL("guard", import.meta.url));
 /** Commands that reach the scheduler; their shims go first on PATH, for shells too. */
 const SCHEDULER_COMMANDS = ["systemctl", "loginctl", "launchctl", "schtasks", "journalctl"];
 

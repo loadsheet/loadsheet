@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// The bin. It checks the Node version before the bundle loads, since an older Node fails to parse
-// the bundle with a SyntaxError that names no version. Keep this file to syntax old versions read:
-// no top-level await. MAJOR.MINOR matches `engines` in package.json.
+// fleetrc's entry in this package: what the installed copy, `<state>/app/cli.mjs`, loads (the fleetrc
+// package's bin does the same for npx). It checks the Node version before the bundle loads, since an
+// older Node fails to parse the bundle with a SyntaxError that names no version. Keep this file to
+// syntax old versions read: no top-level await. MAJOR.MINOR matches `engines` in package.json.
 import module from "node:module";
 import { basename, dirname, join } from "node:path";
 
@@ -29,22 +30,4 @@ if (
     // Node 22.1 and newer; a folder that can't be made leaves the cache off.
     module.enableCompileCache?.(join(dirname(script), "compile"));
   } catch {}
-// What an agent's session hook runs, when a session starts: hook.ts alone, without the rest of the
-// CLI. `hook prompt`, the legacy Claude Code hook, only reports new skills and never starts a sync.
-const [command, action, agent] = args;
-if (command === "hook" && action === "prompt" && process.argv.length === 4)
-  void import("./hook.ts").then((hook) => hook.runHook("claude-code", true));
-else if (
-  command === "hook" &&
-  action === "run" &&
-  (agent === "claude-code" || agent === "codex") &&
-  process.argv.length === 5
-)
-  void import("./hook.ts").then((hook) => hook.runHook(agent));
-// What programs built on fleetrc run: list.ts reads state.json alone. An error it meets (a
-// state.json it may not read) goes to the CLI, which says it in one line.
-else if (command === "list" && action === "--json" && process.argv.length === 4)
-  void import("./list.ts").then((list) => list.printSkillList()).catch(() => import("./cli.ts"));
-else if ((command === "--version" || command === "-v") && process.argv.length === 3)
-  void import("./version.ts").then(({ version }) => console.log(version));
-else void import("./cli.ts");
+void import("./index.ts").then(({ run }) => run(args, "fleetrc"));

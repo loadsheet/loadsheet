@@ -3,10 +3,11 @@
 // on its own, and again after a new skill lands upstream. Then it checks `status`, installs again
 // to prove that changes nothing, removes the timer, and checks the OS has nothing left.
 //
-//   pnpm --filter fleetrc build
-//   pnpm pack --out fleetrc.tgz
-//   node .github/scripts/timer-e2e.mjs fleetrc.tgz
-//   node .github/scripts/timer-e2e.mjs fleetrc.tgz --home-name "O'Brien & Zoë"
+//   pnpm build
+//   pnpm --dir packages/fleetrc pack --out fleetrc.tgz
+//   pnpm --dir packages/fleet pack --out fleet.tgz
+//   node packages/fleet/scripts/e2e/timer-e2e.mjs fleetrc.tgz fleet.tgz
+//   node packages/fleet/scripts/e2e/timer-e2e.mjs fleetrc.tgz fleet.tgz --home-name "O'Brien & Zoë"
 //
 // --home-name names the throwaway HOME folder, so the timer's files, its command line and its
 // environment carry that name (the windows-break job passes cmd and PowerShell metacharacters).
@@ -27,8 +28,12 @@ const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: { yes: { type: "boolean" }, "home-name": { type: "string", default: "home" } },
 });
-const tarball = positionals[0] && resolve(positionals[0]);
-assert.ok(tarball && existsSync(tarball), "pass the path of the packed fleetrc tarball");
+// fleetrc's tarball, then the @loadsheet/fleet one its bin runs.
+const tarballs = positionals.map((file) => resolve(file));
+assert.ok(
+  tarballs.length === 2 && tarballs.every((file) => existsSync(file)),
+  "pass the paths of the packed fleetrc and @loadsheet/fleet tarballs",
+);
 if (process.env.CI !== "true" && !values.yes) {
   console.error(
     "timer-e2e installs a real timer in your OS scheduler (and removes it). Pass --yes to run it outside CI.",
@@ -197,7 +202,9 @@ try {
   step(`platform ${platform}, node ${process.version}, root ${root}`);
   assert.ok(!osKnows().known, `a ${NAME} timer exists before the test; remove it first`);
 
-  step("install the tarball into a temporary prefix, offline: the package has no dependencies");
+  step(
+    "install the tarballs into a temporary prefix, offline: the packages have no other dependencies",
+  );
   mkdirSync(prefix, { recursive: true });
   writeFileSync(join(prefix, "package.json"), "{}\n");
   const npmCli = [
@@ -207,7 +214,7 @@ try {
   assert.ok(npmCli, `npm is not next to ${process.execPath}`);
   const npm = run(
     process.execPath,
-    [npmCli, "install", "--offline", "--no-audit", "--no-fund", "--prefix", prefix, tarball],
+    [npmCli, "install", "--offline", "--no-audit", "--no-fund", "--prefix", prefix, ...tarballs],
     { env: process.env, cwd: prefix },
   );
   assert.equal(npm.code, 0, `npm install failed:\n${npm.stdout}\n${npm.stderr}`);

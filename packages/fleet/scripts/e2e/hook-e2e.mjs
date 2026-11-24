@@ -5,9 +5,10 @@
 // starts must outlive both and link the skill that landed upstream. Then a fresh attempt starts no
 // second sync, init wrote no prompt hook, and `hook remove` takes fleetrc's entries out.
 //
-//   pnpm --filter fleetrc build
-//   pnpm pack --out fleetrc.tgz
-//   node .github/scripts/hook-e2e.mjs fleetrc.tgz
+//   pnpm build
+//   pnpm --dir packages/fleetrc pack --out fleetrc.tgz
+//   pnpm --dir packages/fleet pack --out fleet.tgz
+//   node packages/fleet/scripts/e2e/hook-e2e.mjs fleetrc.tgz fleet.tgz
 //
 // Everything lives under a throwaway HOME, and nothing touches the OS scheduler, so it runs
 // outside CI too.
@@ -17,8 +18,12 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
-const tarball = process.argv[2] && resolve(process.argv[2]);
-assert.ok(tarball && existsSync(tarball), "pass the path of the packed fleetrc tarball");
+// fleetrc's tarball, then the @loadsheet/fleet one its bin runs.
+const tarballs = process.argv.slice(2).map((file) => resolve(file));
+assert.ok(
+  tarballs.length === 2 && tarballs.every((file) => existsSync(file)),
+  "pass the paths of the packed fleetrc and @loadsheet/fleet tarballs",
+);
 
 const SYNC_MS = 120_000;
 const root = mkdtempSync(join(tmpdir(), "fleetrc-hook-e2e-"));
@@ -136,7 +141,7 @@ try {
   assert.ok(npmCli, `npm is not next to ${process.execPath}`);
   const npm = spawnSync(
     process.execPath,
-    [npmCli, "install", "--offline", "--no-audit", "--no-fund", "--prefix", prefix, tarball],
+    [npmCli, "install", "--offline", "--no-audit", "--no-fund", "--prefix", prefix, ...tarballs],
     { encoding: "utf8", cwd: prefix },
   );
   assert.equal(npm.status, 0, `npm install failed:\n${npm.stdout}\n${npm.stderr}`);

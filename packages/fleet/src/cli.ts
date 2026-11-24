@@ -82,6 +82,7 @@ import { staleSessions } from "./sessions.ts";
 import { loadState } from "./state.ts";
 import { LockHeldError } from "./lock.ts";
 import { manifestSpec, sync, withSyncLock } from "./sync.ts";
+import { cliName } from "./name.ts";
 import {
   foreignTimer,
   foreignTimerResource,
@@ -163,8 +164,9 @@ const COMMANDS: Record<string, Command> = {
   init: {
     usage: "init [manifest]",
     summary: "Point this machine at a manifest, migrate the folders, install the session hooks",
-    details:
-      "The manifest is a repository (owner/repo, github:owner/repo, gitlab:group/repo or a git URL ending in .git, read for its .fleetrc/manifest.json), <repo>//<file>, or a file or folder on this machine (a folder means its .fleetrc/manifest.json). Without one, init uses the configured manifest again. The session hooks go into Claude Code and Codex where they are installed (see `fleetrc hook --help`); a machine that had the timer keeps it.",
+    get details() {
+      return `The manifest is a repository (owner/repo, github:owner/repo, gitlab:group/repo or a git URL ending in .git, read for its .fleetrc/manifest.json), <repo>//<file>, or a file or folder on this machine (a folder means its .fleetrc/manifest.json). Without one, init uses the configured manifest again. The session hooks go into Claude Code and Codex where they are installed (see \`${cliName()} hook --help\`); a machine that had the timer keeps it.`;
+    },
     options: [...SYNC_OPTIONS, "timer", "no-hooks", "force"],
   },
   status: {
@@ -282,30 +284,31 @@ const optionLine = (name: Option) => {
   return `  ${`${short}--${name}${arg}`.padEnd(18)} ${text}`;
 };
 
-const USAGE = [
-  "Usage: fleetrc [command] [options]",
-  "",
-  "Keeps the same skills in every agent's skills folder, from the sources a manifest lists.",
-  "",
-  "Commands:",
-  ...Object.values(COMMANDS).map((entry) =>
-    entry.usage.length < 25
-      ? `  ${entry.usage.padEnd(24)} ${entry.summary}`
-      : `  ${entry.usage}\n  ${"".padEnd(24)} ${entry.summary}`,
-  ),
-  "",
-  "Options:",
-  ...(
-    ["offline", "dry-run", "json", "copy", "no-copy", "manifest", "version", "help"] as const
-  ).map(optionLine),
-  "",
-  "`fleetrc <command> --help` shows a command's options.",
-].join("\n");
+const usageText = () =>
+  [
+    `Usage: ${cliName()} [command] [options]`,
+    "",
+    "Keeps the same skills in every agent's skills folder, from the sources a manifest lists.",
+    "",
+    "Commands:",
+    ...Object.values(COMMANDS).map((entry) =>
+      entry.usage.length < 25
+        ? `  ${entry.usage.padEnd(24)} ${entry.summary}`
+        : `  ${entry.usage}\n  ${"".padEnd(24)} ${entry.summary}`,
+    ),
+    "",
+    "Options:",
+    ...(
+      ["offline", "dry-run", "json", "copy", "no-copy", "manifest", "version", "help"] as const
+    ).map(optionLine),
+    "",
+    `\`${cliName()} <command> --help\` shows a command's options.`,
+  ].join("\n");
 
 function commandHelp(name: string): string {
   const entry = COMMANDS[name]!;
   return [
-    `Usage: fleetrc ${entry.usage}${entry.options.length ? " [options]" : ""}`,
+    `Usage: ${cliName()} ${entry.usage}${entry.options.length ? " [options]" : ""}`,
     "",
     entry.summary,
     ...(entry.details ? ["", entry.details] : []),
@@ -316,42 +319,41 @@ function commandHelp(name: string): string {
 /** Commands that only read, where a dry run would be the same as the real thing. */
 const READ_ONLY = new Set(["status", "list", "agents", "doctor", "diff"]);
 
+/** The arguments after the program name, as `cli` got them. */
+let argv: readonly string[] = [];
+
 /** --json on the command line, read before (or without) parsing it. */
 const jsonRequested = () => {
-  const args = process.argv.slice(2);
-  const end = args.indexOf("--");
-  return (end < 0 ? args : args.slice(0, end)).includes("--json");
+  const end = argv.indexOf("--");
+  return (end < 0 ? argv : argv.slice(0, end)).includes("--json");
 };
 
 /**
- * One line on stderr and exit code 2, for a command line fleetrc can't run. Under --json,
+ * One line on stderr and exit code 2, for a command line this CLI can't run. Under --json,
  * stdout gets the error as a document too.
  */
 function usageError(message: string): never {
   if (jsonRequested()) console.log(JSON.stringify({ ok: false, error: message }, null, 2));
-  console.error(`fleetrc: ${message}`);
+  console.error(`${cliName()}: ${message}`);
   process.exit(2);
 }
 
-let args;
-try {
-  args = parseArgs({
+const parse = (args: string[]) =>
+  parseArgs({
+    args,
     allowPositionals: true,
     options: Object.fromEntries(
       Object.entries(OPTIONS).map(([name, { help: _help, ...option }]) => [name, option]),
     ) as { [name in Option]: Omit<(typeof OPTIONS)[name], "help"> },
   });
-} catch (error) {
-  // Node's message goes on about positionals after its first sentence.
-  const said = (error as Error).message.split("\n")[0]!.replace(/(\.) .*/, "$1");
-  usageError(`${said} See \`fleetrc --help\`.`);
-}
-const { values, positionals } = args;
-const [command = "sync", ...rest] = positionals;
-const dryRun = values["dry-run"] ?? false;
-const json = values.json ?? false;
 
-process.env.DO_NOT_TRACK ??= "1";
+// The command line `cli` runs, parsed.
+let values: ReturnType<typeof parse>["values"];
+let positionals: string[];
+let command: string;
+let rest: string[];
+let dryRun: boolean;
+let json: boolean;
 
 /** Human lines: on stdout, or on stderr under --json, so stdout holds only the JSON document. */
 function say(...lines: string[]) {
@@ -361,7 +363,7 @@ function say(...lines: string[]) {
 const emit = (value: unknown) => console.log(JSON.stringify(value, null, 2));
 
 function usage(message: string): never {
-  usageError(`${message}; see \`fleetrc ${command} --help\``);
+  usageError(`${message}; see \`${cliName()} ${command} --help\``);
 }
 
 function one(name: string): string {
@@ -518,7 +520,7 @@ async function followLauncherNode(node: string): Promise<string[]> {
     settings = (await loadManifest(manifestSpec(values.manifest), { offline: true })).root.timer;
   } catch (error) {
     return [
-      `the timer still runs ${timer.node}, and the manifest to install it again does not load (${(error as Error).message.split("\n")[0]}); run \`fleetrc timer install\``,
+      `the timer still runs ${timer.node}, and the manifest to install it again does not load (${(error as Error).message.split("\n")[0]}); run \`${cliName()} timer install\``,
     ];
   }
   const result = await installTimer(settings);
@@ -644,7 +646,7 @@ async function status() {
     return 0;
   }
   say(
-    `manifest: ${config?.manifest ?? "none; run `fleetrc init <manifest>`"}${config?.tailscale ? " (from the tailnet policy)" : ""}`,
+    `manifest: ${config?.manifest ?? `none; run \`${cliName()} init <manifest>\``}${config?.tailscale ? " (from the tailnet policy)" : ""}`,
   );
   if (!report) say("no sync has run on this machine yet");
   else
@@ -965,7 +967,7 @@ function addHooks(
   const lines = formatHookChanges(changes, "install", dryRun);
   if (changes.every((change) => change.skipped))
     lines.push(
-      "no Claude Code or Codex here, so no session hook starts a sync; install one of them and run `fleetrc hook install`, or on a machine where no agent runs, `fleetrc timer install`",
+      `no Claude Code or Codex here, so no session hook starts a sync; install one of them and run \`${cliName()} hook install\`, or on a machine where no agent runs, \`${cliName()} timer install\``,
     );
   return { lines, changes, code: changes.some((change) => change.error) ? 1 : 0 };
 }
@@ -993,7 +995,7 @@ async function init() {
     else if (named) throw new UserError(found.error);
     else if (config) {
       given = config.manifest;
-      say(`fleetrc: keeping ${given}: ${found.error}`);
+      say(`${cliName()}: keeping ${given}: ${found.error}`);
     } else
       usage(
         `init needs a manifest: a path, a repository such as owner/repo (its .fleetrc/manifest.json), or <repo>//<file> such as github:org/agents//team.json; with none, it asks the tailnet policy, but ${found.error}`,
@@ -1122,7 +1124,7 @@ function checkFleetArgs(action: string | undefined) {
     usageError(
       action === "status"
         ? "fleet status changes nothing, so it has no --dry-run"
-        : "fleet upgrade has no --dry-run; `fleetrc fleet status` shows each host's version",
+        : `fleet upgrade has no --dry-run; \`${cliName()} fleet status\` shows each host's version`,
     );
 }
 
@@ -1146,11 +1148,11 @@ async function fleetCommand(action: "sync" | "status" | "upgrade" | "init" | "ad
         .map(([tag, machines]) => ({ tag, machines }));
       if (json) emit({ suggestions, tags });
       else if (suggestions.length === 0 && tags.length === 0)
-        say("no tailnet machines to suggest; name hosts: fleetrc fleet add <host>...");
+        say(`no tailnet machines to suggest; name hosts: ${cliName()} fleet add <host>...`);
       else {
         if (suggestions.length > 0)
           say(
-            "machines on your tailnet; add the ones you want with `fleetrc fleet add <host>...`:",
+            `machines on your tailnet; add the ones you want with \`${cliName()} fleet add <host>...\`:`,
             ...suggestions.map(
               (peer) =>
                 `  ${peer.host}${peer.online ? "" : " (offline)"}${peer.dns ? `  ${peer.dns}` : ""}`,
@@ -1158,7 +1160,7 @@ async function fleetCommand(action: "sync" | "status" | "upgrade" | "init" | "ad
           );
         if (tags.length > 0)
           say(
-            "tags on your tailnet; `fleetrc fleet add tag:<name>` adds every machine with the tag, now and later:",
+            `tags on your tailnet; \`${cliName()} fleet add tag:<name>\` adds every machine with the tag, now and later:`,
             ...tags.map(
               ({ tag, machines }) => `  ${tag}  (${machines} machine${machines === 1 ? "" : "s"})`,
             ),
@@ -1188,7 +1190,8 @@ async function fleetCommand(action: "sync" | "status" | "upgrade" | "init" | "ad
   }
   if (action === "init") return fleetInit(loaded);
   const entries = rest.length > 1 ? rest.slice(1) : loaded.root.fleet;
-  if (entries.length === 0) usage("the manifest has no fleet; add hosts with `fleetrc fleet add`");
+  if (entries.length === 0)
+    usage(`the manifest has no fleet; add hosts with \`${cliName()} fleet add\``);
   const bad = entries.filter(isTag).flatMap((entry) => tagProblem(entry) ?? []);
   if (bad.length > 0) usage(bad.join("; "));
   if (action === "upgrade" && !process.env.FLEETRC_PACKAGE) {
@@ -1228,7 +1231,7 @@ async function fleetTargets(
     dryRun,
     setup,
   });
-  for (const warning of warnings) console.error(`fleetrc: warning: ${warning}`);
+  for (const warning of warnings) console.error(`${cliName()}: warning: ${warning}`);
   if (dryRun)
     for (const tag of new Set(
       targets.flatMap((target) => (target.error ? [] : (target.via ?? []))),
@@ -1434,14 +1437,14 @@ async function main(): Promise<number> {
     return 0;
   }
   if (positionals.length === 0 && values.help) {
-    console.log(USAGE);
+    console.log(usageText());
     return 0;
   }
   const entry = Object.hasOwn(COMMANDS, command) ? COMMANDS[command] : undefined;
   if (!entry) {
     const near = closest(command, Object.keys(COMMANDS));
     usageError(
-      `unknown command "${command}"${near ? `; did you mean "${near}"?` : "."} \`fleetrc --help\` lists the commands`,
+      `unknown command "${command}"${near ? `; did you mean "${near}"?` : "."} \`${cliName()} --help\` lists the commands`,
     );
   }
   if (values.help) {
@@ -1455,7 +1458,7 @@ async function main(): Promise<number> {
     if (!allowed.includes(name) && name !== "help")
       usageError(
         name !== "dry-run"
-          ? `${command} does not take --${name}; see \`fleetrc ${command} --help\``
+          ? `${command} does not take --${name}; see \`${cliName()} ${command} --help\``
           : READ_ONLY.has(command)
             ? `${command} changes nothing, so it has no --dry-run`
             : `${command} has no --dry-run`,
@@ -1584,21 +1587,43 @@ function gitProblem(error: GitError): string {
   return `git ${verb ?? ""} failed: ${said.at(-1) ?? `exit ${error.result.code}`}`;
 }
 
-main().then(
-  (code) => {
-    process.exitCode = code;
-  },
-  (error: unknown) => {
-    const { message, expected } = explain(error);
-    // Under --json, a failure is a document too.
-    if (json) emit({ ok: false, error: message });
-    const at = process.env.FLEETRC_TIMER ? `${new Date().toISOString()} ` : "";
-    if (expected) console.error(`${at}fleetrc: ${message}`);
-    else if (process.env.FLEETRC_DEBUG) console.error(error);
-    else
-      console.error(
-        `${at}fleetrc: unexpected error: ${message}\n  run again with FLEETRC_DEBUG=1 for the stack trace, and report it at https://github.com/onmax/fleetrc/issues`,
-      );
-    process.exitCode = 1;
-  },
-);
+/**
+ * Runs the command line `args` (the arguments after the program name) and sets process.exitCode;
+ * a command line it can't run exits with code 2.
+ */
+export async function cli(args: readonly string[]): Promise<void> {
+  argv = args;
+  let parsed;
+  try {
+    parsed = parse([...args]);
+  } catch (error) {
+    // Node's message goes on about positionals after its first sentence.
+    const said = (error as Error).message.split("\n")[0]!.replace(/(\.) .*/, "$1");
+    usageError(`${said} See \`${cliName()} --help\`.`);
+  }
+  ({ values, positionals } = parsed);
+  [command = "sync", ...rest] = positionals;
+  dryRun = values["dry-run"] ?? false;
+  json = values.json ?? false;
+
+  process.env.DO_NOT_TRACK ??= "1";
+
+  await main().then(
+    (code) => {
+      process.exitCode = code;
+    },
+    (error: unknown) => {
+      const { message, expected } = explain(error);
+      // Under --json, a failure is a document too.
+      if (json) emit({ ok: false, error: message });
+      const at = process.env.FLEETRC_TIMER ? `${new Date().toISOString()} ` : "";
+      if (expected) console.error(`${at}${cliName()}: ${message}`);
+      else if (process.env.FLEETRC_DEBUG) console.error(error);
+      else
+        console.error(
+          `${at}${cliName()}: unexpected error: ${message}\n  run again with FLEETRC_DEBUG=1 for the stack trace, and report it at https://github.com/onmax/fleetrc/issues`,
+        );
+      process.exitCode = 1;
+    },
+  );
+}

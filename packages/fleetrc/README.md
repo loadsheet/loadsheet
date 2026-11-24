@@ -24,7 +24,7 @@ Set up fleetrc on all my machines by following https://raw.githubusercontent.com
 
 The agent asks which machines to include, looks at what each one has, and shows you what will go into Git and what will change on each machine before it does anything. It follows the [setup guide](./docs/agent-setup.md).
 
-[Watch or download the explainer (MP4)](.github/assets/explainer.mp4)
+[Watch or download the explainer (MP4)](assets/explainer.mp4)
 
 https://github.com/user-attachments/assets/d51e096f-9e02-49c3-85d4-9986b0aa1169
 

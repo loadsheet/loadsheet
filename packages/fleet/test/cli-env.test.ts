@@ -1,7 +1,7 @@
 // Regression tests for the CLI, init and environment breaks in test/linux-envs.test.ts (L-rows)
 // that had no case there, and for the behavior their fixes added.
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vite-plus/test";
 import {
@@ -17,7 +17,9 @@ import {
 } from "./fixture.ts";
 
 const engines = (
-  JSON.parse(readFileSync(resolve("package.json"), "utf8")) as { engines: { node: string } }
+  JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+    engines: { node: string };
+  }
 ).engines.node;
 
 describe("cli and environments", () => {

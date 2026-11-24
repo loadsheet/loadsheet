@@ -25,6 +25,7 @@ export default defineConfig({
             "packages/*/src/**",
             "packages/*/package.json",
             "packages/*/tsdown.config.ts",
+            "packages/fleet/scripts/agent-table.ts",
             "packages/*/README.md",
             "packages/*/LICENSE",
             "tsdown.shared.ts",
@@ -42,7 +43,17 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["packages/*/test/**/*.test.ts"],
+    projects: [
+      {
+        test: {
+          name: "packages",
+          include: ["packages/*/test/**/*.test.ts"],
+          // fleet runs as its own project, with its own setup and timeouts.
+          exclude: ["**/node_modules/**", "packages/fleet/**"],
+        },
+      },
+      "packages/fleet",
+    ],
   },
   staged: {
     "*": "vp check --fix",

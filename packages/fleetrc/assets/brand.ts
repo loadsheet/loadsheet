@@ -1,7 +1,7 @@
 // Draws the brand from one mark, a regatta: three sails on one waterline, the tallest in blue. A fleet is ships, and
 // the lead sail is the source the others follow. It makes the logo, the favicons, the icons a phone and a shared link
-// show, and the README banner in a light and a dark version, in .github/assets.
-// Usage: node --no-warnings .github/scripts/brand.ts (needs sharp)
+// show, and the README banner in a light and a dark version, in assets/.
+// Usage, in packages/fleetrc: node --no-warnings assets/brand.ts (needs sharp)
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import sharp from "sharp";
@@ -146,27 +146,27 @@ const ico = (images: [size: number, png: Buffer][]) => {
   return Buffer.concat([head, ...images.map(([, data]) => data)]);
 };
 
-write(".github/assets/logo.svg", logo(64));
-write(".github/assets/favicon.svg", logo(32));
-write(".github/assets/favicon-32.png", await png(logo(32), 32));
+write("assets/logo.svg", logo(64));
+write("assets/favicon.svg", logo(32));
+write("assets/favicon-32.png", await png(logo(32), 32));
 write(
-  ".github/assets/favicon.ico",
+  "assets/favicon.ico",
   ico(
     await Promise.all(
       [16, 32, 48].map(async (size) => [size, await png(logo(size), size)] as const),
     ),
   ),
 );
-write(".github/assets/apple-touch-icon.png", await png(tile(180), 180));
-write(".github/assets/logo-512.png", await png(tile(512), 512));
+write("assets/apple-touch-icon.png", await png(tile(180), 180));
+write("assets/logo-512.png", await png(tile(512), 512));
 for (const [name, theme] of [
   ["light", light],
   ["dark", dark],
 ] as const) {
   const svg = banner(theme);
-  write(`.github/assets/banner-${name}.svg`, svg);
+  write(`assets/banner-${name}.svg`, svg);
   write(
-    `.github/assets/banner-${name}.png`,
+    `assets/banner-${name}.png`,
     await sharp(Buffer.from(svg), { density: 144 }).png().toBuffer(),
   );
 }
