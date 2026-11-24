@@ -392,6 +392,34 @@ describe("scanMachine", () => {
     await expect(NodeFSP.readdir(NodePath.join(tmp, "cache"))).rejects.toThrow();
   });
 
+  it("reads no inventory for a harness without transcripts whose home is missing", async () => {
+    const home = await makeHome("not-installed", []);
+    const full = fake.machine!;
+    const absent = defineHarness({
+      id: "absent",
+      signals: fake.signals,
+      inventory: async () => [],
+      machine: {
+        home: (place) => `${place.home}/.absent`,
+        sources: (place) => full.sources(place),
+        inventory: (files, place) => full.inventory(files, place),
+      },
+    });
+    const result = await scanMachine({
+      harnesses: [absent as Harness],
+      days: DAYS,
+      tool: "loadsheet@0.0.0-test",
+      machine: "test-machine",
+      now: NOW,
+      place: { home, env: {} },
+      cacheDir: false,
+    });
+    expect(result.coverage).toEqual([
+      expect.objectContaining({ harness: "absent", installed: false, sessions: 0 }),
+    ]);
+    expect(result.items).toEqual([]);
+  });
+
   it("keeps the fields of the harness listed first when a later one reports the same item", async () => {
     const home = await makeHome("two-harnesses", []);
     const full = fake.machine!;
