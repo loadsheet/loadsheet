@@ -807,6 +807,15 @@ describe("duplicate", () => {
       }),
     ],
     [
+      "a skill Codex used, which no copy lists Codex for",
+      scan("laptop", {
+        coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
+        items: [skill("deploy"), command],
+        sessions: [...sessions(30), ...sessions(30, {}, "codex")],
+        cells: [cell("deploy", 5, { harness: "codex", byModel: 1 })],
+      }),
+    ],
+    [
       "a command beside a project's skill, where precedence and kind disagree",
       scan("laptop", {
         items: [
@@ -1790,6 +1799,52 @@ describe("fixes", () => {
         tool: "t",
       }).findings.find((f) => f.rule === "dead-skill")!.fixes,
     ).toEqual(hidden);
+  });
+
+  it("hides a skill another harness used, though the Scan lists no copy for that harness", () => {
+    // Codex's use is read from the files it opened, so it can use a skill it does not load.
+    const laptop = scan("laptop", {
+      coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
+      items: [skill("idle")],
+      sessions: [...sessions(30), ...sessions(30, {}, "codex")],
+      cells: [cell("idle", 25), cell("idle", 5, { harness: "codex", byModel: 1 })],
+    });
+    expect(
+      report([laptop], { harnesses: ["claude-code"] }).findings.map((f) => [f.rule, f.fixes]),
+    ).toEqual([
+      [
+        "dead-skill",
+        [
+          {
+            machine: "laptop",
+            action: "hide-from-model",
+            path: "~/.claude/skills/idle/SKILL.md",
+            set: { key: "disable-model-invocation", value: true },
+          },
+        ],
+      ],
+    ]);
+  });
+
+  it("a harness without a fix table gets nothing for a skill fleetrc links on another machine", () => {
+    const linked = (harness: string, path: string) =>
+      skill("idle", { harnesses: [harness], managedBy: "fleetrc", pack: "source", path });
+    const laptop = scan("laptop", {
+      coverage: [coverage("laptop", "cursor")],
+      items: [linked("cursor", "~/.cursor/skills/idle")],
+      sessions: [...sessions(30, {}, "cursor")],
+      cells: [cell("idle", 25, { harness: "cursor" })],
+    });
+    // Pi loads the same name there and cannot tell use.
+    const none = Object.fromEntries(Object.keys(EXACT).map((signal) => [signal, "none"]));
+    const server = scan("server", {
+      coverage: [coverage("server", "pi", { sessions: 0, signals: none as typeof EXACT })],
+      items: [linked("pi", "~/.agents/skills/idle")],
+      sessions: [],
+    });
+    expect(
+      report([laptop, server], { harnesses: ["cursor"] }).findings.map((f) => [f.rule, f.fixes]),
+    ).toEqual([["dead-skill", []]]);
   });
 
   it("a harness without a fix table gets the path and no command, and nothing to hide", () => {

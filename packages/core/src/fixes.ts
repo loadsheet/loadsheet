@@ -208,22 +208,23 @@ const removeOne = (
   // A remove is offered only when what it reaches is known and none of it is in use or out of
   // sight; everything else is hidden or turned off.
   const reach = reachOf(items, item);
-  // A harness loads something the removal reaches and uses it, or cannot tell whether it does on
-  // this machine: hide the skill from this one, or turn it off here.
-  const kept = reach?.some((other) =>
-    other.harnesses.some(
-      (harness) =>
-        unfiltered.usedBy(other.id).includes(harness) || !unfiltered.tellsUse(machine, harness),
-    ),
+  // Some harness uses something the removal reaches, whether or not the Scan lists a copy for
+  // it: a harness can read a skill it does not load. Or one that loads it cannot tell use on this
+  // machine. Hide the skill from this harness, or turn it off here.
+  const kept = reach?.some(
+    (other) =>
+      unfiltered.usedBy(other.id).length > 0 ||
+      other.harnesses.some((harness) => !unfiltered.tellsUse(machine, harness)),
   );
   if (kept !== false) return hide();
   const remove: Fix = { machine, action: "remove", path: item.path };
-  // A harness loadsheet has no table for gets the path and no command.
-  if (!table) return remove;
+  // A harness loadsheet has no table for gets the path and no command, once its installer's
+  // checks below have passed.
+  const command = (run: string): Fix => (table ? { ...remove, run } : remove);
   const name = quote(baseName(item.path));
   switch (item.managedBy) {
     case "skills": {
-      if (!table.skillsAgent) return remove;
+      if (!table?.skillsAgent) return remove;
       const scope = item.scope === "user" ? " --global" : "";
       return {
         ...remove,
@@ -259,7 +260,7 @@ const removeOne = (
       const source = unfiltered
         .items()
         .some((other) => other.managedBy === "fleetrc" && fleetrcKey(other.pack ?? "") === key);
-      return source ? undefined : { ...remove, run: `fleetrc remove ${name}` };
+      return source ? undefined : command(`fleetrc remove ${name}`);
     }
     // A plugin's skills come and go with the plugin, and an update replaces its files.
     case "plugin":
@@ -272,7 +273,7 @@ const removeOne = (
         other.path === item.path ? other.id !== item.id : item.reaches!.includes(other.path),
       )
         ? hide()
-        : { ...remove, run: `rm -r ${shellPath(item.path.replace(/\/+$/u, ""))}` };
+        : command(`rm -r ${shellPath(item.path.replace(/\/+$/u, ""))}`);
   }
 };
 
