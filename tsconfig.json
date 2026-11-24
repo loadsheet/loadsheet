@@ -17,6 +17,7 @@
   "include": [
     "packages/*/src",
     "packages/*/test",
+    "packages/*/scripts",
     "packages/*/tsdown.config.ts",
     "tsdown.shared.ts",
     "vite.config.ts"

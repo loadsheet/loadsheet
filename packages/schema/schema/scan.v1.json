@@ -1,0 +1,348 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://loadsheet.dev/schema/scan.v1.json",
+  "title": "loadsheet Scan",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": 1,
+      "description": "The schema version, 1."
+    },
+    "tool": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The tool and version that wrote it, such as loadsheet@0.0.1."
+    },
+    "machine": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The machine's name."
+    },
+    "scannedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When it was scanned, as an ISO 8601 timestamp."
+    },
+    "window": {
+      "type": "array",
+      "items": [
+        {
+          "type": "string",
+          "format": "date",
+          "description": "A UTC calendar day, written YYYY-MM-DD."
+        },
+        {
+          "type": "string",
+          "format": "date",
+          "description": "A UTC calendar day, written YYYY-MM-DD."
+        }
+      ],
+      "minItems": 2,
+      "additionalItems": false,
+      "description": "The first and last day it covers, inclusive."
+    },
+    "coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "machine": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The machine's name."
+          },
+          "harness": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The harness id."
+          },
+          "installed": {
+            "type": "boolean",
+            "description": "Whether the harness's home exists on that machine."
+          },
+          "sessions": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Sessions found in the window."
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Harness versions seen in those sessions."
+          },
+          "firstDay": {
+            "type": "string",
+            "format": "date",
+            "description": "The first day with a session."
+          },
+          "lastDay": {
+            "type": "string",
+            "format": "date",
+            "description": "The last day with a session."
+          },
+          "signals": {
+            "type": "object",
+            "properties": {
+              "listing": {
+                "enum": ["exact", "inferred", "none"],
+                "type": "string",
+                "description": "How well a harness provides a signal: read directly, inferred from indirect evidence, or not at all."
+              },
+              "modelUse": {
+                "enum": ["exact", "inferred", "none"],
+                "type": "string",
+                "description": "How well a harness provides a signal: read directly, inferred from indirect evidence, or not at all."
+              },
+              "userUse": {
+                "enum": ["exact", "inferred", "none"],
+                "type": "string",
+                "description": "How well a harness provides a signal: read directly, inferred from indirect evidence, or not at all."
+              },
+              "instructions": {
+                "enum": ["exact", "inferred", "none"],
+                "type": "string",
+                "description": "How well a harness provides a signal: read directly, inferred from indirect evidence, or not at all."
+              },
+              "mcp": {
+                "enum": ["exact", "inferred", "none"],
+                "type": "string",
+                "description": "How well a harness provides a signal: read directly, inferred from indirect evidence, or not at all."
+              },
+              "tokens": {
+                "enum": ["exact", "inferred", "none"],
+                "type": "string",
+                "description": "How well a harness provides a signal: read directly, inferred from indirect evidence, or not at all."
+              }
+            },
+            "required": ["listing", "modelUse", "userUse", "instructions", "mcp", "tokens"],
+            "description": "How well each signal is provided."
+          }
+        },
+        "required": ["machine", "harness", "installed", "sessions", "versions", "signals"],
+        "description": "What one harness on one machine could tell."
+      },
+      "description": "What each harness on this machine could tell."
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^(skill|instructions|mcp|subagent):.+$",
+            "description": "Its id, `${kind}:${name}`."
+          },
+          "ref": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": ["skill", "instructions", "mcp", "subagent"],
+                "type": "string",
+                "description": "What the piece of context is."
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Its name, unique within its kind."
+              }
+            },
+            "required": ["kind", "name"],
+            "description": "Its kind and name."
+          },
+          "harnesses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Ids of the harnesses that load it from this path."
+          },
+          "scope": {
+            "enum": ["user", "project", "plugin"],
+            "type": "string",
+            "description": "Where it is installed."
+          },
+          "pack": {
+            "type": "string",
+            "description": "Where it came from: a plugin name, `owner/repo`, or a fleetrc source."
+          },
+          "managedBy": {
+            "enum": ["fleetrc", "skills", "plugin", "hand"],
+            "type": "string",
+            "description": "What installed it."
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!\\/home\\/|\\/Users\\/|[A-Za-z]:)",
+            "description": "Its file or folder, relative to the home directory (`~/...`) or to the project."
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "The sha256 of its file content, as lowercase hex."
+          },
+          "chars": {
+            "type": "object",
+            "properties": {
+              "listed": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Characters of its entry in the harness's listing: name and description."
+              },
+              "body": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Characters of the rest of the file."
+              }
+            },
+            "required": ["listed", "body"],
+            "description": "Its size in characters: listed is its entry in the harness's listing (name and description), body is the rest of the file."
+          },
+          "modelInvocable": {
+            "type": "boolean",
+            "description": "Whether the model may invoke it on its own."
+          },
+          "description": {
+            "type": "string",
+            "description": "Its description, in pack mode only."
+          }
+        },
+        "required": [
+          "id",
+          "ref",
+          "harnesses",
+          "scope",
+          "managedBy",
+          "path",
+          "digest",
+          "chars",
+          "modelInvocable"
+        ],
+        "description": "One installed piece of context found on disk (or in a pack). Two Items with the same id that the same harness loads are a duplicate."
+      },
+      "description": "Installed pieces of context."
+    },
+    "sessions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string",
+            "format": "date",
+            "description": "The day the sessions started."
+          },
+          "harness": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The harness id."
+          },
+          "via": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The entrypoint or originator that started the sessions."
+          },
+          "sessions": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Sessions started."
+          },
+          "fixedTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "First-request input tokens, summed over the sessions that reported them."
+          },
+          "measured": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Sessions that reported their first-request input tokens."
+          }
+        },
+        "required": ["day", "harness", "via", "sessions", "fixedTokens", "measured"],
+        "description": "Additive session totals for one harness, day and entrypoint: the denominator for every share."
+      },
+      "description": "Session totals."
+    },
+    "cells": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string",
+            "format": "date",
+            "description": "The day the sessions started."
+          },
+          "harness": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The harness id."
+          },
+          "via": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The entrypoint or originator that started the sessions, such as cli or an app's name."
+          },
+          "item": {
+            "type": "string",
+            "pattern": "^(skill|instructions|mcp|subagent):.+$",
+            "description": "The item's id."
+          },
+          "sessions": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Sessions that listed it (skill, mcp, subagent) or loaded it (instructions)."
+          },
+          "bare": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Of those sessions, how many listed it without its description."
+          },
+          "chars": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Characters it occupied, summed over those sessions."
+          },
+          "byModel": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Times the model invoked it."
+          },
+          "byUser": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Times the user invoked it."
+          }
+        },
+        "required": [
+          "day",
+          "harness",
+          "via",
+          "item",
+          "sessions",
+          "bare",
+          "chars",
+          "byModel",
+          "byUser"
+        ],
+        "description": "Additive usage counters for one item, in one harness, on one day, through one entrypoint."
+      },
+      "description": "Usage counters."
+    }
+  },
+  "required": [
+    "schema",
+    "tool",
+    "machine",
+    "scannedAt",
+    "window",
+    "coverage",
+    "items",
+    "sessions",
+    "cells"
+  ],
+  "description": "One machine's counters for a window: what is installed and how it was used, with no text."
+}

@@ -1,0 +1,285 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://loadsheet.dev/schema/config.v1.json",
+  "title": "loadsheet config",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "The JSON Schema this file follows."
+    },
+    "window": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Days of history to read, default 30."
+    },
+    "harnesses": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Read only these harness ids."
+    },
+    "via": {
+      "type": "object",
+      "properties": {
+        "include": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Read only sessions from these entrypoints."
+        },
+        "exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Skip sessions from these entrypoints."
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "description": "Filter sessions by entrypoint or originator."
+    },
+    "ignore": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(skill|instructions|mcp|subagent):.+$",
+        "description": "A piece of context's id, `${kind}:${name}`."
+      },
+      "description": "Item ids never reported."
+    },
+    "rules": {
+      "type": "object",
+      "properties": {
+        "invisible-skill": {
+          "anyOf": [
+            {
+              "const": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "minSessions": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Least sessions that listed it, default 5."
+                },
+                "bareShare": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Least share of those that listed it bare, default 0.5."
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            }
+          ],
+          "description": "A skill listed without its description in most sessions."
+        },
+        "dead-skill": {
+          "anyOf": [
+            {
+              "const": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "minSessions": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Least sessions that listed it, default 20."
+                },
+                "minDays": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Least days of history, default 14."
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            }
+          ],
+          "description": "A skill listed for weeks and never invoked."
+        },
+        "manual-only": {
+          "anyOf": [
+            {
+              "const": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "minUserUses": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Least user invocations, default 3."
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            }
+          ],
+          "description": "A model-invocable skill only the user invokes."
+        },
+        "expensive-description": {
+          "anyOf": [
+            {
+              "const": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "maxChars": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Most listed characters, default 300."
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            }
+          ],
+          "description": "A skill whose listing entry is longer than it should be."
+        },
+        "dead-pack": {
+          "anyOf": [
+            {
+              "const": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "minSkills": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Least skills in the pack, default 5."
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            }
+          ],
+          "description": "A pack none of whose skills is used."
+        },
+        "duplicate": {
+          "anyOf": [
+            {
+              "const": false
+            },
+            {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": false
+            }
+          ],
+          "description": "The same piece of context installed more than once."
+        },
+        "heavy-instructions": {
+          "anyOf": [
+            {
+              "const": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "maxChars": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Most characters, default 12000."
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            }
+          ],
+          "description": "An instruction file larger than it should be."
+        },
+        "idle-mcp": {
+          "anyOf": [
+            {
+              "const": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "minSessions": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Least sessions that listed it, default 20."
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            }
+          ],
+          "description": "An MCP server listed and never called."
+        },
+        "harness-mismatch": {
+          "anyOf": [
+            {
+              "const": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "minSessions": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "A harness with fewer sessions in the window counts as unused, default 1."
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            }
+          ],
+          "description": "Context installed for a harness that is not used."
+        },
+        "drift": {
+          "anyOf": [
+            {
+              "const": false
+            },
+            {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": false
+            }
+          ],
+          "description": "The same piece of context differs between machines."
+        },
+        "short-history": {
+          "anyOf": [
+            {
+              "const": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "minDays": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Least days of history, default 30."
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            }
+          ],
+          "description": "Too little history to judge."
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "description": "Per rule: false turns it off, an object overrides its thresholds."
+    }
+  },
+  "required": [],
+  "additionalProperties": false,
+  "description": "User config file. Every field is optional."
+}
