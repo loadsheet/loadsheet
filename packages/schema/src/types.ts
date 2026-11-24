@@ -54,6 +54,8 @@ export interface Item {
   managedBy: ManagedBy;
   /** Its file or folder, relative to the home directory (`~/...`) or to the project. */
   path: string;
+  /** The paths of the other Items of this machine that removing this one would take or break, worked out on the machine's disk; absent when that is not known. */
+  reaches?: string[];
   /** The sha256 of its file content, as lowercase hex. */
   digest: string;
   /** Its size in characters: listed is paid by every session that lists or loads it, body only by a session that invokes it. */

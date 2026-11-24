@@ -107,6 +107,9 @@ describe("parsing", () => {
     "/home/ada/.claude/skills/x",
     "/Users/ada/.claude/skills/x",
     "/var/home/ada/.claude/skills/x",
+    "//home/ada/.claude/skills/x",
+    "/./home/ada/.claude/skills/x",
+    "/var//home/ada/.claude/skills/x",
     "/root/.codex/skills/x",
     "/root",
     "C:\\Users\\ada\\x",
@@ -241,6 +244,42 @@ describe("parsing", () => {
     expect(issuesOf(() => parseConfig({ rules: { "dead-skils": false } }))).toEqual([
       { path: '$.rules["dead-skils"]', message: 'unknown key "dead-skils"' },
     ]);
+  });
+
+  it("rejects a filter that is not an entrypoint or a harness id", () => {
+    expect(
+      issuesOf(() =>
+        parseConfig({
+          via: { include: ["/home/someone/private"], exclude: ["claude-vscode", "a/b"] },
+          harnesses: ["claude-code", "Claude Code"],
+          ignore: [
+            "mcp:@scope/server",
+            "skill:/home/someone/private",
+            "skill: /home/someone/private",
+            "skill:\t/Users/someone/private",
+          ],
+        }),
+      ).map((issue) => issue.path),
+    ).toEqual([
+      "$.harnesses[1]",
+      "$.via.include[0]",
+      "$.via.exclude[1]",
+      "$.ignore[1]",
+      "$.ignore[2]",
+      "$.ignore[3]",
+    ]);
+    expect(() =>
+      parseConfig({
+        via: { include: ["sdk-ts", "codex_vscode", "Codex Desktop"] },
+        ignore: [
+          "skill:my skill",
+          "skill:team/deploy",
+          "instructions:~/.codex/AGENTS.md",
+          "instructions:CLAUDE.md",
+          "instructions:home/notes.md",
+        ],
+      }),
+    ).not.toThrow();
   });
 
   it("rejects an unknown threshold and an unknown top-level key in a config", () => {
