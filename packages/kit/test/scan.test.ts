@@ -476,6 +476,43 @@ describe("the scan cache", () => {
     expect(parsed).toBe(all);
   });
 
+  it("leaves the cache file alone on a run that read nothing", async () => {
+    const home = await makeHome("idle", SESSIONS);
+    await scan(home, cacheDir());
+    const file = NodePath.join(cacheDir(), "fake.json");
+    const before = await NodeFSP.stat(file);
+
+    parsed = 0;
+    const warm = await scan(home, cacheDir());
+    expect(parsed).toBe(0);
+    const after = await NodeFSP.stat(file);
+    expect([after.ino, after.mtimeMs]).toEqual([before.ino, before.mtimeMs]);
+    expect(warm).toEqual(await cold(home));
+
+    await NodeFSP.rm(transcriptPath(home, SESSIONS[2]!.sid));
+    await scan(home, cacheDir());
+    expect((await NodeFSP.stat(file)).ino).not.toBe(before.ino);
+  });
+
+  it("reads again the one transcript whose cache entry is damaged", async () => {
+    const home = await makeHome("damaged", SESSIONS);
+    const expected = await cold(home);
+    await scan(home, cacheDir());
+    const file = NodePath.join(cacheDir(), "fake.json");
+    const stored = JSON.parse(await NodeFSP.readFile(file, "utf8"));
+    const keys = Object.keys(stored.files);
+    expect(keys).toHaveLength(SESSIONS.length);
+    stored.files[keys[0]!][7] = [[], [0, 0, 0, [stored.strings.length, 1, 0, 0, 0, 0]], []];
+    await NodeFSP.writeFile(file, JSON.stringify(stored));
+
+    parsed = 0;
+    expect(await scan(home, cacheDir())).toEqual(expected);
+    expect(parsed).toBeGreaterThan(0);
+    parsed = 0;
+    expect(await scan(home, cacheDir())).toEqual(expected);
+    expect(parsed).toBe(0);
+  });
+
   it("holds no transcript text, session id, file name or home path", async () => {
     const home = await makeHome("clean", SESSIONS);
     const sid = SESSIONS[0]!.sid;
