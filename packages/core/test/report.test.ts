@@ -504,6 +504,20 @@ describe("expensive-description", () => {
     }
   });
 
+  it("charges a session that listed the skill bare only `- name`", () => {
+    const { findings } = findingsOf(
+      [
+        scan("laptop", {
+          items: [skill("long", { chars: { listed: 400, body: 0 } })],
+          cells: [cell("long", 30, { bare: 20 })],
+        }),
+      ],
+      "expensive-description",
+    );
+    // 10 full entries of 100 tokens, and 20 bare `- long` of 2.
+    expect(findings[0]!.evidence.tokensPerUse).toBe(1040);
+  });
+
   it("orders by listing tokens per use, and shortens the SKILL.md on each machine", () => {
     const items = [
       skill("often", { chars: { listed: 800, body: 0 } }),
@@ -1019,6 +1033,27 @@ describe("buildReport", () => {
         use: { byModel: 0, byUser: 0 },
       },
     ]);
+  });
+
+  it("measures a line whose install lists nothing by what its sessions held", () => {
+    // An MCP server's Item cannot know its listing's size; the transcripts saw 200 characters.
+    const server: Item = {
+      ...skill("x"),
+      id: "mcp:docs",
+      ref: { kind: "mcp", name: "docs" },
+      chars: { listed: 0, body: 0 },
+    };
+    const [sheet] = report([
+      scan("laptop", {
+        items: [server],
+        cells: [{ ...cell("x", 30, { chars: 6000 }), item: "mcp:docs" }],
+      }),
+    ]).sheet;
+    expect(sheet!.lines[0]).toMatchObject({
+      item: "mcp:docs",
+      chars: { listed: 200, body: 0 },
+      tokens: { value: 50, basis: "estimated" },
+    });
   });
 
   it("is local for one machine, and lists machines that could not be read", () => {

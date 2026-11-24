@@ -166,10 +166,10 @@ const buildSheet = (
       ...(installs.get(id) ?? []).map(({ machine }) => machine),
       ...(used?.machines ?? []),
     ]);
-    // An item installed nowhere is measured by what its sessions held.
-    const chars = install
-      ? { ...install.chars }
-      : { listed: used?.sessions ? Math.round(used.chars / used.sessions) : 0, body: 0 };
+    // An item installed nowhere, or whose install measured no listing (an MCP server's size is not
+    // on disk), is measured by what its sessions held.
+    const chars = install ? { ...install.chars } : { listed: 0, body: 0 };
+    if (chars.listed === 0 && used?.sessions) chars.listed = Math.round(used.chars / used.sessions);
     const line: Line = {
       item: id,
       ref: install ? { ...install.ref } : parseId(id),

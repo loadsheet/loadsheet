@@ -1,17 +1,8 @@
 import type { Finding, Id } from "@loadsheet/schema";
-import { installsOf, shortenFixes, uniqueFixes } from "../fixes.ts";
+import { bareEntry, installsOf, shortenFixes, uniqueFixes } from "../fixes.ts";
 import { defineRule, estimateTokens, sum, type Hit, type Install } from "./rule.ts";
 
 const usesOf = (hits: Hit[]) => sum(hits, ({ line }) => line.use.byModel + line.use.byUser);
-
-/**
- * Listing tokens paid per use: what every session that listed it paid, over the times it was
- * invoked (at least one), so a long description nobody invokes comes first.
- */
-const tokensPerUse = (hits: Hit[]) =>
-  Math.round(
-    sum(hits, ({ line }) => line.tokens.value * line.exposure.sessions) / Math.max(1, usesOf(hits)),
-  );
 
 /**
  * A line of a sheet over maxChars: its installs over it, and the largest of their listing entries.
@@ -21,6 +12,21 @@ interface Over extends Hit {
   installs: Install[];
   listed: number;
 }
+
+/**
+ * Listing tokens paid per use: what every session that listed it paid, the full entry or, listed
+ * bare, `- name`, over the times it was invoked (at least one), so a long description nobody
+ * invokes comes first.
+ */
+const tokensPerUse = (hits: Over[]) => {
+  let paid = 0;
+  for (const { line, listed } of hits) {
+    const { sessions, bare } = line.exposure;
+    const bareChars = Math.min(bareEntry(line.ref.name), listed);
+    paid += estimateTokens(listed) * (sessions - bare) + estimateTokens(bareChars) * bare;
+  }
+  return Math.round(paid / Math.max(1, usesOf(hits)));
+};
 
 /** A skill whose listing entry is longer than maxChars; shortening it saves the excess in every session. */
 export const expensiveDescription = defineRule({
