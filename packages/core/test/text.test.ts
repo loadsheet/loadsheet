@@ -142,6 +142,15 @@ describe("renderText on the fleet example", () => {
     expect(text.trimEnd().endsWith(PROMPT_DOC)).toBe(true);
   });
 
+  it("ends on the summary of the findings, where a terminal leaves the reader", () => {
+    const summary = text.indexOf(`${fleet.findings.length} findings; the number is tokens`);
+    const lastFix = Math.max(
+      ...fleet.findings.flatMap(({ fixes }) => fixes.map(({ path }) => text.lastIndexOf(path))),
+    );
+    expect(summary).toBeGreaterThan(lastFix);
+    expect(text.slice(summary).split("\n").length).toBeLessThan(20);
+  });
+
   it("says why a finding has no fix", () => {
     expect(text).toContain("No fix: this is for you to know; there is nothing to change.");
   });

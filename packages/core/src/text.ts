@@ -340,8 +340,12 @@ const findingRows = (findings: Finding[]) =>
     { 1: ITEM_WIDTH },
   );
 
-const findingsBlock = (report: Report): string[] => {
-  if (!report.findings.length) return ["No findings."];
+/**
+ * The findings in full, rule by rule, and their summary. The summary is printed last: a terminal
+ * shows the end of a long report, and it is what a person reads first.
+ */
+const findingsBlocks = (report: Report): { details: string[]; summary: string[] } => {
+  if (!report.findings.length) return { details: [], summary: ["No findings."] };
   const showMachine = report.machines.length > 1;
   const label = (finding: Finding) => finding.item ?? finding.pack ?? finding.id;
 
@@ -366,7 +370,7 @@ const findingsBlock = (report: Report): string[] => {
   rules.sort((a, b) => levelOf(a) - levelOf(b));
 
   const groupOf = (rule: string) => report.findings.filter((finding) => finding.rule === rule);
-  const out = [
+  const summary = [
     `${plural(report.findings.length, "finding")}; the number is tokens a session would save`,
     ...table(
       rules.map((rule) => {
@@ -383,12 +387,13 @@ const findingsBlock = (report: Report): string[] => {
       [1, 2],
     ),
   ];
+  const out: string[] = [];
   for (const rule of rules) {
     const group = groupOf(rule);
     const fixable = group.filter((finding) => finding.fixes.length);
     const fixless = group.filter((finding) => !finding.fixes.length);
+    if (out.length) out.push("");
     out.push(
-      "",
       `${rule} (${group[0]!.level}), ${num(group.length)}${RULE_TITLE[rule] ? `: ${RULE_TITLE[rule]}` : ""}`,
     );
     const sharedHere: string[] = [];
@@ -430,7 +435,7 @@ const findingsBlock = (report: Report): string[] => {
       );
     }
   }
-  return out;
+  return { details: out, summary };
 };
 
 // Skipped
@@ -468,13 +473,15 @@ const skippedBlock = (report: Report): string[] => {
  * lets loadsheet see, the findings by rule with every fix in full, and the rules that did not run.
  */
 export const renderText = (report: Report): string => {
+  const findings = findingsBlocks(report);
   const blocks = [
     header(report),
     ...report.sheet.map((sheet) => sheetBlock(report, sheet)),
     report.sheet.length ? [sheetLegend(report)] : [],
     coverageBlock(report),
-    findingsBlock(report),
+    findings.details,
     skippedBlock(report),
+    findings.summary,
     [
       "loadsheet changes none of your files. Every number and fix as JSON: loadsheet --json",
       "To have your agent apply the fixes you accept, paste it the prompt in",
