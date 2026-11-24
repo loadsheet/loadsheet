@@ -42,13 +42,15 @@ export const heavyInstructions = defineRule({
         fixes: [],
       };
       if (mode !== "pack") {
-        finding.where = group.flatMap(({ sheet, line, installs }) =>
-          (installs.length
-            ? [...new Set(installs.map(({ machine }) => machine))]
-            : line.machines
-          ).map((machine) => ({ machine, harness: sheet.harness })),
+        const machinesOf = ({ line, installs }: Heavy) =>
+          installs.length ? [...new Set(installs.map(({ machine }) => machine))] : line.machines;
+        finding.where = group.flatMap((hit) =>
+          machinesOf(hit).map((machine) => ({ machine, harness: hit.sheet.harness })),
         );
-        finding.evidence.sessions = sum(group, ({ line }) => line.exposure.sessions);
+        // A line's sessions are over all its machines, so they are the finding's only when it
+        // holds for every one of them.
+        if (group.every((hit) => machinesOf(hit).length === hit.line.machines.length))
+          finding.evidence.sessions = sum(group, ({ line }) => line.exposure.sessions);
       }
       findings.push(finding);
     }

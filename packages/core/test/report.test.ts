@@ -813,7 +813,6 @@ describe("heavy-instructions", () => {
           items: [instructions("CLAUDE.md", 20000), instructions("rules/short.md", 400)],
           cells: [{ ...cell("x", 30, { chars: 600000 }), item: "instructions:CLAUDE.md" }],
         }),
-        scan("server", { items: [instructions("CLAUDE.md", 900)] }),
       ],
       "heavy-instructions",
     );
@@ -827,6 +826,23 @@ describe("heavy-instructions", () => {
         evidence: { chars: 20000, maxChars: 12000, sessions: 30 },
         fixes: [],
       },
+    ]);
+  });
+
+  it("names only the machines over the limit, and no sessions it cannot tell apart", () => {
+    const loaded = (chars: number, listed: number) => ({
+      ...cell("x", listed, { chars: listed * chars }),
+      item: "instructions:CLAUDE.md",
+    });
+    const { findings } = findingsOf(
+      [
+        scan("laptop", { items: [instructions("CLAUDE.md", 20000)], cells: [loaded(20000, 3)] }),
+        scan("server", { items: [instructions("CLAUDE.md", 900)], cells: [loaded(900, 29)] }),
+      ],
+      "heavy-instructions",
+    );
+    expect(findings.map((f) => [f.where, f.evidence])).toEqual([
+      [[{ machine: "laptop", harness: "claude-code" }], { chars: 20000, maxChars: 12000 }],
     ]);
   });
 });
