@@ -18,10 +18,10 @@ Each package's dependencies in `package.json` are the layering. Keep imports ins
 
 Fleet is a separate CLI layer; it parses its own arguments independently of `loadsheet`.
 
-| Package                            | May import                            | Must not know                                                                                 |
-| ---------------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `@loadsheet/fleet`                 | Node, and the dependencies it bundles | schema, kit, harnesses, core, `loadsheet`; the command name is passed to `run(argv, name)`      |
-| `fleetrc` (`packages/fleetrc`)     | `@loadsheet/fleet`                    | anything but `run`; it is the npm bin and must keep behaving as before                         |
+| Package                        | May import                            | Must not know                                                                              |
+| ------------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `@loadsheet/fleet`             | Node, and the dependencies it bundles | schema, kit, harnesses, core, `loadsheet`; the command name is passed to `run(argv, name)` |
+| `fleetrc` (`packages/fleetrc`) | `@loadsheet/fleet`                    | anything but `run`; it is the npm bin and must keep behaving as before                     |
 
 `vp lint` fails when `packages/core/src` or `packages/schema/src` imports a Node builtin, kit, harnesses or `loadsheet`, and when `packages/harnesses/src` or `packages/kit/src` outside `node/` imports a Node builtin or `@loadsheet/kit/node`.
 
