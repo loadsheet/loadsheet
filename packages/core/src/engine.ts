@@ -42,7 +42,8 @@ export interface RuleInput {
  * Runs every enabled rule once over the sheets that can answer it. A sheet whose harness grades a
  * needed signal none is skipped as missing-signal, one with too little history as not-enough-data;
  * a disabled rule, or one not written yet whose signals are all there, is left out. A fix-level
- * finding whose every machine and harness a cut finding for the same item holds for is dropped.
+ * finding whose every machine and harness a cut finding for the same item holds for is dropped,
+ * and an item finding whose every place a cut finding for its pack holds for.
  */
 export const runRules = ({ mode, sheets, config, unfiltered = NOTHING_UNFILTERED }: RuleInput) => {
   const findings: Finding[] = [];
@@ -76,13 +77,27 @@ export const runRules = ({ mode, sheets, config, unfiltered = NOTHING_UNFILTERED
       .filter((finding) => finding.level === "cut" && finding.item !== undefined)
       .flatMap((finding) => finding.where.map((where) => place(finding.item!, where))),
   );
-  // A fix-level finding goes only when a cut covers every place it holds for.
-  const covered = (finding: Finding) =>
+  // A cut for a pack holds for each of its skills where it holds.
+  const packed = new Set<string>();
+  for (const finding of findings) {
+    if (finding.level !== "cut" || finding.pack === undefined || finding.item !== undefined)
+      continue;
+    for (const where of finding.where) {
+      for (const line of visible.find((sheet) => sheet.harness === where.harness)?.lines ?? []) {
+        if (line.pack === finding.pack && line.machines.includes(where.machine))
+          packed.add(place(line.item, where));
+      }
+    }
+  }
+  // A finding goes only when a cut covers every place it holds for: a fix-level one by its item's
+  // or its pack's cut, a cut by its pack's.
+  const covered = (finding: Finding, by: (key: string) => boolean) =>
     finding.item !== undefined &&
     finding.where.length > 0 &&
-    finding.where.every((where) => cut.has(place(finding.item!, where)));
-  return {
-    findings: findings.filter((finding) => finding.level !== "fix" || !covered(finding)),
-    skipped,
-  };
+    finding.where.every((where) => by(place(finding.item!, where)));
+  const dropped = (finding: Finding) =>
+    finding.level === "fix"
+      ? covered(finding, (key) => cut.has(key) || packed.has(key))
+      : finding.level === "cut" && covered(finding, (key) => packed.has(key));
+  return { findings: findings.filter((finding) => !dropped(finding)), skipped };
 };

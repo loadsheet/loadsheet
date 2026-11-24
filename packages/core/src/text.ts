@@ -336,6 +336,12 @@ const noFixReason = (report: Report, finding: Finding): string => {
       return "every session that loads the file pays for all of it; trim what the agent does not need.";
     case "idle-mcp":
       return "every session lists the server; turn it off where you do not need it.";
+    case "dead-pack": {
+      const lines = report.sheet.flatMap((sheet) => sheet.lines);
+      if (lines.some((line) => line.pack === finding.pack && line.managedBy === "plugin"))
+        return "its skills come with a plugin. Turning the plugin off in /plugin also turns off its hooks and commands, which loadsheet does not read: check you need none of them first.";
+      break;
+    }
   }
   if (finding.level === "info") return "this is for you to know; there is nothing to change.";
   if (finding.item === undefined) return "loadsheet has no safe change to offer.";

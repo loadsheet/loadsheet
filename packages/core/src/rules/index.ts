@@ -1,4 +1,5 @@
 import type { RuleId, Signal } from "@loadsheet/schema";
+import { deadPack } from "./dead-pack.ts";
 import { deadSkill } from "./dead-skill.ts";
 import { drift } from "./drift.ts";
 import { expensiveDescription } from "./expensive-description.ts";
@@ -16,6 +17,7 @@ export const rules: Rule[] = [
   deadSkill as Rule,
   manualOnly as Rule,
   expensiveDescription as Rule,
+  deadPack as Rule,
   heavyInstructions as Rule,
   idleMcp as Rule,
   harnessMismatch as Rule,
@@ -28,6 +30,5 @@ export const rules: Rule[] = [
  * A rule moves from here into `rules` when it is written.
  */
 export const pendingRules: Partial<Record<RuleId, Signal[]>> = {
-  "dead-pack": ["listing", "modelUse", "userUse"],
   duplicate: [],
 };

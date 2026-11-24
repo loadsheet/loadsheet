@@ -1543,21 +1543,15 @@
       "evidence": {
         "skills": 6,
         "sessions": 412,
-        "uses": 0,
-        "listedChars": 1082
+        "days": 30,
+        "byModel": 0,
+        "byUser": 0
       },
       "savesTokens": {
         "value": 272,
         "basis": "estimated"
       },
-      "fixes": [
-        {
-          "machine": "laptop",
-          "action": "remove",
-          "path": "~/.claude/plugins/cache/data-toolkit",
-          "run": "claude plugin uninstall data-toolkit"
-        }
-      ]
+      "fixes": []
     },
     {
       "id": "duplicate:skill:git-commit",

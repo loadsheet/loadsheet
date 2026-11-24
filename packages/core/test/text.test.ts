@@ -153,6 +153,9 @@ describe("renderText on the fleet example", () => {
 
   it("says why a finding has no fix, in the rule's own words", () => {
     expect(text).toContain("No fix: its copies on laptop, server differ;");
+    expect(text).toContain(
+      "No fix: its skills come with a plugin. Turning the plugin off in /plugin",
+    );
     expect(text).toContain("No fix: every session lists the server;");
     expect(text).toContain(
       "No fix: the harness kept too little history for the usage rules to judge.",

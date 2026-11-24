@@ -574,6 +574,92 @@ const serverCell = (name: string, listed: number, extra: Partial<Omit<Cell, "ite
   item: `mcp:${name}`,
 });
 
+describe("dead-pack", () => {
+  const NAMES = ["a", "b", "c", "d", "e"];
+  const packed = (name: string, extra: Partial<Item> = {}) =>
+    skill(name, { pack: "acme/kit", managedBy: "skills", ...extra });
+  const kit = (names = NAMES, extra: Partial<Item> = {}, used: string[] = []) =>
+    scan("laptop", {
+      items: names.map((name) => packed(name, extra)),
+      cells: names.map((name) => cell(name, 30, used.includes(name) ? { byModel: 1 } : {})),
+    });
+  /** Every finding, with dead-skill and expensive-description running beside dead-pack. */
+  const both = (built: Scan) =>
+    report([built], {
+      rules: {
+        ...only("dead-pack").rules,
+        "dead-skill": {},
+        "expensive-description": {},
+      },
+    }).findings;
+
+  it.each([
+    ["fires for a pack of minSkills skills none of which is invoked", kit(), ["acme/kit"]],
+    ["holds when one of its skills is invoked", kit(NAMES, {}, ["c"]), []],
+    ["holds below minSkills", kit(NAMES.slice(0, 4)), []],
+  ])("%s", (_, built, expected) => {
+    const result = findingsOf([built], "dead-pack");
+    expect(result.findings.map((f) => f.pack)).toEqual(expected);
+    expect(result.skipped).toEqual([]);
+  });
+
+  it("is one finding for the pack, with no item, saving every skill's listing", () => {
+    const { findings } = findingsOf([kit()], "dead-pack");
+    expect(findings).toEqual([
+      {
+        id: "dead-pack:acme/kit",
+        rule: "dead-pack",
+        level: "cut",
+        pack: "acme/kit",
+        where: [{ machine: "laptop", harness: "claude-code" }],
+        evidence: { skills: 5, sessions: 30, days: 26, byModel: 0, byUser: 0 },
+        savesTokens: { value: 150, basis: "estimated" },
+        fixes: NAMES.map((name) => ({
+          machine: "laptop",
+          action: "remove",
+          path: `~/.claude/skills/${name}`,
+          run: `npx skills remove ${name} --global --agent claude-code --yes`,
+        })),
+      },
+    ]);
+  });
+
+  it("takes its skills' own findings away, and keeps them when one skill is in use", () => {
+    const long = kit(NAMES, { chars: { listed: 400, body: 0 } });
+    expect(both(long).map((f) => f.id)).toEqual(["dead-pack:acme/kit"]);
+    expect(both(kit(NAMES, {}, ["c"])).map((f) => f.id)).toEqual(
+      ["a", "b", "d", "e"].map((name) => `dead-skill:skill:${name}`),
+    );
+  });
+
+  it("offers no fix for a plugin, whose hooks and commands loadsheet does not read", () => {
+    const plugin = kit(NAMES, { managedBy: "plugin", scope: "plugin" });
+    expect(both(plugin).map((f) => [f.id, f.fixes])).toEqual([["dead-pack:acme/kit", []]]);
+  });
+
+  it("skips a harness that cannot tell use, and one with less history than dead-skill wants", () => {
+    const blind = kit();
+    blind.coverage = [
+      coverage("laptop", "claude-code", { signals: { ...EXACT, userUse: "none" } }),
+    ];
+    expect(findingsOf([blind], "dead-pack")).toMatchObject({
+      items: [],
+      skipped: [
+        {
+          rule: "dead-pack",
+          harness: "claude-code",
+          reason: "missing-signal",
+          missing: ["userUse"],
+        },
+      ],
+    });
+    const young = { ...kit(), sessions: sessions(30, { day: "2026-11-20" }) };
+    expect(findingsOf([young], "dead-pack").skipped).toEqual([
+      { rule: "dead-pack", harness: "claude-code", reason: "not-enough-data" },
+    ]);
+  });
+});
+
 describe("heavy-instructions", () => {
   it.each([
     ["fires past maxChars", 12001, ["instructions:CLAUDE.md"]],
