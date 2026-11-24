@@ -631,6 +631,15 @@ describe("fixes", () => {
         set: { key: 'skills.config[path="~/.agents/skills/idle/SKILL.md"].enabled', value: false },
       },
     ]);
+    // CODEX_HOME moves the config: an MCP server's Item names the config.toml it came from.
+    const server: Item = {
+      ...skill("x"),
+      id: "mcp:docs",
+      ref: { kind: "mcp", name: "docs" },
+      harnesses: ["codex"],
+      path: "~/.config/codex/config.toml",
+    };
+    expect(fixes([shared, server]).map((fix) => fix.path)).toEqual(["~/.config/codex/config.toml"]);
     // A plugin's path holds its version, so an entry for it would not last.
     const plugin = { ...shared, managedBy: "plugin" as const, scope: "plugin" as const };
     expect(fixes([plugin])).toEqual([]);

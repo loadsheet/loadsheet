@@ -24,7 +24,7 @@ interface HarnessFixes {
   /** The change that hides one install, or none when no change to it would last. */
   hide: (item: Item) => Change | undefined;
   /** The change that turns one install off in this harness alone, where another harness uses its path. */
-  off?: (item: Item) => Change | undefined;
+  off?: (item: Item, sheet: RuleSheet, machine: string) => Change | undefined;
   /** The skills CLI's `--agent` id for this harness. */
   skillsAgent?: string;
   /** Whether a bare listing is the user's own choice, not the listing's budget. */
@@ -51,6 +51,26 @@ const userSettingsPath = (sheet: RuleSheet, machine: string) => {
     if (dir !== undefined) return `${dir}/settings.json`;
   }
   return "~/.claude/settings.json";
+};
+
+/**
+ * A path in Codex's home, which the first group names: its own skills folder, its plugins, its
+ * AGENTS.md or the config.toml its MCP servers come from. `~/.agents/skills` is not in it.
+ */
+const CODEX_HOME =
+  /^(.*?)\/(?:skills\/|plugins\/cache\/|AGENTS(?:\.override)?\.md$|config\.toml$)/u;
+
+/**
+ * Codex's config.toml on a machine: in the home one of its user or plugin Items is in, since
+ * `CODEX_HOME` moves it, else `~/.codex`.
+ */
+const codexConfigPath = (sheet: RuleSheet, machine: string) => {
+  for (const item of sheet.itemsOn(machine)) {
+    if (item.scope === "project") continue;
+    const dir = CODEX_HOME.exec(item.path)?.[1];
+    if (dir !== undefined && !dir.endsWith("/.agents")) return `${dir}/config.toml`;
+  }
+  return "~/.codex/config.toml";
 };
 
 const HARNESSES: Record<string, HarnessFixes> = {
@@ -94,12 +114,12 @@ const HARNESSES: Record<string, HarnessFixes> = {
     // Codex's own config turns a skill off by its SKILL.md path, for the model and for `$name`, and
     // expands `~` in it. The key names the `[[skills.config]]` entry with that path, to add when
     // there is none. A plugin's path holds its version, so an entry for it would not last.
-    off: (item) =>
+    off: (item, sheet, machine) =>
       item.managedBy === "plugin"
         ? undefined
         : {
             action: "set",
-            path: "~/.codex/config.toml",
+            path: codexConfigPath(sheet, machine),
             set: { key: `skills.config[path="${skillFile(item.path)}"].enabled`, value: false },
           },
     skillsAgent: "codex",
@@ -154,7 +174,7 @@ const removeOne = (
 ): Fix | undefined => {
   const table = HARNESSES[sheet.harness];
   const hide = () =>
-    table ? withMachine(machine, table.hide(item) ?? table.off?.(item)) : undefined;
+    table ? withMachine(machine, table.hide(item) ?? table.off?.(item, sheet, machine)) : undefined;
   const usedBy = unfiltered.usedBy(item.id);
   // This harness used it in sessions the filters left out, so nothing about it is dead there.
   if (usedBy.includes(sheet.harness)) return undefined;
