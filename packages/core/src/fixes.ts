@@ -188,11 +188,14 @@ const removeOne = (
   const table = HARNESSES[sheet.harness];
   const hide = () =>
     table ? withMachine(machine, table.hide(item) ?? table.off?.(item, sheet, machine)) : undefined;
-  // This harness used it in sessions the filters left out, so nothing about it is dead there.
-  if (unfiltered.usedBy(item.id).includes(sheet.harness)) return undefined;
+  const items = unfiltered.items(machine);
+  // This harness used it in sessions the filters left out, under this id or another one its file
+  // had, so nothing about it is dead there.
+  const here = [item, ...items.filter((other) => other.path === item.path)];
+  if (here.some((other) => unfiltered.usedBy(other.id).includes(sheet.harness))) return undefined;
   // A remove is offered only when what it reaches is known and none of it is in use or out of
   // sight; everything else is hidden or turned off.
-  const reach = reachOf(unfiltered.items(machine), item);
+  const reach = reachOf(items, item);
   // A harness loads something the removal reaches and uses it, or cannot tell whether it does on
   // this machine: hide the skill from this one, or turn it off here.
   const kept = reach?.some((other) =>

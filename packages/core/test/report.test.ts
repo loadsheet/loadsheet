@@ -734,6 +734,15 @@ describe("fixes", () => {
     expect(fixes.map((fix) => [fix.action, fix.run])).toEqual([["hide-from-model", undefined]]);
   });
 
+  it("gives no fix for a file this harness used under another id", () => {
+    // One machine's Scans merged: the folder's skill was renamed between them.
+    const before = skill("old-name", { path: "~/.claude/skills/idle" });
+    const fixes = dead([skill("idle"), before], {
+      cells: [cell("idle", 25), cell("old-name", 25, { byModel: 2 })],
+    }).find((f) => f.id === "dead-skill:skill:idle")!.fixes;
+    expect(fixes).toEqual([]);
+  });
+
   it("writes `rm -r` without a trailing slash, which would empty a link's folder", () => {
     const [finding] = dead([skill("idle", { path: "~/.claude/skills/idle/" })]);
     expect(finding!.fixes.map((fix) => fix.run)).toEqual(["rm -r ~/.claude/skills/idle"]);
