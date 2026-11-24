@@ -130,7 +130,7 @@ const withMachine = (machine: string, change: Change | undefined): Fix | undefin
   change && { machine, ...change };
 
 /** Each install of a line on the machines it holds for. */
-const installsOf = (sheet: RuleSheet, line: Line) => {
+export const installsOf = (sheet: RuleSheet, line: Line) => {
   const machines = new Set(line.machines);
   return sheet.installs(line.item).filter((install) => machines.has(install.machine));
 };
@@ -235,10 +235,10 @@ export const removeFixes = (sheet: RuleSheet, line: Line, unfiltered: Unfiltered
     installsOf(sheet, line).flatMap((install) => removeOne(sheet, install, unfiltered) ?? []),
   );
 
-/** Shortens the file that holds a skill's description, on every machine that has it. */
-export const shortenFixes = (sheet: RuleSheet, line: Line): Fix[] =>
+/** Shortens the file that holds a skill's description, for each of these installs. */
+export const shortenFixes = (installs: Install[]): Fix[] =>
   uniqueFixes(
-    installsOf(sheet, line).map(({ machine, item }) => ({
+    installs.map(({ machine, item }) => ({
       machine,
       action: "shorten",
       path: skillFile(item.path),

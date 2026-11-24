@@ -475,6 +475,35 @@ describe("expensive-description", () => {
     expect(result.skipped).toEqual([]);
   });
 
+  it("judges each install, whatever the machines' names, and names only the long ones", () => {
+    const copies = (short: string, long: string) =>
+      findingsOf(
+        [
+          scan(short, {
+            items: [skill("long", { chars: { listed: 20, body: 0 } })],
+            cells: [cell("long", 30, { byModel: 1 })],
+          }),
+          scan(long, {
+            items: [skill("long", { chars: { listed: 400, body: 0 } })],
+            cells: [cell("long", 30, { byModel: 1 })],
+          }),
+        ],
+        "expensive-description",
+      ).findings.map((f) => [f.where, f.evidence.listedChars, f.fixes]);
+    for (const [short, long] of [
+      ["laptop", "server"],
+      ["server", "laptop"],
+    ] as const) {
+      expect(copies(short, long)).toEqual([
+        [
+          [{ machine: long, harness: "claude-code" }],
+          400,
+          [{ machine: long, action: "shorten", path: "~/.claude/skills/long/SKILL.md" }],
+        ],
+      ]);
+    }
+  });
+
   it("orders by listing tokens per use, and shortens the SKILL.md on each machine", () => {
     const items = [
       skill("often", { chars: { listed: 800, body: 0 } }),
