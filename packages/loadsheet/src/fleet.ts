@@ -58,41 +58,44 @@ export const scanOf = (result: RunResult): Scan | Unread => {
   }
 };
 
+const renameScan = (scan: Scan, machine: string): Scan => ({
+  ...scan,
+  machine,
+  coverage: scan.coverage.map((row) => ({ ...row, machine })),
+});
+
 /**
  * The Scans and unread machines of a fleet, this machine's Scan first, every machine under a name
  * no other has: buildReport keys Scans by machine, and two hosts may call themselves the same. No
  * machine takes the fleet's name for another host. A Scan whose name is not free goes by its name
- * and the fleet's name for its own host, as in `ubuntu (vps2)`, and if that is not free either, by
- * a number after it.
+ * and the fleet's name for its own host (or `local`), and if that is not free either, by a number
+ * after its name.
  */
 export const fleetScans = (
   here: Scan,
   results: readonly RunResult[],
 ): { scans: Scan[]; machines: Machine[] } => {
-  const taken = new Set([here.machine]);
-  const unique = (result: RunResult, ...names: string[]) => {
-    const free = (name: string) =>
-      !taken.has(name) && (name === result.host || !results.some(({ host }) => host === name));
+  const reserved = new Set(results.map(({ host }) => host));
+  const taken = new Set<string>();
+  const unique = (host: string | undefined, ...names: string[]) => {
+    const free = (name: string) => !taken.has(name) && (name === host || !reserved.has(name));
     let name = names.find(free);
     for (let n = 2; name === undefined; n++)
       if (free(`${names[0]} #${n}`)) name = `${names[0]} #${n}`;
     taken.add(name);
     return name;
   };
-  const scans = [here];
+  const localName = unique(undefined, here.machine, `${here.machine} (local)`);
+  const scans = [localName === here.machine ? here : renameScan(here, localName)];
   const machines: Machine[] = [];
   for (const result of results) {
     const scan = scanOf(result);
     if (typeof scan === "string") {
-      machines.push({ name: unique(result, result.host), reachable: false, error: scan });
+      machines.push({ name: unique(result.host, result.host), reachable: false, error: scan });
       continue;
     }
-    const machine = unique(result, scan.machine, `${scan.machine} (${result.host})`);
-    scans.push({
-      ...scan,
-      machine,
-      coverage: scan.coverage.map((row) => ({ ...row, machine })),
-    });
+    const machine = unique(result.host, scan.machine, `${scan.machine} (${result.host})`);
+    scans.push(renameScan(scan, machine));
   }
   return { scans, machines };
 };

@@ -489,7 +489,7 @@
                   "items": {
                     "type": "string"
                   },
-                  "description": "Machines where it is installed or was seen."
+                  "description": "Machines where it is installed or was seen; empty in pack mode."
                 },
                 "path": {
                   "type": "string",
@@ -599,7 +599,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9-]*:(?!(?:(?:skill|instructions|mcp|subagent):)?(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))[\\s\\S]+",
             "description": "A stable id, `${rule}:${item ?? pack ?? harness}`."
           },
           "rule": {
@@ -809,6 +809,59 @@
       }
     },
     "required": ["mode"]
+  },
+  "then": {
+    "properties": {
+      "machines": {
+        "type": "array",
+        "maxItems": 0
+      },
+      "coverage": {
+        "type": "array",
+        "maxItems": 0
+      },
+      "sheet": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "lines": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "machines": {
+                    "type": "array",
+                    "maxItems": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "findings": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "where": {
+              "type": "array",
+              "maxItems": 0
+            },
+            "fixes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "machine": false
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   },
   "else": {
     "properties": {
