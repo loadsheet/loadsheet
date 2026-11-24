@@ -260,7 +260,9 @@ export const bareEntry = (name: string) => `- ${name}\n`.length;
  * every skill its sessions listed in the window, ignored ones included since they still take room,
  * plus a tenth. A skill installed there counts its Item's entry; one installed nowhere loadsheet
  * reads, what the sessions that listed it in full held. Undefined when no session listed a skill
- * bare, so the budget already fits.
+ * bare, so the budget already fits, and when a skill installed nowhere loadsheet reads was listed
+ * bare in every session, so its full entry is unknown and a budget could be lower than the one the
+ * machine has.
  */
 const listingBudget = (sheet: RuleSheet, machine: string, unfiltered: Unfiltered) => {
   const listed = new Map<string, { sessions: number; bare: number; chars: number }>();
@@ -279,10 +281,13 @@ const listingBudget = (sheet: RuleSheet, machine: string, unfiltered: Unfiltered
   }
   let total = 0;
   for (const [id, { sessions, bare, chars }] of listed) {
-    const bareChars = bareEntry(id.slice("skill:".length));
-    total +=
-      installed.get(id) ??
-      (sessions > bare ? Math.round((chars - bare * bareChars) / (sessions - bare)) : bareChars);
+    const own = installed.get(id);
+    if (own !== undefined) total += own;
+    else if (sessions > bare) {
+      total += Math.round(
+        (chars - bare * bareEntry(id.slice("skill:".length))) / (sessions - bare),
+      );
+    } else return undefined;
   }
   return Math.ceil((total * 11) / 10);
 };

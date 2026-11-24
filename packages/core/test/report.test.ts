@@ -182,7 +182,8 @@ describe("invisible-skill", () => {
           ],
           cells: [cell("hidden", 10, { bare: 8, byUser: 1 }), cell("quiet", 10), ...seen],
         }),
-        // hidden is installed nowhere and always listed bare, `- hidden`: 9 + 120, plus a tenth.
+        // hidden is installed nowhere and always listed bare, so its full entry, and the budget the
+        // listing needs, are unknown: no budget, which could be lower than the one it has.
         scan("server", {
           cells: [cell("hidden", 10, { bare: 10, chars: 90 }), ...seen],
         }),
@@ -210,7 +211,7 @@ describe("invisible-skill", () => {
           { machine: "server", harness: "claude-code" },
         ],
         evidence: { sessions: 30, bare: 18, bareShare: 0.6, byModel: 0, byUser: 1 },
-        fixes: [budget("laptop", "792"), budget("server", "142")],
+        fixes: [budget("laptop", "792")],
       },
     ]);
   });
