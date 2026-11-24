@@ -27,11 +27,20 @@ export interface RuleSheet {
   sessions: number;
   /** Days of history: from the first day with a session left after every filter to the last, inclusive; 0 without sessions. */
   days: number;
+  /** Days from the first day with a session left after every filter to the window's last day, inclusive; 0 without sessions. */
+  history: number;
+  /** The machines it is on: those with its coverage, an Item it loads or one of its sessions; empty in pack mode. */
+  machines: string[];
+  /** Its sessions on a machine, after every filter. */
+  sessionsOn: (machine: string) => number;
   /** How well each signal is provided: the worst grade among the machines read. */
   signals: Record<Signal, Grade>;
   /** The sheet's lines, without ignored items. */
   lines: Line[];
-  /** Every install of an item this harness loads, by machine then path; empty in pack mode. */
+  /**
+   * Every install of an item this harness loads, by machine then path; in pack mode, the pack's
+   * Items of that id, on a machine named "".
+   */
   installs: (item: Id) => Install[];
   /** Every Item this harness loads on a machine, by path; empty in pack mode. */
   itemsOn: (machine: string) => Item[];
@@ -54,6 +63,11 @@ export interface Unfiltered {
   items: (machine?: string) => Item[];
   /** A machine's usage counters in the window, of every harness and entrypoint. */
   cells: (machine: string) => Cell[];
+  /**
+   * A harness's sessions on a machine in the window, through every entrypoint; undefined when the
+   * machine does not cover the harness or its coverage grades listing none, so it cannot tell.
+   */
+  sessions: (machine: string, harness: string) => number | undefined;
 }
 
 /** What a pack, read without Scans, holds. */
@@ -64,6 +78,7 @@ export const NOTHING_UNFILTERED: Unfiltered = {
   tellsUse: () => false,
   items: () => [],
   cells: () => [],
+  sessions: () => undefined,
 };
 
 /** What a rule sees: every sheet that can answer it, and its thresholds. */
@@ -85,8 +100,10 @@ export interface Rule<R extends RuleId = RuleId> {
   id: R;
   /** Signals the rule needs; a sheet is skipped as missing-signal when any of them is graded none. */
   needs: Signal[];
+  /** Signals no machine of a sheet provides, for a rule that judges each machine on its own; a sheet with any is skipped as missing-signal. */
+  blind?: (sheet: RuleSheet, unfiltered: Unfiltered) => Signal[];
   /** Whether a sheet holds enough history to judge; a sheet that does not is skipped as not-enough-data. */
-  enough?: (sheet: RuleSheet, options: RuleOptions[R]) => boolean;
+  enough?: (sheet: RuleSheet, options: RuleOptions[R], config: ResolvedConfig) => boolean;
   /** Runs once per Report over the sheets that can answer it, and gives one Finding per item. */
   run: (context: RuleContext<R>) => Finding[];
 }

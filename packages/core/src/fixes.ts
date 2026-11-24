@@ -29,6 +29,8 @@ interface HarnessFixes {
   skillsAgent?: string;
   /** Whether a bare listing is the user's own choice, not the listing's budget. */
   bareByChoice?: (item: Item) => boolean;
+  /** Of one skill's copies on a machine, those the harness does not load, when its order tells. */
+  shadowed?: (copies: Item[]) => Item[];
 }
 
 /** A path under Claude Code's config directory, which the first group names. */
@@ -96,6 +98,16 @@ const HARNESSES: Record<string, HarnessFixes> = {
     // `skillOverrides: name-only` lists the skill as the bare `- name`, which is all its Item lists.
     bareByChoice: (item) =>
       item.modelInvocable && item.chars.listed === `- ${item.ref.name}\n`.length,
+    // "If a skill and a command share the same name, the skill takes precedence" (Claude Code's
+    // skills documentation), so a command is shadowed by a skill in the same config directory.
+    shadowed: (copies) => {
+      const skills = copies.filter((item) => /\/skills\/[^/]+$/u.test(item.path));
+      return copies.filter(
+        (item) =>
+          /\/commands\/.+\.md$/u.test(item.path) &&
+          skills.some((skill) => claudeConfigDir(skill.path) === claudeConfigDir(item.path)),
+      );
+    },
   },
   codex: {
     // Codex reads the setting only from `agents/openai.yaml` in the skill's folder, which only a
@@ -196,22 +208,23 @@ const removeOne = (
   // A remove is offered only when what it reaches is known and none of it is in use or out of
   // sight; everything else is hidden or turned off.
   const reach = reachOf(items, item);
-  // A harness loads something the removal reaches and uses it, or cannot tell whether it does on
-  // this machine: hide the skill from this one, or turn it off here.
-  const kept = reach?.some((other) =>
-    other.harnesses.some(
-      (harness) =>
-        unfiltered.usedBy(other.id).includes(harness) || !unfiltered.tellsUse(machine, harness),
-    ),
+  // Some harness uses something the removal reaches, whether or not the Scan lists a copy for
+  // it: a harness can read a skill it does not load. Or one that loads it cannot tell use on this
+  // machine. Hide the skill from this harness, or turn it off here.
+  const kept = reach?.some(
+    (other) =>
+      unfiltered.usedBy(other.id).length > 0 ||
+      other.harnesses.some((harness) => !unfiltered.tellsUse(machine, harness)),
   );
   if (kept !== false) return hide();
   const remove: Fix = { machine, action: "remove", path: item.path };
-  // A harness loadsheet has no table for gets the path and no command.
-  if (!table) return remove;
+  // A harness loadsheet has no table for gets the path and no command, once its installer's
+  // checks below have passed.
+  const command = (run: string): Fix => (table ? { ...remove, run } : remove);
   const name = quote(baseName(item.path));
   switch (item.managedBy) {
     case "skills": {
-      if (!table.skillsAgent) return remove;
+      if (!table?.skillsAgent) return remove;
       const scope = item.scope === "user" ? " --global" : "";
       return {
         ...remove,
@@ -247,17 +260,20 @@ const removeOne = (
       const source = unfiltered
         .items()
         .some((other) => other.managedBy === "fleetrc" && fleetrcKey(other.pack ?? "") === key);
-      return source ? undefined : { ...remove, run: `fleetrc remove ${name}` };
+      return source ? undefined : command(`fleetrc remove ${name}`);
     }
     // A plugin's skills come and go with the plugin, and an update replaces its files.
     case "plugin":
       return undefined;
-    // `rm -r` would take whatever else it reaches too, so such a folder is hidden instead. The
+    // `rm -r` would take whatever else is at its path or the Scan says it reaches, so such a
+    // folder is hidden instead; a copy under its id elsewhere on the disk stays where it is. The
     // path goes without a trailing slash: with one, `rm -r` of a link empties the folder it leads to.
     case "hand":
-      return reach!.some((other) => other.id !== item.id || other.path !== item.path)
+      return reach!.some((other) =>
+        other.path === item.path ? other.id !== item.id : item.reaches!.includes(other.path),
+      )
         ? hide()
-        : { ...remove, run: `rm -r ${shellPath(item.path.replace(/\/+$/u, ""))}` };
+        : command(`rm -r ${shellPath(item.path.replace(/\/+$/u, ""))}`);
   }
 };
 
@@ -269,6 +285,33 @@ export const removeFixes = (sheet: RuleSheet, line: Line, unfiltered: Unfiltered
   uniqueFixes(
     installsOf(sheet, line).flatMap((install) => removeOne(sheet, install, unfiltered) ?? []),
   );
+
+/**
+ * Removes the copies of a skill that a harness does not load, because another copy on the same
+ * machine shadows them, through the same guard as `removeFixes`: only its action changes, to
+ * `dedupe`. Only a copy made by hand is removed, by its path: an installer removes by name, which
+ * would take the copy that is loaded. A copy the guard would only hide, or keep, gets nothing, and
+ * so does every copy of a harness whose order loadsheet does not know. The guard reads use by id,
+ * which every copy shares, so a duplicate in use gets nothing either.
+ */
+export const dedupeFixes = (sheet: RuleSheet, installs: Install[], unfiltered: Unfiltered) => {
+  const shadowed = HARNESSES[sheet.harness]?.shadowed;
+  if (!shadowed) return [];
+  const byMachine = new Map<string, Install[]>();
+  for (const install of installs) {
+    byMachine.set(install.machine, [...(byMachine.get(install.machine) ?? []), install]);
+  }
+  return uniqueFixes(
+    [...byMachine.values()].flatMap((copies) => {
+      const lost = new Set(shadowed(copies.map(({ item }) => item)));
+      return copies.flatMap((install) => {
+        if (!lost.has(install.item) || install.item.managedBy !== "hand") return [];
+        const fix = removeOne(sheet, install, unfiltered);
+        return fix?.action === "remove" ? [{ ...fix, action: "dedupe" as const }] : [];
+      });
+    }),
+  );
+};
 
 /** Shortens the file that holds a skill's description, for each of these installs. */
 export const shortenFixes = (installs: Install[]): Fix[] =>

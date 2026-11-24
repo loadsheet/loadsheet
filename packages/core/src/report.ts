@@ -83,6 +83,14 @@ const unfilteredOf = (
     ),
   );
   const byMachine = new Map(scans.map((scan) => [scan.machine, scan]));
+  const sessionsOf = (machine: string, harness: string) => {
+    const scan = byMachine.get(machine);
+    const row = scan?.coverage.find((c) => c.harness === harness);
+    if (!scan || !row || row.signals.listing === "none") return undefined;
+    return scan.sessions
+      .filter((cell) => cell.harness === harness && inWindow(cell.day))
+      .reduce((total, cell) => total + cell.sessions, 0);
+  };
   return {
     wholeFleet,
     machines: scans.map((scan) => scan.machine),
@@ -93,6 +101,7 @@ const unfilteredOf = (
         ? scans.flatMap((scan) => scan.items)
         : (byMachine.get(machine)?.items ?? []),
     cells: (machine) => (byMachine.get(machine)?.cells ?? []).filter((cell) => inWindow(cell.day)),
+    sessions: sessionsOf,
   };
 };
 
@@ -120,6 +129,7 @@ const buildSheet = (
   harness: string,
   scans: Scan[],
   keep: (cell: { day: Day; via: string }) => boolean,
+  last: Day,
 ): { sheet: Sheet; rules: RuleSheet } => {
   const installs = new Map<Id, Install[]>();
   const itemsOn = new Map<string, Item[]>();
@@ -138,6 +148,7 @@ const buildSheet = (
   for (const list of itemsOn.values()) list.sort((a, b) => compare(a.path, b.path));
 
   let sessions = 0;
+  const perMachine = new Map<string, number>();
   let fixedTokens = 0;
   let measured = 0;
   let firstDay: Day | undefined;
@@ -151,6 +162,7 @@ const buildSheet = (
         if (!lastDay || cell.day > lastDay) lastDay = cell.day;
       }
       sessions += cell.sessions;
+      perMachine.set(scan.machine, (perMachine.get(scan.machine) ?? 0) + cell.sessions);
       fixedTokens += cell.fixedTokens;
       measured += cell.measured;
     }
@@ -216,6 +228,11 @@ const buildSheet = (
 
   const coverage = scans.flatMap((scan) => scan.coverage.filter((c) => c.harness === harness));
   const active = coverage.filter((c) => c.installed || c.sessions > 0);
+  const machines = new Set([
+    ...active.map((c) => c.machine),
+    ...itemsOn.keys(),
+    ...perMachine.keys(),
+  ]);
 
   const sheet: Sheet = { harness, sessions, lines };
   if (measured > 0) {
@@ -227,6 +244,9 @@ const buildSheet = (
       harness,
       sessions,
       days: firstDay && lastDay ? daysBetween(firstDay, lastDay) : 0,
+      history: firstDay ? daysBetween(firstDay, last) : 0,
+      machines: [...machines].sort(compare),
+      sessionsOn: (machine) => perMachine.get(machine) ?? 0,
       signals: worstSignals(active.length ? active : coverage),
       lines,
       installs: (item) => installs.get(item) ?? [],
@@ -283,7 +303,7 @@ export const buildReport = ({
   const built = [...harnesses]
     .filter((harness) => !wanted || wanted.has(harness))
     .sort(compare)
-    .map((harness) => buildSheet(harness, scans, keep));
+    .map((harness) => buildSheet(harness, scans, keep, last));
 
   const reportMode = mode ?? (names.length > 1 ? "fleet" : "local");
   // Every machine the report names has a Scan: one listed without, reachable or not, is unknown.

@@ -599,7 +599,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9-]*:(?!(?:(?:skill|instructions|mcp|subagent):)?(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/]))[\\s\\S]+",
+            "pattern": "^[a-z][a-z0-9-]*:(?!(?:(?:skill|instructions|mcp|subagent):)?(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))[\\s\\S]+",
             "description": "A stable id, `${rule}:${item ?? pack ?? harness}`."
           },
           "rule": {
