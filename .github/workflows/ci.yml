@@ -115,8 +115,10 @@ jobs:
     name: fleet (${{ matrix.os }}, node ${{ matrix.node }})
     needs: build
     runs-on: ${{ matrix.os }}
-    # A passing run takes up to 25 minutes on Windows and 11 on macOS, and a busy runner half as long again.
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 45 || 30 }}
+    # A runner that gives the tests one worker runs the files one after another: on Windows a passing
+    # run then takes 35 minutes, and one stopped at 45 had a quarter of the suite left. With several
+    # workers it takes up to 25 minutes on Windows and 11 on macOS.
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 75 || 30 }}
     strategy:
       fail-fast: false
       matrix:
