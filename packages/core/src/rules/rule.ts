@@ -37,7 +37,10 @@ export interface RuleSheet {
   signals: Record<Signal, Grade>;
   /** The sheet's lines, without ignored items. */
   lines: Line[];
-  /** Every install of an item this harness loads, by machine then path; empty in pack mode. */
+  /**
+   * Every install of an item this harness loads, by machine then path; in pack mode, the pack's
+   * Items of that id, on a machine named "".
+   */
   installs: (item: Id) => Install[];
   /** Every Item this harness loads on a machine, by path; empty in pack mode. */
   itemsOn: (machine: string) => Item[];

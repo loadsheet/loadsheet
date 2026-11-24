@@ -62,7 +62,10 @@ export const packReport = ({
         history: 0,
         signals: NO_SIGNALS,
         lines,
-        installs: () => [],
+        // The pack's own Items, on no machine: a line holds for none, so only a rule that reads
+        // installs by id, such as duplicate, sees them.
+        installs: (id) =>
+          items.filter((item) => item.id === id).map((item) => ({ machine: "", item })),
         itemsOn: () => [],
       },
     ],

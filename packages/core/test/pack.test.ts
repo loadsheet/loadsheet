@@ -146,6 +146,34 @@ describe("packReport", () => {
     const ignored = packReport({ ...input, config: resolveConfig({ ignore: ["skill:long"] }) });
     expect(ignored.findings).toEqual([]);
   });
+
+  it("finds a skill the pack installs twice, with no machine and no fix", () => {
+    const deploy = (path: string, digest: string) =>
+      item("kit:deploy", 120, 900, {
+        managedBy: "plugin",
+        scope: "plugin",
+        pack: "kit",
+        path,
+        digest: digest.repeat(64),
+      });
+    const report = packReport({
+      ...input,
+      items: [deploy("commands/deploy.md", "a"), deploy("skills/deploy", "b")],
+      config: resolveConfig({ rules: { "expensive-description": false } }),
+    });
+    expect(parseReport(JSON.parse(JSON.stringify(report)))).toEqual(report);
+    expect(report.findings).toEqual([
+      {
+        id: "duplicate:skill:kit:deploy",
+        rule: "duplicate",
+        level: "fix",
+        item: "skill:kit:deploy",
+        where: [],
+        evidence: { copies: 2 },
+        fixes: [],
+      },
+    ]);
+  });
 });
 
 describe("examples/report.pack.example.json", () => {

@@ -24,7 +24,7 @@ const twice = (installs: Install[]) =>
 export const duplicate = defineRule({
   id: "duplicate",
   needs: [],
-  run: ({ sheets, unfiltered }) => {
+  run: ({ mode, sheets, unfiltered }) => {
     const hits = new Map<Id, Hit[]>();
     for (const sheet of sheets) {
       for (const line of sheet.lines) {
@@ -44,15 +44,23 @@ export const duplicate = defineRule({
         rule: "duplicate",
         level: "fix",
         item,
-        where: group.flatMap(({ sheet, copies }) =>
-          copies.map(([first]) => ({ machine: first!.machine, harness: sheet.harness })),
-        ),
+        // In pack mode the copies are the pack's own, on no machine, and which one to drop is
+        // the pack's author's call.
+        where:
+          mode === "pack"
+            ? []
+            : group.flatMap(({ sheet, copies }) =>
+                copies.map(([first]) => ({ machine: first!.machine, harness: sheet.harness })),
+              ),
         evidence: {
           copies: Math.max(...group.flatMap(({ copies }) => copies.map((one) => one.length))),
         },
-        fixes: uniqueFixes(
-          group.flatMap(({ sheet, copies }) => dedupeFixes(sheet, copies.flat(), unfiltered)),
-        ),
+        fixes:
+          mode === "pack"
+            ? []
+            : uniqueFixes(
+                group.flatMap(({ sheet, copies }) => dedupeFixes(sheet, copies.flat(), unfiltered)),
+              ),
       });
     }
     return findings.sort(byWaste);
