@@ -67,22 +67,36 @@ export const isRecord = (value: unknown): value is Record<string, unknown> =>
 /** JSON with `//` and `/* *\/` comments and trailing commas, as several harnesses accept it in config files. */
 export const parseJsonc = (text: string): unknown => {
   let out = "";
+  // Where in `out` the last comma outside a string sits, until a value or a closing bracket follows.
+  let comma: number | undefined;
   for (let at = 0; at < text.length; at++) {
     const char = text[at]!;
+    if (char === "/" && text[at + 1] === "/") {
+      while (at < text.length && text[at] !== "\n") at++;
+      out += "\n";
+      continue;
+    }
+    if (char === "/" && text[at + 1] === "*") {
+      const end = text.indexOf("*/", at + 2);
+      at = end === -1 ? text.length : end + 1;
+      out += " ";
+      continue;
+    }
+    if (/\s/u.test(char)) {
+      out += char;
+      continue;
+    }
+    if (comma !== undefined && (char === "}" || char === "]")) {
+      out = out.slice(0, comma) + out.slice(comma + 1);
+    }
+    comma = char === "," ? out.length : undefined;
     if (char === '"') {
       const start = at;
       for (at++; at < text.length && text[at] !== '"'; at++) if (text[at] === "\\") at++;
       out += text.slice(start, at + 1);
-    } else if (char === "/" && text[at + 1] === "/") {
-      while (at < text.length && text[at] !== "\n") at++;
-      out += "\n";
-    } else if (char === "/" && text[at + 1] === "*") {
-      const end = text.indexOf("*/", at + 2);
-      at = end === -1 ? text.length : end + 1;
-      out += " ";
     } else out += char;
   }
-  return JSON.parse(out.replace(/,(\s*[}\]])/gu, "$1")) as unknown;
+  return JSON.parse(out) as unknown;
 };
 
 /** A JSON or JSONC file's top object; empty when it is missing or unreadable. */

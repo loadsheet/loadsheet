@@ -1,7 +1,7 @@
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
-import { memoryFiles, type Harness, type Place } from "@loadsheet/kit";
+import { memoryFiles, sha256, type Harness, type Place } from "@loadsheet/kit";
 import { scanMachine } from "@loadsheet/kit/node";
 import type { Item } from "@loadsheet/schema";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -301,6 +301,23 @@ describe("OpenCode", () => {
       ),
       shared("opencode", plain("shared-skill", "Shared by many.")),
     ]);
+  });
+
+  it("keeps a comma before a bracket inside a string of its JSONC config", async () => {
+    const config = `{
+      "mcp": {
+        "servers": {
+          "kettle": { "command": ["k", "a,}", "b,]"], }, // trailing commas
+          "pot": { "command": ["p"] /* note */, },
+        },
+      },
+    }`;
+    const items = await inventoryOf(opencode, { "~/.config/opencode/opencode.jsonc": config });
+    expect(summary(items).map((item) => item.id)).toEqual(["mcp:kettle", "mcp:pot"]);
+    // The digest is of the server's config as written, commas in its strings included.
+    expect(items.find((item) => item.id === "mcp:kettle")!.digest).toBe(
+      await sha256(JSON.stringify({ command: ["k", "a,}", "b,]"] })),
+    );
   });
 
   it("lists a skill whose autoinvoke metadata is true despite disable-model-invocation", async () => {
