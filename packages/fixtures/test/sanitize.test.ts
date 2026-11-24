@@ -138,6 +138,19 @@ describe("sanitize with an empty policy", () => {
   });
 });
 
+describe("keys that came from data", () => {
+  it("replaces a key that is not a plain identifier, and still matches rules on the original", () => {
+    const input = {
+      files: { "/home/someone/notes.md": "text", "a b": "text", "SKILL.md": "text" },
+      kept: { "/home/someone/notes.md": "enum" },
+    };
+    expect(sanitize(input, { rules: { "kept.*": "keep" } })).toEqual({
+      files: { "key-1": CANARY, "key-2": CANARY, "SKILL.md": CANARY },
+      kept: { "key-1": "enum" },
+    });
+  });
+});
+
 describe("policy actions", () => {
   const line = {
     type: "assistant",

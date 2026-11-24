@@ -36,11 +36,15 @@ export interface Policy {
    * Path pattern to action; the first pattern that matches wins. A pattern is dot-separated
    * segments: a key, `*` for any one key or index, `**` for any number of segments.
    * A value no rule matches is default-denied: strings become the canary, other values recurse.
+   * A key that is not a plain identifier (it holds a slash, a space, an `@`) came from data,
+   * so it becomes a `key-N` pseudonym; rules match the original key.
    */
   readonly rules?: Readonly<Record<string, Action>>;
 }
 
 type Matcher = (path: JsonPath) => boolean;
+
+const PLAIN_KEY = /^[\w$.-]+$/;
 
 function compile(pattern: string): Matcher {
   const segments = pattern === "" ? [] : pattern.split(".");
@@ -97,7 +101,10 @@ export function createSanitizer(policy: Policy = {}): Sanitizer {
     if (Array.isArray(value)) return value.map((item, index) => walk(item, [...path, index]));
     if (typeof value === "object" && value !== null) {
       return Object.fromEntries(
-        Object.entries(value).map(([key, item]) => [key, walk(item, [...path, key])]),
+        Object.entries(value).map(([key, item]) => [
+          PLAIN_KEY.test(key) ? key : pseudonym("key", key),
+          walk(item, [...path, key]),
+        ]),
       );
     }
     return value;
@@ -139,9 +146,10 @@ export function pathPseudonym(options: { readonly keep?: readonly string[] } = {
   return (value, { pseudonym }) => {
     if (typeof value !== "string") return CANARY;
     const separator = value.includes("\\") && !value.includes("/") ? "\\" : "/";
-    const home = /^(?:\/home\/[^/]+|\/Users\/[^/]+|[A-Za-z]:\\Users\\[^\\]+|~)(?=[/\\]|$)/.exec(
-      value,
-    );
+    const home =
+      /^(?:\/(?:var\/)?home\/[^/]+|\/Users\/[^/]+|\/root|[A-Za-z]:\\Users\\[^\\]+|~)(?=[/\\]|$)/.exec(
+        value,
+      );
     const rest = home ? value.slice(home[0].length) : value;
     const segments = rest.split(separator);
     const last = segments.length - 1;
