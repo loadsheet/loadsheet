@@ -150,19 +150,14 @@ const IdSchema = v.pipe(
 );
 const id = (text: string) => describe(IdSchema, text);
 
-// What a config may name, in the shapes the adapters accept, so a typo or a private path in a
-// filter never reaches a Report's `config`: words without markup, quotes, slashes or invisible
-// characters, joined by single spaces. JSON Schema takes no regex flags, so the invisible
-// characters are spelled out: the controls and the format characters a name could hide behind.
+// An entrypoint or harness a config may name, in the shapes the adapters accept, so a typo or a
+// private path in a filter never reaches a Report's `config`: words without markup, quotes,
+// slashes or invisible characters, joined by single spaces. An ignored id is any Item id. JSON
+// Schema takes no regex flags, so the invisible characters are spelled out: the controls and the
+// format characters a name could hide behind.
 const CHAR = String.raw`[^\s<>"'\x60/\\\x00-\x1f\x7f-\x9f\xad\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff\ufff9-\ufffb]`;
 const WORD = `${CHAR}+(?: ${CHAR}+)*`;
 const ENTRYPOINT = new RegExp(String.raw`^(?=.{1,128}$)${WORD}$`);
-// An instruction file is named by its path under the harness's home: words joined by slashes,
-// with a leading ~/ at most and no . or .. step.
-const STEP = String.raw`(?!\.\.?(?:/|$))${WORD}`;
-const CONFIG_ID = new RegExp(
-  String.raw`^(?:(?:skill|mcp|subagent):(?=.{1,128}$)${WORD}|instructions:(?=.{1,256}$)(?:~/)?${STEP}(?:/${STEP})*)$`,
-);
 const entrypoints = (text: string) =>
   describe(
     v.array(
@@ -183,20 +178,6 @@ const harnessIds = (text: string) =>
     ),
     text,
   );
-const ignored = (text: string) =>
-  describe(
-    v.array(
-      v.pipe(
-        v.string(),
-        v.regex(
-          CONFIG_ID,
-          "must be kind:name: a skill, mcp or subagent name without slashes, or instructions and a file's path under the harness's home",
-        ),
-      ),
-    ),
-    text,
-  );
-
 const RefSchema = v.pipe(
   v.looseObject({
     kind: describe(KindSchema, "What the piece of context is."),
@@ -431,7 +412,7 @@ const configSchema = v.pipe(
         v.description("Filter sessions by entrypoint or originator."),
       ),
     ),
-    ignore: v.optional(ignored("Item ids never reported.")),
+    ignore: v.optional(describe(v.array(IdSchema), "Item ids never reported.")),
     rules: v.optional(
       v.pipe(
         strict({
@@ -477,7 +458,7 @@ const ResolvedConfigSchema = v.pipe(
       }),
       v.description("The entrypoint filter."),
     ),
-    ignore: ignored("Item ids never reported."),
+    ignore: describe(v.array(IdSchema), "Item ids never reported."),
     // A rule added after 0.0.1 must be optional here, or its loadsheet could not read an older Report.
     rules: v.pipe(
       v.looseObject({

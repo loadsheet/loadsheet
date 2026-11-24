@@ -148,8 +148,8 @@ describe("parsing", () => {
   });
 
   it("keeps a one-letter plugin prefix and a name that only mentions home", () => {
-    for (const id of ["skill:x:deploy", "instructions:home/notes.md", "skill:rooted"]) {
-      expect(() => parseConfig({ ignore: [id] })).not.toThrow();
+    for (const name of ["x:deploy", "home/notes", "rooted"]) {
+      expect(() => parseConfig({ ignore: [`skill:${name}`] })).not.toThrow();
     }
   });
 
@@ -243,22 +243,16 @@ describe("parsing", () => {
     ]);
   });
 
-  it("rejects a filter that is not an entrypoint, harness or item name", () => {
+  it("rejects a filter that is not an entrypoint or a harness id", () => {
     expect(
       issuesOf(() =>
         parseConfig({
           via: { include: ["/home/someone/private"], exclude: ["claude-vscode", "a/b"] },
           harnesses: ["claude-code", "Claude Code"],
-          ignore: ["mcp:linear", "skill:x/y", "instructions:rules/a.md", "instructions:../a.md"],
+          ignore: ["mcp:@scope/server", "skill:/home/someone/private"],
         }),
       ).map((issue) => issue.path),
-    ).toEqual([
-      "$.harnesses[1]",
-      "$.via.include[0]",
-      "$.via.exclude[1]",
-      "$.ignore[1]",
-      "$.ignore[3]",
-    ]);
+    ).toEqual(["$.harnesses[1]", "$.via.include[0]", "$.via.exclude[1]", "$.ignore[1]"]);
     expect(() =>
       parseConfig({
         via: { include: ["sdk-ts", "codex_vscode", "Codex Desktop"] },
