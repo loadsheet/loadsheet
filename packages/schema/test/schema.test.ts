@@ -23,7 +23,8 @@ const example = (name: string) => read(`../../../examples/${name}`);
 const committed = (name: string) => read(`../schema/${name}`);
 const clone = <T>(value: T): T => structuredClone(value);
 
-const ajv = new Ajv({ allErrors: true, strict: true });
+// strictRequired would reject `required` in a condition, away from the object's own properties.
+const ajv = new Ajv({ allErrors: true, strict: true, strictRequired: false });
 formats.default(ajv);
 const validators = new Map(
   ["report.v1.json", "scan.v1.json", "config.v1.json"].map((file) => [
@@ -158,12 +159,14 @@ describe("parsing", () => {
     expect(issuesOf(() => parseScan(scan))).toEqual([
       { path: "$.items[0]", message: "a Scan must not carry a description" },
     ]);
+    expect(validators.get("scan.v1.json")!(scan)).toBe(false);
 
     const report = fleet();
     report.sheet[0]!.lines[0]!.description = "Use when the deploy fails.";
     expect(issuesOf(() => parseReport(report))).toEqual([
       { path: "$.sheet", message: "a line carries a description only in pack mode" },
     ]);
+    expect(validators.get("report.v1.json")!(report)).toBe(false);
   });
 
   it("rejects a set fix with nothing to set and a fix without a machine outside pack mode", () => {
@@ -173,12 +176,14 @@ describe("parsing", () => {
     expect(issuesOf(() => parseReport(report)).map((issue) => issue.message)).toEqual([
       "set and hide-from-model need set or run",
     ]);
+    expect(validators.get("report.v1.json")!(report)).toBe(false);
 
     const other = fleet();
     delete other.findings[0]!.fixes[0]!.machine;
     expect(issuesOf(() => parseReport(other))).toEqual([
       { path: "$.findings", message: "outside pack mode every fix names its machine" },
     ]);
+    expect(validators.get("report.v1.json")!(other)).toBe(false);
   });
 
   it("rejects a timestamp on a day that does not exist", () => {
@@ -194,6 +199,13 @@ describe("parsing", () => {
     report.findings[0] = { ...report.findings[0]!, id: "stale-hook:skill:x", rule: "stale-hook" };
     report.skipped.push({ rule: "stale-hook", harness: "codex", reason: "not-enough-data" });
     expect(() => parseReport(report)).not.toThrow();
+    expect(validators.get("report.v1.json")!(report)).toBe(true);
+
+    report.findings[0] = { ...report.findings[0]!, id: "/root/private:x", rule: "/root/private" };
+    expect(issuesOf(() => parseReport(report)).map((issue) => issue.path)).toEqual([
+      "$.findings[0].rule",
+    ]);
+    expect(validators.get("report.v1.json")!(report)).toBe(false);
   });
 
   it.each(["2026-13-01", "2026-02-30", "26-11-01", "2026-11-01T00:00:00Z"])(

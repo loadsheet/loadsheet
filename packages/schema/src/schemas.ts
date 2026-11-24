@@ -91,6 +91,12 @@ const relativePath = (text: string) =>
     v.regex(NOT_HOME, "must be relative to the home directory (~/...), not an absolute home path"),
     v.description(text),
   );
+const ruleId = (text: string) =>
+  v.pipe(
+    v.string(),
+    v.regex(/^[a-z][a-z0-9-]*$/, "must be a rule id: lowercase letters, digits and hyphens"),
+    v.description(text),
+  );
 const name = (text: string) =>
   v.pipe(
     v.string(),
@@ -425,6 +431,7 @@ const ResolvedConfigSchema = v.pipe(
       v.description("The entrypoint filter."),
     ),
     ignore: describe(v.array(IdSchema), "Item ids never reported."),
+    // A rule added after 0.0.1 must be optional here, or its loadsheet could not read an older Report.
     rules: v.pipe(
       v.looseObject({
         "invisible-skill": resolvedRule(
@@ -572,9 +579,7 @@ const FixSchema = v.pipe(
 const FindingSchema = v.pipe(
   v.looseObject({
     id: nonEmpty("A stable id, `${rule}:${item ?? pack ?? harness}`."),
-    rule: nonEmpty(
-      "The rule that found it: a RuleId, or the id of a rule a newer loadsheet added.",
-    ),
+    rule: ruleId("The rule that found it: a RuleId, or the id of a rule a newer loadsheet added."),
     level: describe(LevelSchema, "How strongly it asks for action."),
     item: v.optional(
       id(
@@ -604,7 +609,7 @@ const FindingSchema = v.pipe(
 
 const SkippedSchema = v.pipe(
   v.looseObject({
-    rule: nonEmpty("The rule: a RuleId, or the id of a rule a newer loadsheet added."),
+    rule: ruleId("The rule: a RuleId, or the id of a rule a newer loadsheet added."),
     harness: nonEmpty("The harness id."),
     reason: describe(
       v.picklist(["missing-signal", "not-enough-data"]),

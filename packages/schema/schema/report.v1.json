@@ -601,7 +601,7 @@
           },
           "rule": {
             "type": "string",
-            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9-]*$",
             "description": "The rule that found it: a RuleId, or the id of a rule a newer loadsheet added."
           },
           "level": {
@@ -722,7 +722,24 @@
                 }
               },
               "required": ["action", "path"],
-              "description": "One change the user's agent should make."
+              "description": "One change the user's agent should make.",
+              "anyOf": [
+                {
+                  "not": {
+                    "properties": {
+                      "action": {
+                        "enum": ["set", "hide-from-model"]
+                      }
+                    }
+                  }
+                },
+                {
+                  "required": ["set"]
+                },
+                {
+                  "required": ["run"]
+                }
+              ]
             },
             "description": "Changes that resolve it."
           }
@@ -739,7 +756,7 @@
         "properties": {
           "rule": {
             "type": "string",
-            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9-]*$",
             "description": "The rule: a RuleId, or the id of a rule a newer loadsheet added."
           },
           "harness": {
@@ -781,5 +798,49 @@
     "findings",
     "skipped"
   ],
-  "description": "What loadsheet found: one sheet per harness and the findings, with no text."
+  "description": "What loadsheet found: one sheet per harness and the findings, with no text.",
+  "if": {
+    "properties": {
+      "mode": {
+        "const": "pack"
+      }
+    },
+    "required": ["mode"]
+  },
+  "else": {
+    "properties": {
+      "sheet": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "lines": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "description": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "findings": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "fixes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["machine"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }

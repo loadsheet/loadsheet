@@ -208,10 +208,7 @@
             "type": "boolean",
             "description": "Whether the model may invoke it on its own."
           },
-          "description": {
-            "type": "string",
-            "description": "Its description, in pack mode only; a Scan never carries it."
-          }
+          "description": false
         },
         "required": [
           "id",
