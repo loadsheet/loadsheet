@@ -1,0 +1,36 @@
+{
+  "name": "@loadsheet/harnesses",
+  "version": "0.0.0",
+  "description": "Built-in adapters (Claude Code, Codex, …).",
+  "homepage": "https://loadsheet.dev",
+  "license": "MIT",
+  "author": "onmax",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/loadsheet/loadsheet.git",
+    "directory": "packages/harnesses"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsdown",
+    "prepack": "pnpm --filter @loadsheet/harnesses... build"
+  },
+  "dependencies": {
+    "@loadsheet/kit": "workspace:*",
+    "@loadsheet/schema": "workspace:*"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
