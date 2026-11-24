@@ -396,7 +396,11 @@ describe("scanMachine", () => {
         ],
       },
     ];
-    const a = await cold(await makeHome("a", first));
+    // The earlier Scan: two at one instant cannot be put in order, and keep no reach.
+    const a = {
+      ...(await cold(await makeHome("a", first))),
+      scannedAt: "2026-11-24T14:00:00.000Z",
+    };
     const b = await cold(await makeHome("b", second));
     const ab = await cold(await makeHome("ab", [...first, ...second]));
 

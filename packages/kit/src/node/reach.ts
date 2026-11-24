@@ -9,8 +9,8 @@
 // link inside, the way to where it leads and, for a folder, that tree too. P reaches X when P's
 // roots meet X's needs (X is, lies inside or leads through P), or X's roots meet P's way (P lies
 // inside X, so removing it takes part of X). An Item whose needs cannot be worked out (a
-// permission error, a link loop, a tree over MAX_REACH_ENTRIES) gets no `reaches`, and every other
-// Item lists it.
+// permission error, a link loop, a tree over MAX_REACH_ENTRIES, a path that is neither under the
+// home nor absolute) gets no `reaches`, and every other Item lists it.
 //
 // What it does not see:
 // - links into the folder from folders loadsheet does not read, such as a project or another
@@ -217,8 +217,8 @@ const reachOfPath = (disk: Disk, path: string): Reach | undefined => {
 const meets = (ids: readonly string[], set: Set<string>) => ids.some((id) => set.has(id));
 
 /**
- * For each path that is `~/...` (under `home`) or absolute, the other paths among `paths` that
- * removing it reaches, sorted; undefined when that is not known. Any other path is left out.
+ * For each path, the other paths among `paths` that removing it reaches, sorted; undefined when
+ * that is not known, as for a path that is neither `~/...` (under `home`) nor absolute.
  */
 export const reachesOf = (
   paths: Iterable<string>,
@@ -229,7 +229,7 @@ export const reachesOf = (
   for (const path of paths) {
     if (reaches.has(path)) continue;
     const real = onDisk(path, home);
-    if (real !== undefined) reaches.set(path, reachOfPath(disk, real));
+    reaches.set(path, real === undefined ? undefined : reachOfPath(disk, real));
   }
   const result = new Map<string, string[] | undefined>();
   for (const [path, mine] of reaches) {

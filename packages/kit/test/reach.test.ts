@@ -446,10 +446,16 @@ describe("reaches, by hand", () => {
     ).toEqual({ "~/s/a": ["~//s/a"], "~//s/a": ["~/s/a"], "~/s//b/": [] });
   });
 
-  it("leaves out a path that is neither under the home nor absolute", () => {
-    expect(
-      reachesIn("relative", [...skill("real/s/a")], ["~/s/a", "s/a", ".agents/skills/a"]),
-    ).toEqual({ "~/s/a": [] });
+  it("a path that is neither under the home nor absolute is unknown and every other Item lists it", () => {
+    const base = join(tmp, "relative");
+    build(base, skill("real/s/a"));
+    expect(reachesOf(["~/s/a", "s/a", ".agents/skills/a"], join(base, "real"))).toEqual(
+      new Map([
+        ["~/s/a", [".agents/skills/a", "s/a"]],
+        ["s/a", undefined],
+        [".agents/skills/a", undefined],
+      ]),
+    );
   });
 
   it.skipIf(process.getuid?.() === 0)(
