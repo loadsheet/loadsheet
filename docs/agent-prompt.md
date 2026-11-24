@@ -52,8 +52,8 @@ Change nothing until I accept a fix.
      work in it that exists nowhere else (`git status`, unpushed commits). If you find either,
      stop and ask me.
    - `remove` with no `run`: ask me how to remove it; never guess a command.
-   - `dedupe`: the same item is installed more than once; remove the copy at `path` with its
-     `run` command, or ask me how when there is none.
+   - `dedupe`: a second copy of a skill, which the harness does not load; its `run` removes
+     only the copy at `path`. Apply it as `run` above.
    - A finding with no fixes: tell me about it and change nothing.
 5. When done, rerun `npx loadsheet --json`. loadsheet reads past sessions, so a finding can
    stay until new sessions have run without the item: tell me which fixes are in place on disk

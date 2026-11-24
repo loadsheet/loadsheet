@@ -115,12 +115,8 @@ describe("packReport", () => {
         missing: ["listing", "modelUse", "userUse"],
       },
       { rule: "idle-mcp", harness: "claude-code", reason: "missing-signal", missing: ["mcp"] },
-      {
-        rule: "harness-mismatch",
-        harness: "claude-code",
-        reason: "missing-signal",
-        missing: ["listing"],
-      },
+      { rule: "harness-mismatch", harness: "claude-code", reason: "not-enough-data" },
+      { rule: "drift", harness: "claude-code", reason: "not-enough-data" },
       {
         rule: "short-history",
         harness: "claude-code",
@@ -144,6 +140,34 @@ describe("packReport", () => {
     expect(off.skipped.map((skip) => skip.rule)).not.toContain("dead-skill");
     const ignored = packReport({ ...input, config: resolveConfig({ ignore: ["skill:long"] }) });
     expect(ignored.findings).toEqual([]);
+  });
+
+  it("finds a skill the pack installs twice, with no machine and no fix", () => {
+    const deploy = (path: string, digest: string) =>
+      item("kit:deploy", 120, 900, {
+        managedBy: "plugin",
+        scope: "plugin",
+        pack: "kit",
+        path,
+        digest: digest.repeat(64),
+      });
+    const report = packReport({
+      ...input,
+      items: [deploy("commands/deploy.md", "a"), deploy("skills/deploy", "b")],
+      config: resolveConfig({ rules: { "expensive-description": false } }),
+    });
+    expect(parseReport(JSON.parse(JSON.stringify(report)))).toEqual(report);
+    expect(report.findings).toEqual([
+      {
+        id: "duplicate:skill:kit:deploy",
+        rule: "duplicate",
+        level: "fix",
+        item: "skill:kit:deploy",
+        where: [],
+        evidence: { copies: 2 },
+        fixes: [],
+      },
+    ]);
   });
 });
 

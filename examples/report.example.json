@@ -1543,26 +1543,20 @@
       "evidence": {
         "skills": 6,
         "sessions": 412,
-        "uses": 0,
-        "listedChars": 1082
+        "days": 30,
+        "byModel": 0,
+        "byUser": 0
       },
       "savesTokens": {
         "value": 272,
         "basis": "estimated"
       },
-      "fixes": [
-        {
-          "machine": "laptop",
-          "action": "remove",
-          "path": "~/.claude/plugins/cache/data-toolkit",
-          "run": "claude plugin uninstall data-toolkit"
-        }
-      ]
+      "fixes": []
     },
     {
       "id": "duplicate:skill:git-commit",
       "rule": "duplicate",
-      "level": "cut",
+      "level": "fix",
       "item": "skill:git-commit",
       "where": [
         {
@@ -1571,25 +1565,14 @@
         }
       ],
       "evidence": {
-        "copies": 2,
-        "sessions": 140
+        "copies": 2
       },
-      "savesTokens": {
-        "value": 32,
-        "basis": "estimated"
-      },
-      "fixes": [
-        {
-          "machine": "laptop",
-          "action": "dedupe",
-          "path": "~/.codex/skills/git-commit"
-        }
-      ]
+      "fixes": []
     },
     {
       "id": "heavy-instructions:instructions:monorepo/CLAUDE.md",
       "rule": "heavy-instructions",
-      "level": "fix",
+      "level": "info",
       "item": "instructions:monorepo/CLAUDE.md",
       "where": [
         {
@@ -1599,24 +1582,15 @@
       ],
       "evidence": {
         "chars": 18460,
+        "maxChars": 12000,
         "sessions": 169
       },
-      "savesTokens": {
-        "value": 1615,
-        "basis": "estimated"
-      },
-      "fixes": [
-        {
-          "machine": "laptop",
-          "action": "shorten",
-          "path": "~/work/monorepo/CLAUDE.md"
-        }
-      ]
+      "fixes": []
     },
     {
       "id": "idle-mcp:mcp:linear",
       "rule": "idle-mcp",
-      "level": "cut",
+      "level": "info",
       "item": "mcp:linear",
       "where": [
         {
@@ -1632,19 +1606,12 @@
         "value": 1030,
         "basis": "estimated"
       },
-      "fixes": [
-        {
-          "machine": "laptop",
-          "action": "remove",
-          "path": "~/.claude.json",
-          "run": "claude mcp remove linear"
-        }
-      ]
+      "fixes": []
     },
     {
       "id": "harness-mismatch:skill:pdf-forms",
       "rule": "harness-mismatch",
-      "level": "cut",
+      "level": "fix",
       "item": "skill:pdf-forms",
       "where": [
         {
@@ -1653,7 +1620,12 @@
         }
       ],
       "evidence": {
-        "sessions": 0
+        "sessions": 0,
+        "minSessions": 1
+      },
+      "savesTokens": {
+        "value": 40,
+        "basis": "estimated"
       },
       "fixes": [
         {
@@ -1679,22 +1651,10 @@
         }
       ],
       "evidence": {
-        "machines": 2,
         "variants": 2,
-        "listedChars": 176,
-        "listedCharsOnServer": 171
+        "machines": 2
       },
-      "fixes": [
-        {
-          "machine": "server",
-          "action": "set",
-          "path": "~/.config/fleetrc/manifest.toml",
-          "set": {
-            "key": "skills.deploy-preview.source",
-            "value": "laptop"
-          }
-        }
-      ]
+      "fixes": []
     },
     {
       "id": "short-history:codex",
@@ -1708,7 +1668,8 @@
       ],
       "evidence": {
         "days": 18,
-        "sessions": 64
+        "sessions": 64,
+        "minDays": 30
       },
       "fixes": []
     }
