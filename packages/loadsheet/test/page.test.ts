@@ -77,7 +77,8 @@ const build = (args: string[], out: string) => {
   return names;
 };
 
-describe.skipIf(!browser)("the web UI on a page loadsheet build wrote", () => {
+// A browser's first start on a CI runner takes longer than the default five seconds.
+describe.skipIf(!browser)("the web UI on a page loadsheet build wrote", { timeout: 60_000 }, () => {
   it("shows a pack's Report, not its own example", () => {
     const out = join(root, "pack-site");
     const names = build(["pack"], out);
