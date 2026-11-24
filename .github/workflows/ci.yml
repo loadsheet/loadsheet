@@ -115,7 +115,8 @@ jobs:
     name: fleet (${{ matrix.os }}, node ${{ matrix.node }})
     needs: build
     runs-on: ${{ matrix.os }}
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 25 || 15 }}
+    # A passing run takes up to 25 minutes on Windows and 11 on macOS, and a busy runner half as long again.
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 45 || 30 }}
     strategy:
       fail-fast: false
       matrix:
@@ -149,7 +150,7 @@ jobs:
     name: timer e2e (${{ matrix.os }})
     needs: build
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
