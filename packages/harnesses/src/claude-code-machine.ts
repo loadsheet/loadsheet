@@ -219,11 +219,11 @@ const pluginItems = async (files: Files, key: string, root: string): Promise<Ite
   const name = typeof manifest.name === "string" && manifest.name ? manifest.name : fallback;
   const manager: Manager = { managedBy: "plugin", pack: name };
   const items = (
-    await packInventory(plugin, {
-      harness: HARNESS,
-      description: claudeCodeDescription,
-      listedChars: claudeCodeEntryChars,
-    })
+    await packInventory(
+      plugin,
+      { harness: HARNESS, description: claudeCodeDescription, listedChars: claudeCodeEntryChars },
+      name,
+    )
   ).map(({ description: _description, ...item }): Item => ({
     ...item,
     scope: "plugin",

@@ -40,7 +40,8 @@ const readJson = async (files: Files, path: string): Promise<unknown> => {
  * A source that is a plain identifier such as `owner/repo`: not a local path, which may name the
  * home directory, and not a URL, which may carry credentials.
  */
-const plainSource = (source: string) => /^(?![/~.])[^\s@]+$/u.test(source) && !source.includes("://");
+const plainSource = (source: string) =>
+  /^(?![/~.])[^\s@]+$/u.test(source) && !source.includes("://");
 
 /** Name to source, for the links fleetrc's manifest says it made in `dir`. */
 const fleetrcLinks = async (files: Files, dir: string) => {

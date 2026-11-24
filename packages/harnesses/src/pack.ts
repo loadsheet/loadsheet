@@ -33,10 +33,17 @@ const pluginName = async (files: Files) => {
  * Everything a pack installs: each `SKILL.md` anywhere in it, and, when it is a plugin
  * (`.claude-plugin/plugin.json`), its `commands/*.md` and `agents/*.md`, named `plugin:name`.
  * The pack's own root AGENTS.md and CLAUDE.md are its development instructions, not installed.
+ * `installed` names a plugin the harness installed, whose manifest is optional.
  */
-export const packInventory = async (files: Files, listing: PackListing): Promise<Item[]> => {
-  const isPlugin = files.paths.includes(PLUGIN_MANIFEST);
-  const plugin = isPlugin ? ((await pluginName(files)) ?? files.name?.split("/").pop()) : undefined;
+export const packInventory = async (
+  files: Files,
+  listing: PackListing,
+  installed?: string,
+): Promise<Item[]> => {
+  const isPlugin = installed !== undefined || files.paths.includes(PLUGIN_MANIFEST);
+  const plugin =
+    installed ??
+    (isPlugin ? ((await pluginName(files)) ?? files.name?.split("/").pop()) : undefined);
   const pack = files.name ?? plugin;
   const qualify = (name: string) => (plugin ? `${plugin}:${name}` : name);
 

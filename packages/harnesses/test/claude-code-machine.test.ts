@@ -281,6 +281,30 @@ describe("Claude Code machine inventory", () => {
     });
   });
 
+  it("namespaces an installed plugin without a manifest by its installed name", async () => {
+    const bare = "~/.claude/plugins/cache/market/bare/2.0.0";
+    const items = await summary({
+      ...home,
+      "~/.claude/settings.json": JSON.stringify({ enabledPlugins: { "bare@market": true } }),
+      "~/.claude/plugins/installed_plugins.json": JSON.stringify({
+        version: 2,
+        plugins: {
+          "bare@market": [
+            { scope: "user", installPath: "/home/jo/.claude/plugins/cache/market/bare/2.0.0" },
+          ],
+        },
+      }),
+      [`${bare}/skills/how/SKILL.md`]: skill("how", "Explains."),
+      [`${bare}/commands/go.md`]: "---\ndescription: Goes.\n---\nSteps.",
+      [`${bare}/agents/helper.md`]: skill("helper", "Helps."),
+    });
+    expect(
+      items.filter((item) => item.scope === "plugin").map((item) => `${item.id} ${item.pack}`),
+    ).toEqual(
+      ["subagent:bare:helper", "skill:bare:go", "skill:bare:how"].map((id) => `${id} bare`),
+    );
+  });
+
   it("applies the skills CLI's lock to skill folders only", async () => {
     const items = await summary({
       ...home,
