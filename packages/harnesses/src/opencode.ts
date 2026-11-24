@@ -50,10 +50,14 @@ const CONFIG_FILES = ["opencode.json", "opencode.jsonc"];
 const configDir = (place: Place) =>
   `${envDir(place, "XDG_CONFIG_HOME") ?? `${trimSlash(place.home)}/.config`}/opencode`;
 
-/** Whether the skill sets `metadata.opencode/autoinvoke: false`, which keeps it out of the listing. */
-const autoinvokeOff = (found: FoundSkill) => {
+/**
+ * Whether OpenCode lists the skill for the model: `metadata.opencode/autoinvoke` when it is a
+ * boolean, which takes precedence, else not `disable-model-invocation`.
+ */
+const autoinvoke = (found: FoundSkill) => {
   const metadata = splitFrontmatter(found.source).data.metadata;
-  return isRecord(metadata) && metadata["opencode/autoinvoke"] === false;
+  const own = isRecord(metadata) ? metadata["opencode/autoinvoke"] : undefined;
+  return typeof own === "boolean" ? own : !found.skill.disableModelInvocation;
 };
 
 interface ServerEntry {
@@ -130,8 +134,8 @@ const machineInventory = async (files: Files, given?: Place): Promise<Item[]> =>
   for (const skill of oneByKey(found, (entry) => entry.folder, "last")) {
     // Listed: a skill with a description that does not opt out of the list.
     const description = skill.skill.description;
-    const optedOut = autoinvokeOff(skill) || skill.skill.disableModelInvocation;
-    const listed = description && !optedOut ? plainListedChars(skill.folder, description) : 0;
+    const listed =
+      description && autoinvoke(skill) ? plainListedChars(skill.folder, description) : 0;
     items.push(await skillItem(HARNESS, skill, { listed, modelInvocable: listed > 0 }));
   }
 

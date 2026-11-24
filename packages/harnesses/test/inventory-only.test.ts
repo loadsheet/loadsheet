@@ -303,6 +303,30 @@ describe("OpenCode", () => {
     ]);
   });
 
+  it("lists a skill whose autoinvoke metadata is true despite disable-model-invocation", async () => {
+    const items = await inventoryOf(opencode, {
+      "~/.config/opencode/skills/loud/SKILL.md":
+        "---\nname: loud\ndescription: Speaks up.\ndisable-model-invocation: true\nmetadata:\n  opencode/autoinvoke: true\n---\nHi.\n",
+      "~/.config/opencode/skills/mute/SKILL.md": skillMd(
+        { name: "mute", description: "Stays put.", "disable-model-invocation": "true" },
+        "x\n",
+      ),
+    });
+    expect(summary(items)).toEqual([
+      hand(
+        "opencode",
+        "skill:loud",
+        "~/.config/opencode/skills/loud",
+        plain("loud", "Speaks up."),
+        4,
+      ),
+      {
+        ...hand("opencode", "skill:mute", "~/.config/opencode/skills/mute", 0, 2),
+        modelInvocable: false,
+      },
+    ]);
+  });
+
   it("settles a server in both config files on the merged one, opencode.jsonc's fields winning", async () => {
     const items = await inventoryOf(opencode, {
       "~/.config/opencode/opencode.json": JSON.stringify({
