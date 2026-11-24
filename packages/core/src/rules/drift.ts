@@ -12,7 +12,8 @@ export const drift = defineRule({
   needs: [],
   // A sheet with no machine is a pack's; the machines are compared over every sheet.
   enough: (sheet) => sheet.machines.length > 0,
-  run: ({ sheets }) => {
+  run: ({ mode, sheets }) => {
+    if (mode !== "fleet") return [];
     const found = new Map<Id, { where: Where[]; digests: Map<string, Set<string>> }>();
     for (const sheet of sheets) {
       for (const line of sheet.lines) {

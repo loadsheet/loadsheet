@@ -1048,6 +1048,17 @@ describe("drift", () => {
     ).toEqual([{ variants: 3, machines: 2 }]);
   });
 
+  it("finds nothing in a local Report, whatever Scans it reads", () => {
+    const built = buildReport({
+      scans: [scan("laptop", { items: [copy("a")] }), scan("server", { items: [copy("b")] })],
+      config: resolveConfig(only("drift")),
+      now: NOW,
+      tool: "loadsheet@0.0.1",
+      mode: "local",
+    });
+    expect(built.findings).toEqual([]);
+  });
+
   it("finds nothing on one machine, where two copies are a duplicate and not drift", () => {
     const one = scan("laptop", {
       items: [copy("a"), { ...copy("b"), path: "~/.claude/commands/deploy.md" }],
