@@ -11,7 +11,7 @@ import {
   type Signal,
 } from "@loadsheet/schema";
 import { describe, expect, it } from "vite-plus/test";
-import { buildReport } from "../src/index.ts";
+import { buildReport, type BuildReportInput } from "../src/index.ts";
 
 const EXACT: Record<Signal, Grade> = {
   listing: "exact",
@@ -646,10 +646,15 @@ describe("fixes", () => {
         run: "npx skills remove idle --global --agent claude-code --yes",
       },
     ],
+    // A local Report knows one machine, and `fleetrc remove` reaches every machine.
     [
       "fleetrc",
       { managedBy: "fleetrc" },
-      { action: "remove", path: "~/.claude/skills/idle", run: "fleetrc remove idle" },
+      {
+        action: "hide-from-model",
+        path: "~/.claude/settings.json",
+        set: { key: "skillOverrides.idle", value: "user-invocable-only" },
+      },
     ],
     // A plugin update replaces the file a hide would edit, so nothing lasts.
     [
@@ -770,6 +775,7 @@ describe("fixes", () => {
         sessions: [sessions(30), sessions(30, {}, "codex")],
         cells: [cell("idle", 25), cell("idle", 25, { harness: "codex" })],
       }),
+      scan("server"),
     ]).findings;
     expect(findings.map((f) => [f.rule, f.fixes])).toEqual([
       [
@@ -786,12 +792,58 @@ describe("fixes", () => {
     ]);
   });
 
-  it("gives no fleetrc command for a skill named like a source, which fleetrc would remove whole", () => {
-    const [finding] = dead([
-      skill("idle", { managedBy: "fleetrc", pack: "Idle" }),
-      skill("other", { managedBy: "fleetrc", pack: "Idle", path: "~/.claude/skills/other" }),
+  it("gives no fleetrc command for a skill named like a source on any machine, which fleetrc would remove whole", () => {
+    const built = report([
+      scan("laptop", {
+        items: [skill("idle", { managedBy: "fleetrc", pack: "mine" })],
+        cells: [cell("idle", 25)],
+      }),
+      // The source is linked only on the server.
+      scan("server", {
+        items: [
+          skill("other", { managedBy: "fleetrc", pack: "Idle", path: "~/.claude/skills/other" }),
+        ],
+      }),
     ]);
-    expect(finding).toMatchObject({ id: "dead-skill:skill:idle", fixes: [] });
+    expect(built.findings).toMatchObject([{ id: "dead-skill:skill:idle", fixes: [] }]);
+  });
+
+  it("gives `fleetrc remove` only in a fleet Report that read every machine and found no use", () => {
+    const linked = skill("idle", { managedBy: "fleetrc", pack: "mine" });
+    const laptop = scan("laptop", { items: [linked], cells: [cell("idle", 25)] });
+    const fixesOf = (scans: Scan[], machines: BuildReportInput["machines"] = []) =>
+      buildReport({ scans, machines, config: resolveConfig(), now: NOW, tool: "t" }).findings.find(
+        (f) => f.rule === "dead-skill",
+      )!.fixes;
+    const hidden = [
+      {
+        machine: "laptop",
+        action: "hide-from-model",
+        path: "~/.claude/settings.json",
+        set: { key: "skillOverrides.idle", value: "user-invocable-only" },
+      },
+    ];
+    expect(fixesOf([laptop, scan("server")]).map((fix) => fix.run)).toEqual([
+      "fleetrc remove idle",
+    ]);
+    // A machine could not be read, so its use is unknown.
+    expect(fixesOf([laptop], [{ name: "mini", reachable: false, error: "timed out" }])).toEqual(
+      hidden,
+    );
+    // Codex on the server used it, which the sheet of the harnesses read does not show.
+    const server = scan("server", {
+      coverage: [coverage("server", "codex")],
+      sessions: [sessions(30, {}, "codex")],
+      cells: [cell("idle", 5, { harness: "codex", byUser: 1 })],
+    });
+    expect(
+      buildReport({
+        scans: [laptop, server],
+        config: resolveConfig({ harnesses: ["claude-code"] }),
+        now: NOW,
+        tool: "t",
+      }).findings.find((f) => f.rule === "dead-skill")!.fixes,
+    ).toEqual(hidden);
   });
 
   it("a harness without a fix table gets the path and no command, and nothing to hide", () => {
