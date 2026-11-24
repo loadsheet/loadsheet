@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -29,6 +29,8 @@ const C = {
   codexInstructionBody: "CANARY-LS-codex-instruction-body",
   mcpEnv: "CANARY-LS-mcp-env",
   mcpArg: "CANARY-LS-mcp-arg",
+  mcpCommand: "CANARY-LS-mcp-command",
+  mcpHeader: "CANARY-LS-mcp-header",
   settingsEnv: "CANARY-LS-settings-env",
   processEnv: "CANARY-LS-process-env",
   hook: "CANARY-LS-hook-command",
@@ -98,11 +100,16 @@ beforeAll(() => {
     JSON.stringify({
       mcpServers: {
         harbor: {
-          command: "node",
+          command: join(home, "bin", C.mcpCommand),
           args: [join(home, "servers", `${C.mcpArg}.js`)],
           env: { HARBOR_TOKEN: C.mcpEnv },
         },
         quay: { command: "node", args: ["quay.js"] },
+        beacon: {
+          type: "http",
+          url: "https://beacon.invalid/mcp",
+          headers: { Authorization: `Bearer ${C.mcpHeader}` },
+        },
       },
     }),
   );
@@ -211,7 +218,19 @@ beforeAll(() => {
   write(join(home, ".codex", "AGENTS.md"), `${C.codexInstructionBody}\n`);
   write(
     join(home, ".codex", "config.toml"),
-    `[mcp_servers.harbor]\ncommand = "node"\nargs = ["${C.mcpArg}"]\n\n[mcp_servers.harbor.env]\nHARBOR_TOKEN = "${C.mcpEnv}"\n`,
+    [
+      "[mcp_servers.harbor]",
+      `command = "${C.mcpCommand}"`,
+      `args = ["${C.mcpArg}"]`,
+      "",
+      "[mcp_servers.harbor.env]",
+      `HARBOR_TOKEN = "${C.mcpEnv}"`,
+      "",
+      "[mcp_servers.beacon]",
+      'url = "https://beacon.invalid/mcp"',
+      `http_headers = { Authorization = "Bearer ${C.mcpHeader}" }`,
+      "",
+    ].join("\n"),
   );
   const skillPath = join(home, ".agents", "skills", "tide-table", "SKILL.md");
   const codexDay = day(1);
@@ -362,6 +381,29 @@ describe("no canary leaves the machine", () => {
     expect(result.status).toBe(0);
     expect(leaks(readFileSync(join(out, "index.html"), "utf8"))).toEqual([]);
     expect(await findCanaryInDir(out, canaries)).toEqual([]);
+  });
+
+  it("the page loadsheet --ui serves", async () => {
+    const child = spawn(process.execPath, [cli, "--ui", "--local"], { cwd: home, env });
+    try {
+      const port = await new Promise<number>((done, failed) => {
+        let out = "";
+        child.stdout.on("data", (chunk: Buffer) => {
+          out += chunk.toString();
+          const match = /http:\/\/127\.0\.0\.1:(\d+)\//u.exec(out);
+          if (match) done(Number(match[1]));
+        });
+        child.on("exit", (code) => failed(new Error(`exited ${code}`)));
+      });
+      const page = await fetch(`http://127.0.0.1:${port}/`);
+      expect(page.status).toBe(200);
+      const body = await page.text();
+      expect(body).toContain("brew-notes");
+      expect(leaks(body)).toEqual([]);
+      expect(body).not.toContain(root);
+    } finally {
+      child.kill("SIGINT");
+    }
   });
 
   it("the cache folder's files", async () => {
