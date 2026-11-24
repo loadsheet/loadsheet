@@ -250,6 +250,10 @@ importers:
       '@loadsheet/schema':
         specifier: workspace:*
         version: link:../schema
+    devDependencies:
+      '@loadsheet/fixtures':
+        specifier: workspace:*
+        version: link:../fixtures
 
   packages/loadsheet:
     dependencies:

@@ -31,6 +31,8 @@ export interface TranscriptFile {
   readonly path: string;
   readonly size: number;
   readonly mtimeMs: number;
+  /** When the file or its metadata last changed, which a restored mtime does not hide. */
+  readonly ctimeMs: number;
 }
 
 /** How to turn a transcript's lines into records. */
@@ -117,7 +119,12 @@ export async function listTranscriptFiles(
       try {
         const stats = await NodeFSP.stat(path);
         if (stats.mtimeMs >= sinceMs) {
-          found[index] = { path, size: stats.size, mtimeMs: stats.mtimeMs };
+          found[index] = {
+            path,
+            size: stats.size,
+            mtimeMs: stats.mtimeMs,
+            ctimeMs: stats.ctimeMs,
+          };
         }
       } catch (error) {
         // A file deleted between readdir and stat is gone, not failed.

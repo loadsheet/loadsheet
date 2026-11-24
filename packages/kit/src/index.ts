@@ -128,3 +128,5 @@ export interface Harness<State = unknown> {
 
 /** Declares a harness; it only checks the shape. */
 export const defineHarness = <H extends Harness>(harness: H): H => harness;
+
+export * from "./fold.ts";
