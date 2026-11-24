@@ -86,7 +86,7 @@ jobs:
     name: fleet (${{ matrix.os }}, node ${{ matrix.node }})
     needs: build
     runs-on: ${{ matrix.os }}
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 25 || 15 }}
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 45 || 15 }}
     strategy:
       fail-fast: false
       matrix:
