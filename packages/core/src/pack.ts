@@ -52,9 +52,23 @@ export const packReport = ({
   const today = now.toISOString().slice(0, 10);
   const { findings, skipped } = runRules({
     mode: "pack",
-    harness: harness.id,
-    lines,
-    signals: NO_SIGNALS,
+    sheets: [
+      {
+        harness: harness.id,
+        sessions: 0,
+        days: 0,
+        machines: [],
+        sessionsOn: () => 0,
+        history: 0,
+        signals: NO_SIGNALS,
+        lines,
+        // The pack's own Items, on no machine: a line holds for none, so only a rule that reads
+        // installs by id, such as duplicate, sees them.
+        installs: (id) =>
+          items.filter((item) => item.id === id).map((item) => ({ machine: "", item })),
+        itemsOn: () => [],
+      },
+    ],
     config,
   });
   return {

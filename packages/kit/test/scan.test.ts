@@ -353,6 +353,20 @@ describe("scanMachine", () => {
     expect(agents.chars.listed).toBe(size);
   });
 
+  it("writes what removing each Item reaches, worked out on the disk", async () => {
+    const home = await makeHome("reach", []);
+    // A second skill folder that is a link to the first: both Items are one file.
+    await NodeFSP.symlink("alpha", `${home}/.fake/skills/beta`);
+    const result = await cold(home);
+    expect(parseScan(result)).toEqual(result);
+    expect(result.items.map((item) => [item.path, item.reaches])).toEqual([
+      ["~/.fake/AGENTS.md", []],
+      ["~/.fake/skills/alpha/SKILL.md", ["~/.fake/skills/beta/SKILL.md"]],
+      ["~/.fake/skills/beta/SKILL.md", ["~/.fake/skills/alpha/SKILL.md"]],
+    ]);
+    expect(findCanary(result, [home, tmp])).toEqual([]);
+  });
+
   it("reports a harness whose home is missing as not installed", async () => {
     const result = await scan(NodePath.join(tmp, "empty-home"), false);
     expect(parseScan(result).coverage).toEqual([
@@ -475,7 +489,11 @@ describe("scanMachine", () => {
         ],
       },
     ];
-    const a = await cold(await makeHome("a", first));
+    // The earlier Scan: two at one instant cannot be put in order, and keep no reach.
+    const a = {
+      ...(await cold(await makeHome("a", first))),
+      scannedAt: "2026-11-24T14:00:00.000Z",
+    };
     const b = await cold(await makeHome("b", second));
     const ab = await cold(await makeHome("ab", [...first, ...second]));
 

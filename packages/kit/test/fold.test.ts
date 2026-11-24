@@ -189,4 +189,80 @@ describe("mergeScans", () => {
     const a = scanOf([{ harness: "h", facts }]);
     expect(() => mergeScans(a, { ...a, machine: "n" })).toThrow(/one machine/);
   });
+
+  it("takes what an Item reaches from the latest Scan alone", () => {
+    const [shared, own] = scanOf([{ harness: "h", facts }]).items;
+    const at = (scannedAt: string, items: Scan["items"]): Scan => ({
+      ...scanOf([{ harness: "h", facts: [] }]),
+      scannedAt,
+      items,
+    });
+    // The older Scan worked out both; the latest holds one of them and could not work it out.
+    const older = at("2026-11-23T00:00:00.000Z", [
+      { ...shared!, reaches: [own!.path] },
+      { ...own!, reaches: [] },
+    ]);
+    const latest = at("2026-11-24T00:00:00.000Z", [shared!]);
+    for (const merged of [mergeScans(older, latest), mergeScans(latest, older)]) {
+      expect(merged.items).toEqual([shared, own]);
+    }
+    const known = at("2026-11-24T00:00:00.000Z", [{ ...shared!, reaches: [] }]);
+    expect(mergeScans(older, known).items).toEqual([{ ...shared!, reaches: [] }, own]);
+    // The latest Scan names a path it does not hold: an older Scan's Item does not stand in for it.
+    const beyond = at("2026-11-24T00:00:00.000Z", [{ ...shared!, reaches: [own!.path] }]);
+    expect(mergeScans(older, beyond).items).toEqual([shared, own]);
+  });
+
+  it("orders Scans by instant, however the time is written", () => {
+    const [shared] = scanOf([{ harness: "h", facts }]).items;
+    const at = (scannedAt: string, items: Scan["items"]): Scan => ({
+      ...scanOf([{ harness: "h", facts: [] }]),
+      scannedAt,
+      items,
+    });
+    // As text, "…00.001Z" sorts before "…00Z".
+    const older = at("2026-11-24T13:00:00Z", [{ ...shared!, reaches: [] }]);
+    const latest = at("2026-11-24T13:00:00.001Z", [shared!]);
+    for (const merged of [mergeScans(older, latest), mergeScans(latest, older)]) {
+      expect(merged.items).toEqual([shared]);
+      expect(merged.scannedAt).toBe(latest.scannedAt);
+    }
+  });
+
+  it("keeps no reach when two Scans tie for the latest millisecond", () => {
+    const [shared] = scanOf([{ harness: "h", facts }]).items;
+    const at = (scannedAt: string, items: Scan["items"]): Scan => ({
+      ...scanOf([{ harness: "h", facts: [] }]),
+      scannedAt,
+      items,
+    });
+    const older = at("2026-11-24T13:00:00.000001Z", [{ ...shared!, reaches: [] }]);
+    const latest = at("2026-11-24T13:00:00.000002Z", [shared!]);
+    for (const merged of [mergeScans(older, latest), mergeScans(latest, older)]) {
+      expect(merged.items).toEqual([shared]);
+    }
+  });
+
+  it.each([
+    "2026-11-24T15:02:00+02",
+    "2026-11-24 15:02:00.5 +0200",
+    "2026-11-24T15:02:00.123456789+02:00",
+  ])("orders a Scan stamped %s by its instant", (scannedAt) => {
+    const [shared] = scanOf([{ harness: "h", facts }]).items;
+    const at = (time: string, items: Scan["items"]): Scan =>
+      parseScan({ ...scanOf([{ harness: "h", facts: [] }]), scannedAt: time, items });
+    const first = at("2026-11-24T13:00:00Z", [shared!]);
+    const second = at("2026-11-24T13:01:00Z", [{ ...shared!, reaches: [] }]);
+    const latest = at(scannedAt, [shared!]);
+    const merged = [
+      mergeScans(latest, second),
+      mergeScans(second, latest),
+      // The order a cache of parts is folded in: the newest first, then an older one.
+      mergeScans(mergeScans(latest, first), second),
+    ];
+    for (const scan of merged) {
+      expect(scan.scannedAt).toBe(scannedAt);
+      expect(scan.items).toEqual([shared]);
+    }
+  });
 });

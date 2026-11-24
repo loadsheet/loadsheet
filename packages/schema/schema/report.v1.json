@@ -26,7 +26,7 @@
     "source": {
       "type": "string",
       "minLength": 1,
-      "pattern": "^(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
+      "pattern": "^(?!(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
       "description": "In pack mode, the directory name or GitHub URL read."
     },
     "machines": {
@@ -87,7 +87,8 @@
         "harnesses": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
           },
           "description": "Only these harness ids were read, when set."
         },
@@ -97,14 +98,16 @@
             "include": {
               "type": "array",
               "items": {
-                "type": "string"
+                "type": "string",
+                "pattern": "^(?=.{1,128}$)[^\\s<>\"'\\x60/\\\\\\x00-\\x1f\\x7f-\\x9f\\xad\\u061c\\u180e\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u206f\\ufeff\\ufff9-\\ufffb]+(?: [^\\s<>\"'\\x60/\\\\\\x00-\\x1f\\x7f-\\x9f\\xad\\u061c\\u180e\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u206f\\ufeff\\ufff9-\\ufffb]+)*$"
               },
               "description": "Only sessions from these entrypoints were read, when not empty."
             },
             "exclude": {
               "type": "array",
               "items": {
-                "type": "string"
+                "type": "string",
+                "pattern": "^(?=.{1,128}$)[^\\s<>\"'\\x60/\\\\\\x00-\\x1f\\x7f-\\x9f\\xad\\u061c\\u180e\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u206f\\ufeff\\ufff9-\\ufffb]+(?: [^\\s<>\"'\\x60/\\\\\\x00-\\x1f\\x7f-\\x9f\\xad\\u061c\\u180e\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u206f\\ufeff\\ufff9-\\ufffb]+)*$"
               },
               "description": "Sessions from these entrypoints were skipped."
             }
@@ -116,7 +119,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(skill|instructions|mcp|subagent):(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
+            "pattern": "^(skill|instructions|mcp|subagent):(?!\\s*(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
             "description": "A piece of context's id, `${kind}:${name}`."
           },
           "description": "Item ids never reported."
@@ -444,7 +447,7 @@
               "properties": {
                 "item": {
                   "type": "string",
-                  "pattern": "^(skill|instructions|mcp|subagent):(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
+                  "pattern": "^(skill|instructions|mcp|subagent):(?!\\s*(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
                   "description": "Its id."
                 },
                 "ref": {
@@ -458,7 +461,7 @@
                     "name": {
                       "type": "string",
                       "minLength": 1,
-                      "pattern": "^(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
+                      "pattern": "^(?!(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
                       "description": "Its name, unique within its kind."
                     }
                   },
@@ -473,7 +476,7 @@
                 "pack": {
                   "type": "string",
                   "minLength": 1,
-                  "pattern": "^(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
+                  "pattern": "^(?!(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
                   "description": "Where it came from."
                 },
                 "managedBy": {
@@ -486,12 +489,12 @@
                   "items": {
                     "type": "string"
                   },
-                  "description": "Machines where it is installed or was seen."
+                  "description": "Machines where it is installed or was seen; empty in pack mode."
                 },
                 "path": {
                   "type": "string",
                   "minLength": 1,
-                  "pattern": "^(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
+                  "pattern": "^(?!(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
                   "description": "Its file or folder, relative to the home directory or the project; absent when it is no longer installed on any machine read."
                 },
                 "chars": {
@@ -596,7 +599,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9-]*:(?!(?:(?:skill|instructions|mcp|subagent):)?(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))[\\s\\S]+",
             "description": "A stable id, `${rule}:${item ?? pack ?? harness}`."
           },
           "rule": {
@@ -611,13 +614,13 @@
           },
           "item": {
             "type": "string",
-            "pattern": "^(skill|instructions|mcp|subagent):(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
+            "pattern": "^(skill|instructions|mcp|subagent):(?!\\s*(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
             "description": "The item it is about; absent for pack-level and harness-level findings such as dead-pack and short-history."
           },
           "pack": {
             "type": "string",
             "minLength": 1,
-            "pattern": "^(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
+            "pattern": "^(?!(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
             "description": "The pack it is about, for dead-pack."
           },
           "where": {
@@ -686,7 +689,7 @@
                 "path": {
                   "type": "string",
                   "minLength": 1,
-                  "pattern": "^(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
+                  "pattern": "^(?!(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
                   "description": "The file or folder to change, relative to the home directory or the project."
                 },
                 "run": {
@@ -806,6 +809,59 @@
       }
     },
     "required": ["mode"]
+  },
+  "then": {
+    "properties": {
+      "machines": {
+        "type": "array",
+        "maxItems": 0
+      },
+      "coverage": {
+        "type": "array",
+        "maxItems": 0
+      },
+      "sheet": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "lines": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "machines": {
+                    "type": "array",
+                    "maxItems": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "findings": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "where": {
+              "type": "array",
+              "maxItems": 0
+            },
+            "fixes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "machine": false
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   },
   "else": {
     "properties": {

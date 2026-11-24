@@ -179,7 +179,8 @@ const itemKey = (item: Item) => [item.id, item.path].join(SEP);
 
 /**
  * Items by id and path; the same item from two harnesses or two Scans lists both harnesses. Its
- * other fields come from the first list that has it, or from the last when `wins` is `last`.
+ * other fields come from the first list that has it, or from the last when `wins` is `last`: they
+ * are one list's whole, so what an Item reaches is never joined from two Scans.
  */
 const unionItems = (lists: Iterable<readonly Item[]>, wins: "first" | "last"): Item[] => {
   const items = new Map<string, Item>();
@@ -236,6 +237,16 @@ export const buildScan = (input: {
 };
 
 /**
+ * The millisecond of a timestamp the schema takes. Date.parse reads fewer spellings than the
+ * schema: not a space for the `T` or before the offset, nor an offset of hours alone, as in `+02`.
+ */
+const instantOf = (timestamp: string): number => {
+  const [, day, time, zone, minutes = "00"] =
+    /^(.{10})[T ](.{8}(?:\.\d{1,3})?)\d* ?(Z|[+-]\d\d)(?::?(\d\d))?$/u.exec(timestamp) ?? [];
+  return Date.parse(`${day}T${time}${zone === "Z" ? "Z" : `${zone}:${minutes}`}`);
+};
+
+/**
  * Merges Scans of the same machine: counters are summed, everything else is unioned. The Scans
  * must cover different sessions, or those are counted twice. Where two Scans describe the same
  * item or harness differently, the later scan wins. Throws on Scans of different machines.
@@ -248,9 +259,17 @@ export const mergeScans = (first: Scan, ...rest: Scan[]): Scan => {
       "mergeScans merges Scans of one machine; Scans of different machines stay separate",
     );
   }
-  // Oldest first, so the later scan's description of an item or harness is the one kept.
-  const ordered = [...scans].sort(byKey((scan) => scan.scannedAt));
+  // Oldest first, by instant rather than by spelling, so the later scan's description of an item
+  // or harness is the one kept.
+  const instant = (scan: Scan) => instantOf(scan.scannedAt);
+  const ordered = [...scans].sort((a, b) => instant(a) - instant(b));
   const latest = ordered.at(-1)!;
+  // An instant is a millisecond: two Scans within the last one cannot be put in order, and neither
+  // can one whose time does not read.
+  const tied =
+    ordered.length > 1 &&
+    (scans.some((scan) => Number.isNaN(instant(scan))) ||
+      instant(ordered.at(-2)!) === instant(latest));
 
   const counters = new Accumulator();
   for (const scan of ordered) {
@@ -281,6 +300,21 @@ export const mergeScans = (first: Scan, ...rest: Scan[]): Scan => {
     }
   }
 
+  // What an Item reaches was worked out on the disk as it was at its Scan. Only the latest Scan
+  // speaks for the disk now, so an Item it does not hold keeps none, and neither does one that
+  // reaches a path the latest Scan does not hold, which an older Scan's Item must not stand in for.
+  // When two Scans tie for latest, or one's time cannot be read, none does.
+  const current = new Set(latest.items.map(itemKey));
+  const paths = new Set(latest.items.map((item) => item.path));
+  const asOf = (item: Item): Item => {
+    if (item.reaches === undefined) return item;
+    if (!tied && current.has(itemKey(item)) && item.reaches.every((path) => paths.has(path)))
+      return item;
+    const rest = { ...item };
+    delete rest.reaches;
+    return rest;
+  };
+
   const starts = scans.map((scan) => scan.window[0]).sort();
   const ends = scans.map((scan) => scan.window[1]).sort();
   return {
@@ -294,7 +328,7 @@ export const mergeScans = (first: Scan, ...rest: Scan[]): Scan => {
     items: unionItems(
       ordered.map((scan) => scan.items),
       "last",
-    ),
+    ).map(asOf),
     sessions: total.sessions,
     cells: total.cells,
   };
