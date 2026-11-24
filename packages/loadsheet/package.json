@@ -1,6 +1,6 @@
 {
   "name": "loadsheet",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Inspect, weigh and diagnose your coding agents' context: which skills, instruction files and MCP servers cost context without being used.",
   "homepage": "https://loadsheet.dev",
   "license": "MIT",
