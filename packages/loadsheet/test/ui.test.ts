@@ -7,6 +7,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { request } from "node:http";
@@ -141,6 +142,34 @@ describe("loadsheet build", () => {
     const result = run(["build", "pack", "--out", out]);
     expect(result.status).toBe(2);
     expect(readFileSync(join(out, "index.html"), "utf8")).toBe("the user's page");
+  });
+
+  it.each([
+    ["a folder", "assets"],
+    ["its page", "index.html"],
+    ["its marker", MARKER],
+  ])("stops with exit 2 at a link in place of %s, and touches nothing behind it", (_, name) => {
+    const out = mkdtempSync(join(root, "linked-"));
+    const elsewhere = mkdtempSync(join(root, "elsewhere-"));
+    writeFileSync(join(elsewhere, "app.js"), "the user's script");
+    writeFileSync(join(elsewhere, "page"), "the user's page");
+    const marker = JSON.stringify({ files: ["assets/app.js", "index.html"] });
+    if (name === MARKER) {
+      writeFileSync(join(elsewhere, "marker"), marker);
+      symlinkSync(join(elsewhere, "marker"), join(out, MARKER));
+    } else {
+      writeFileSync(join(out, MARKER), marker);
+      symlinkSync(join(elsewhere, name === "assets" ? "." : "page"), join(out, name));
+    }
+    const result = run(["build", "pack", "--out", out]);
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("is a link");
+    expect(readFileSync(join(elsewhere, "app.js"), "utf8")).toBe("the user's script");
+    expect(readFileSync(join(elsewhere, "page"), "utf8")).toBe("the user's page");
+    expect(readdirSync(elsewhere).sort()).toEqual(
+      name === MARKER ? ["app.js", "marker", "page"] : ["app.js", "page"],
+    );
+    if (name === MARKER) expect(readFileSync(join(elsewhere, "marker"), "utf8")).toBe(marker);
   });
 
   it.each([[["build", "pack"]], [["pack", "--ui"]]])(

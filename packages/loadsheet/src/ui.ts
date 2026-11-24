@@ -118,18 +118,28 @@ const writeBuild = async (out: string, web: string, html: string) => {
       }
     }
   }
+  // The marker's paths that stay inside the folder: the only ones a build may replace.
+  previous = previous.filter((file) => resolve(out, file).startsWith(out + sep));
   // A file the last build did not write is the user's: stop before touching anything.
   const mine = new Set([...previous, MARKER]);
   for (const file of files) {
     if (!mine.has(file) && existsSync(join(out, file)))
       fail(`${join(out, file)} is not loadsheet build's; it will not overwrite it`);
   }
+  // A link on the way to a file leads out of the folder, where nothing is loadsheet build's.
+  for (const file of [...previous, ...files, MARKER]) {
+    let path = out;
+    for (const part of relative(out, resolve(out, file)).split(sep)) {
+      path = join(path, part);
+      if (lstatSync(path, { throwIfNoEntry: false })?.isSymbolicLink())
+        fail(`${path} is a link; loadsheet build writes and deletes through no link`);
+    }
+  }
   for (const file of previous) {
     const path = resolve(out, file);
-    if (!path.startsWith(resolve(out) + sep)) continue;
     rmSync(path, { force: true });
     // Folders the last build made go too, once nothing else is left in them.
-    for (let dir = dirname(path); dir.startsWith(resolve(out) + sep); dir = dirname(dir)) {
+    for (let dir = dirname(path); dir.startsWith(out + sep); dir = dirname(dir)) {
       try {
         rmdirSync(dir);
       } catch {
