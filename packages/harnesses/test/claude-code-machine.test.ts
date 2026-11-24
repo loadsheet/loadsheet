@@ -264,6 +264,24 @@ describe("Claude Code machine inventory", () => {
     expect(managed("skill:quiet")).toEqual({ managedBy: "skills", pack: "mine" });
   });
 
+  it("applies the skills CLI's lock to skill folders only", async () => {
+    const items = await summary({
+      ...home,
+      "~/.claude/commands/beta.md": "---\ndescription: A command.\n---\nSteps.",
+      "~/.claude/agents/.fleetrc-manifest.json": JSON.stringify({
+        version: 1,
+        links: { rev: { source: "mine" } },
+      }),
+    });
+    const managed = (path: string) => {
+      const { managedBy, pack } = items.find((item) => item.path === path)!;
+      return { managedBy, pack };
+    };
+    expect(managed("~/.claude/skills/beta")).toEqual({ managedBy: "skills", pack: "acme/skills" });
+    expect(managed("~/.claude/commands/beta.md")).toEqual({ managedBy: "hand", pack: undefined });
+    expect(managed("~/.claude/agents/rev.md")).toEqual({ managedBy: "fleetrc", pack: "mine" });
+  });
+
   it("prefers the skills CLI's XDG lock", async () => {
     const items = await summary({
       ...home,

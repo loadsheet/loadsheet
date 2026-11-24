@@ -75,13 +75,18 @@ const lockedSkills = async (files: Files) => {
 
 /**
  * Who manages each entry of the folder `dir` (keyed as `files` keys it): fleetrc when its manifest
- * there records the entry, the skills CLI when its lock does, the user by hand otherwise.
+ * there records the entry, the skills CLI when its lock does and `dir` is a skills folder, the user
+ * by hand otherwise.
  */
 export const readManagers = async (
   files: Files,
   dir: string,
 ): Promise<(name: string) => Manager> => {
-  const [links, locked] = await Promise.all([fleetrcLinks(files, dir), lockedSkills(files)]);
+  // The skills CLI installs skill folders only; its lock says nothing of commands or subagents.
+  const [links, locked] = await Promise.all([
+    fleetrcLinks(files, dir),
+    dir.endsWith("/skills") ? lockedSkills(files) : new Map<string, string | undefined>(),
+  ]);
   return (name) => {
     const fleetrc = links.get(name);
     const managedBy = fleetrc !== undefined ? "fleetrc" : locked.has(name) ? "skills" : "hand";
