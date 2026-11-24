@@ -56,10 +56,11 @@ Change nothing until I accept a fix.
      only the copy at `path`. Apply it as `run` above.
    - A finding with no fixes: tell me about it and change nothing.
 5. When done, rerun `npx loadsheet --json`. loadsheet reads past sessions, so a finding can
-   stay until new sessions have run without the item. A fix that is in place is no longer in
-   its finding's `fixes` for this machine, and an item you removed no longer has a `path` on
-   its line in `sheet[].lines`. Tell me which fixes are in place, which findings are gone,
-   which remain, and what each session will save.
+   stay until new sessions have run without the item. Once the Scan shows that the model can
+   no longer invoke a copy, its finding stops offering a hide or turn-off for that copy on
+   this machine. An item you removed no longer has a `path` on its line in `sheet[].lines`.
+   Tell me which fixes are in place, which findings are gone, which remain, and what each
+   session will save.
 ```
 
 Without an agent, `npx loadsheet` prints the same findings and fixes as text.
