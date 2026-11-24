@@ -1012,14 +1012,47 @@ describe("drift", () => {
     ]);
   });
 
-  it("skips one machine, where two copies are a duplicate and not drift", () => {
+  it("compares each machine's copies over every harness that loads them", () => {
+    const codex = (digest: string) => ({ ...copy(digest), harnesses: ["codex"] });
+    const on = (machine: string, harnesses: string[], items: Item[]) =>
+      scan(machine, {
+        coverage: harnesses.map((harness) => coverage(machine, harness)),
+        sessions: harnesses.flatMap((harness) => sessions(30, {}, harness)),
+        items,
+      });
+    // Each harness is on one machine only.
+    expect(
+      findingsOf(
+        [on("laptop", ["claude-code"], [copy("a")]), on("server", ["codex"], [codex("b")])],
+        "drift",
+      ),
+    ).toMatchObject({
+      skipped: [],
+      findings: [
+        {
+          where: [
+            { machine: "laptop", harness: "claude-code" },
+            { machine: "server", harness: "codex" },
+          ],
+          evidence: { variants: 2, machines: 2 },
+        },
+      ],
+    });
+    // Three digests in all: a and c on the laptop, b on the server.
+    const both = ["claude-code", "codex"];
+    expect(
+      findingsOf(
+        [on("laptop", both, [copy("a"), codex("c")]), on("server", both, [copy("b"), codex("b")])],
+        "drift",
+      ).findings.map((f) => f.evidence),
+    ).toEqual([{ variants: 3, machines: 2 }]);
+  });
+
+  it("finds nothing on one machine, where two copies are a duplicate and not drift", () => {
     const one = scan("laptop", {
       items: [copy("a"), { ...copy("b"), path: "~/.claude/commands/deploy.md" }],
     });
-    expect(findingsOf([one], "drift")).toMatchObject({
-      items: [],
-      skipped: [{ rule: "drift", harness: "claude-code", reason: "not-enough-data" }],
-    });
+    expect(findingsOf([one], "drift")).toMatchObject({ items: [], skipped: [] });
   });
 });
 

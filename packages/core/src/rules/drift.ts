@@ -3,44 +3,45 @@ import { defineRule } from "./rule.ts";
 
 /**
  * In fleet mode, a skill whose copies differ between machines: the same id with different digests.
- * Two copies on one machine are a duplicate, not drift, so machines are compared by the set of
- * digests each holds. Bringing a copy up to date is its installer's work, so there is no fix.
+ * Each machine holds the set of digests every harness there loads, and machines are compared by
+ * that set, so two copies on one machine are a duplicate, not drift. Bringing a copy up to date is
+ * its installer's work, so there is no fix.
  */
 export const drift = defineRule({
   id: "drift",
   needs: [],
-  enough: (sheet) => sheet.machines.length >= 2,
+  // A sheet with no machine is a pack's; the machines are compared over every sheet.
+  enough: (sheet) => sheet.machines.length > 0,
   run: ({ sheets }) => {
-    const found = new Map<Id, { where: Where[]; versions: Map<string, string> }>();
+    const found = new Map<Id, { where: Where[]; digests: Map<string, Set<string>> }>();
     for (const sheet of sheets) {
       for (const line of sheet.lines) {
         if (line.ref.kind !== "skill") continue;
-        const byMachine = new Map<string, Set<string>>();
+        const known = found.get(line.item) ?? { where: [] as Where[], digests: new Map() };
         for (const { machine, item } of sheet.installs(line.item)) {
-          byMachine.set(machine, (byMachine.get(machine) ?? new Set()).add(item.digest));
-        }
-        const versions = new Map(
-          [...byMachine].map(([machine, digests]) => [machine, [...digests].sort().join(",")]),
-        );
-        if (new Set(versions.values()).size < 2) continue;
-        const known = found.get(line.item) ?? { where: [] as Where[], versions: new Map() };
-        for (const [machine, version] of versions) {
-          known.where.push({ machine, harness: sheet.harness });
-          known.versions.set(machine, version);
+          known.digests.set(machine, (known.digests.get(machine) ?? new Set()).add(item.digest));
+          const last = known.where.at(-1);
+          // Installs come by machine, so a machine's second copy follows its first.
+          if (last?.machine !== machine || last.harness !== sheet.harness)
+            known.where.push({ machine, harness: sheet.harness });
         }
         found.set(line.item, known);
       }
     }
     const findings: Finding[] = [];
-    for (const [item, { where, versions }] of found) {
-      const digests = new Set([...versions.values()].flatMap((version) => version.split(",")));
+    for (const [item, { where, digests }] of found) {
+      const versions = new Set([...digests.values()].map((set) => [...set].sort().join(",")));
+      if (versions.size < 2) continue;
       findings.push({
         id: `drift:${item}`,
         rule: "drift",
         level: "fix",
         item,
         where,
-        evidence: { variants: digests.size, machines: versions.size },
+        evidence: {
+          variants: new Set([...digests.values()].flatMap((set) => [...set])).size,
+          machines: digests.size,
+        },
         fixes: [],
       });
     }
