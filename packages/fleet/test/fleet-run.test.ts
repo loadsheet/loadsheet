@@ -7,19 +7,26 @@ import { isWindows, machine, type Machine } from "./fixture.ts";
 
 /**
  * A fake `ssh` for FLEETRC_SSH: skips the options and the `--` after them, and runs the remote
- * command with `sh -c` on this machine for `box`, with FLEET_SIDE=remote. `gone.example` never
- * answers, like a machine that dropped off the network.
+ * command with `sh -c` on this machine for `box`, with FLEET_SIDE=remote. For `drops` the
+ * connection drops a second in: the remote command and what it started are killed, and ssh exits
+ * 255. Any other host never answers, like a machine that dropped off the network.
  */
 function fakeSsh(m: Machine): NodeJS.ProcessEnv {
   const script = join(m.root, "ssh.mjs");
   writeFileSync(
     script,
-    `import { spawnSync } from "node:child_process";
+    `import { spawn, spawnSync } from "node:child_process";
 const args = process.argv.slice(2);
 while (args[0] === "-o") args.splice(0, 2);
 if (args[0] === "--") args.shift();
 const [host, command] = args;
-if (host !== "box") setTimeout(() => {}, 1e9);
+if (host === "drops") {
+  const run = spawn("sh", ["-c", command], { stdio: "inherit", detached: true });
+  setTimeout(() => {
+    process.kill(-run.pid, "SIGKILL");
+    process.exit(255);
+  }, 1000);
+} else if (host !== "box") setTimeout(() => {}, 1e9);
 else {
   const run = spawnSync("sh", ["-c", command], {
     stdio: "inherit",
@@ -131,6 +138,26 @@ describe.skipIf(isWindows)("fleet run", () => {
         { here: false },
       );
       expect(box).toMatchObject({ host: "box", reachable: true, exitCode: 0, stdout: "done\n" });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("gives no exit code when the connection drops before the command finished", async () => {
+    const m = machine();
+    vi.stubEnv("FLEETRC_SSH", fakeSsh(m).FLEETRC_SSH);
+    try {
+      expect(await fleetRun([{ host: "drops" }], ["sleep", "10"], 30_000, { here: false })).toEqual(
+        [
+          {
+            host: "drops",
+            reachable: true,
+            stdout: "",
+            stderr: "",
+            error: "the connection dropped before the command finished",
+          },
+        ],
+      );
     } finally {
       vi.unstubAllEnvs();
     }

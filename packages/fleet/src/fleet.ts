@@ -757,7 +757,8 @@ export async function fleetRun(
     return finished(hostname(), run);
   };
   const words = argv.map(quote).join(" ");
-  const remoteCommand = `sh -c ${quote(`${ANSWERED}; ${watched(words)}`)}`;
+  // The command's own exit status goes to stderr too, since ssh exits 255 when the connection drops.
+  const remoteCommand = `sh -c ${quote(`${ANSWERED}; (${watched(words)}); s=$?; echo "${NOTE} exit $s" >&2; exit $s`)}`;
   const remote = async ({ host, offline, error }: FleetTarget): Promise<RunResult> => {
     const unreachable = (why: string): RunResult => ({
       host,
@@ -772,14 +773,27 @@ export async function fleetRun(
     if ("error" in tried) return unreachable(tried.error);
     const { run } = tried;
     const answered = new RegExp(`^${NOTE} answered\r?$`, "m").test(run.stderr);
-    const stderr = run.stderr.replace(new RegExp(`^${NOTE} .*\r?\n?`, "gm"), "");
+    // The exit line comes last, after stderr that may not end in a newline.
+    const exited = new RegExp(`${NOTE} exit (\\d+)\r?\n$`);
+    const exit = run.stderr.match(exited)?.[1];
+    const stderr = run.stderr
+      .replace(exited, "")
+      .replace(new RegExp(`^${NOTE} .*\r?\n?`, "gm"), "");
     if (!answered)
       return unreachable(
         run.timedOut
           ? `no answer within ${after}`
           : stderr.trim().split("\n").slice(-3).join(" ") || `ssh exited ${run.code}`,
       );
-    return finished(host, { ...run, stderr });
+    if (run.timedOut || exit === undefined)
+      return {
+        host,
+        reachable: true,
+        error: run.timedOut ? stopped : "the connection dropped before the command finished",
+        stdout: run.stdout,
+        stderr,
+      };
+    return { host, reachable: true, exitCode: Number(exit), stdout: run.stdout, stderr };
   };
   const remotes = targets.filter(({ host }) => !isThisMachine(host));
   return Promise.all([
