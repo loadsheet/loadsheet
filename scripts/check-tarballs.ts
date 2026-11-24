@@ -50,8 +50,6 @@ const named = (manifest: Manifest): string[] => {
 const ALWAYS = /^(?:package\.json|README(?:\.md)?|LICENSE(?:\.md)?)$/iu;
 const TEST = /(?:^|\/)(?:tests?|__tests__|fixtures?)(?:\/|$)|\.(?:test|spec)\.[cm]?[jt]sx?$/iu;
 const ENV = /(?:^|\/)\.env(?:\.|$)/u;
-/** A path a source map should not hold: one from the root of the disk that built it. */
-const ABSOLUTE = /^(?:[/\\]|[a-z]:[/\\]|file:)/iu;
 
 const run = (command: string, args: string[], options: SpawnSyncOptions = {}) => {
   const result = spawnSync(command, args, { encoding: "utf8", ...options });
@@ -102,14 +100,16 @@ try {
     }
     // The install below points every package at its tarball, whatever range asks for it, so the
     // range is checked here: npm must find in it the version published alongside.
-    for (const [dependency, range] of Object.entries({
-      ...manifest.dependencies,
-      ...manifest.peerDependencies,
-      ...manifest.optionalDependencies,
-    })) {
-      const beside = packed.get(dependency)?.manifest.version;
-      if (beside !== undefined && ![beside, `^${beside}`, `~${beside}`].includes(range))
-        problem(`${name}: asks for ${dependency}@${range}, and ${beside} is what ships with it`);
+    for (const ranges of [
+      manifest.dependencies,
+      manifest.peerDependencies,
+      manifest.optionalDependencies,
+    ]) {
+      for (const [dependency, range] of Object.entries(ranges ?? {})) {
+        const beside = packed.get(dependency)?.manifest.version;
+        if (beside !== undefined && ![beside, `^${beside}`, `~${beside}`].includes(range))
+          problem(`${name}: asks for ${dependency}@${range}, and ${beside} is what ships with it`);
+      }
     }
     const exported = named(manifest);
     for (const path of exported) {
@@ -125,16 +125,8 @@ try {
         problem(`${name}: ${path} is neither dist, package.json, README, LICENSE nor exported`);
       if (TEST.test(path)) problem(`${name}: ${path} is test code or a fixture`);
       if (ENV.test(path)) problem(`${name}: ${path} is an env file`);
-      if (path.endsWith(".map")) {
-        const map = execFileSync("tar", ["-xOzf", file, `package/${path}`], { encoding: "utf8" });
-        const { sources = [], sourceRoot = "" } = JSON.parse(map) as {
-          sources?: string[];
-          sourceRoot?: string;
-        };
-        if (sources.some((source) => TEST.test(source))) problem(`${name}: ${path} maps test code`);
-        if ([sourceRoot, ...sources].some((source) => ABSOLUTE.test(source)))
-          problem(`${name}: ${path} holds a path of the disk it was built on`);
-      }
+      // No package is built with source maps; one would carry paths of the disk it was built on.
+      if (path.endsWith(".map")) problem(`${name}: ${path} is a source map`);
     }
   }
   if (problems.length) throw new Error("the tarballs hold what they should not");
