@@ -128,15 +128,18 @@ const readTranscripts = async (
   await eachLimited(files, options.concurrency, async (file) => {
     const key = cache?.key(file.path);
     const cached = key === undefined ? undefined : cache?.get(key);
-    if (cached && !cached.hasTail && cached.size === file.size && cached.mtimeMs === file.mtimeMs) {
+    const unchanged = cached?.size === file.size && cached.mtimeMs === file.mtimeMs;
+    if (cached && unchanged && !cached.hasTail) {
       kept.set(key!, cached);
       tallies.push(cached.tally);
       return;
     }
-    const read = await readTranscript<unknown, Fact>(file.path, format, cached?.position);
+    // A file that changed without growing may have been rewritten before the cached position.
+    const resume = cached && (unchanged || file.size > cached.size) ? cached : undefined;
+    const read = await readTranscript<unknown, Fact>(file.path, format, resume?.position);
     if (read === null) return;
     const fresh = foldFacts(harness, read.records);
-    const committed = read.resumed && cached ? sumTallies([cached.tally, fresh]) : fresh;
+    const committed = read.resumed && resume ? sumTallies([resume.tally, fresh]) : fresh;
     tallies.push(committed, foldFacts(harness, read.tail));
     if (key !== undefined) {
       kept.set(key, {

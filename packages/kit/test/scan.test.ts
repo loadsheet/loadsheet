@@ -465,6 +465,23 @@ describe("the scan cache", () => {
     expect(deleted.sessions.map((cell) => cell.via)).toEqual(["cli"]);
   });
 
+  it("reads again from the start a transcript rewritten in place at the same size", async () => {
+    const home = await makeHome("same-size", SESSIONS);
+    await scan(home, cacheDir());
+
+    // 1200 becomes 4321 near the start; the size and the bytes before the cached offset stay.
+    const sid = SESSIONS[0]!.sid;
+    const before = await NodeFSP.readFile(transcriptPath(home, sid), "utf8");
+    const after = transcript({ ...SESSIONS[0]!, tokens: 4321 });
+    expect(after.length).toBe(before.length);
+    expect(after.slice(-64)).toBe(before.slice(-64));
+    await writeTranscript(home, sid, after, LATER);
+
+    const rewritten = await scan(home, cacheDir());
+    expect(rewritten).toEqual(await cold(home));
+    expect(rewritten.sessions[0]!.fixedTokens).toBe(4321 + 800);
+  });
+
   it("starts cold on a corrupt cache or a new tool version", async () => {
     const home = await makeHome("corrupt", SESSIONS);
     const expected = await cold(home);
