@@ -31,7 +31,8 @@ export default defineConfig({
   run: {
     tasks: {
       "packages:build": {
-        command: 'pnpm -r --filter "./packages/*" run build',
+        // The web UI builds first: `loadsheet` copies its page into dist/web.
+        command: 'pnpm -r --filter "./packages/*" --filter @loadsheet/web run build',
         cache: {
           input: [
             "packages/*/src/**",
@@ -39,7 +40,10 @@ export default defineConfig({
             "packages/*/tsdown.config.ts",
             "packages/fleet/scripts/agent-table.ts",
             "packages/loadsheet/scripts/copy-web.ts",
-            "apps/web/dist/**",
+            "apps/web/src/**",
+            "apps/web/index.html",
+            "apps/web/package.json",
+            "apps/web/vite.config.ts",
             "packages/*/README.md",
             "packages/*/LICENSE",
             "tsdown.shared.ts",
@@ -50,7 +54,7 @@ export default defineConfig({
             ".node-version",
             "vite.config.ts",
           ],
-          output: ["packages/*/dist/**"],
+          output: ["packages/*/dist/**", "apps/web/dist/**"],
           env: ["NODE_ENV"],
         },
       },

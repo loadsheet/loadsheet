@@ -116,6 +116,9 @@ try {
       if (!files.includes(path))
         problem(`${name}: exports or bin name ${path}, which is not in the tarball`);
     }
+    // `loadsheet build` and `loadsheet --ui` read the web UI's page from here.
+    if (name === "loadsheet" && !files.includes("dist/web/index.html"))
+      problem(`${name}: no dist/web/index.html, so this build has no web UI`);
     for (const required of [/^README(?:\.md)?$/iu, /^LICENSE(?:\.md)?$/iu]) {
       if (!files.some((path) => required.test(path)))
         problem(`${name}: no ${required.source.slice(1, 7)}`);
@@ -229,13 +232,29 @@ try {
     );
   }
 
+  const site = join(tmp, "site");
+  const build = npx("build", "--days", "3650", "--out", site);
+  let page = "";
+  try {
+    const html = readFileSync(join(site, "index.html"), "utf8");
+    const inline = /<script type="application\/json" id="report">(.*?)<\/script>/su.exec(html);
+    page = parseReport(JSON.parse(inline![1]!))
+      .sheet.map((sheet) => `${sheet.harness} ${sheet.sessions}`)
+      .sort()
+      .join(", ");
+  } catch {}
+  if (build.status !== 0 || page !== harnesses)
+    problem(
+      `npx loadsheet build wrote a page with ${page || "no"} sessions, exit ${build.status}: ${build.stderr}`,
+    );
+
   const fleet = npx("fleet", "--help");
   if (fleet.status !== 0 || !fleet.stdout.includes("Usage: loadsheet fleet"))
     problem(`npx loadsheet fleet --help exited ${fleet.status}: ${fleet.stderr}`);
 
   if (problems.length) throw new Error("the installed packages do not run");
   console.log(
-    `npm installed them together: --version ${version}, --json a Report (sessions: ${harnesses}), fleet --help ok`,
+    `npm installed them together: --version ${version}, --json a Report (sessions: ${harnesses}), build a page with that Report, fleet --help ok`,
   );
 } catch (error) {
   for (const text of problems) console.error(`- ${text}`);
