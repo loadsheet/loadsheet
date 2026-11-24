@@ -29,8 +29,6 @@ export interface Tally {
   readonly versions: VersionSeen[];
 }
 
-export const emptyTally = (): Tally => ({ sessions: [], cells: [], versions: [] });
-
 const SEP = "\u0000";
 const sessionKey = (cell: { day: Day; harness: string; via: string }) =>
   [cell.day, cell.harness, cell.via].join(SEP);
