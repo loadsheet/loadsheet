@@ -49,6 +49,8 @@ export const scanOf = (result: RunResult): Scan | Unread => {
   if (result.exitCode === undefined)
     return result.error?.startsWith("timed out") ? "timed out" : "offline";
   if (result.exitCode !== 0) return "loadsheet failed there";
+  // The end of an output that was cut is not what the host printed, even when it reads as a Scan.
+  if (result.truncated) return "sent no Scan";
   try {
     return known(ScanSchema as unknown as Shape, parseScan(JSON.parse(result.stdout))) as Scan;
   } catch {

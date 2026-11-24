@@ -236,6 +236,17 @@ describe("loadsheet with a fleet", () => {
     ]);
   });
 
+  it("reads no Scan from the end of an output that was cut", () => {
+    const scan = JSON.parse(loadsheet(["--scan", "--days", "3650"]).stdout);
+    const sent = { reachable: true, exitCode: 0, stdout: JSON.stringify(scan), stderr: "" };
+    const { scans, machines } = fleetScans(parseScan({ ...scan, machine: "desk" }), [
+      { host: "whole", ...sent },
+      { host: "cut", ...sent, truncated: true },
+    ]);
+    expect(scans).toHaveLength(2);
+    expect(machines).toEqual([{ name: "cut", reachable: false, error: "sent no Scan" }]);
+  });
+
   it("takes a fleet of empty entries for no fleet", () => {
     rmSync(log, { force: true });
     manifest(["", " "]);
