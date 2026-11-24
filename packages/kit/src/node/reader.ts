@@ -169,45 +169,69 @@ type ZstdDecompress = () => Transform & { readonly bytesWritten: number };
 const createZstdDecompress = (NodeZlib as { createZstdDecompress?: ZstdDecompress })
   .createZstdDecompress;
 
-/** One zstd frame's decoder: what it decoded so far, and whether it finished or failed. */
-function openZstdFrame() {
+/** One zstd decoder, and what its events said since: `wake` runs on each of them. */
+function openZstdDecoder() {
   const decoder = createZstdDecompress!();
-  const decoded: Buffer[] = [];
-  decoder.on("data", (chunk: Buffer) => decoded.push(chunk));
-  const failed = new Promise<never>((_, reject) => decoder.once("error", reject));
-  const done = Promise.race([new Promise((resolve) => decoder.once("end", resolve)), failed]);
-  failed.catch(() => undefined);
-  done.catch(() => undefined);
-  return { decoder, decoded, failed, done };
+  const state = {
+    decoder,
+    ended: false,
+    failure: undefined as unknown,
+    wake: (): void => undefined,
+  };
+  decoder.on("readable", () => state.wake());
+  decoder.on("end", () => {
+    state.ended = true;
+    state.wake();
+  });
+  decoder.on("error", (error: unknown) => {
+    state.failure ??= error;
+    state.wake();
+  });
+  return state;
 }
 
 /**
- * Decodes every frame of a zstd stream. Node's decoder closes when a frame ends inside a chunk
- * and drops the rest of that chunk, so the rest goes to a new decoder.
+ * Decodes every frame of a zstd stream, reading the output as it comes so the decoder never
+ * holds more than its own buffer. Node's decoder closes when a frame ends inside a chunk and
+ * drops the rest of that chunk, so the rest goes to a new decoder.
  */
 async function* zstdFrames(input: AsyncIterable<Buffer>): AsyncGenerator<Buffer> {
-  let frame = openZstdFrame();
+  let current = openZstdDecoder();
+  async function* decodedUntil(reached: () => boolean): AsyncGenerator<Buffer> {
+    for (;;) {
+      if (current.failure !== undefined) throw current.failure;
+      const piece = current.decoder.read() as Buffer | null;
+      if (piece !== null) yield piece;
+      else if (reached()) return;
+      else await new Promise<void>((resolve) => (current.wake = resolve));
+    }
+  }
   try {
     for await (const chunk of input) {
       let rest = chunk;
       while (rest.length > 0) {
-        const { decoder } = frame;
+        const { decoder } = current;
         const before = decoder.bytesWritten;
-        const written = new Promise<void>((resolve) => decoder.write(rest, () => resolve()));
-        await Promise.race([written, frame.failed]);
+        let written = false;
+        decoder.write(rest, () => {
+          written = true;
+          current.wake();
+        });
+        yield* decodedUntil(() => written);
         const used = decoder.bytesWritten - before;
         if (used === 0) throw new Error("the zstd decoder read nothing");
         rest = rest.subarray(used);
-        if (rest.length > 0) await frame.done;
-        yield* frame.decoded.splice(0);
-        if (rest.length > 0) frame = openZstdFrame();
+        if (rest.length > 0) {
+          yield* decodedUntil(() => current.ended);
+          decoder.destroy();
+          current = openZstdDecoder();
+        }
       }
     }
-    frame.decoder.end();
-    await frame.done;
-    yield* frame.decoded.splice(0);
+    current.decoder.end();
+    yield* decodedUntil(() => current.ended);
   } finally {
-    frame.decoder.destroy();
+    current.decoder.destroy();
   }
 }
 
