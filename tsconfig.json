@@ -20,6 +20,7 @@
     "packages/*/scripts",
     "packages/*/tsdown.config.ts",
     "packages/*/vite.config.ts",
+    "scripts",
     "tsdown.shared.ts",
     "vite.config.ts"
   ]

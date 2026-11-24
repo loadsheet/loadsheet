@@ -81,6 +81,30 @@ jobs:
       - name: Test on Node 22.18
         run: node_modules/.bin/vp test
 
+  # The tarballs npm will receive, packed from the build without prepack: what each holds, then
+  # installed together with npm and run as `npx loadsheet` (scripts/check-tarballs.ts).
+  tarballs:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
+      - run: corepack enable
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: packages
+          path: packages
+      - run: pnpm install --frozen-lockfile
+      - name: Pack, install and run the tarballs
+        run: pnpm check:tarballs
+
   # fleet's suite against the built CLI on Linux, macOS and Windows, with Node 22 and 24.
   fleet:
     name: fleet (${{ matrix.os }}, node ${{ matrix.node }})
