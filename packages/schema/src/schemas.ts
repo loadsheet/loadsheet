@@ -80,9 +80,10 @@ const windowOf = (text: string) =>
   );
 
 // A home directory written out in full: /home/<user>, /Users/<user>, /var/home/<user>, /root, or a
-// Windows drive. The schema cannot know a machine's home, so this catches the usual places; the
-// writer replaces the real one with ~.
-const HOME = String.raw`(?:/home/|/Users/|/var/home/|/root(?:/|$)|[A-Za-z]:[\\/])`;
+// Windows drive, however its slashes are written (`//home/`, `/./home/`). The schema cannot know a
+// machine's home, so this catches the usual places; the writer replaces the real one with ~.
+const SEP = String.raw`(?:/(?:\.{1,2}(?=/))?)+`;
+const HOME = String.raw`(?:${SEP}(?:home|Users|var${SEP}home)${SEP}|${SEP}root(?:/|$)|[A-Za-z]:[\\/])`;
 const NOT_HOME = new RegExp(`^(?!${HOME})`);
 const relativePath = (text: string) =>
   v.pipe(

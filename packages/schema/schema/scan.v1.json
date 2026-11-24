@@ -132,7 +132,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^(skill|instructions|mcp|subagent):(?!\\s*(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
+            "pattern": "^(skill|instructions|mcp|subagent):(?!\\s*(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
             "description": "Its id, `${kind}:${name}`."
           },
           "ref": {
@@ -146,7 +146,7 @@
               "name": {
                 "type": "string",
                 "minLength": 1,
-                "pattern": "^(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
+                "pattern": "^(?!(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
                 "description": "Its name, unique within its kind."
               }
             },
@@ -168,7 +168,7 @@
           "pack": {
             "type": "string",
             "minLength": 1,
-            "pattern": "^(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
+            "pattern": "^(?!(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
             "description": "Where it came from: a plugin name, `owner/repo`, or a fleetrc source."
           },
           "managedBy": {
@@ -179,7 +179,7 @@
           "path": {
             "type": "string",
             "minLength": 1,
-            "pattern": "^(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
+            "pattern": "^(?!(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
             "description": "Its file or folder, relative to the home directory (`~/...`) or to the project."
           },
           "reaches": {
@@ -187,7 +187,7 @@
             "items": {
               "type": "string",
               "minLength": 1,
-              "pattern": "^(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
+              "pattern": "^(?!(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
               "description": "Its file or folder, relative to the home directory (`~/...`) or to the project."
             },
             "description": "The paths of the other Items of this machine that removing this one would take or break, worked out on the machine's disk; absent when that is not known."
@@ -298,7 +298,7 @@
           },
           "item": {
             "type": "string",
-            "pattern": "^(skill|instructions|mcp|subagent):(?!\\s*(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
+            "pattern": "^(skill|instructions|mcp|subagent):(?!\\s*(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
             "description": "The item's id."
           },
           "sessions": {
