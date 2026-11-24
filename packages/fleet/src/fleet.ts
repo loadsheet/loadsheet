@@ -936,8 +936,8 @@ export interface Tailnet {
   peers: TailscalePeer[];
   /** False when the tailnet has MagicDNS off, so only a peer's Tailscale IP reaches it. */
   magicDNS: boolean;
-  /** This machine, which Tailscale lists under Self: its MagicDNS name, or "". */
-  self?: { dns: string };
+  /** This machine, which Tailscale lists under Self: its MagicDNS name, or "", and its tags. */
+  self?: { dns: string; tags: string[] };
 }
 
 /** The machines on the tailnet other than this one, or why Tailscale could not list them. */
@@ -973,7 +973,12 @@ export async function tailnet(timeoutMs = 10_000): Promise<Tailnet | { error: st
   return {
     peers,
     magicDNS: current.MagicDNSEnabled !== false,
-    self: { dns: typeof self.DNSName === "string" ? self.DNSName.replace(/\.$/, "") : "" },
+    self: {
+      dns: typeof self.DNSName === "string" ? self.DNSName.replace(/\.$/, "") : "",
+      tags: Array.isArray(self.Tags)
+        ? self.Tags.filter((tag): tag is string => typeof tag === "string")
+        : [],
+    },
   };
 }
 

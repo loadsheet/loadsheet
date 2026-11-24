@@ -184,6 +184,34 @@ describe.skipIf(isWindows)("fleet run", () => {
     }
   });
 
+  it("runs here for a tag Tailscale gives this machine", async () => {
+    const m = machine();
+    const manifest = m.manifest({ agents: ["claude-code"], sources: [], fleet: [] });
+    const tailscale = join(m.root, "tailscale.mjs");
+    const status = {
+      BackendState: "Running",
+      Self: { DNSName: "me.ts.net.", Tags: ["tag:servers"] },
+    };
+    writeFileSync(tailscale, `process.stdout.write(${JSON.stringify(JSON.stringify(status))});`);
+    const run = await m.runWith(
+      { env: { ...fakeSsh(m), FLEETRC_TAILSCALE: tailscale } },
+      "fleet",
+      "run",
+      "tag:servers",
+      "--manifest",
+      manifest,
+      "--json",
+      "--",
+      "sh",
+      "-c",
+      "echo here",
+    );
+    expect(run.code, run.stderr).toBe(0);
+    expect(JSON.parse(run.stdout)).toEqual([
+      { host: hostname(), reachable: true, exitCode: 0, stdout: "here\n" },
+    ]);
+  });
+
   it("needs a command after --", async () => {
     const m = machine();
     const manifest = m.manifest({ agents: ["claude-code"], sources: [], fleet: ["box"] });

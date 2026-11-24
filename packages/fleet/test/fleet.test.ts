@@ -731,7 +731,7 @@ process.exit(255);`,
       targets: [{ host: "laptop" }],
       warnings: ["tag:servers matches no machine on your tailnet besides this one"],
       enrollment: new Map([["laptop", [{ host: "laptop" }]]]),
-      self: { dns: "me.tail.ts.net" },
+      self: { dns: "me.tail.ts.net", tags: ["tag:servers"] },
     });
     rmSync(join(m.root, "tailscale-ran"));
     await withTailscale(program, () => resolveFleet(["laptop"]));

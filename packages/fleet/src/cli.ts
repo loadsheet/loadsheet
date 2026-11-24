@@ -1238,9 +1238,11 @@ async function fleetRunCommand(loaded: Awaited<ReturnType<typeof loadManifest>>)
   if (bad.length > 0) usage(bad.join("; "));
   const timeout = fleetTimeout(30_000);
   const { targets, self } = await fleetTargets(entries, timeout, "status");
-  // Hosts named on the command line narrow the run to them, as for fleet sync.
+  // Hosts named on the command line narrow the run to them, as for fleet sync, and a tag named
+  // there takes in this machine when Tailscale gives it that tag.
+  const tagged = (tag: string) => self?.tags.some((own) => own.toLowerCase() === tag.toLowerCase());
   const results = await fleetRun(targets, words, timeout, {
-    here: named.length === 0,
+    here: named.length === 0 || named.some((entry) => isTag(entry) && tagged(entry)),
     magicDNS: self?.dns,
   });
   const lines = (host: string, text: string) =>
