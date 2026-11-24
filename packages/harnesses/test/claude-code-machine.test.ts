@@ -238,6 +238,32 @@ describe("Claude Code machine inventory", () => {
     expect(items.some((item) => item.scope === "plugin")).toBe(false);
   });
 
+  it("keeps an installer's source out of pack unless it is a plain identifier", async () => {
+    const items = await summary({
+      ...home,
+      "~/.claude/skills/.fleetrc-manifest.json": JSON.stringify({
+        version: 1,
+        links: { alpha: { source: "~/src/skills" } },
+      }),
+      "~/.agents/.skill-lock.json": JSON.stringify({
+        version: 3,
+        skills: {
+          beta: { source: "/home/jo/src/beta" },
+          gone: { source: "https://jo:sekrit@git.example.com/x.git" },
+          quiet: { source: "mine" },
+        },
+      }),
+    });
+    const managed = (id: string) => {
+      const { managedBy, pack } = items.find((item) => item.id === id)!;
+      return { managedBy, pack };
+    };
+    expect(managed("skill:alpha")).toEqual({ managedBy: "fleetrc", pack: undefined });
+    expect(managed("skill:beta")).toEqual({ managedBy: "skills", pack: undefined });
+    expect(managed("skill:gone")).toEqual({ managedBy: "skills", pack: undefined });
+    expect(managed("skill:quiet")).toEqual({ managedBy: "skills", pack: "mine" });
+  });
+
   it("prefers the skills CLI's XDG lock", async () => {
     const items = await summary({
       ...home,

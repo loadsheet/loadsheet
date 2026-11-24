@@ -36,6 +36,12 @@ const readJson = async (files: Files, path: string): Promise<unknown> => {
   }
 };
 
+/**
+ * A source that is a plain identifier such as `owner/repo`: not a local path, which may name the
+ * home directory, and not a URL, which may carry credentials.
+ */
+const plainSource = (source: string) => /^(?![/~.])[^\s@]+$/u.test(source) && !source.includes("://");
+
 /** Name to source, for the links fleetrc's manifest says it made in `dir`. */
 const fleetrcLinks = async (files: Files, dir: string) => {
   const manifest = await readJson(files, `${dir}/${FLEETRC_MANIFEST}`);
@@ -78,11 +84,10 @@ export const readManagers = async (
   const [links, locked] = await Promise.all([fleetrcLinks(files, dir), lockedSkills(files)]);
   return (name) => {
     const fleetrc = links.get(name);
-    if (fleetrc !== undefined) return { managedBy: "fleetrc", pack: fleetrc };
-    if (locked.has(name)) {
-      const source = locked.get(name);
-      return source === undefined ? { managedBy: "skills" } : { managedBy: "skills", pack: source };
-    }
-    return { managedBy: "hand" };
+    const managedBy = fleetrc !== undefined ? "fleetrc" : locked.has(name) ? "skills" : "hand";
+    const source = fleetrc ?? locked.get(name);
+    return source !== undefined && plainSource(source)
+      ? { managedBy, pack: source }
+      : { managedBy };
   };
 };
