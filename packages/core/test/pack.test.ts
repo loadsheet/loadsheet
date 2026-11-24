@@ -115,12 +115,7 @@ describe("packReport", () => {
         missing: ["listing", "modelUse", "userUse"],
       },
       { rule: "idle-mcp", harness: "claude-code", reason: "missing-signal", missing: ["mcp"] },
-      {
-        rule: "harness-mismatch",
-        harness: "claude-code",
-        reason: "missing-signal",
-        missing: ["listing"],
-      },
+      { rule: "harness-mismatch", harness: "claude-code", reason: "not-enough-data" },
       { rule: "drift", harness: "claude-code", reason: "not-enough-data" },
       {
         rule: "short-history",

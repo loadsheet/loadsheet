@@ -367,8 +367,7 @@
     {
       "rule": "harness-mismatch",
       "harness": "claude-code",
-      "reason": "missing-signal",
-      "missing": ["listing"]
+      "reason": "not-enough-data"
     },
     {
       "rule": "drift",

@@ -947,27 +947,33 @@ describe("harness-mismatch", () => {
       Signal,
       Grade
     >;
-    // Codex reads nothing here, so the sheet is skipped and the folder is not judged.
+    // Codex reads nothing here, so the folder is not judged.
     const blind = both(0, {
       coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex", { signals: none })],
       items: [agents("pdf")],
     });
-    expect(findingsOf([blind], "harness-mismatch")).toMatchObject({
-      items: [],
-      skipped: [
-        {
-          rule: "harness-mismatch",
-          harness: "codex",
-          reason: "missing-signal",
-          missing: ["listing"],
-        },
-      ],
-    });
+    expect(findingsOf([blind], "harness-mismatch")).toMatchObject({ items: [], skipped: [] });
     // Codex is not covered on the server, so its folder there is not judged either.
     const server = scan("server", { items: [agents("pdf")] });
     expect(
       findingsOf([both(0, { items: [agents("pdf")] }), server], "harness-mismatch").findings,
     ).toMatchObject([{ where: [{ machine: "laptop", harness: "codex" }] }]);
+  });
+
+  it("judges each machine by its own coverage, beside one whose harness cannot tell", () => {
+    const blind = scan("server", {
+      coverage: [
+        coverage("server", "claude-code"),
+        coverage("server", "codex", { signals: { ...EXACT, listing: "none" } }),
+      ],
+      items: [agents("pdf")],
+    });
+    expect(
+      findingsOf([both(0, { items: [agents("pdf")] }), blind], "harness-mismatch"),
+    ).toMatchObject({
+      skipped: [],
+      findings: [{ where: [{ machine: "laptop", harness: "codex" }] }],
+    });
   });
 });
 
