@@ -15,6 +15,7 @@ import {
 } from "../index.ts";
 import { defaultCacheDir, openCache, type CachedFile } from "./cache.ts";
 import { dirFiles } from "./files.ts";
+import { reachesOf, withReach } from "./reach.ts";
 import { listTranscriptFiles, readTranscript, type TranscriptFile } from "./reader.ts";
 
 export interface ScanMachineOptions {
@@ -204,11 +205,21 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
     });
   }
 
+  // What removing each Item reaches, across every harness's Items, since one harness's folder can
+  // hold or lead through another's.
+  const reaches = reachesOf(
+    parts.flatMap((part) => part.items.map((item) => item.path)),
+    place.home,
+  );
+
   return buildScan({
     tool: options.tool,
     machine: options.machine ?? hostname(),
     scannedAt: now.toISOString(),
     window,
-    harnesses: parts,
+    harnesses: parts.map((part) => ({
+      ...part,
+      items: part.items.map((item) => withReach(item, reaches)),
+    })),
   });
 };

@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -210,6 +210,60 @@ describe("loadsheet (this machine)", () => {
     expect(report.coverage.map((row) => row.harness)).toEqual(["codex"]);
     const finding = report.findings.find((f) => f.id === "dead-skill:skill:skill-34");
     expect(finding?.fixes.map((fix) => fix.action)).toEqual(["hide-from-model"]);
+  });
+
+  it.each([
+    ["a plain folder gets rm -r", false, [["remove", "rm -r ~/.agents/skills/skill-1"]]],
+    ["a folder a used skill is linked into gets no remove", true, [["hide-from-model", undefined]]],
+  ])("a dead hand-installed skill in %s", (_, linked, fixes) => {
+    const own = join(root, `reach-${String(linked)}`);
+    mkdirSync(join(own, ".claude", "projects", "p"), { recursive: true });
+    cpSync(
+      join(transcripts, "claude-code", "session.jsonl"),
+      join(own, ".claude", "projects", "p", "session.jsonl"),
+    );
+    mkdirSync(join(own, ".codex", "sessions", "2026", "11", "09"), { recursive: true });
+    cpSync(
+      join(transcripts, "codex", "session.jsonl"),
+      join(own, ".codex", "sessions", "2026", "11", "09", "rollout-2026-11-09T10-00-00-s.jsonl"),
+    );
+    // Codex lists skill-1 and never uses it.
+    const skill = (dir: string, name: string) => {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(
+        join(dir, "SKILL.md"),
+        `---\nname: ${name}\ndescription: Use when it comes up.\n---\n\n${CANARY} body.\n`,
+      );
+    };
+    skill(join(own, ".agents", "skills", "skill-1"), "skill-1");
+    if (linked) {
+      // Claude Code's model invokes skill-34, whose folder is a link into skill-1's.
+      skill(join(own, ".agents", "skills", "skill-1", "vendored"), "skill-34");
+      mkdirSync(join(own, ".claude", "skills"), { recursive: true });
+      symlinkSync(
+        "../../.agents/skills/skill-1/vendored",
+        join(own, ".claude", "skills", "skill-34"),
+      );
+    }
+    const result = spawnSync(
+      process.execPath,
+      [
+        cli,
+        "--json",
+        "--no-cache",
+        "--rule",
+        "dead-skill.minSessions=1",
+        "--rule",
+        "dead-skill.minDays=1",
+      ],
+      { encoding: "utf8", cwd: own, env: { ...env, HOME: own } },
+    );
+    expect(result.stderr).toBe("");
+    const report = parseReport(JSON.parse(result.stdout));
+    const finding = report.findings.find((f) => f.id === "dead-skill:skill:skill-1");
+    expect(finding?.fixes.map((fix) => [fix.action, fix.run])).toEqual(fixes);
+    expect(result.stdout).not.toContain(CANARY);
+    expect(result.stdout).not.toContain(root);
   });
 
   it("--rule turns a rule off and sets a threshold", () => {
