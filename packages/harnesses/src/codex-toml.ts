@@ -70,6 +70,59 @@ const leftOpen = (line: string): string | undefined => {
   return undefined;
 };
 
+const KEY_VALUE =
+  /^\s*((?:"(?:[^"\\]|\\.)*"|'[^']*'|[^\s=#"'])(?:"(?:[^"\\]|\\.)*"|'[^']*'|[^=#"'])*?)\s*=\s*(.*)$/u;
+const BOOLEAN = /^(true|false)\s*(?:#.*)?$/u;
+const ONE_LINE_ARRAY = /^\[(.*)\]\s*(?:#.*)?$/u;
+const STRING = /"((?:[^"\\]|\\.)*)"|'([^']*)'/gu;
+
+const unquote = (match: RegExpMatchArray) => {
+  if (match[2] !== undefined) return match[2];
+  try {
+    return JSON.parse(`"${match[1]}"`) as string;
+  } catch {
+    return match[1]!;
+  }
+};
+
+/**
+ * The booleans and one-line string arrays of a TOML file, by dotted key such as
+ * `compat.claude.skills`: what the Grok adapter reads from `~/.grok/config.toml`. Every other value,
+ * an array that spans lines, and the entries of `[[...]]` tables are skipped without being kept.
+ */
+export const readTomlFlags = (source: string): Map<string, boolean | string[]> => {
+  const flags = new Map<string, boolean | string[]>();
+  let table: string[] | undefined = [];
+  let multiline: string | undefined;
+  for (const line of source.replace(/\r\n?/gu, "\n").split("\n")) {
+    if (multiline !== undefined) {
+      if (line.split(multiline).length % 2 === 0) multiline = undefined;
+      continue;
+    }
+    if (/^\s*#/u.test(line)) continue;
+    if (ARRAY_HEADER.test(line)) {
+      table = undefined;
+      continue;
+    }
+    const header = HEADER.exec(line);
+    if (header) {
+      table = keyParts(header[1]!);
+      continue;
+    }
+    multiline = leftOpen(line);
+    if (multiline !== undefined || table === undefined) continue;
+    const entry = KEY_VALUE.exec(line);
+    if (!entry) continue;
+    const key = [...table, ...keyParts(entry[1]!)].join(".");
+    const value = entry[2]!.trim();
+    const boolean = BOOLEAN.exec(value);
+    const array = ONE_LINE_ARRAY.exec(value);
+    if (boolean) flags.set(key, boolean[1] === "true");
+    else if (array) flags.set(key, [...array[1]!.matchAll(STRING)].map(unquote));
+  }
+  return flags;
+};
+
 export const readCodexConfig = (source: string): CodexConfig => {
   const mcpServers = new Map<string, boolean>();
   const plugins = new Map<string, boolean>();
