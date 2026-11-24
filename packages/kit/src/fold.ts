@@ -177,15 +177,19 @@ export const coverageOf = (
 
 const itemKey = (item: Item) => [item.id, item.path].join(SEP);
 
-/** Items by id and path; the same item from two harnesses or two Scans lists both harnesses. */
-const unionItems = (lists: Iterable<readonly Item[]>): Item[] => {
+/**
+ * Items by id and path; the same item from two harnesses or two Scans lists both harnesses. Its
+ * other fields come from the first list that has it, or from the last when `wins` is `last`.
+ */
+const unionItems = (lists: Iterable<readonly Item[]>, wins: "first" | "last"): Item[] => {
   const items = new Map<string, Item>();
   for (const list of lists) {
     for (const item of list) {
       const key = itemKey(item);
       const known = items.get(key);
       const harnesses = new Set([...(known?.harnesses ?? []), ...item.harnesses]);
-      items.set(key, { ...item, harnesses: [...harnesses].sort() });
+      const fields = known && wins === "first" ? known : item;
+      items.set(key, { ...fields, harnesses: [...harnesses].sort() });
     }
   }
   return [...items.values()].sort(byKey(itemKey));
@@ -219,7 +223,13 @@ export const buildScan = (input: {
     coverage: input.harnesses
       .map((part, index) => coverageOf(tallies[index]!, { ...part, machine: input.machine }))
       .sort(byKey((coverage) => coverage.harness)),
-    items: unionItems(input.harnesses.map((part) => part.items)),
+    // Within one machine the harness listed first describes an item: the full adapters come first
+    // and measure what an inventory-only adapter can only estimate, such as whether Codex lets
+    // the model invoke a skill. A later harness only adds itself to the item's `harnesses`.
+    items: unionItems(
+      input.harnesses.map((part) => part.items),
+      "first",
+    ),
     sessions: total.sessions,
     cells: total.cells,
   };
@@ -280,7 +290,11 @@ export const mergeScans = (first: Scan, ...rest: Scan[]): Scan => {
     scannedAt: latest.scannedAt,
     window: [starts[0]!, ends.at(-1)!],
     coverage: [...coverage.values()].sort(byKey((entry) => entry.harness)),
-    items: unionItems(ordered.map((scan) => scan.items)),
+    // Across Scans the newest describes an item: it saw the files as they are now.
+    items: unionItems(
+      ordered.map((scan) => scan.items),
+      "last",
+    ),
     sessions: total.sessions,
     cells: total.cells,
   };

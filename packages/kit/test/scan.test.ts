@@ -392,6 +392,40 @@ describe("scanMachine", () => {
     await expect(NodeFSP.readdir(NodePath.join(tmp, "cache"))).rejects.toThrow();
   });
 
+  it("keeps the fields of the harness listed first when a later one reports the same item", async () => {
+    const home = await makeHome("two-harnesses", []);
+    const full = fake.machine!;
+    const later = defineHarness({
+      id: "later",
+      signals: fake.signals,
+      inventory: async () => [],
+      machine: {
+        home: (place) => full.home(place),
+        sources: (place) => full.sources(place),
+        inventory: async (files, place) =>
+          (await full.inventory(files, place)).map((item) => ({
+            ...item,
+            harnesses: ["later"],
+            chars: { listed: 1, body: 1 },
+            modelInvocable: false,
+          })),
+      },
+    });
+    const result = await scanMachine({
+      harnesses: [fake as Harness, later as Harness],
+      days: DAYS,
+      tool: "loadsheet@0.0.0-test",
+      machine: "test-machine",
+      now: NOW,
+      place: { home, env: {} },
+      cacheDir: false,
+    });
+    const alone = await cold(home);
+    expect(result.items).toEqual(
+      alone.items.map((item) => ({ ...item, harnesses: ["fake", "later"] })),
+    );
+  });
+
   it("merging the Scans of two sets of sessions equals the Scan of both", async () => {
     const first = SESSIONS.slice(0, 2);
     // The second half shares a day and entrypoint with the first, so the merge sums cells with
