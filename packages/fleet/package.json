@@ -1,0 +1,57 @@
+{
+  "name": "@loadsheet/fleet",
+  "version": "0.0.0",
+  "description": "The same skills on every agent and every machine, synced when an agent session starts: the fleetrc CLI, run under any program name.",
+  "keywords": [
+    "agent-skills",
+    "ai-agents",
+    "claude-code",
+    "cli",
+    "codex",
+    "copilot",
+    "cursor",
+    "gemini-cli",
+    "opencode",
+    "skill-md",
+    "skills",
+    "ssh",
+    "sync",
+    "tailscale"
+  ],
+  "homepage": "https://loadsheet.dev",
+  "license": "MIT",
+  "author": "onmax",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/loadsheet/loadsheet.git",
+    "directory": "packages/fleet"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsdown",
+    "prepack": "pnpm --filter @loadsheet/fleet... build"
+  },
+  "devDependencies": {
+    "@vite-hub/schedule": "catalog:",
+    "cron-schedule": "catalog:",
+    "fastest-levenshtein": "catalog:",
+    "jsonc-parser": "catalog:",
+    "skills": "catalog:",
+    "smol-toml": "catalog:",
+    "tar": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

@@ -69,11 +69,196 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Check
         run: pnpm check
+      # Codex runs hooks with the user's $SHELL, so fleet tests the hook's shell form in fish and zsh too.
+      - name: Install fish and zsh
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends fish zsh
       - name: Test
-        run: pnpm test
+        run: pnpm test --project packages
       # Keep the full suite on the oldest Vite+ runtime as well as the current Node.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22.18.0
       - name: Test on Node 22.18
         run: node_modules/.bin/vp test
+
+  # fleet's suite against the built CLI on Linux, macOS and Windows, with Node 22 and 24.
+  fleet:
+    name: fleet (${{ matrix.os }}, node ${{ matrix.node }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 25 || 15 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
+      - run: corepack enable
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: packages
+          path: packages
+      - run: pnpm install --frozen-lockfile
+      - name: Install fish and zsh
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends fish zsh
+      - name: Test fleet
+        run: node_modules/.bin/vp test --project fleet
+
+  # The real timer: install the packed packages, let systemd, launchd or Task Scheduler run the sync
+  # on a one-minute cron, check `status`, reinstall to prove nothing changes, and remove it
+  # (packages/fleet/scripts/e2e/timer-e2e.mjs).
+  timer-e2e:
+    name: timer e2e (${{ matrix.os }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    # Bash runs on every GitHub runner; Windows defaults to PowerShell.
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
+      - run: corepack enable
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: packages
+          path: packages
+      - run: pnpm install --frozen-lockfile
+      # The built packages, packed without building again: fleetrc's bin and the @loadsheet/fleet it runs.
+      - name: Pack fleetrc and @loadsheet/fleet
+        env:
+          pnpm_config_ignore_scripts: "true"
+        run: |
+          pnpm --dir packages/fleetrc pack --out "$RUNNER_TEMP/fleetrc.tgz"
+          pnpm --dir packages/fleet pack --out "$RUNNER_TEMP/fleet.tgz"
+      # The runner user has no login session, so it has no systemd user manager. Linger starts one,
+      # as on a server.
+      - name: Start the systemd user manager
+        if: runner.os == 'Linux'
+        run: |
+          sudo loginctl enable-linger "$USER"
+          runtime_dir="/run/user/$(id -u)"
+          for _ in $(seq 1 30); do
+            if [ -S "$runtime_dir/bus" ]; then break; fi
+            sleep 1
+          done
+          if [ ! -S "$runtime_dir/bus" ]; then
+            echo "::error::The systemd user manager did not start: $runtime_dir/bus is missing."
+            exit 1
+          fi
+          {
+            echo "XDG_RUNTIME_DIR=$runtime_dir"
+            echo "DBUS_SESSION_BUS_ADDRESS=unix:path=$runtime_dir/bus"
+          } >> "$GITHUB_ENV"
+          XDG_RUNTIME_DIR="$runtime_dir" systemctl --user is-system-running --wait || true
+      - name: Install fleetrc, let the OS timer sync twice, remove it
+        run: node packages/fleet/scripts/e2e/timer-e2e.mjs "$RUNNER_TEMP/fleetrc.tgz" "$RUNNER_TEMP/fleet.tgz"
+
+  # The session hooks as the agents run them: init writes them into a throwaway HOME's Claude Code
+  # and Codex files, each runs through a shell from a parent that exits at once, and the sync it
+  # starts must outlive both (packages/fleet/scripts/e2e/hook-e2e.mjs).
+  hook-e2e:
+    name: hook e2e (${{ matrix.os }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
+      - run: corepack enable
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: packages
+          path: packages
+      - run: pnpm install --frozen-lockfile
+      # The built packages, packed without building again: fleetrc's bin and the @loadsheet/fleet it runs.
+      - name: Pack fleetrc and @loadsheet/fleet
+        env:
+          pnpm_config_ignore_scripts: "true"
+        run: |
+          pnpm --dir packages/fleetrc pack --out "$RUNNER_TEMP/fleetrc.tgz"
+          pnpm --dir packages/fleet pack --out "$RUNNER_TEMP/fleet.tgz"
+      - name: Run the session hooks as Claude Code and Codex do, and wait for their syncs
+        run: node packages/fleet/scripts/e2e/hook-e2e.mjs "$RUNNER_TEMP/fleetrc.tgz" "$RUNNER_TEMP/fleet.tgz"
+
+  # Windows breaks that change the machine or need the real Task Scheduler: a subst drive for HOME
+  # (packages/fleet/test/windows.test.ts, W-SUBST), and the timer e2e under a USERPROFILE with
+  # cmd and PowerShell metacharacters, with and without a %VAR% in it.
+  windows-break:
+    name: windows-break (node ${{ matrix.node }})
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
+      - run: corepack enable
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: packages
+          path: packages
+      - run: pnpm install --frozen-lockfile
+      - name: Windows break tests, with subst
+        env:
+          FLEETRC_BREAK_SUBST: "1"
+        run: node_modules/.bin/vp test run --project fleet packages/fleet/test/windows.test.ts
+      # The built packages, packed without building again: fleetrc's bin and the @loadsheet/fleet it runs.
+      - name: Pack fleetrc and @loadsheet/fleet
+        if: ${{ !cancelled() }}
+        env:
+          pnpm_config_ignore_scripts: "true"
+        run: |
+          pnpm --dir packages/fleetrc pack --out "$RUNNER_TEMP/fleetrc.tgz"
+          pnpm --dir packages/fleet pack --out "$RUNNER_TEMP/fleet.tgz"
+      - name: Task Scheduler e2e under a USERPROFILE with metacharacters
+        if: ${{ !cancelled() }}
+        run: node packages/fleet/scripts/e2e/timer-e2e.mjs "$RUNNER_TEMP/fleetrc.tgz" "$RUNNER_TEMP/fleet.tgz" --home-name "O'Brien & Zoë ^ ! (x) \$(whoami) 😀"
+      - name: Task Scheduler e2e under a USERPROFILE with %PATH% in it
+        if: ${{ !cancelled() }}
+        run: node packages/fleet/scripts/e2e/timer-e2e.mjs "$RUNNER_TEMP/fleetrc.tgz" "$RUNNER_TEMP/fleet.tgz" --home-name "pct %PATH% home"

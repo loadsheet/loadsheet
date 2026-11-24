@@ -1,0 +1,367 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/fleetrc/schema.json",
+  "title": "fleetrc manifest",
+  "description": "Where skills come from and which agents get them. Sources are listed in precedence order: the first source with a skill name wins.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "This schema, for editors: https://unpkg.com/fleetrc/schema.json"
+    },
+    "extends": {
+      "description": "Team manifests, as paths or <repo>//<file> such as github:org/agents//team.json; a repository alone means its .fleetrc/manifest.json. They add sources only; their hooks, fleet, hub and report are ignored. An entry may be an object that leaves some of the team's skills or sources out; `fleetrc remove` writes it.",
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "type": "string", "minLength": 1 },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["manifest"],
+            "properties": {
+              "manifest": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The team manifest, as a path or <repo>//<file>."
+              },
+              "exclude": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Skill names left out of every source the team manifest (and what it extends) declares."
+              },
+              "excludeSources": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Source ids of the team manifest left out."
+              }
+            }
+          }
+        ]
+      }
+    },
+    "agents": {
+      "description": "\"all\" for every agent installed on the machine (one whose folder is in your home, such as ~/.claude for Claude Code), or agent ids from the skills package (claude-code, codex, gemini-cli, opencode, cursor, github-copilot, ...). `fleetrc agents` lists the ids.",
+      "oneOf": [
+        { "const": "all" },
+        { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      ],
+      "default": "all"
+    },
+    "sources": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/source" }
+    },
+    "forks": {
+      "description": "Skills copied from upstream into the personal repository, by skill name. `fleetrc diff` and `merge` compare against `from` at `base`.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from", "path"],
+        "properties": {
+          "from": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Repository the skill came from."
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Skill folder inside that repository."
+          },
+          "upstream": {
+            "enum": ["git", "index"],
+            "description": "Upstream type. Use git to let full online sync check a standalone repository whose origin is otherwise ambiguous. Index forks are not checked."
+          },
+          "base": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Upstream commit the fork was last merged with. Without it, `merge` has no common ancestor, so each difference from upstream is a conflict to settle once; the merge then records the base."
+          }
+        }
+      }
+    },
+    "hooks": {
+      "description": "Commands run after a sync that changed matching files. Only the root manifest can declare them.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["run"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Names the hook in the report and in FLEETRC_HOOK. Defaults to run."
+          },
+          "run": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Shell command. Gets the sync report as JSON on stdin, FLEETRC_HOOK, and FLEETRC_CHANGED: the matched <source>:<file> lines."
+          },
+          "on": {
+            "description": "<source id>:<glob> patterns, such as personal:pstack/**. Default: any change.",
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "fleet": {
+      "description": "SSH hosts for `fleetrc fleet`, and tag:<name> entries that stand for every machine on your tailnet with that Tailscale tag.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "if": { "pattern": "^tag:" },
+        "then": { "pattern": "^tag:[A-Za-z][A-Za-z0-9-]*$" }
+      }
+    },
+    "hub": {
+      "type": "string",
+      "minLength": 1,
+      "description": "URL each sync POSTs its report to."
+    },
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run"],
+      "properties": {
+        "run": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Shell command that gets the report JSON on stdin after each sync."
+        }
+      }
+    },
+    "timer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cron": {
+          "type": "string",
+          "default": "*/30 * * * *",
+          "pattern": "^\\S+(\\s+\\S+){4}$",
+          "description": "When the timer runs the sync: a five-field cron expression (minute 0-59, hour 0-23, day of month 1-31, month 1-12, day of week 0-7), such as \"*/30 * * * *\". \"* * * * *\" runs it every minute. fleetrc refuses a value out of range when it reads the manifest."
+        },
+        "timeZone": {
+          "type": "string",
+          "description": "IANA time zone of the cron, such as \"Europe/Madrid\" or \"UTC\", or \"local\"; fleetrc refuses a name Node.js does not know. Defaults to \"local\": the machine's time zone, following its clock changes and a move to another zone. launchd and Task Scheduler run timers in the machine's time zone, so on macOS and Windows another zone works only when it gives the same times."
+        }
+      }
+    }
+  },
+  "$defs": {
+    "common": {
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "maxLength": 255,
+          "not": {
+            "pattern": "^([Cc][Oo][Nn]|[Pp][Rr][Nn]|[Aa][Uu][Xx]|[Nn][Uu][Ll]|[Cc][Oo][Mm][0-9]|[Ll][Pp][Tt][0-9])(\\..*)?$"
+          },
+          "description": "Names the source's folder in the state folder. Defaults to the repository, host or package name. Not a Windows device name such as con or aux, and unique without regard to case."
+        },
+        "skills": {
+          "type": "string",
+          "description": "Glob of skill folders inside the source, e.g. skills/*."
+        },
+        "include": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Only these skill names."
+        },
+        "exclude": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Never these skill names."
+        },
+        "update": {
+          "enum": ["auto", "review"],
+          "default": "auto",
+          "description": "review: fetch and show a diff, apply only on `fleetrc update <source>`."
+        },
+        "instructions": {
+          "description": "The user-level instruction file, linked as each agent's own (CLAUDE.md, AGENTS.md, GEMINI.md, copilot-instructions.md). Its glob must match one file.",
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "Glob of files inside the source; it goes to every agent with an instruction file."
+            },
+            {
+              "type": "object",
+              "minProperties": 1,
+              "propertyNames": {
+                "enum": ["claude-code", "codex", "grok", "gemini-cli", "opencode", "github-copilot"]
+              },
+              "additionalProperties": { "type": "string", "minLength": 1 },
+              "description": "A glob of files inside the source for each agent id. Each agent gets its own files: nothing is translated."
+            }
+          ]
+        },
+        "subagents": {
+          "description": "Subagent files, linked into each agent's subagents folder (~/.claude/agents for Claude Code), keeping their folders below the glob's base.",
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "Glob of files inside the source; it goes to Claude Code only, since agents read other formats."
+            },
+            {
+              "type": "object",
+              "minProperties": 1,
+              "propertyNames": {
+                "enum": [
+                  "claude-code",
+                  "codex",
+                  "grok",
+                  "gemini-cli",
+                  "opencode",
+                  "cursor",
+                  "github-copilot"
+                ]
+              },
+              "additionalProperties": { "type": "string", "minLength": 1 },
+              "description": "A glob of files inside the source for each agent id. Each agent gets its own files: nothing is translated."
+            }
+          ]
+        },
+        "commands": {
+          "description": "Command files, linked into each agent's commands folder (~/.claude/commands for Claude Code), keeping their folders below the glob's base.",
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "Glob of files inside the source; it goes to Claude Code only, since agents read other formats."
+            },
+            {
+              "type": "object",
+              "minProperties": 1,
+              "propertyNames": { "enum": ["claude-code", "gemini-cli", "opencode"] },
+              "additionalProperties": { "type": "string", "minLength": 1 },
+              "description": "A glob of files inside the source for each agent id. Each agent gets its own files: nothing is translated."
+            }
+          ]
+        },
+        "mcp": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A file inside the source holding {\"mcpServers\": {...}}, merged into every agent's MCP config (Claude Code, Codex, Cursor, Gemini CLI, GitHub Copilot, Grok, OpenCode), each in its own format. Secrets are written as ${VAR}: a literal value in a header, or in an env key that looks like a token, key, secret, password or auth, fails that server. A server may list the agents it goes to in \"agents\". Only the root manifest can set it; an extended manifest's is ignored."
+        },
+        "agentHooks": {
+          "description": "Hook definitions, in each agent's own hooks format: Claude Code's go into a plugin fleetrc writes at ~/.claude/skills/fleetrc, Codex's into ~/.codex/hooks.json (approve them in /hooks), Grok's into ~/.grok/hooks, Gemini CLI's into ~/.gemini/settings.json and Cursor's into ~/.cursor/hooks.json, each next to the user's own. Only the root manifest can set it; an extended manifest's is ignored.",
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "A file inside the source of Claude Code hooks, {\"hooks\": {...}}; it goes to Claude Code only."
+            },
+            {
+              "type": "object",
+              "minProperties": 1,
+              "propertyNames": { "enum": ["claude-code", "codex", "grok", "gemini-cli", "cursor"] },
+              "additionalProperties": { "type": "string", "minLength": 1 },
+              "description": "A file inside the source for each agent id, in that agent's hooks format. Nothing is translated."
+            }
+          ]
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "oneOf": [
+        {
+          "description": "A git repository. With `path`, a working clone you edit, updated by fast-forward and linked in place; without, a copy fleetrc keeps.",
+          "required": ["git"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/common/properties/id" },
+            "skills": { "$ref": "#/$defs/common/properties/skills" },
+            "include": { "$ref": "#/$defs/common/properties/include" },
+            "exclude": { "$ref": "#/$defs/common/properties/exclude" },
+            "update": { "$ref": "#/$defs/common/properties/update" },
+            "instructions": { "$ref": "#/$defs/common/properties/instructions" },
+            "subagents": { "$ref": "#/$defs/common/properties/subagents" },
+            "commands": { "$ref": "#/$defs/common/properties/commands" },
+            "mcp": { "$ref": "#/$defs/common/properties/mcp" },
+            "agentHooks": { "$ref": "#/$defs/common/properties/agentHooks" },
+            "git": {
+              "type": "string",
+              "minLength": 1,
+              "description": "owner/repo, github:owner/repo, or any git URL."
+            },
+            "ref": { "type": "string", "minLength": 1 },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Working clone on this machine, e.g. ~/onmax/skills."
+            },
+            "adopt": {
+              "type": "boolean",
+              "description": "init, adopt and fork move hand-made skills into this source. Needs path."
+            },
+            "followLinks": {
+              "type": "boolean",
+              "description": "Follow links that lead out of the working clone, such as a dotfiles repository whose skills link into another repository of yours, to find and link skills. Without it they are left out, since a cloned repository's links come from whoever pushes to it. Only the root manifest can set it; an extended manifest's is ignored. Needs path."
+            }
+          },
+          "dependentRequired": { "adopt": ["path"], "followLinks": ["path"] }
+        },
+        {
+          "description": "A site serving /.well-known/agent-skills/index.json (v0.2.0, with digests) or /.well-known/skills/index.json (v0.1).",
+          "required": ["index"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/common/properties/id" },
+            "include": { "$ref": "#/$defs/common/properties/include" },
+            "exclude": { "$ref": "#/$defs/common/properties/exclude" },
+            "update": { "$ref": "#/$defs/common/properties/update" },
+            "index": { "type": "string", "format": "uri" }
+          }
+        },
+        {
+          "description": "An npm package; `name`, `name@version` or `name@tag`.",
+          "required": ["npm"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/common/properties/id" },
+            "skills": { "$ref": "#/$defs/common/properties/skills" },
+            "include": { "$ref": "#/$defs/common/properties/include" },
+            "exclude": { "$ref": "#/$defs/common/properties/exclude" },
+            "update": { "$ref": "#/$defs/common/properties/update" },
+            "instructions": { "$ref": "#/$defs/common/properties/instructions" },
+            "subagents": { "$ref": "#/$defs/common/properties/subagents" },
+            "commands": { "$ref": "#/$defs/common/properties/commands" },
+            "mcp": { "$ref": "#/$defs/common/properties/mcp" },
+            "agentHooks": { "$ref": "#/$defs/common/properties/agentHooks" },
+            "npm": { "type": "string", "minLength": 1 },
+            "registry": { "type": "string", "format": "uri" }
+          }
+        },
+        {
+          "description": "A folder on this machine, linked in place.",
+          "required": ["local"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/common/properties/id" },
+            "skills": { "$ref": "#/$defs/common/properties/skills" },
+            "include": { "$ref": "#/$defs/common/properties/include" },
+            "exclude": { "$ref": "#/$defs/common/properties/exclude" },
+            "update": { "$ref": "#/$defs/common/properties/update" },
+            "instructions": { "$ref": "#/$defs/common/properties/instructions" },
+            "subagents": { "$ref": "#/$defs/common/properties/subagents" },
+            "commands": { "$ref": "#/$defs/common/properties/commands" },
+            "mcp": { "$ref": "#/$defs/common/properties/mcp" },
+            "agentHooks": { "$ref": "#/$defs/common/properties/agentHooks" },
+            "local": { "type": "string", "minLength": 1 },
+            "adopt": { "type": "boolean" }
+          }
+        }
+      ]
+    }
+  }
+}
