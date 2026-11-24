@@ -314,8 +314,13 @@ try {
   git(work, "commit", "--quiet", "-m", "second");
   git(work, "push", "--quiet", "origin", "main");
 
-  await waitFor("link the second skill", SECOND_RUN_MS, () =>
-    existsSync(join(claudeSkills, "second", "SKILL.md")),
+  // A run links the skill before it writes its record, so wait for the record as well.
+  await waitFor(
+    "link the second skill",
+    SECOND_RUN_MS,
+    () =>
+      existsSync(join(claudeSkills, "second", "SKILL.md")) &&
+      lastRun()?.skills?.names?.includes("second"),
   );
 
   step("status reports the timer and its last run");
