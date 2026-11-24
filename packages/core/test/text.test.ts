@@ -157,7 +157,7 @@ describe("renderText on the fleet example", () => {
     expect(text).toContain(
       "No fix: its skills come with a plugin. Turning the plugin off in /plugin",
     );
-    expect(text).toContain("No fix: every session lists the server;");
+    expect(text).toContain("No fix: the sessions that listed the server never called it;");
     expect(text).toContain(
       "No fix: the harness kept too little history for the usage rules to judge.",
     );
