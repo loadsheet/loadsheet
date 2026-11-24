@@ -20,6 +20,13 @@ export interface SkillMd {
   bodyChars: number;
 }
 
+/**
+ * A frontmatter name loadsheet will put in an id, as Claude Code allows it: words with one plain
+ * space between them, and no markup, quotes, path separators or invisible characters. Claude Code
+ * names an entry whose frontmatter name it refuses by its folder or file.
+ */
+export const SKILL_NAME = /^(?=.{1,128}$)[^\s<>"'`/\\\p{C}]+(?: [^\s<>"'`/\\\p{C}]+)*$/u;
+
 // The opening `---` must be the first line; the block ends at the next line that is exactly `---` (or `...`).
 const FRONTMATTER = /^---[ \t]*\n([\s\S]*?\n)?(?:---|\.\.\.)[ \t]*(?:\n|$)/u;
 

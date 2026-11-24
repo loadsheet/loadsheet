@@ -12,7 +12,7 @@ import {
 } from "./claude-code-listing.ts";
 import { readManagers, skillsLockPath, type Manager } from "./managed.ts";
 import { packInventory } from "./pack.ts";
-import { readSkillMd } from "./skill-md.ts";
+import { readSkillMd, SKILL_NAME } from "./skill-md.ts";
 
 const HARNESS = "claude-code";
 
@@ -86,8 +86,6 @@ const readJson = async (files: Files, path: string): Promise<Record<string, unkn
 
 /** A name loadsheet will put in an id: no spaces, markup, quotes, path separators or invisible characters. */
 export const NAME = /^[^\s<>"'`/\\\p{C}]{1,128}$/u;
-/** A skill's name may also hold one plain space between words, as Claude Code allows. */
-export const SKILL_NAME = /^(?=.{1,128}$)[^\s<>"'`/\\\p{C}]+(?: [^\s<>"'`/\\\p{C}]+)*$/u;
 
 /** The name Claude Code gives an MCP server in its tool names: anything but `[A-Za-z0-9_-]` becomes `_`. */
 export const mcpToolName = (name: string) => name.replace(/[^A-Za-z0-9_-]/gu, "_");

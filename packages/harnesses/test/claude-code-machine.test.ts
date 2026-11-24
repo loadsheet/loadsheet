@@ -259,13 +259,19 @@ describe("Claude Code machine inventory", () => {
     for (const id of ["skill:alpha", "skill:beta", "skill:gone", "skill:quiet"]) {
       expect(pack(skills, id)).toEqual({ managedBy: "skills", pack: undefined });
     }
-    const untyped = await lock({ alpha: { source: "jo/agent-skills" } });
-    expect(pack(untyped, "skill:alpha")).toEqual({ managedBy: "skills", pack: undefined });
-    const fetched = await lock({ alpha: { source: "jo/agent-skills.v2", sourceType: "github" } });
-    expect(pack(fetched, "skill:alpha")).toEqual({
-      managedBy: "skills",
-      pack: "jo/agent-skills.v2",
-    });
+    // Only a type the skills CLI writes for a fetched source says the source is not a path.
+    for (const sourceType of [undefined, "", "folder"]) {
+      const untyped = await lock({ alpha: { source: "client/private-skills", sourceType } });
+      expect(pack(untyped, "skill:alpha")).toEqual({ managedBy: "skills", pack: undefined });
+    }
+    for (const source of ["jo/agent-skills.v2", "vercel/.github"]) {
+      const fetched = await lock({ alpha: { source, sourceType: "github" } });
+      expect(pack(fetched, "skill:alpha")).toEqual({ managedBy: "skills", pack: source });
+    }
+    for (const source of ["./skills", "jo/.", "../skills"]) {
+      const dotted = await lock({ alpha: { source, sourceType: "github" } });
+      expect(pack(dotted, "skill:alpha")).toEqual({ managedBy: "skills", pack: undefined });
+    }
 
     const fleetrc = async (source: string) =>
       pack(
@@ -329,13 +335,17 @@ describe("Claude Code machine inventory", () => {
         },
       }),
       [`${bare}/skills/how/SKILL.md`]: skill("how", "Explains."),
+      // A frontmatter name Claude Code refuses gives way to the folder in a plugin too.
+      [`${bare}/skills/deploy/SKILL.md`]: skill('"deploy  staging"', "Deploys."),
       [`${bare}/commands/go.md`]: "---\ndescription: Goes.\n---\nSteps.",
       [`${bare}/agents/helper.md`]: skill("helper", "Helps."),
     });
     expect(
       items.filter((item) => item.scope === "plugin").map((item) => `${item.id} ${item.pack}`),
     ).toEqual(
-      ["subagent:bare:helper", "skill:bare:go", "skill:bare:how"].map((id) => `${id} bare`),
+      ["subagent:bare:helper", "skill:bare:go", "skill:bare:deploy", "skill:bare:how"].map(
+        (id) => `${id} bare`,
+      ),
     );
   });
 

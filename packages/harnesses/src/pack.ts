@@ -1,7 +1,7 @@
 import type { Files } from "@loadsheet/kit";
 import { sha256 } from "@loadsheet/kit";
 import type { Item, Kind } from "@loadsheet/schema";
-import { readSkillMd, type SkillMd } from "./skill-md.ts";
+import { readSkillMd, SKILL_NAME, type SkillMd } from "./skill-md.ts";
 
 /** How a harness lists one entry, which decides what it costs every session. */
 export interface PackListing {
@@ -72,10 +72,9 @@ export const packInventory = async (
     const source = await files.text(file);
     if (source === undefined) continue;
     const skill = readSkillMd(source);
-    // Commands are named after their file; skills and subagents by their frontmatter name. Claude
-    // Code refuses a name with a control character, `<` or `>`, and one with a slash would read as
-    // a path in the Report; the folder names those entries instead.
-    const named = skill.name !== undefined && !/[\\/<>\p{Cc}]/u.test(skill.name);
+    // Commands are named after their file; skills and subagents by their frontmatter name, and by
+    // their folder or file when that name is not one Claude Code takes.
+    const named = skill.name !== undefined && SKILL_NAME.test(skill.name);
     const name = qualify(named && !file.startsWith("commands/") ? skill.name! : fallback);
     const listed = listing.listedChars(name, skill, kind);
     const item: Item = {

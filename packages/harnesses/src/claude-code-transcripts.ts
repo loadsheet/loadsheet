@@ -3,7 +3,8 @@
 // tool calls and usage, `user` lines slash commands.
 import type { Fact, TranscriptFormat } from "@loadsheet/kit";
 import type { Day, Id } from "@loadsheet/schema";
-import { MCP_NAME, mcpToolName, NAME, SKILL_NAME } from "./claude-code-machine.ts";
+import { MCP_NAME, mcpToolName, NAME } from "./claude-code-machine.ts";
+import { SKILL_NAME } from "./skill-md.ts";
 
 /**
  * What one transcript remembers between lines: the session's day, entrypoint and version, which

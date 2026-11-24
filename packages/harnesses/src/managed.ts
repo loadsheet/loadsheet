@@ -38,8 +38,10 @@ const readJson = async (files: Files, path: string): Promise<unknown> => {
 
 /** A fleetrc source id, as fleetrc's manifest allows it: one word, never a path. */
 const FLEETRC_SOURCE = /^(?=.{1,128}$)[a-z\d][a-z\d._-]*$/iu;
-/** A source the skills CLI fetched, such as `owner/repo`: one or two words, none of them `..`. */
-const SKILLS_SOURCE = /^(?=.{1,128}$)[\w-][\w.-]*(?:\/[\w-][\w.-]*)?$/u;
+/** A source the skills CLI fetched, such as `owner/repo` or `vercel/.github`: one or two words, neither of them `.` or `..`. */
+const SKILLS_SOURCE = /^(?=.{1,128}$)(?!\.{1,2}(?:\/|$))[\w.-]+(?:\/(?!\.{1,2}$)[\w.-]+)?$/u;
+/** The source types the skills CLI writes for what it fetched; `local` and anything else is taken for a path on this machine. */
+const FETCHED = new Set(["github", "gitlab", "git", "well-known", "download"]);
 
 /** Name to source, for the links fleetrc's manifest says it made in `dir`. */
 const fleetrcLinks = async (files: Files, dir: string) => {
@@ -68,7 +70,7 @@ const lockedSkills = async (files: Files) => {
   for (const [name, entry] of Object.entries(lock.skills)) {
     // A local source is a path on this machine, whatever it looks like; a URL may carry credentials.
     const fetched =
-      isRecord(entry) && typeof entry.sourceType === "string" && entry.sourceType !== "local";
+      isRecord(entry) && typeof entry.sourceType === "string" && FETCHED.has(entry.sourceType);
     const source = fetched && typeof entry.source === "string" ? entry.source : "";
     skills.set(name, SKILLS_SOURCE.test(source) ? source : undefined);
   }
