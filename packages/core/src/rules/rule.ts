@@ -100,6 +100,8 @@ export interface Rule<R extends RuleId = RuleId> {
   id: R;
   /** Signals the rule needs; a sheet is skipped as missing-signal when any of them is graded none. */
   needs: Signal[];
+  /** Signals no machine of a sheet provides, for a rule that judges each machine on its own; a sheet with any is skipped as missing-signal. */
+  blind?: (sheet: RuleSheet, unfiltered: Unfiltered) => Signal[];
   /** Whether a sheet holds enough history to judge; a sheet that does not is skipped as not-enough-data. */
   enough?: (sheet: RuleSheet, options: RuleOptions[R], config: ResolvedConfig) => boolean;
   /** Runs once per Report over the sheets that can answer it, and gives one Finding per item. */

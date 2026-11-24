@@ -61,7 +61,10 @@ export const runRules = ({ mode, sheets, config, unfiltered = NOTHING_UNFILTERED
     const options = config.rules[id];
     const ready: RuleSheet[] = [];
     for (const sheet of visible) {
-      const missing = needs.filter((signal) => sheet.signals[signal] === "none");
+      const missing = [
+        ...needs.filter((signal) => sheet.signals[signal] === "none"),
+        ...(rule.blind?.(sheet, unfiltered) ?? []),
+      ];
       if (missing.length) {
         skipped.push({ rule: id, harness: sheet.harness, reason: "missing-signal", missing });
       } else if (rule.enough && !rule.enough(sheet, options, config)) {

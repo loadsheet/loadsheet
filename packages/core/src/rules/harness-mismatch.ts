@@ -18,8 +18,14 @@ interface Mismatch extends Hit {
 export const harnessMismatch = defineRule({
   id: "harness-mismatch",
   // Each install is judged by its own machine's coverage, so a machine that cannot tell does not
-  // silence one that can; a sheet with no machine is a pack's.
+  // silence one that can; a sheet none of whose machines can tell is skipped, and one with no
+  // machine is a pack's.
   needs: [],
+  blind: (sheet, unfiltered) =>
+    sheet.machines.length > 0 &&
+    sheet.machines.every((machine) => unfiltered.sessions(machine, sheet.harness) === undefined)
+      ? ["listing"]
+      : [],
   enough: (sheet) => sheet.machines.length > 0,
   run: ({ sheets, options, unfiltered }) => {
     const unused = (machine: string, harness: string) => {

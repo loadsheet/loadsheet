@@ -1005,12 +1005,34 @@ describe("harness-mismatch", () => {
       coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex", { signals: none })],
       items: [agents("pdf")],
     });
-    expect(findingsOf([blind], "harness-mismatch")).toMatchObject({ items: [], skipped: [] });
+    expect(findingsOf([blind], "harness-mismatch").items).toEqual([]);
     // Codex is not covered on the server, so its folder there is not judged either.
     const server = scan("server", { items: [agents("pdf")] });
     expect(
       findingsOf([both(0, { items: [agents("pdf")] }), server], "harness-mismatch").findings,
     ).toMatchObject([{ where: [{ machine: "laptop", harness: "codex" }] }]);
+  });
+
+  it("skips a harness that no machine can tell sessions for, as missing listing", () => {
+    const blind = both(0, {
+      coverage: [
+        coverage("laptop", "claude-code"),
+        coverage("laptop", "codex", { signals: { ...EXACT, listing: "none" } }),
+      ],
+      items: [agents("pdf")],
+    });
+    expect(findingsOf([blind], "harness-mismatch")).toEqual({
+      items: [],
+      findings: [],
+      skipped: [
+        {
+          rule: "harness-mismatch",
+          harness: "codex",
+          reason: "missing-signal",
+          missing: ["listing"],
+        },
+      ],
+    });
   });
 
   it("judges each machine by its own coverage, beside one whose harness cannot tell", () => {
