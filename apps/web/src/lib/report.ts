@@ -21,7 +21,11 @@ export const isExample = shallowRef(!fromPage);
   plugin manifests and SKILL.md files (names, descriptions and sizes), the way the pack checker will.
 */
 export const packs: Record<string, { report: Report; title: string; by?: string }> = {
-  "mattpocock/skills": { report: parseReport(mattpocock), title: "Matt Pocock's skills", by: "Matt Pocock" },
+  "mattpocock/skills": {
+    report: parseReport(mattpocock),
+    title: "Matt Pocock's skills",
+    by: "Matt Pocock",
+  },
   "cursor/plugins/pstack": { report: parseReport(pstack), title: "pstack", by: "Lauren Tan" },
   "northwind-ai/agent-skills": { report: parseReport(packExample), title: "agent-skills" },
 };
@@ -29,13 +33,20 @@ export const packs: Record<string, { report: Report; title: string; by?: string 
 export const home = (() => {
   if (!fromPage) return undefined;
   if (fromPage.mode !== "pack") return "/report";
-  const slug = packSlug(fromPage.source ?? "") ?? fromPage.source?.split(/[\\/]/).filter(Boolean).at(-1) ?? "pack";
+  const slug =
+    packSlug(fromPage.source ?? "") ??
+    fromPage.source?.split(/[\\/]/).filter(Boolean).at(-1) ??
+    "pack";
   packs[slug] = { report: fromPage, title: slug.split("/").at(-1)! };
   return `/pack/${slug}`;
 })();
 /** `github.com/owner/repo`, `owner/repo` or `github.com/owner/repo/tree/main/dir` → `owner/repo[/dir]`. */
 export function packSlug(input: string): string | undefined {
-  const m = input.trim().replace(/^https?:\/\//, "").replace(/^github\.com\//, "").match(/^([\w.-]+)\/([\w.-]+)(?:\/tree\/[^/]+((?:\/[\w.-]+)+))?/);
+  const m = input
+    .trim()
+    .replace(/^https?:\/\//, "")
+    .replace(/^github\.com\//, "")
+    .match(/^([\w.-]+)\/([\w.-]+)(?:\/tree\/[^/]+((?:\/[\w.-]+)+))?/);
   return m ? `${m[1]}/${m[2]!.replace(/\.git$/, "")}${m[3] ?? ""}` : undefined;
 }
 /** Tokens a pack adds to every session once installed: what the model is shown before it uses anything. */
@@ -46,10 +57,17 @@ export const packTokens = (r: Report) => r.sheet[0]!.lines.reduce((n, l) => n + 
   It is the same Report the page already shows, counters and names only, and the fragment never reaches a server.
 */
 async function pipe(bytes: Uint8Array, stream: CompressionStream | DecompressionStream) {
-  return new Uint8Array(await new Response(new Blob([bytes as Uint8Array<ArrayBuffer>]).stream().pipeThrough(stream)).arrayBuffer());
+  return new Uint8Array(
+    await new Response(
+      new Blob([bytes as Uint8Array<ArrayBuffer>]).stream().pipeThrough(stream),
+    ).arrayBuffer(),
+  );
 }
 export async function shareLink(r: Report, path = "/report/overview", h?: string) {
-  const z = await pipe(new TextEncoder().encode(JSON.stringify(r)), new CompressionStream("deflate-raw"));
+  const z = await pipe(
+    new TextEncoder().encode(JSON.stringify(r)),
+    new CompressionStream("deflate-raw"),
+  );
   let bin = "";
   for (const b of z) bin += String.fromCharCode(b);
   const code = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -58,7 +76,9 @@ export async function shareLink(r: Report, path = "/report/overview", h?: string
 async function fromLink(code: string) {
   const bin = atob(code.replace(/-/g, "+").replace(/_/g, "/"));
   const z = Uint8Array.from(bin, (c) => c.charCodeAt(0));
-  return parseReport(JSON.parse(new TextDecoder().decode(await pipe(z, new DecompressionStream("deflate-raw")))));
+  return parseReport(
+    JSON.parse(new TextDecoder().decode(await pipe(z, new DecompressionStream("deflate-raw")))),
+  );
 }
 /** Set when the URL carried a report this page couldn't read, so the page can say so instead of showing the example. */
 export const linkError = shallowRef<string>();
@@ -105,7 +125,8 @@ export const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 export const K = (n: number) =>
   n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k` : String(Math.round(n));
 export const pct = (n: number) => `${(n * 100).toFixed(n < 0.1 ? 1 : 0)}%`;
-export const plural = (n: number, one: string, many = `${one}s`) => `${fmt(n)} ${n === 1 ? one : many}`;
+export const plural = (n: number, one: string, many = `${one}s`) =>
+  `${fmt(n)} ${n === 1 ? one : many}`;
 
 /** Tokens a SKILL.md body adds when invoked: the report gives characters, so this is an estimate. */
 export const bodyTokens = (l: Line) => Math.round(l.chars.body / 4);
@@ -129,10 +150,15 @@ export function kinds(ls: Line[]): string {
     .map(([k, w]) => [ls.filter((l) => l.ref.kind === k).length, w] as const)
     .filter(([n]) => n)
     .map(([n, w]) => plural(n, w));
-  return parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : (parts[0] ?? "nothing");
+  return parts.length > 1
+    ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`
+    : (parts[0] ?? "nothing");
 }
 /** A plugin skill is named `pack:skill`; inside its pack the prefix is noise. */
-export const shortName = (l: Line) => (l.pack && l.ref.name.startsWith(`${l.pack.split("/").pop()}:`) ? l.ref.name.slice(l.ref.name.indexOf(":") + 1) : l.ref.name);
+export const shortName = (l: Line) =>
+  l.pack && l.ref.name.startsWith(`${l.pack.split("/").pop()}:`)
+    ? l.ref.name.slice(l.ref.name.indexOf(":") + 1)
+    : l.ref.name;
 
 // ─── what every session starts with, by kind ───
 
@@ -146,12 +172,48 @@ export interface Segment {
   lines: Line[];
 }
 
-const KINDS: { id: Exclude<KindId, "harness">; name: string; color: string; what: string; test: (l: Line) => boolean }[] = [
-  { id: "instr", name: "Instructions", color: "--k-instr", what: "CLAUDE.md, AGENTS.md and the files they pull in. Sent in every session of the project they belong to.", test: (l) => l.ref.kind === "instructions" },
-  { id: "mcp", name: "MCP servers", color: "--k-mcp", what: "Tool names and schemas from your MCP servers. Sent in every session that has the server.", test: (l) => l.ref.kind === "mcp" },
-  { id: "agents", name: "Subagents", color: "--k-agents", what: "The subagents the model can call, by name and description.", test: (l) => l.ref.kind === "subagent" },
-  { id: "used", name: "Skills you use", color: "--k-used", what: "Each skill's name and description is listed every session. These were used at least once.", test: (l) => l.ref.kind === "skill" && isUsed(l) },
-  { id: "dead", name: "Skills never used", color: "--k-dead", what: "Listed in every session, and no session in the window used them.", test: (l) => l.ref.kind === "skill" && !isUsed(l) },
+const KINDS: {
+  id: Exclude<KindId, "harness">;
+  name: string;
+  color: string;
+  what: string;
+  test: (l: Line) => boolean;
+}[] = [
+  {
+    id: "instr",
+    name: "Instructions",
+    color: "--k-instr",
+    what: "CLAUDE.md, AGENTS.md and the files they pull in. Sent in every session of the project they belong to.",
+    test: (l) => l.ref.kind === "instructions",
+  },
+  {
+    id: "mcp",
+    name: "MCP servers",
+    color: "--k-mcp",
+    what: "Tool names and schemas from your MCP servers. Sent in every session that has the server.",
+    test: (l) => l.ref.kind === "mcp",
+  },
+  {
+    id: "agents",
+    name: "Subagents",
+    color: "--k-agents",
+    what: "The subagents the model can call, by name and description.",
+    test: (l) => l.ref.kind === "subagent",
+  },
+  {
+    id: "used",
+    name: "Skills you use",
+    color: "--k-used",
+    what: "Each skill's name and description is listed every session. These were used at least once.",
+    test: (l) => l.ref.kind === "skill" && isUsed(l),
+  },
+  {
+    id: "dead",
+    name: "Skills never used",
+    color: "--k-dead",
+    what: "Listed in every session, and no session in the window used them.",
+    test: (l) => l.ref.kind === "skill" && !isUsed(l),
+  },
 ];
 
 export interface Context {
@@ -166,7 +228,14 @@ export function context(sheet: Sheet | undefined): Context | undefined {
   if (!sheet || !sheet.lines.length) return undefined;
   const segments: Segment[] = KINDS.map((k) => {
     const lines = sheet.lines.filter(k.test).sort((a, b) => perSession(b) - perSession(a));
-    return { id: k.id, name: k.name, what: k.what, color: k.color, lines, tokens: lines.reduce((n, l) => n + perSession(l), 0) };
+    return {
+      id: k.id,
+      name: k.name,
+      what: k.what,
+      color: k.color,
+      lines,
+      tokens: lines.reduce((n, l) => n + perSession(l), 0),
+    };
   });
   const yours = segments.reduce((n, s) => n + s.tokens, 0);
   const fixed = sheet.fixedTokens?.value ?? yours;
@@ -178,7 +247,13 @@ export function context(sheet: Sheet | undefined): Context | undefined {
     tokens: Math.max(0, fixed - yours),
     lines: [],
   };
-  return { sheet, fixed, basis: sheet.fixedTokens?.basis ?? "estimated", yours, segments: sheet.fixedTokens ? [own, ...segments] : segments };
+  return {
+    sheet,
+    fixed,
+    basis: sheet.fixedTokens?.basis ?? "estimated",
+    yours,
+    segments: sheet.fixedTokens ? [own, ...segments] : segments,
+  };
 }
 
 // ─── findings, in words ───
@@ -197,7 +272,8 @@ export const RULE: Record<string, string> = {
   "short-history": "Short history",
 };
 /** A rule a newer loadsheet added still reads as words. */
-export const ruleName = (rule: string) => RULE[rule] ?? rule.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
+export const ruleName = (rule: string) =>
+  RULE[rule] ?? rule.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
 
 export function evidence(f: Finding): string {
   const e = f.evidence;
@@ -226,7 +302,9 @@ export function evidence(f: Finding): string {
     case "short-history":
       return `Only ${n("days")} days and ${n("sessions")} sessions so far; rules that need a month of history wait.`;
     default:
-      return Object.entries(e).map(([k, v]) => `${k} ${fmt(v)}`).join(" · ");
+      return Object.entries(e)
+        .map(([k, v]) => `${k} ${fmt(v)}`)
+        .join(" · ");
   }
 }
 
@@ -256,10 +334,17 @@ export function agentPrompt(fs: Finding[]): string {
   const acts = fs.filter((f) => f.fixes.length);
   return (
     `loadsheet found ${plural(acts.length, "fix", "fixes")} in my agent setup. Show me the list, apply the ones I approve one at a time, and tell me what changed:\n` +
-    acts.map((f, i) => `${i + 1}. ${findingName(f)}: ${fixLine(f)}${f.fixes.length > 1 ? ` (on ${f.fixes.map((x) => x.machine).join(" and ")})` : ""}`).join("\n")
+    acts
+      .map(
+        (f, i) =>
+          `${i + 1}. ${findingName(f)}: ${fixLine(f)}${f.fixes.length > 1 ? ` (on ${f.fixes.map((x) => x.machine).join(" and ")})` : ""}`,
+      )
+      .join("\n")
   );
 }
 
 export const findingsFor = (r: Report, l: Line) =>
-  r.findings.filter((f) => f.item === l.item || (f.rule === "dead-pack" && l.pack && f.pack === l.pack));
+  r.findings.filter(
+    (f) => f.item === l.item || (f.rule === "dead-pack" && l.pack && f.pack === l.pack),
+  );
 export const saves = (fs: Finding[]) => fs.reduce((n, f) => n + (f.savesTokens?.value ?? 0), 0);

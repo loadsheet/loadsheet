@@ -1,972 +1,957 @@
 {
- "$schema": "https://loadsheet.dev/schema/v1.json",
- "schema": 1,
- "tool": "loadsheet@0.0.1",
- "generatedAt": "2026-11-19T13:34:58.000Z",
- "mode": "pack",
- "source": "https://github.com/mattpocock/skills",
- "machines": [],
- "window": [
-  "2026-11-19",
-  "2026-11-19"
- ],
- "config": {
-  "window": 30,
-  "via": {
-   "include": [],
-   "exclude": []
-  },
-  "ignore": [],
-  "rules": {
-   "invisible-skill": {
-    "enabled": true,
-    "minSessions": 5,
-    "bareShare": 0.5
-   },
-   "dead-skill": {
-    "enabled": true,
-    "minSessions": 20,
-    "minDays": 14
-   },
-   "manual-only": {
-    "enabled": true,
-    "minUserUses": 3
-   },
-   "expensive-description": {
-    "enabled": true,
-    "maxChars": 300
-   },
-   "dead-pack": {
-    "enabled": true,
-    "minSkills": 5
-   },
-   "duplicate": {
-    "enabled": true
-   },
-   "heavy-instructions": {
-    "enabled": true,
-    "maxChars": 12000
-   },
-   "idle-mcp": {
-    "enabled": true,
-    "minSessions": 20
-   },
-   "harness-mismatch": {
-    "enabled": true,
-    "minSessions": 1
-   },
-   "drift": {
-    "enabled": true
-   },
-   "short-history": {
-    "enabled": true,
-    "minDays": 30
-   }
-  }
- },
- "coverage": [],
- "sheet": [
-  {
-   "harness": "claude-code",
-   "sessions": 0,
-   "lines": [
-    {
-     "item": "skill:ask-matt",
-     "ref": {
-      "kind": "skill",
-      "name": "ask-matt"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/engineering/ask-matt",
-     "chars": {
-      "listed": 0,
-      "body": 12428
-     },
-     "tokens": {
-      "value": 0,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Ask which skill or flow fits your situation. A router over the skills in this repo."
+  "$schema": "https://loadsheet.dev/schema/v1.json",
+  "schema": 1,
+  "tool": "loadsheet@0.0.1",
+  "generatedAt": "2026-11-19T13:34:58.000Z",
+  "mode": "pack",
+  "source": "https://github.com/mattpocock/skills",
+  "machines": [],
+  "window": ["2026-11-19", "2026-11-19"],
+  "config": {
+    "window": 30,
+    "via": {
+      "include": [],
+      "exclude": []
     },
-    {
-     "item": "skill:diagnosing-bugs",
-     "ref": {
-      "kind": "skill",
-      "name": "diagnosing-bugs"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/engineering/diagnosing-bugs",
-     "chars": {
-      "listed": 171,
-      "body": 8460
-     },
-     "tokens": {
-      "value": 43,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Diagnosis loop for hard bugs and performance regressions. Use when the user says \"diagnose\"/\"debug this\", or reports something broken/throwing/failing/slow."
-    },
-    {
-     "item": "skill:grill-with-docs",
-     "ref": {
-      "kind": "skill",
-      "name": "grill-with-docs"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/engineering/grill-with-docs",
-     "chars": {
-      "listed": 0,
-      "body": 65
-     },
-     "tokens": {
-      "value": 0,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "A relentless interview to sharpen a plan or design, which also creates docs (ADR's and glossary) as we go."
-    },
-    {
-     "item": "skill:triage",
-     "ref": {
-      "kind": "skill",
-      "name": "triage"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/engineering/triage",
-     "chars": {
-      "listed": 0,
-      "body": 6355
-     },
-     "tokens": {
-      "value": 0,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Move issues and external PRs through a state machine of triage roles, categorise, verify, grill if needed, and write agent-ready briefs."
-    },
-    {
-     "item": "skill:improve-codebase-architecture",
-     "ref": {
-      "kind": "skill",
-      "name": "improve-codebase-architecture"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/engineering/improve-codebase-architecture",
-     "chars": {
-      "listed": 0,
-      "body": 5811
-     },
-     "tokens": {
-      "value": 0,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick."
-    },
-    {
-     "item": "skill:setup-matt-pocock-skills",
-     "ref": {
-      "kind": "skill",
-      "name": "setup-matt-pocock-skills"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/engineering/setup-matt-pocock-skills",
-     "chars": {
-      "listed": 0,
-      "body": 7259
-     },
-     "tokens": {
-      "value": 0,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Configure this repo for the engineering skills: set up its issue tracker, triage label vocabulary, and domain doc layout. Run once before first use of the other engineering skills."
-    },
-    {
-     "item": "skill:tdd",
-     "ref": {
-      "kind": "skill",
-      "name": "tdd"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/engineering/tdd",
-     "chars": {
-      "listed": 152,
-      "body": 3439
-     },
-     "tokens": {
-      "value": 38,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions \"red-green-refactor\", or wants integration tests."
-    },
-    {
-     "item": "skill:to-spec",
-     "ref": {
-      "kind": "skill",
-      "name": "to-spec"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/engineering/to-spec",
-     "chars": {
-      "listed": 0,
-      "body": 2824
-     },
-     "tokens": {
-      "value": 0,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Turn the current conversation into a spec and publish it to the project issue tracker: no interview, just synthesis of what you've already discussed."
-    },
-    {
-     "item": "skill:to-tickets",
-     "ref": {
-      "kind": "skill",
-      "name": "to-tickets"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/engineering/to-tickets",
-     "chars": {
-      "listed": 0,
-      "body": 5486
-     },
-     "tokens": {
-      "value": 0,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker (edges as text in one file per ticket locally, or native blocking links on a real tracker)."
-    },
-    {
-     "item": "skill:wayfinder",
-     "ref": {
-      "kind": "skill",
-      "name": "wayfinder"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/engineering/wayfinder",
-     "chars": {
-      "listed": 0,
-      "body": 12141
-     },
-     "tokens": {
-      "value": 0,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Plan a huge chunk of work (more than one agent session can hold) as a shared map of decision tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear."
-    },
-    {
-     "item": "skill:implement",
-     "ref": {
-      "kind": "skill",
-      "name": "implement"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/engineering/implement",
-     "chars": {
-      "listed": 0,
-      "body": 490
-     },
-     "tokens": {
-      "value": 0,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Implement a piece of work based on a spec or set of tickets."
-    },
-    {
-     "item": "skill:implement-spec",
-     "ref": {
-      "kind": "skill",
-      "name": "implement-spec"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/engineering/implement-spec",
-     "chars": {
-      "listed": 0,
-      "body": 2701
-     },
-     "tokens": {
-      "value": 0,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Implement the result of /to-spec and /to-tickets in code."
-    },
-    {
-     "item": "skill:prototype",
-     "ref": {
-      "kind": "skill",
-      "name": "prototype"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/engineering/prototype",
-     "chars": {
-      "listed": 188,
-      "body": 2705
-     },
-     "tokens": {
-      "value": 47,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Build a throwaway prototype to answer a design question. Use when the user wants to sanity-check whether a state model or logic feels right, or explore what a UI should look like."
-    },
-    {
-     "item": "skill:research",
-     "ref": {
-      "kind": "skill",
-      "name": "research"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/engineering/research",
-     "chars": {
-      "listed": 246,
-      "body": 556
-     },
-     "tokens": {
-      "value": 62,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent."
-    },
-    {
-     "item": "skill:domain-modeling",
-     "ref": {
-      "kind": "skill",
-      "name": "domain-modeling"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/engineering/domain-modeling",
-     "chars": {
-      "listed": 166,
-      "body": 3026
-     },
-     "tokens": {
-      "value": 42,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Build and sharpen a project's domain model. Use when discussing codebase terminology, writing or editing a GLOSSARY.md, or recording or editing an ADR."
-    },
-    {
-     "item": "skill:codebase-design",
-     "ref": {
-      "kind": "skill",
-      "name": "codebase-design"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/engineering/codebase-design",
-     "chars": {
-      "listed": 280,
-      "body": 5756
-     },
-     "tokens": {
-      "value": 70,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary."
-    },
-    {
-     "item": "skill:code-review",
-     "ref": {
-      "kind": "skill",
-      "name": "code-review"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/engineering/code-review",
-     "chars": {
-      "listed": 428,
-      "body": 6229
-     },
-     "tokens": {
-      "value": 107,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\"."
-    },
-    {
-     "item": "skill:pr",
-     "ref": {
-      "kind": "skill",
-      "name": "pr"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/engineering/pr",
-     "chars": {
-      "listed": 29,
-      "body": 3856
-     },
-     "tokens": {
-      "value": 7,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Use when writing a PR body."
-    },
-    {
-     "item": "skill:retro",
-     "ref": {
-      "kind": "skill",
-      "name": "retro"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/engineering/retro",
-     "chars": {
-      "listed": 0,
-      "body": 4257
-     },
-     "tokens": {
-      "value": 0,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Conduct a retrospective on a coding session."
-    },
-    {
-     "item": "skill:wizard",
-     "ref": {
-      "kind": "skill",
-      "name": "wizard"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/engineering/wizard",
-     "chars": {
-      "listed": 319,
-      "body": 3766
-     },
-     "tokens": {
-      "value": 80,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Generate an interactive bash wizard that walks a human through steps only they can perform. Use when provisioning infrastructure, setting up credentials or CI secrets, walking an unfamiliar third-party dashboard, or running a one-off migration or cutover. Don't invoke this for steps the agent can perform itself."
-    },
-    {
-     "item": "skill:grill-me",
-     "ref": {
-      "kind": "skill",
-      "name": "grill-me"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/productivity/grill-me",
-     "chars": {
-      "listed": 0,
-      "body": 37
-     },
-     "tokens": {
-      "value": 0,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "A relentless interview to sharpen a plan or design."
-    },
-    {
-     "item": "skill:grilling",
-     "ref": {
-      "kind": "skill",
-      "name": "grilling"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/productivity/grilling",
-     "chars": {
-      "listed": 160,
-      "body": 1875
-     },
-     "tokens": {
-      "value": 40,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases."
-    },
-    {
-     "item": "skill:handoff",
-     "ref": {
-      "kind": "skill",
-      "name": "handoff"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/productivity/handoff",
-     "chars": {
-      "listed": 0,
-      "body": 729
-     },
-     "tokens": {
-      "value": 0,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Compact the current conversation into a handoff document for another agent to pick up."
-    },
-    {
-     "item": "skill:teach",
-     "ref": {
-      "kind": "skill",
-      "name": "teach"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/productivity/teach",
-     "chars": {
-      "listed": 0,
-      "body": 9553
-     },
-     "tokens": {
-      "value": 0,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Teach the user a new skill or concept, within this workspace."
-    },
-    {
-     "item": "skill:to-questionnaire",
-     "ref": {
-      "kind": "skill",
-      "name": "to-questionnaire"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/productivity/to-questionnaire",
-     "chars": {
-      "listed": 0,
-      "body": 2737
-     },
-     "tokens": {
-      "value": 0,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Turn a decision you can't fully answer into a questionnaire for someone else to fill in."
-    },
-    {
-     "item": "skill:wait-what",
-     "ref": {
-      "kind": "skill",
-      "name": "wait-what"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/productivity/wait-what",
-     "chars": {
-      "listed": 0,
-      "body": 274
-     },
-     "tokens": {
-      "value": 0,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Stop. That last message did not land: re-pitch it."
-    },
-    {
-     "item": "skill:writing-for-agents",
-     "ref": {
-      "kind": "skill",
-      "name": "writing-for-agents"
-     },
-     "scope": "user",
-     "pack": "mattpocock/skills",
-     "managedBy": "plugin",
-     "machines": [],
-     "path": "skills/productivity/writing-for-agents",
-     "chars": {
-      "listed": 121,
-      "body": 10731
-     },
-     "tokens": {
-      "value": 30,
-      "basis": "estimated"
-     },
-     "exposure": {
-      "sessions": 0,
-      "share": 0,
-      "bare": 0
-     },
-     "use": {
-      "byModel": 0,
-      "byUser": 0
-     },
-     "description": "Writing documents for agents. Use when creating or editing skills, or modifying AGENTS.md or CLAUDE.md."
+    "ignore": [],
+    "rules": {
+      "invisible-skill": {
+        "enabled": true,
+        "minSessions": 5,
+        "bareShare": 0.5
+      },
+      "dead-skill": {
+        "enabled": true,
+        "minSessions": 20,
+        "minDays": 14
+      },
+      "manual-only": {
+        "enabled": true,
+        "minUserUses": 3
+      },
+      "expensive-description": {
+        "enabled": true,
+        "maxChars": 300
+      },
+      "dead-pack": {
+        "enabled": true,
+        "minSkills": 5
+      },
+      "duplicate": {
+        "enabled": true
+      },
+      "heavy-instructions": {
+        "enabled": true,
+        "maxChars": 12000
+      },
+      "idle-mcp": {
+        "enabled": true,
+        "minSessions": 20
+      },
+      "harness-mismatch": {
+        "enabled": true,
+        "minSessions": 1
+      },
+      "drift": {
+        "enabled": true
+      },
+      "short-history": {
+        "enabled": true,
+        "minDays": 30
+      }
     }
-   ]
-  }
- ],
- "findings": [
-  {
-   "id": "expensive-description:skill:code-review",
-   "rule": "expensive-description",
-   "level": "fix",
-   "item": "skill:code-review",
-   "where": [],
-   "evidence": {
-    "listedChars": 428
-   },
-   "savesTokens": {
-    "value": 32,
-    "basis": "estimated"
-   },
-   "fixes": [
+  },
+  "coverage": [],
+  "sheet": [
     {
-     "action": "shorten",
-     "path": "skills/engineering/code-review/SKILL.md"
+      "harness": "claude-code",
+      "sessions": 0,
+      "lines": [
+        {
+          "item": "skill:ask-matt",
+          "ref": {
+            "kind": "skill",
+            "name": "ask-matt"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/engineering/ask-matt",
+          "chars": {
+            "listed": 0,
+            "body": 12428
+          },
+          "tokens": {
+            "value": 0,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Ask which skill or flow fits your situation. A router over the skills in this repo."
+        },
+        {
+          "item": "skill:diagnosing-bugs",
+          "ref": {
+            "kind": "skill",
+            "name": "diagnosing-bugs"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/engineering/diagnosing-bugs",
+          "chars": {
+            "listed": 171,
+            "body": 8460
+          },
+          "tokens": {
+            "value": 43,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Diagnosis loop for hard bugs and performance regressions. Use when the user says \"diagnose\"/\"debug this\", or reports something broken/throwing/failing/slow."
+        },
+        {
+          "item": "skill:grill-with-docs",
+          "ref": {
+            "kind": "skill",
+            "name": "grill-with-docs"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/engineering/grill-with-docs",
+          "chars": {
+            "listed": 0,
+            "body": 65
+          },
+          "tokens": {
+            "value": 0,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "A relentless interview to sharpen a plan or design, which also creates docs (ADR's and glossary) as we go."
+        },
+        {
+          "item": "skill:triage",
+          "ref": {
+            "kind": "skill",
+            "name": "triage"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/engineering/triage",
+          "chars": {
+            "listed": 0,
+            "body": 6355
+          },
+          "tokens": {
+            "value": 0,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Move issues and external PRs through a state machine of triage roles, categorise, verify, grill if needed, and write agent-ready briefs."
+        },
+        {
+          "item": "skill:improve-codebase-architecture",
+          "ref": {
+            "kind": "skill",
+            "name": "improve-codebase-architecture"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/engineering/improve-codebase-architecture",
+          "chars": {
+            "listed": 0,
+            "body": 5811
+          },
+          "tokens": {
+            "value": 0,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick."
+        },
+        {
+          "item": "skill:setup-matt-pocock-skills",
+          "ref": {
+            "kind": "skill",
+            "name": "setup-matt-pocock-skills"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/engineering/setup-matt-pocock-skills",
+          "chars": {
+            "listed": 0,
+            "body": 7259
+          },
+          "tokens": {
+            "value": 0,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Configure this repo for the engineering skills: set up its issue tracker, triage label vocabulary, and domain doc layout. Run once before first use of the other engineering skills."
+        },
+        {
+          "item": "skill:tdd",
+          "ref": {
+            "kind": "skill",
+            "name": "tdd"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/engineering/tdd",
+          "chars": {
+            "listed": 152,
+            "body": 3439
+          },
+          "tokens": {
+            "value": 38,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions \"red-green-refactor\", or wants integration tests."
+        },
+        {
+          "item": "skill:to-spec",
+          "ref": {
+            "kind": "skill",
+            "name": "to-spec"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/engineering/to-spec",
+          "chars": {
+            "listed": 0,
+            "body": 2824
+          },
+          "tokens": {
+            "value": 0,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Turn the current conversation into a spec and publish it to the project issue tracker: no interview, just synthesis of what you've already discussed."
+        },
+        {
+          "item": "skill:to-tickets",
+          "ref": {
+            "kind": "skill",
+            "name": "to-tickets"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/engineering/to-tickets",
+          "chars": {
+            "listed": 0,
+            "body": 5486
+          },
+          "tokens": {
+            "value": 0,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker (edges as text in one file per ticket locally, or native blocking links on a real tracker)."
+        },
+        {
+          "item": "skill:wayfinder",
+          "ref": {
+            "kind": "skill",
+            "name": "wayfinder"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/engineering/wayfinder",
+          "chars": {
+            "listed": 0,
+            "body": 12141
+          },
+          "tokens": {
+            "value": 0,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Plan a huge chunk of work (more than one agent session can hold) as a shared map of decision tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear."
+        },
+        {
+          "item": "skill:implement",
+          "ref": {
+            "kind": "skill",
+            "name": "implement"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/engineering/implement",
+          "chars": {
+            "listed": 0,
+            "body": 490
+          },
+          "tokens": {
+            "value": 0,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Implement a piece of work based on a spec or set of tickets."
+        },
+        {
+          "item": "skill:implement-spec",
+          "ref": {
+            "kind": "skill",
+            "name": "implement-spec"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/engineering/implement-spec",
+          "chars": {
+            "listed": 0,
+            "body": 2701
+          },
+          "tokens": {
+            "value": 0,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Implement the result of /to-spec and /to-tickets in code."
+        },
+        {
+          "item": "skill:prototype",
+          "ref": {
+            "kind": "skill",
+            "name": "prototype"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/engineering/prototype",
+          "chars": {
+            "listed": 188,
+            "body": 2705
+          },
+          "tokens": {
+            "value": 47,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Build a throwaway prototype to answer a design question. Use when the user wants to sanity-check whether a state model or logic feels right, or explore what a UI should look like."
+        },
+        {
+          "item": "skill:research",
+          "ref": {
+            "kind": "skill",
+            "name": "research"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/engineering/research",
+          "chars": {
+            "listed": 246,
+            "body": 556
+          },
+          "tokens": {
+            "value": 62,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent."
+        },
+        {
+          "item": "skill:domain-modeling",
+          "ref": {
+            "kind": "skill",
+            "name": "domain-modeling"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/engineering/domain-modeling",
+          "chars": {
+            "listed": 166,
+            "body": 3026
+          },
+          "tokens": {
+            "value": 42,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Build and sharpen a project's domain model. Use when discussing codebase terminology, writing or editing a GLOSSARY.md, or recording or editing an ADR."
+        },
+        {
+          "item": "skill:codebase-design",
+          "ref": {
+            "kind": "skill",
+            "name": "codebase-design"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/engineering/codebase-design",
+          "chars": {
+            "listed": 280,
+            "body": 5756
+          },
+          "tokens": {
+            "value": 70,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary."
+        },
+        {
+          "item": "skill:code-review",
+          "ref": {
+            "kind": "skill",
+            "name": "code-review"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/engineering/code-review",
+          "chars": {
+            "listed": 428,
+            "body": 6229
+          },
+          "tokens": {
+            "value": 107,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\"."
+        },
+        {
+          "item": "skill:pr",
+          "ref": {
+            "kind": "skill",
+            "name": "pr"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/engineering/pr",
+          "chars": {
+            "listed": 29,
+            "body": 3856
+          },
+          "tokens": {
+            "value": 7,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Use when writing a PR body."
+        },
+        {
+          "item": "skill:retro",
+          "ref": {
+            "kind": "skill",
+            "name": "retro"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/engineering/retro",
+          "chars": {
+            "listed": 0,
+            "body": 4257
+          },
+          "tokens": {
+            "value": 0,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Conduct a retrospective on a coding session."
+        },
+        {
+          "item": "skill:wizard",
+          "ref": {
+            "kind": "skill",
+            "name": "wizard"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/engineering/wizard",
+          "chars": {
+            "listed": 319,
+            "body": 3766
+          },
+          "tokens": {
+            "value": 80,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Generate an interactive bash wizard that walks a human through steps only they can perform. Use when provisioning infrastructure, setting up credentials or CI secrets, walking an unfamiliar third-party dashboard, or running a one-off migration or cutover. Don't invoke this for steps the agent can perform itself."
+        },
+        {
+          "item": "skill:grill-me",
+          "ref": {
+            "kind": "skill",
+            "name": "grill-me"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/productivity/grill-me",
+          "chars": {
+            "listed": 0,
+            "body": 37
+          },
+          "tokens": {
+            "value": 0,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "A relentless interview to sharpen a plan or design."
+        },
+        {
+          "item": "skill:grilling",
+          "ref": {
+            "kind": "skill",
+            "name": "grilling"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/productivity/grilling",
+          "chars": {
+            "listed": 160,
+            "body": 1875
+          },
+          "tokens": {
+            "value": 40,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases."
+        },
+        {
+          "item": "skill:handoff",
+          "ref": {
+            "kind": "skill",
+            "name": "handoff"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/productivity/handoff",
+          "chars": {
+            "listed": 0,
+            "body": 729
+          },
+          "tokens": {
+            "value": 0,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Compact the current conversation into a handoff document for another agent to pick up."
+        },
+        {
+          "item": "skill:teach",
+          "ref": {
+            "kind": "skill",
+            "name": "teach"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/productivity/teach",
+          "chars": {
+            "listed": 0,
+            "body": 9553
+          },
+          "tokens": {
+            "value": 0,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Teach the user a new skill or concept, within this workspace."
+        },
+        {
+          "item": "skill:to-questionnaire",
+          "ref": {
+            "kind": "skill",
+            "name": "to-questionnaire"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/productivity/to-questionnaire",
+          "chars": {
+            "listed": 0,
+            "body": 2737
+          },
+          "tokens": {
+            "value": 0,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Turn a decision you can't fully answer into a questionnaire for someone else to fill in."
+        },
+        {
+          "item": "skill:wait-what",
+          "ref": {
+            "kind": "skill",
+            "name": "wait-what"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/productivity/wait-what",
+          "chars": {
+            "listed": 0,
+            "body": 274
+          },
+          "tokens": {
+            "value": 0,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Stop. That last message did not land: re-pitch it."
+        },
+        {
+          "item": "skill:writing-for-agents",
+          "ref": {
+            "kind": "skill",
+            "name": "writing-for-agents"
+          },
+          "scope": "user",
+          "pack": "mattpocock/skills",
+          "managedBy": "plugin",
+          "machines": [],
+          "path": "skills/productivity/writing-for-agents",
+          "chars": {
+            "listed": 121,
+            "body": 10731
+          },
+          "tokens": {
+            "value": 30,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Writing documents for agents. Use when creating or editing skills, or modifying AGENTS.md or CLAUDE.md."
+        }
+      ]
     }
-   ]
-  },
-  {
-   "id": "expensive-description:skill:wizard",
-   "rule": "expensive-description",
-   "level": "fix",
-   "item": "skill:wizard",
-   "where": [],
-   "evidence": {
-    "listedChars": 319
-   },
-   "savesTokens": {
-    "value": 4,
-    "basis": "estimated"
-   },
-   "fixes": [
+  ],
+  "findings": [
     {
-     "action": "shorten",
-     "path": "skills/engineering/wizard/SKILL.md"
+      "id": "expensive-description:skill:code-review",
+      "rule": "expensive-description",
+      "level": "fix",
+      "item": "skill:code-review",
+      "where": [],
+      "evidence": {
+        "listedChars": 428
+      },
+      "savesTokens": {
+        "value": 32,
+        "basis": "estimated"
+      },
+      "fixes": [
+        {
+          "action": "shorten",
+          "path": "skills/engineering/code-review/SKILL.md"
+        }
+      ]
+    },
+    {
+      "id": "expensive-description:skill:wizard",
+      "rule": "expensive-description",
+      "level": "fix",
+      "item": "skill:wizard",
+      "where": [],
+      "evidence": {
+        "listedChars": 319
+      },
+      "savesTokens": {
+        "value": 4,
+        "basis": "estimated"
+      },
+      "fixes": [
+        {
+          "action": "shorten",
+          "path": "skills/engineering/wizard/SKILL.md"
+        }
+      ]
     }
-   ]
-  }
- ],
- "skipped": [
-  {
-   "rule": "invisible-skill",
-   "harness": "claude-code",
-   "reason": "missing-signal",
-   "missing": [
-    "listing"
-   ]
-  },
-  {
-   "rule": "dead-skill",
-   "harness": "claude-code",
-   "reason": "missing-signal",
-   "missing": [
-    "listing",
-    "modelUse",
-    "userUse"
-   ]
-  },
-  {
-   "rule": "manual-only",
-   "harness": "claude-code",
-   "reason": "missing-signal",
-   "missing": [
-    "userUse"
-   ]
-  },
-  {
-   "rule": "idle-mcp",
-   "harness": "claude-code",
-   "reason": "missing-signal",
-   "missing": [
-    "mcp"
-   ]
-  },
-  {
-   "rule": "short-history",
-   "harness": "claude-code",
-   "reason": "missing-signal",
-   "missing": [
-    "listing"
-   ]
-  }
- ]
+  ],
+  "skipped": [
+    {
+      "rule": "invisible-skill",
+      "harness": "claude-code",
+      "reason": "missing-signal",
+      "missing": ["listing"]
+    },
+    {
+      "rule": "dead-skill",
+      "harness": "claude-code",
+      "reason": "missing-signal",
+      "missing": ["listing", "modelUse", "userUse"]
+    },
+    {
+      "rule": "manual-only",
+      "harness": "claude-code",
+      "reason": "missing-signal",
+      "missing": ["userUse"]
+    },
+    {
+      "rule": "idle-mcp",
+      "harness": "claude-code",
+      "reason": "missing-signal",
+      "missing": ["mcp"]
+    },
+    {
+      "rule": "short-history",
+      "harness": "claude-code",
+      "reason": "missing-signal",
+      "missing": ["listing"]
+    }
+  ]
 }

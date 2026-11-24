@@ -7,12 +7,20 @@ const emit = defineEmits<{ pick: [KindId] }>();
 
 const tipFor = (e: MouseEvent, i: number) => {
   const s = props.ctx.segments[i]!;
-  showTip(e, `${s.name} · <b>${fmt(s.tokens)}</b> tokens · ${pct(s.tokens / props.ctx.fixed)}${s.lines.length ? ` · ${plural(s.lines.length, "item")}` : ""}`);
+  showTip(
+    e,
+    `${s.name} · <b>${fmt(s.tokens)}</b> tokens · ${pct(s.tokens / props.ctx.fixed)}${s.lines.length ? ` · ${plural(s.lines.length, "item")}` : ""}`,
+  );
 };
 </script>
 
 <template>
-  <div class="winbar" role="group" aria-label="What every session starts with" @mouseleave="hideTip">
+  <div
+    class="winbar"
+    role="group"
+    aria-label="What every session starts with"
+    @mouseleave="hideTip"
+  >
     <button
       v-for="(s, i) in ctx.segments"
       :key="s.id"

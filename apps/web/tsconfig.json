@@ -4,27 +4,16 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "target": "esnext",
-    "lib": [
-      "esnext",
-      "dom",
-      "dom.iterable"
-    ],
+    "lib": ["esnext", "dom", "dom.iterable"],
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "types": [
-      "vite-plus/client"
-    ],
+    "types": ["vite-plus/client"],
     "paths": {
-      "@loadsheet/schema": [
-        "../../packages/schema/src/index.ts"
-      ]
+      "@loadsheet/schema": ["../../packages/schema/src/index.ts"]
     },
     "allowImportingTsExtensions": true
   },
-  "include": [
-    "src/**/*.ts",
-    "src/**/*.vue"
-  ]
+  "include": ["src/**/*.ts", "src/**/*.vue"]
 }

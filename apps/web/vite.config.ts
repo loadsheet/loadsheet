@@ -15,9 +15,15 @@ function singleFile() {
       if (page?.type !== "asset") return;
       let html = String(page.source);
       for (const [name, file] of Object.entries(bundle)) {
-        const tag = new RegExp(`<(script|link)[^>]*?(src|href)="[^"]*${name.replace(/[.]/g, "\\.")}"[^>]*>(</script>)?`);
+        const tag = new RegExp(
+          `<(script|link)[^>]*?(src|href)="[^"]*${name.replace(/[.]/g, "\\.")}"[^>]*>(</script>)?`,
+        );
         if (file.type === "chunk" && file.isEntry) {
-          html = html.replace(tag, () => `<script type="module">${file.code.replaceAll("</script", "<\\/script")}</script>`);
+          html = html.replace(
+            tag,
+            () =>
+              `<script type="module">${file.code.replaceAll("</script", "<\\/script")}</script>`,
+          );
         } else if (file.type === "asset" && name.endsWith(".css")) {
           html = html.replace(tag, () => `<style>${String(file.source)}</style>`);
         } else continue;
@@ -34,7 +40,11 @@ export default defineConfig({
   plugins: [vue(), singleFile()],
   resolve: {
     // Read the contract from source so the app needs no package build.
-    alias: { "@loadsheet/schema": fileURLToPath(new URL("../../packages/schema/src/index.ts", import.meta.url)) },
+    alias: {
+      "@loadsheet/schema": fileURLToPath(
+        new URL("../../packages/schema/src/index.ts", import.meta.url),
+      ),
+    },
   },
   // Fonts inline as data URIs and the CSS stays one sheet, so singleFile leaves nothing behind in assets/.
   build: { assetsInlineLimit: 1_000_000, cssCodeSplit: false },

@@ -23,7 +23,8 @@ const theme = (() => {
     return null;
   }
 })();
-document.documentElement.dataset.theme = theme ?? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+document.documentElement.dataset.theme =
+  theme ?? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
 
 // Hash history: the same file works from disk, from `loadsheet --ui` and on a static host.
 const router = createRouter({
