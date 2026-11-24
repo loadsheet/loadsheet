@@ -83,9 +83,13 @@ const parse = (argv: string[]) => {
     if (arg === "--out" || arg.startsWith("--out=")) out = value("--out");
     else if (arg === "--port" || arg.startsWith("--port=")) port = value("--port");
     else if (arg === "--ui") ui = true;
-    else if (arg === "--help" || arg === "-h") help = true;
-    else if (arg === "--version" || arg === "-v") version = true;
-    else if (arg === "--scan") scan = true;
+    else if (arg === "--help") help = true;
+    else if (arg === "--version") version = true;
+    // The default command's two short options, alone or together as in `-vh`.
+    else if (/^-[hv]+$/u.test(arg)) {
+      help ||= arg.includes("h");
+      version ||= arg.includes("v");
+    } else if (arg === "--scan") scan = true;
     else if (arg === "--json") continue;
     else forward.push(arg);
   }
@@ -123,8 +127,9 @@ const writeBuild = async (out: string, web: string, html: string) => {
       try {
         const marker: unknown = JSON.parse(readFileSync(join(out, MARKER), "utf8"));
         const listed = (marker as { files?: unknown } | null)?.files;
-        if (!Array.isArray(listed) || !listed.every((file) => typeof file === "string"))
-          throw new Error("no file list");
+        // No path holds a NUL, so a list with one is not a build's.
+        const path = (file: unknown) => typeof file === "string" && !file.includes("\0");
+        if (!Array.isArray(listed) || !listed.every(path)) throw new Error("no file list");
         previous = listed;
       } catch {
         fail(
@@ -144,12 +149,18 @@ const writeBuild = async (out: string, web: string, html: string) => {
   // Every path is looked at before any is changed, so a build that stops has changed nothing. A link
   // on the way to a file leads out of the folder, where nothing is loadsheet build's; a folder where
   // a file goes, or a file where a folder goes, is the user's change to the last build.
+  const there = new Set<string>();
   for (const file of [...previous, ...files, MARKER]) {
     const parts = relative(out, resolve(out, file)).split(sep);
     let path = out;
     for (const [index, part] of parts.entries()) {
       path = join(path, part);
-      const found = lstatSync(path, { throwIfNoEntry: false });
+      let found;
+      try {
+        found = lstatSync(path, { throwIfNoEntry: false });
+      } catch {
+        fail(`${path} cannot be read; name an empty or missing folder with --out`);
+      }
       if (!found) break;
       if (found.isSymbolicLink())
         fail(`${path} is a link; loadsheet build writes and deletes through no link`);
@@ -158,10 +169,13 @@ const writeBuild = async (out: string, web: string, html: string) => {
         fail(
           `${path} is not the ${last ? "file" : "folder"} loadsheet build wrote; name an empty or missing folder with --out`,
         );
+      if (last) there.add(path);
     }
   }
+  // Only a file the loop above found is deleted: a listed path that is not there needs no removal.
   for (const file of previous) {
     const path = resolve(out, file);
+    if (!there.has(path)) continue;
     rmSync(path, { force: true });
     // Folders the last build made go too, once nothing else is left in them.
     for (let dir = dirname(path); dir.startsWith(out + sep); dir = dirname(dir)) {
@@ -260,12 +274,13 @@ const serve = (web: string, html: string, port: number) => {
 
 export async function run(argv: string[]): Promise<void> {
   const { build, ui, out, port, help, version, scan, forward } = parse(argv);
-  if (help) {
-    process.stdout.write(usage);
-    process.exit(0);
-  }
+  // The version before the help, as the default command answers both.
   if (version) {
     process.stdout.write(`${pkg.version}\n`);
+    process.exit(0);
+  }
+  if (help) {
+    process.stdout.write(usage);
     process.exit(0);
   }
   if (build && ui) fail(`build writes the page and --ui serves it; pick one\n\n${usage}`);

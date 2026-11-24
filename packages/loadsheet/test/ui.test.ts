@@ -192,6 +192,23 @@ describe("loadsheet build", () => {
     expect(readdirSync(out).sort()).toEqual([MARKER, "assets", "index.html"]);
   });
 
+  it.each([
+    ["a path no disk holds", "missing/bad\u0000name", 2],
+    ["a path that is not there", "missing/gone.js", 0],
+  ])("deletes nothing before it stops at a marker that lists %s", (_, listed, status) => {
+    const out = mkdtempSync(join(root, "listed-"));
+    expect(run(["build", "pack", "--out", out]).status).toBe(0);
+    const marker = JSON.parse(readFileSync(join(out, MARKER), "utf8")) as { files: string[] };
+    writeFileSync(join(out, MARKER), JSON.stringify({ files: [...marker.files, listed] }));
+    writeFileSync(join(out, "index.html"), "the last build's page");
+    const result = run(["build", "pack", "--out", out]);
+    expect(result.status).toBe(status);
+    expect(existsSync(join(out, "assets", "app.js"))).toBe(true);
+    if (status === 2)
+      expect(readFileSync(join(out, "index.html"), "utf8")).toBe("the last build's page");
+    else expect(reportIn(readFileSync(join(out, "index.html"), "utf8")).report.source).toBe("pack");
+  });
+
   it.each([[["build", "pack"]], [["pack", "--ui"]]])(
     "%j without a web UI stops with one line",
     (args: string[]) => {
@@ -248,7 +265,7 @@ describe("loadsheet build", () => {
     },
   );
 
-  it.each([[["build", "--version"]], [["--ui", "-v"]]])(
+  it.each([[["build", "--version"]], [["--ui", "-v"]], [["build", "-vh"]], [["--ui", "-h", "-v"]]])(
     "%j prints the version",
     (args: string[]) => {
       const result = run(args);
