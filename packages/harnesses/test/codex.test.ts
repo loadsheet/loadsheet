@@ -801,12 +801,24 @@ describe("codex machine", () => {
         '# a note with """ in it',
         "[mcp_servers.first]",
         'enabled = true # and """ here',
+        "[mcp_servers.second]",
+        'enabled = false # example: prompt = """',
+        "[mcp_servers.third]",
+        String.raw`args = ["'''", "# \" \"\"\""]`,
+        "enabled = false",
+        "[mcp_servers.fourth]",
+        'prompt = """',
+        "[mcp_servers.inside]",
+        '""" # closed',
         "[mcp_servers.after]",
         'command = "x"',
       ].join("\n"),
     );
     expect([...mcpServers]).toEqual([
       ["first", true],
+      ["second", false],
+      ["third", false],
+      ["fourth", true],
       ["after", true],
     ]);
   });

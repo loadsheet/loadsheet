@@ -48,6 +48,28 @@ const keyParts = (key: string): string[] => {
  * entry's `name` or `path` and `enabled`; every other value, command, token and environment variable
  * is skipped without being kept.
  */
+/**
+ * The triple quote a line opens and does not close. Strings on the line are read past and a comment
+ * ends it, so a quote inside either opens nothing.
+ */
+const leftOpen = (line: string): string | undefined => {
+  for (let at = 0; at < line.length; at++) {
+    const quote = line[at]!;
+    if (quote === "#") return undefined;
+    if (quote !== '"' && quote !== "'") continue;
+    const triple = quote.repeat(3);
+    if (line.startsWith(triple, at)) {
+      const end = line.indexOf(triple, at + 3);
+      if (end === -1) return triple;
+      at = end + 2;
+      continue;
+    }
+    at++;
+    while (at < line.length && line[at] !== quote) at += quote === '"' && line[at] === "\\" ? 2 : 1;
+  }
+  return undefined;
+};
+
 export const readCodexConfig = (source: string): CodexConfig => {
   const mcpServers = new Map<string, boolean>();
   const plugins = new Map<string, boolean>();
@@ -83,12 +105,8 @@ export const readCodexConfig = (source: string): CodexConfig => {
         continue;
       }
     }
-    // Where a value starts; a triple quote in a comment after a value opens nothing.
-    const opens = /(?:^|[=[,])\s*("""|''')/u.exec(line)?.[1];
-    if (opens && line.split(opens).length % 2 === 0) {
-      multiline = opens;
-      continue;
-    }
+    multiline = leftOpen(line);
+    if (multiline !== undefined) continue;
     const header = HEADER.exec(line);
     if (header) {
       table = keyParts(header[1]!);
