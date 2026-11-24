@@ -11,7 +11,7 @@ const isomorphicImports = {
   patterns: [
     { group: ["node:*", "@loadsheet/kit/*", "@loadsheet/harnesses/*", "loadsheet/*"], message },
     // A relative path into a sibling package gets past the names above.
-    { regex: "\\.\\./(.*/)?(kit|harnesses|loadsheet)/src/", message },
+    { regex: "\\.\\./(.*/)?(kit|harnesses|loadsheet)(/|$)", message },
   ],
 };
 
