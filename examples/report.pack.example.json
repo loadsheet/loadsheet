@@ -61,23 +61,7 @@
       }
     }
   },
-  "coverage": [
-    {
-      "machine": "pack",
-      "harness": "claude-code",
-      "installed": false,
-      "sessions": 0,
-      "versions": [],
-      "signals": {
-        "listing": "none",
-        "modelUse": "none",
-        "userUse": "none",
-        "instructions": "none",
-        "mcp": "none",
-        "tokens": "none"
-      }
-    }
-  ],
+  "coverage": [],
   "sheet": [
     {
       "harness": "claude-code",
@@ -335,8 +319,8 @@
           "machines": [],
           "path": "AGENTS.md",
           "chars": {
-            "listed": 0,
-            "body": 2360
+            "listed": 2360,
+            "body": 0
           },
           "tokens": {
             "value": 590,
@@ -362,12 +346,7 @@
       "rule": "expensive-description",
       "level": "fix",
       "item": "skill:dependency-audit",
-      "where": [
-        {
-          "machine": "pack",
-          "harness": "claude-code"
-        }
-      ],
+      "where": [],
       "evidence": {
         "listedChars": 398
       },
@@ -377,7 +356,6 @@
       },
       "fixes": [
         {
-          "machine": "pack",
           "action": "shorten",
           "path": "skills/dependency-audit/SKILL.md"
         }

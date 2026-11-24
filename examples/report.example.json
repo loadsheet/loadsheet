@@ -196,8 +196,8 @@
           "machines": ["laptop", "server"],
           "path": "~/.claude/CLAUDE.md",
           "chars": {
-            "listed": 0,
-            "body": 5420
+            "listed": 5420,
+            "body": 0
           },
           "tokens": {
             "value": 1355,
@@ -224,8 +224,8 @@
           "machines": ["laptop"],
           "path": "~/work/monorepo/CLAUDE.md",
           "chars": {
-            "listed": 0,
-            "body": 18460
+            "listed": 18460,
+            "body": 0
           },
           "tokens": {
             "value": 4615,
@@ -252,8 +252,8 @@
           "machines": ["laptop", "server"],
           "path": "~/work/infra/CLAUDE.md",
           "chars": {
-            "listed": 0,
-            "body": 3110
+            "listed": 3110,
+            "body": 0
           },
           "tokens": {
             "value": 778,
@@ -679,6 +679,32 @@
           }
         },
         {
+          "item": "skill:regex-helper",
+          "ref": {
+            "kind": "skill",
+            "name": "regex-helper"
+          },
+          "machines": ["laptop"],
+          "chars": {
+            "listed": 152,
+            "body": 0
+          },
+          "tokens": {
+            "value": 38,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 37,
+            "share": 0.0619,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 3,
+            "byUser": 0,
+            "lastUsed": "2026-11-02"
+          }
+        },
+        {
           "item": "mcp:github",
           "ref": {
             "kind": "mcp",
@@ -932,8 +958,8 @@
           "machines": ["laptop", "server"],
           "path": "~/.codex/AGENTS.md",
           "chars": {
-            "listed": 0,
-            "body": 4180
+            "listed": 4180,
+            "body": 0
           },
           "tokens": {
             "value": 1045,
@@ -960,8 +986,8 @@
           "machines": ["laptop"],
           "path": "~/work/monorepo/AGENTS.md",
           "chars": {
-            "listed": 0,
-            "body": 7920
+            "listed": 7920,
+            "body": 0
           },
           "tokens": {
             "value": 1980,
@@ -1022,7 +1048,7 @@
             "body": 4410
           },
           "tokens": {
-            "value": 56,
+            "value": 57,
             "basis": "estimated"
           },
           "exposure": {
@@ -1371,7 +1397,7 @@
         "byUser": 0
       },
       "savesTokens": {
-        "value": 56,
+        "value": 57,
         "basis": "estimated"
       },
       "fixes": [
@@ -1504,9 +1530,10 @@
       ]
     },
     {
-      "id": "dead-pack:claude-code",
+      "id": "dead-pack:data-toolkit",
       "rule": "dead-pack",
       "level": "cut",
+      "pack": "data-toolkit",
       "where": [
         {
           "machine": "laptop",

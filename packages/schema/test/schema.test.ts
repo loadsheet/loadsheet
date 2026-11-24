@@ -216,7 +216,29 @@ describe("examples/report.example.json is coherent", () => {
     for (const finding of report.findings) {
       expect(RULES).toContain(finding.rule);
       if (finding.item) expect(lines.map((line) => line.item)).toContain(finding.item);
-      expect(finding.id).toBe(`${finding.rule}:${finding.item ?? finding.where[0]!.harness}`);
+      if (finding.pack) expect(lines.map((line) => line.pack)).toContain(finding.pack);
+      expect(finding.id).toBe(
+        `${finding.rule}:${finding.item ?? finding.pack ?? finding.where[0]!.harness}`,
+      );
+    }
+  });
+
+  it("keeps a line seen in sessions but no longer installed, without scope, owner or path", () => {
+    const gone = lines.filter((line) => !line.path);
+    expect(gone.length).toBeGreaterThan(0);
+    for (const line of gone) {
+      expect(line.scope).toBeUndefined();
+      expect(line.managedBy).toBeUndefined();
+      expect(line.exposure.sessions).toBeGreaterThan(0);
+      expect(report.findings.map((finding) => finding.item)).not.toContain(line.item);
+    }
+  });
+
+  it("estimates each line's tokens from the characters every session pays", () => {
+    for (const line of lines) {
+      if (line.ref.kind === "instructions" || line.ref.kind === "mcp")
+        expect(line.chars.body).toBe(0);
+      expect(line.tokens.value, line.item).toBe(Math.round(line.chars.listed / 4));
     }
   });
 
@@ -236,14 +258,61 @@ describe("examples/report.example.json is coherent", () => {
       expect(covered.reduce((sum, row) => sum + row.sessions, 0)).toBe(sheet.sessions);
     }
   });
+});
 
-  it("gives laptop's Scan the counters the report's laptop coverage shows", () => {
-    const scan = parseScan(example("scan.example.json"));
-    for (const row of report.coverage.filter((row) => row.machine === "laptop")) {
-      const sessions = scan.sessions
+describe("examples/report.pack.example.json reads no machine", () => {
+  const report = parseReport(example("report.pack.example.json"));
+
+  it("names no machine in machines, coverage, where or fixes", () => {
+    expect(report.mode).toBe("pack");
+    expect(report.machines).toEqual([]);
+    expect(report.coverage).toEqual([]);
+    for (const finding of report.findings) {
+      expect(finding.where).toEqual([]);
+      for (const fix of finding.fixes) expect(fix).not.toHaveProperty("machine");
+    }
+  });
+});
+
+describe("examples/scan.example.json is coherent", () => {
+  const scan = parseScan(example("scan.example.json"));
+  const key = (row: { day: string; harness: string; via: string }) =>
+    `${row.day} ${row.harness} ${row.via}`;
+  const sessions = new Map(scan.sessions.map((row) => [key(row), row.sessions]));
+
+  it("has one sessions row per day, harness and entrypoint, inside the window", () => {
+    expect(sessions.size).toBe(scan.sessions.length);
+    const [first, last] = scan.window;
+    for (const row of [...scan.sessions, ...scan.cells]) {
+      expect(row.day >= first && row.day <= last, row.day).toBe(true);
+    }
+  });
+
+  it("counts each cell's item among the items and its sessions within its sessions row", () => {
+    const items = new Set(scan.items.map((item) => item.id));
+    for (const cell of scan.cells) {
+      expect(items, cell.item).toContain(cell.item);
+      expect(sessions.get(key(cell)), key(cell)).toBeGreaterThanOrEqual(cell.sessions);
+      expect(cell.bare).toBeLessThanOrEqual(cell.sessions);
+    }
+  });
+
+  it("totals each coverage row from its harness's sessions rows", () => {
+    for (const row of scan.coverage) {
+      expect(row.machine).toBe(scan.machine);
+      const total = scan.sessions
         .filter((cell) => cell.harness === row.harness)
         .reduce((sum, cell) => sum + cell.sessions, 0);
-      expect(sessions, row.harness).toBe(row.sessions);
+      expect(total, row.harness).toBe(row.sessions);
     }
+  });
+
+  it("covers every kind and both harnesses", () => {
+    expect(new Set(scan.items.map((item) => item.ref.kind))).toEqual(
+      new Set(["skill", "instructions", "mcp", "subagent"]),
+    );
+    expect(new Set(scan.items.flatMap((item) => item.harnesses))).toEqual(
+      new Set(["claude-code", "codex"]),
+    );
   });
 });
