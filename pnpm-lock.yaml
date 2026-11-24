@@ -179,6 +179,9 @@ catalogs:
     publint:
       specifier: ^0.3.25
       version: 0.3.25
+    tinyaml:
+      specifier: ^0.1.2
+      version: 0.1.2
     tsdown:
       specifier: ^0.23.7
       version: 0.23.7
@@ -232,6 +235,9 @@ importers:
       '@loadsheet/schema':
         specifier: workspace:*
         version: link:../schema
+      tinyaml:
+        specifier: 'catalog:'
+        version: 0.1.2
 
   packages/kit:
     dependencies:
@@ -1520,6 +1526,22 @@ packages:
   std-env@4.3.0:
     resolution: {integrity: sha512-OtU/EgQ1kIm5KwqQpBC6ZEMXrZRui11w8zgfTWp8cdO9B8OaPsbA8bTHO2P+HNo1VlUTGMVBwPhydu6poeXiag==}
 
+  tinyaml@0.1.2:
+    resolution: {integrity: sha512-l+JA0Eey+lm+qMOcatBnfnUYnI6UtkiL+4HV0Ixk4jPiUu50q9I1/JAP7N6lUTCwNX9bq5bzoOQLqYHGKvtg8Q==}
+    engines: {node: '>=22.12.0'}
+    hasBin: true
+    peerDependencies:
+      eslint: '>=9.15.0'
+      vite-doctor: '>=0.1.1'
+      yaml-eslint-parser: '>=2.0.0'
+    peerDependenciesMeta:
+      eslint:
+        optional: true
+      vite-doctor:
+        optional: true
+      yaml-eslint-parser:
+        optional: true
+
   tinybench@6.2.4:
     resolution: {integrity: sha512-SQ52jEncXxbMCzJuY2A/jGIbbAu6NYsBWW7grz2pNE+EnzQdoGaoBfpk4qC/opE7qiUcGmGgaGIz5EoHdS1O9w==}
     engines: {node: '>=20.0.0'}
@@ -2524,6 +2546,8 @@ snapshots:
   source-map-js@1.2.4: {}
 
   std-env@4.3.0: {}
+
+  tinyaml@0.1.2: {}
 
   tinybench@6.2.4: {}
 
