@@ -1,7 +1,7 @@
 // What the user's agent should change, per harness and per installer. loadsheet never runs any of
 // it: a Fix names the machine, the path and, when one exists, the exact command.
-import type { Fix, Id, Item, Line } from "@loadsheet/schema";
-import type { Install, RuleSheet } from "./rules/rule.ts";
+import type { Fix, Item, Line } from "@loadsheet/schema";
+import type { Install, RuleSheet, Unfiltered } from "./rules/rule.ts";
 
 /** A word the shell reads as itself, or the text in single quotes. */
 const quote = (text: string) =>
@@ -150,13 +150,18 @@ const fleetrcKey = (name: string) =>
 const removeOne = (
   sheet: RuleSheet,
   { machine, item }: Install,
-  usedBy: string[],
+  unfiltered: Unfiltered,
 ): Fix | undefined => {
   const table = HARNESSES[sheet.harness];
   const hide = () =>
     table ? withMachine(machine, table.hide(item) ?? table.off?.(item)) : undefined;
-  // Another harness that loads this path still uses it: hide it from this one, or turn it off here.
-  if (item.harnesses.some((harness) => harness !== sheet.harness && usedBy.includes(harness))) {
+  const usedBy = unfiltered.usedBy(item.id);
+  // This harness used it in sessions the filters left out, so nothing about it is dead there.
+  if (usedBy.includes(sheet.harness)) return undefined;
+  // Another harness that loads this path uses it, or cannot tell whether it does on this machine:
+  // hide it from this one, or turn it off here.
+  const others = item.harnesses.filter((harness) => harness !== sheet.harness);
+  if (others.some((other) => usedBy.includes(other) || !unfiltered.tellsUse(machine, other))) {
     return hide();
   }
   const remove: Fix = { machine, action: "remove", path: item.path };
@@ -192,12 +197,13 @@ const removeOne = (
   }
 };
 
-/** Removes a skill from one harness on every machine that has it, or hides it where removing would take it from a harness that uses it. */
-export const removeFixes = (sheet: RuleSheet, line: Line, usedBy: (item: Id) => string[]): Fix[] =>
+/**
+ * Removes a skill from one harness on every machine that has it, or hides it where removing could
+ * take it from a harness that uses it. Use is read from the Scans before any filter.
+ */
+export const removeFixes = (sheet: RuleSheet, line: Line, unfiltered: Unfiltered): Fix[] =>
   uniqueFixes(
-    installsOf(sheet, line).flatMap(
-      (install) => removeOne(sheet, install, usedBy(line.item)) ?? [],
-    ),
+    installsOf(sheet, line).flatMap((install) => removeOne(sheet, install, unfiltered) ?? []),
   );
 
 /** Shortens the file that holds a skill's description, on every machine that has it. */

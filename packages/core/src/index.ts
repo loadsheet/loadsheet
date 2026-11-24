@@ -8,5 +8,6 @@ export {
   type Rule,
   type RuleContext,
   type RuleSheet,
+  type Unfiltered,
 } from "./rules/rule.ts";
 export { renderText } from "./text.ts";

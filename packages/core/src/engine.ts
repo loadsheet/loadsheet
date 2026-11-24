@@ -10,7 +10,13 @@ import type {
 } from "@loadsheet/schema";
 import { RULES } from "@loadsheet/schema";
 import { pendingRules, rules } from "./rules/index.ts";
-import type { Rule, RuleContext, RuleSheet } from "./rules/rule.ts";
+import {
+  NOTHING_UNFILTERED,
+  type Rule,
+  type RuleContext,
+  type RuleSheet,
+  type Unfiltered,
+} from "./rules/rule.ts";
 
 /** Every signal graded none: what a pack, read without transcripts, can tell. */
 export const NO_SIGNALS: Record<Signal, Grade> = {
@@ -28,6 +34,8 @@ export interface RuleInput {
   /** Every sheet, ignored items included; the engine leaves those out of what rules see. */
   sheets: RuleSheet[];
   config: ResolvedConfig;
+  /** The Scans before any filter; none in pack mode. */
+  unfiltered?: Unfiltered;
 }
 
 /**
@@ -36,7 +44,7 @@ export interface RuleInput {
  * a disabled rule, or one not written yet whose signals are all there, is left out. A fix-level
  * finding whose every machine and harness a cut finding for the same item holds for is dropped.
  */
-export const runRules = ({ mode, sheets, config }: RuleInput) => {
+export const runRules = ({ mode, sheets, config, unfiltered = NOTHING_UNFILTERED }: RuleInput) => {
   const findings: Finding[] = [];
   const skipped: Skipped[] = [];
   const ignored = new Set(config.ignore);
@@ -44,14 +52,6 @@ export const runRules = ({ mode, sheets, config }: RuleInput) => {
     ...sheet,
     lines: sheet.lines.filter((line) => !ignored.has(line.item)),
   }));
-  const users = new Map<Id, string[]>();
-  for (const sheet of sheets) {
-    for (const line of sheet.lines) {
-      if (line.use.byModel + line.use.byUser === 0) continue;
-      users.set(line.item, [...(users.get(line.item) ?? []), sheet.harness]);
-    }
-  }
-  const usedBy = (item: Id) => users.get(item) ?? [];
   const byId = new Map(rules.map((rule) => [rule.id, rule]));
   for (const id of RULES as readonly RuleId[]) {
     if (!config.rules[id].enabled) continue;
@@ -68,7 +68,7 @@ export const runRules = ({ mode, sheets, config }: RuleInput) => {
       } else ready.push(sheet);
     }
     if (!rule || !ready.length) continue;
-    findings.push(...rule.run({ mode, sheets: ready, options, config, usedBy }));
+    findings.push(...rule.run({ mode, sheets: ready, options, config, unfiltered }));
   }
   const place = (item: Id, { machine, harness }: Where) => JSON.stringify([item, machine, harness]);
   const cut = new Set(

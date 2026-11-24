@@ -7,7 +7,7 @@ export const deadSkill = defineRule({
   id: "dead-skill",
   needs: ["listing", "modelUse", "userUse"],
   enough: (sheet, options) => sheet.days >= options.minDays,
-  run: ({ sheets, options, usedBy }) => {
+  run: ({ sheets, options, unfiltered }) => {
     const hits = hitsByItem(
       sheets,
       (line) =>
@@ -30,7 +30,9 @@ export const deadSkill = defineRule({
           byUser: 0,
         },
         savesTokens: tokensOf(group),
-        fixes: uniqueFixes(group.flatMap(({ sheet, line }) => removeFixes(sheet, line, usedBy))),
+        fixes: uniqueFixes(
+          group.flatMap(({ sheet, line }) => removeFixes(sheet, line, unfiltered)),
+        ),
       });
     }
     return findings.sort(byWaste);

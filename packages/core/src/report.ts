@@ -14,7 +14,7 @@ import type {
 } from "@loadsheet/schema";
 import { parseId, SIGNALS } from "@loadsheet/schema";
 import { NO_SIGNALS, runRules } from "./engine.ts";
-import { estimateTokens, type Install, type RuleSheet } from "./rules/rule.ts";
+import { estimateTokens, type Install, type RuleSheet, type Unfiltered } from "./rules/rule.ts";
 
 /** Input for buildReport. */
 export interface BuildReportInput {
@@ -61,6 +61,39 @@ interface Usage {
   lastUsed?: Day;
   machines: Set<string>;
 }
+
+/** The Scans as they are, before the harness, entrypoint and ignore filters. */
+const unfilteredOf = (
+  scans: Scan[],
+  wholeFleet: boolean,
+  inWindow: (day: Day) => boolean,
+): Unfiltered => {
+  const users = new Map<Id, Set<string>>();
+  for (const scan of scans) {
+    for (const cell of scan.cells) {
+      if (cell.byModel + cell.byUser === 0) continue;
+      users.set(cell.item, (users.get(cell.item) ?? new Set()).add(cell.harness));
+    }
+  }
+  const tells = new Set(
+    scans.flatMap((scan) =>
+      scan.coverage
+        .filter((c) => c.signals.modelUse !== "none" && c.signals.userUse !== "none")
+        .map((c) => JSON.stringify([c.machine, c.harness])),
+    ),
+  );
+  const byMachine = new Map(scans.map((scan) => [scan.machine, scan]));
+  return {
+    wholeFleet,
+    usedBy: (item) => [...(users.get(item) ?? [])].sort(compare),
+    tellsUse: (machine, harness) => tells.has(JSON.stringify([machine, harness])),
+    items: (machine) =>
+      machine === undefined
+        ? scans.flatMap((scan) => scan.items)
+        : (byMachine.get(machine)?.items ?? []),
+    cells: (machine) => (byMachine.get(machine)?.cells ?? []).filter((cell) => inWindow(cell.day)),
+  };
+};
 
 /** One harness's sheet and what its rules see behind it. */
 const buildSheet = (
@@ -219,10 +252,12 @@ export const buildReport = ({
     .map((harness) => buildSheet(harness, scans, keep));
 
   const reportMode = mode ?? (names.length > 1 ? "fleet" : "local");
+  const wholeFleet = reportMode === "fleet" && machines.every((machine) => machine.reachable);
   const { findings, skipped } = runRules({
     mode: reportMode,
     sheets: built.map(({ rules }) => rules),
     config,
+    unfiltered: unfilteredOf(scans, wholeFleet, () => true),
   });
 
   const today = now.toISOString().slice(0, 10);

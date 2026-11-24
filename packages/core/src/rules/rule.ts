@@ -1,4 +1,5 @@
 import type {
+  Cell,
   Finding,
   Grade,
   Id,
@@ -24,7 +25,7 @@ export interface RuleSheet {
   harness: string;
   /** Its sessions in the window, over all machines. */
   sessions: number;
-  /** Days of history: from the first day with a session to the last, inclusive; 0 without sessions. */
+  /** Days of history: from the first day with a session left after every filter to the last, inclusive; 0 without sessions. */
   days: number;
   /** How well each signal is provided: the worst grade among the machines read. */
   signals: Record<Signal, Grade>;
@@ -36,6 +37,32 @@ export interface RuleSheet {
   itemsOn: (machine: string) => Item[];
 }
 
+/**
+ * What the Scans hold before any harness, entrypoint or ignore filter: what the guards that keep a
+ * Fix right for the machine it names read. Empty in pack mode.
+ */
+export interface Unfiltered {
+  /** Whether the Report is in fleet mode and read every machine it names. */
+  wholeFleet: boolean;
+  /** The harnesses, on any machine and through any entrypoint, whose model or user invoked the item. */
+  usedBy: (item: Id) => string[];
+  /** Whether a harness on a machine can tell use: the machine covers it and grades modelUse and userUse above none. */
+  tellsUse: (machine: string, harness: string) => boolean;
+  /** Every Item on a machine, of every harness; with no machine, every Item of every machine. */
+  items: (machine?: string) => Item[];
+  /** A machine's usage counters in the window, of every harness and entrypoint. */
+  cells: (machine: string) => Cell[];
+}
+
+/** What a pack, read without Scans, holds. */
+export const NOTHING_UNFILTERED: Unfiltered = {
+  wholeFleet: false,
+  usedBy: () => [],
+  tellsUse: () => false,
+  items: () => [],
+  cells: () => [],
+};
+
 /** What a rule sees: every sheet that can answer it, and its thresholds. */
 export interface RuleContext<R extends RuleId = RuleId> {
   /** local, fleet or pack. */
@@ -46,8 +73,8 @@ export interface RuleContext<R extends RuleId = RuleId> {
   options: RuleOptions[R];
   /** The whole config, for rules that need more than their own thresholds. */
   config: ResolvedConfig;
-  /** The harnesses, over every sheet, whose model or user invoked the item. */
-  usedBy: (item: Id) => string[];
+  /** The Scans before any filter. */
+  unfiltered: Unfiltered;
 }
 
 /** A rule: the signals it cannot judge without, how much data it needs, and what it finds. One file per rule. */

@@ -558,6 +558,59 @@ describe("fixes", () => {
     ]);
   });
 
+  it("reads another harness's use before any filter, and keeps a path whose other harness cannot tell use", () => {
+    const shared = skill("idle", {
+      harnesses: ["claude-code", "codex"],
+      path: "~/.agents/skills/idle",
+    });
+    const hidden = [
+      {
+        machine: "laptop",
+        action: "hide-from-model",
+        path: "~/.agents/skills/idle/SKILL.md",
+        set: { key: "disable-model-invocation", value: true },
+      },
+    ];
+    const fixesOf = (extra: Partial<Scan>, config: Config = {}) =>
+      report(
+        [
+          scan("laptop", {
+            items: [shared],
+            coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
+            sessions: [
+              sessions(30),
+              sessions(30, {}, "codex"),
+              sessions(5, { via: "app" }, "codex"),
+            ],
+            cells: [cell("idle", 25), cell("idle", 25, { harness: "codex" })],
+            ...extra,
+          }),
+        ],
+        config,
+      ).findings.find((f) => f.rule === "dead-skill")!.fixes;
+    const usedInApp = {
+      cells: [
+        cell("idle", 25),
+        cell("idle", 25, { harness: "codex" }),
+        cell("idle", 5, { harness: "codex", via: "app", byModel: 2 }),
+      ],
+    };
+    // Codex used it only through an entrypoint the via filter leaves out, or outside the harnesses read.
+    expect(fixesOf(usedInApp, { via: { include: ["cli"] } })).toEqual(hidden);
+    expect(fixesOf(usedInApp, { harnesses: ["claude-code"] })).toEqual(hidden);
+    // Codex is not covered on this machine, or cannot tell use there.
+    expect(fixesOf({ coverage: [coverage("laptop", "claude-code")] })).toEqual(hidden);
+    const blind = coverage("laptop", "codex", { signals: { ...EXACT, modelUse: "none" } });
+    expect(fixesOf({ coverage: [coverage("laptop", "claude-code"), blind] })).toEqual(hidden);
+    // Claude Code itself used it through an entrypoint the filter leaves out: no fix at all.
+    expect(
+      fixesOf(
+        { cells: [cell("idle", 25), cell("idle", 3, { via: "app", byUser: 1 })] },
+        { via: { include: ["cli"] } },
+      ),
+    ).toEqual([]);
+  });
+
   it("turns a skill off in Codex's own config when an installer owns its folder and another harness uses it", () => {
     const shared = skill("idle", {
       harnesses: ["claude-code", "codex"],
