@@ -30,6 +30,9 @@
   "dependencies": {
     "@loadsheet/schema": "workspace:*"
   },
+  "devDependencies": {
+    "@loadsheet/fixtures": "workspace:*"
+  },
   "engines": {
     "node": ">=22.12.0"
   }
