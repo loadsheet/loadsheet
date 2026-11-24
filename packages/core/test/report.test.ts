@@ -377,6 +377,18 @@ describe("manual-only", () => {
     expect(result.skipped).toEqual([]);
   });
 
+  it("offers no hide on a machine where the model already may not invoke it", () => {
+    const cells = [cell("manual", 30, { byUser: 3 })];
+    const { findings } = findingsOf(
+      [
+        scan("laptop", { items: [skill("manual")], cells }),
+        scan("desktop", { items: [skill("manual", { modelInvocable: false })], cells }),
+      ],
+      "manual-only",
+    );
+    expect(findings.map((f) => f.fixes.map((fix) => fix.machine))).toEqual([["laptop"]]);
+  });
+
   it("hides it from the model: frontmatter by hand, settings for an installer, openai.yaml in Codex", () => {
     const { findings } = findingsOf(
       [
@@ -1534,6 +1546,23 @@ describe("fixes", () => {
     // A plugin's path holds its version, so an entry for it would not last.
     const plugin = { ...shared, managedBy: "plugin" as const, scope: "plugin" as const };
     expect(fixes([plugin])).toEqual([]);
+  });
+
+  it("offers no hide or turn-off for a copy the model already may not invoke", () => {
+    const copy = skill("idle", {
+      harnesses: ["codex"],
+      managedBy: "fleetrc",
+      path: "~/.agents/skills/idle",
+    });
+    const fixes = (item: Item) =>
+      dead([item], {
+        coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
+        sessions: [...sessions(30), ...sessions(30, {}, "codex")],
+        cells: [cell("idle", 25, { byModel: 2 }), cell("idle", 25, { harness: "codex" })],
+      }).find((f) => f.rule === "dead-skill")!.fixes;
+    expect(fixes(copy).map((fix) => fix.action)).toEqual(["set"]);
+    // Turned off since: past sessions keep the finding, and there is nothing left to turn off.
+    expect(fixes({ ...copy, modelInvocable: false, chars: { listed: 0, body: 900 } })).toEqual([]);
   });
 
   it.each([

@@ -32,13 +32,13 @@ Change nothing until I accept a fix.
      - `config.toml` (TOML): `skills.config[path="~/x/SKILL.md"].enabled` is `enabled` in the
        `[[skills.config]]` entry whose `path` is exactly that value. Add the entry, with that
        `path`, when there is none. The last entry that matches a skill wins, so put it after
-       every other `[[skills.config]]` entry.
+       every other `[[skills.config]]` entry; the end of the file is fine.
      - `agents/openai.yaml` (YAML): `policy.allow_implicit_invocation` is
        `allow_implicit_invocation` under `policy`.
      - `SKILL.md`: `disable-model-invocation` goes in the YAML frontmatter between the `---`
        lines at the top.
      Create a missing file or parent key. Keep everything else in the file as it is. Show me
-     the diff.
+     the lines you changed, and nothing else from a file that holds keys or tokens.
    - `hide-from-model` carries a `set` (apply it as above): the model stops invoking the
      skill on its own, and I can still call it by name.
    - `shorten`: rewrite the skill's `description` in that SKILL.md so it says when to use the
@@ -56,9 +56,10 @@ Change nothing until I accept a fix.
      only the copy at `path`. Apply it as `run` above.
    - A finding with no fixes: tell me about it and change nothing.
 5. When done, rerun `npx loadsheet --json`. loadsheet reads past sessions, so a finding can
-   stay until new sessions have run without the item: tell me which fixes are in place on disk
-   (an item you removed no longer has a `path` on its line in `sheet[].lines`), which findings
-   are gone, which remain, and what each session will save.
+   stay until new sessions have run without the item. A fix that is in place is no longer in
+   its finding's `fixes` for this machine, and an item you removed no longer has a `path` on
+   its line in `sheet[].lines`. Tell me which fixes are in place, which findings are gone,
+   which remain, and what each session will save.
 ```
 
 Without an agent, `npx loadsheet` prints the same findings and fixes as text.
