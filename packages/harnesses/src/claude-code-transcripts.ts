@@ -46,6 +46,8 @@ const BUILT_IN_AGENTS = [
 const SYNTHETIC_MODEL = "<synthetic>";
 /** A name loadsheet will put in an id: no spaces, markup, quotes or path separators. */
 const NAME = /^[^\s<>"'`/\\]{1,128}$/u;
+/** A skill's name may also hold one plain space between words, as Claude Code allows. */
+const SKILL_NAME = /^(?=.{1,128}$)[^\s<>"'`/\\]+(?: [^\s<>"'`/\\]+)*$/u;
 const COMMAND =
   /^\s*<command-message>[^<]*<\/command-message>\s*<command-name>\/?([^<]+)<\/command-name>/u;
 
@@ -182,7 +184,7 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
         case "skill_listing": {
           const content = typeof attachment.content === "string" ? attachment.content : "";
           for (const { name, chars, bare } of skillEntries(strings(attachment.names), content)) {
-            if (NAME.test(name)) listed(`skill:${name}`, chars, bare);
+            if (SKILL_NAME.test(name)) listed(`skill:${name}`, chars, bare);
           }
           break;
         }
@@ -262,7 +264,7 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
       if (command !== undefined && record.isMeta === true) used(`skill:${command}`, "user");
       const match = COMMAND.exec(userText(record.message) ?? "");
       const name = match?.[1]?.trim();
-      if (name !== undefined && NAME.test(name)) state.command = name;
+      if (name !== undefined && SKILL_NAME.test(name)) state.command = name;
       return facts;
     }
     delete state.command;
@@ -285,7 +287,7 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
         if (block.name === "Skill") {
           const name =
             typeof input.skill === "string" ? input.skill.trim().replace(/^\//u, "") : "";
-          if (NAME.test(name)) used(`skill:${name}`, "model");
+          if (SKILL_NAME.test(name)) used(`skill:${name}`, "model");
         } else if (block.name === "Agent" || block.name === "Task") {
           const name =
             typeof input.subagent_type === "string"

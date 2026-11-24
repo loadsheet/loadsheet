@@ -286,8 +286,8 @@ describe("claudeTranscripts", () => {
       line({ type: "user", entrypoint: "/home/jo/bin", message: { content: "hi" } }),
       attachment({
         type: "skill_listing",
-        names: ["has space", "<x>"],
-        content: "- has space: A\n- <x>: B",
+        names: ["two  spaces", " edge", "<x>"],
+        content: "- two  spaces: A\n-  edge: B\n- <x>: C",
       }),
       attachment({
         type: "instructions",
@@ -389,6 +389,17 @@ describe("claudeTranscripts", () => {
     ]);
     expect(items.filter((item) => item.includes(folder))).toEqual([]);
     expect(JSON.stringify(state)).not.toContain(folder);
+  });
+
+  it("lists and counts the use of a skill whose name has one space between words", () => {
+    const { facts } = parseAll([
+      line({ type: "user", message: { content: "hi" } }),
+      attachment({ type: "skill_listing", names: ["code review"], content: "- code review: R" }),
+      assistant([skillCall("code review")]),
+    ]);
+    expect(
+      facts.filter((fact) => fact.type === "listed" || fact.type === "used").map((f) => f.item),
+    ).toEqual(["skill:code review", "skill:code review"]);
   });
 
   it("keeps a malformed MCP server name out of State", () => {
