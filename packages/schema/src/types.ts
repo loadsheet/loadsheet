@@ -283,7 +283,7 @@ export interface Line {
   pack?: string;
   /** What installed it; absent when it is no longer installed on any machine read. */
   managedBy?: ManagedBy;
-  /** Machines where it is installed or was seen. */
+  /** Machines where it is installed or was seen; empty in pack mode. */
   machines: string[];
   /** Its file or folder, relative to the home directory or the project; absent when it is no longer installed on any machine read. */
   path?: string;

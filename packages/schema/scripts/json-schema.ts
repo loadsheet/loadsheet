@@ -22,6 +22,7 @@ const each = (properties: Node): Node => ({
   type: "array",
   items: { type: "object", properties },
 });
+const emptyArray = { type: "array", maxItems: 0 };
 
 // A Scan never carries a description.
 const scan = (): Node => {
@@ -41,6 +42,14 @@ const report = (): Node => {
     { required: ["run"] },
   ];
   schema.if = { properties: { mode: { const: "pack" } }, required: ["mode"] };
+  schema.then = {
+    properties: {
+      machines: emptyArray,
+      coverage: emptyArray,
+      sheet: each({ lines: each({ machines: emptyArray }) }),
+      findings: each({ where: emptyArray, fixes: each({ machine: false }) }),
+    },
+  };
   schema.else = {
     properties: {
       sheet: each({ lines: each({ description: false }) }),
