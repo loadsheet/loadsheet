@@ -7,6 +7,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   cli,
   clone,
+  fleetrcDir,
   http,
   isWindows,
   machine,
@@ -16,8 +17,9 @@ import {
   skills,
 } from "./fixture.ts";
 
+// The wrapper's, whose bin the test launches.
 const engines = (
-  JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+  JSON.parse(readFileSync(join(fleetrcDir, "package.json"), "utf8")) as {
     engines: { node: string };
   }
 ).engines.node;
