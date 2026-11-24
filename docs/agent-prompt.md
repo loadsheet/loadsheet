@@ -21,7 +21,8 @@ Change nothing until I accept a fix.
      the machines read; a local Report holds one, this machine. In a fleet Report, yours is the
      one named like `hostname`; if none is, ask me. List fixes for other machines for me to run
      there. A fix with no `machine` (a pack's Report) goes to the pack's own files.
-   - `path`: `~/` is my home directory; any other path is relative to the current project.
+   - `path`: `~/` is my home directory. Any other path is absolute, or, in a pack's Report,
+     relative to the pack's folder.
    - `run`: show me the exact command first, then run it. Never alter it.
    - `set`: write `key` = `value` into the file at `path`, keeping the value's JSON type (the
      string "24000" stays a string). `key` is a dotted path in the file's own format:
