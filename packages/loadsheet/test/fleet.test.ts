@@ -236,6 +236,25 @@ describe("loadsheet with a fleet", () => {
     ]);
   });
 
+  it("leaves a peer its fleet name even when this machine has the same hostname", () => {
+    const here = parseScan({
+      schema: 1,
+      tool: "loadsheet@0.0.1",
+      machine: "build",
+      scannedAt: "2026-01-01T00:00:00.000Z",
+      window: ["2026-01-01", "2026-01-01"],
+      coverage: [],
+      items: [],
+      sessions: [],
+      cells: [],
+    });
+    const { scans, machines } = fleetScans(here, [
+      { host: "build", reachable: false, stdout: "", stderr: "", error: "refused" },
+    ]);
+    expect(scans[0]?.machine).toBe("build (local)");
+    expect(machines).toEqual([{ name: "build", reachable: false, error: "offline" }]);
+  });
+
   it("reads no Scan from the end of an output that was cut", () => {
     const scan = JSON.parse(loadsheet(["--scan", "--days", "3650"]).stdout);
     const sent = { reachable: true, exitCode: 0, stdout: JSON.stringify(scan), stderr: "" };

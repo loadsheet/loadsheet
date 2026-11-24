@@ -21,8 +21,25 @@ const HEADER = /^\s*\[([^[\]]+)\]\s*(?:#.*)?$/u;
 const ARRAY_HEADER = /^\s*\[\[([^[\]]+)\]\]\s*(?:#.*)?$/u;
 const SELECTOR = /^\s*(name|path)\s*=\s*("(?:[^"\\]|\\.)*"|'[^']*')\s*(?:#.*)?$/u;
 const INLINE_ENTRY = /^\s*("(?:[^"\\]|\\.)*"|'[^']*'|[\w-]+)\s*=\s*\{(.*)$/u;
-const ENABLED = /^\s*enabled\s*=\s*(true|false)\b/u;
-const INLINE_DISABLED = /(?:^|[{,\s])enabled\s*=\s*false\b/u;
+const ENABLED = /^\s*(?:enabled|"enabled"|'enabled')\s*=\s*(true|false)\b/u;
+
+/** Only the inline table's own fields can disable an entry, not its strings or nested values. */
+const inlineEnabled = (body: string): boolean => {
+  const first = ENABLED.exec(body);
+  if (first) return first[1] === "true";
+  let depth = 0;
+  for (const token of body.matchAll(/"(?:[^"\\]|\\.)*"|'[^']*'|[{}[\],]/gu)) {
+    if (token[0] === "[" || token[0] === "{") depth++;
+    else if (token[0] === "]" || token[0] === "}") {
+      if (depth === 0) break;
+      depth--;
+    } else if (token[0] === "," && depth === 0) {
+      const enabled = ENABLED.exec(body.slice(token.index + 1));
+      if (enabled) return enabled[1] === "true";
+    }
+  }
+  return true;
+};
 
 /** Splits a dotted TOML key such as `plugins."a@b".x` into its parts, unquoting each. */
 const keyParts = (key: string): string[] => {
@@ -212,14 +229,14 @@ export const readCodexConfig = (source: string): CodexConfig => {
       const [root, key, ...rest] = table;
       target = root === "mcp_servers" ? mcpServers : root === "plugins" ? plugins : undefined;
       name = target && key !== undefined && rest.length === 0 ? key : undefined;
-      if (target && name !== undefined && !target.has(name)) target.set(name, true);
+      if (target && key !== undefined && !target.has(key)) target.set(key, true);
       continue;
     }
     if (!target) continue;
     if (name === undefined && table.length === 1) {
       // `[mcp_servers]` followed by `name = { ... }` lines.
       const entry = INLINE_ENTRY.exec(line);
-      if (entry) target.set(keyParts(entry[1]!)[0]!, !INLINE_DISABLED.test(entry[2]!));
+      if (entry) target.set(keyParts(entry[1]!)[0]!, inlineEnabled(entry[2]!));
       continue;
     }
     if (name === undefined) continue;

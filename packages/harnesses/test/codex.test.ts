@@ -768,6 +768,33 @@ describe("codex machine", () => {
     ]);
   });
 
+  it("reads enabled only from the server's own table fields", () => {
+    const { mcpServers } = readCodexConfig(
+      [
+        "[mcp_servers]",
+        'nested_only.command = "node"',
+        'with_args = { command = "node", args = ["--message enabled = false", ", }"] }',
+        'with_env = { command = "node", env = { enabled = "false" } }',
+        'off = { command = "node", args = ["a,b"], "enabled" = false }',
+        'commented = { command = "node" } # , enabled = false',
+        "[mcp_servers.nested.env]",
+        'enabled = "false"',
+        "[mcp_servers.nested]",
+        'command = "node"',
+        "[mcp_servers.nested_only.env]",
+        'LOG_LEVEL = "info"',
+      ].join("\n"),
+    );
+    expect([...mcpServers]).toEqual([
+      ["with_args", true],
+      ["with_env", true],
+      ["off", false],
+      ["commented", true],
+      ["nested", true],
+      ["nested_only", true],
+    ]);
+  });
+
   it("keeps a skill installed in two roots as two Items", async () => {
     const items = await machine.inventory(
       memoryFiles({
