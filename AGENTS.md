@@ -30,6 +30,8 @@ Real transcripts are private. Read them a few lines at a time. Make a fixture wi
 
 loadsheet reads the user's files and edits none of them. It writes only to its own cache directory; fixes go to the user's agent as commands.
 
+`loadsheet build` is the one command that writes where the user says, and it never overwrites anything it did not write: it writes into a folder that is missing or empty, or one holding the `.loadsheet-build` marker it wrote before, and replaces only the files that marker lists; otherwise it stops with exit code 2. `loadsheet --ui` serves the same page from memory and writes nothing.
+
 ## Commands
 
 - `pnpm build`: builds every package (cached by `vp run`); tests run the built CLI, so build first.

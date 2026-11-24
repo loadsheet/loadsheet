@@ -25,7 +25,7 @@
     "provenance": true
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && node scripts/copy-web.ts",
     "prepack": "pnpm --filter loadsheet... build"
   },
   "dependencies": {

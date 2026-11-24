@@ -38,6 +38,8 @@ export default defineConfig({
             "packages/*/package.json",
             "packages/*/tsdown.config.ts",
             "packages/fleet/scripts/agent-table.ts",
+            "packages/loadsheet/scripts/copy-web.ts",
+            "apps/web/dist/**",
             "packages/*/README.md",
             "packages/*/LICENSE",
             "tsdown.shared.ts",

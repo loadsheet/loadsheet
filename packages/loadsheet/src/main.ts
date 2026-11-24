@@ -20,9 +20,12 @@ Usage: loadsheet [options]                     Scan this machine's sessions, and
        loadsheet <dir | GitHub URL> [options]  Weigh a skill pack, with no usage data
        loadsheet fleet [command] [options]     Run fleetrc, which keeps a fleet's skills in sync;
                                                \`loadsheet fleet --help\` lists its commands
+       loadsheet build [--out <dir>] [options] Write the report as a web page to <dir>
+                                               (default ./loadsheet-report)
+       loadsheet --ui [--port <n>] [options]   Serve the report as a web page on 127.0.0.1
 
   <dir | GitHub URL>  A URL is https://github.com/<owner>/<repo>[/tree/<ref>[/<folder>]].
-                      A pack in a folder named fleet is ./fleet.
+                      A pack in a folder named fleet or build is ./fleet or ./build.
 
 Options:
   --local               Report this machine alone, even when it has a fleet
