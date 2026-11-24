@@ -170,37 +170,49 @@ describe("invisible-skill", () => {
     expect(result.skipped).toEqual([]);
   });
 
-  it("evidences the numbers and raises Claude Code's listing budget where the skill is installed", () => {
+  it("evidences the numbers and sets each machine's listing budget from its own listing", () => {
     const { findings } = findingsOf(
       [
+        // 400 (hidden's Item) + 120 (used, as its sessions held it) + 200 (quiet, ignored but
+        // listed), plus a tenth.
         scan("laptop", {
-          items: [skill("hidden", { chars: { listed: 400, body: 900 } })],
-          cells: [cell("hidden", 10, { bare: 8, byUser: 1 }), ...seen],
+          items: [
+            skill("hidden", { chars: { listed: 400, body: 900 } }),
+            skill("quiet", { chars: { listed: 200, body: 0 } }),
+          ],
+          cells: [cell("hidden", 10, { bare: 8, byUser: 1 }), cell("quiet", 10), ...seen],
         }),
+        // hidden is installed nowhere and always listed bare, `- hidden`: 9 + 120, plus a tenth.
+        scan("server", {
+          cells: [cell("hidden", 10, { bare: 10, chars: 90 }), ...seen],
+        }),
+        // Nothing listed bare, so the budget already fits.
+        scan("mini", { cells: [cell("hidden", 10), ...seen] }),
       ],
       "invisible-skill",
+      { ignore: ["skill:quiet"] },
     );
+    const budget = (machine: string, value: string) => ({
+      machine,
+      action: "set",
+      path: "~/.claude/settings.json",
+      set: { key: "env.SLASH_COMMAND_TOOL_CHAR_BUDGET", value },
+    });
     expect(findings).toEqual([
       {
         id: "invisible-skill:skill:hidden",
         rule: "invisible-skill",
         level: "fix",
         item: "skill:hidden",
-        where: [{ machine: "laptop", harness: "claude-code" }],
-        evidence: { sessions: 10, bare: 8, bareShare: 0.8, byModel: 0, byUser: 1 },
-        fixes: [
-          {
-            machine: "laptop",
-            action: "set",
-            path: "~/.claude/settings.json",
-            set: { key: "skillListingBudgetFraction", value: expect.any(Number) },
-          },
+        where: [
+          { machine: "laptop", harness: "claude-code" },
+          { machine: "mini", harness: "claude-code" },
+          { machine: "server", harness: "claude-code" },
         ],
+        evidence: { sessions: 30, bare: 18, bareShare: 0.6, byModel: 0, byUser: 1 },
+        fixes: [budget("laptop", "792"), budget("server", "142")],
       },
     ]);
-    const value = findings[0]!.fixes[0]!.set!.value as number;
-    expect(value).toBeGreaterThan(0.01);
-    expect(value).toBeLessThanOrEqual(1);
   });
 
   it("raises the budget on every machine it holds for, also where the skill is installed nowhere loadsheet reads", () => {

@@ -252,42 +252,66 @@ export const bareByChoice = (sheet: RuleSheet, line: Line) => {
   return test !== undefined && installs.length > 0 && installs.every(({ item }) => test(item));
 };
 
-/**
- * Claude Code's skill listing gets `contextWindow × 4 × skillListingBudgetFraction` characters
- * (default 0.01); past that, the skills it has used least lose their descriptions. The fraction that
- * fits every description is the default scaled by what the full listing takes over what sessions
- * listed, with a tenth for headroom. A user who already set the fraction gets a value scaled from
- * the default, which is why the fix says what to set rather than by how much to raise it.
- */
-const DEFAULT_BUDGET_FRACTION = 0.01;
+/** The bare listing entry of a skill, `- name`, which is all a session that lists it bare pays. */
+export const bareEntry = (name: string) => `- ${name}\n`.length;
 
-/** The settings change that gives Claude Code's skill listing room for every description, per machine. */
-export const listingBudgetFixes = (sheet: RuleSheet, line: Line): Fix[] => {
-  if (sheet.harness !== "claude-code" || sheet.sessions === 0) return [];
-  let full = 0;
-  let listed = 0;
-  for (const skill of sheet.lines) {
-    if (skill.ref.kind !== "skill") continue;
-    const bareChars = `- ${skill.ref.name}\n`.length;
-    full += skill.exposure.sessions * skill.chars.listed;
-    listed +=
-      (skill.exposure.sessions - skill.exposure.bare) * skill.chars.listed +
-      skill.exposure.bare * Math.min(bareChars, skill.chars.listed);
+/**
+ * The characters one machine's Claude Code listing needs for every description: the full entry of
+ * every skill its sessions listed in the window, ignored ones included since they still take room,
+ * plus a tenth. A skill installed there counts its Item's entry; one installed nowhere loadsheet
+ * reads, what the sessions that listed it in full held. Undefined when no session listed a skill
+ * bare, so the budget already fits.
+ */
+const listingBudget = (sheet: RuleSheet, machine: string, unfiltered: Unfiltered) => {
+  const listed = new Map<string, { sessions: number; bare: number; chars: number }>();
+  for (const cell of unfiltered.cells(machine)) {
+    if (cell.harness !== sheet.harness || !cell.item.startsWith("skill:")) continue;
+    const known = listed.get(cell.item) ?? { sessions: 0, bare: 0, chars: 0 };
+    known.sessions += cell.sessions;
+    known.bare += cell.bare;
+    known.chars += cell.chars;
+    listed.set(cell.item, known);
   }
-  if (listed === 0 || full <= listed) return [];
-  const fraction = Math.min(
-    1,
-    Math.ceil(((DEFAULT_BUDGET_FRACTION * full * 1.1) / listed) * 1000) / 1000,
-  );
-  if (fraction <= DEFAULT_BUDGET_FRACTION) return [];
+  if (![...listed.values()].some(({ bare }) => bare > 0)) return undefined;
+  const installed = new Map<string, number>();
+  for (const item of sheet.itemsOn(machine)) {
+    installed.set(item.id, Math.max(installed.get(item.id) ?? 0, item.chars.listed));
+  }
+  let total = 0;
+  for (const [id, { sessions, bare, chars }] of listed) {
+    const bareChars = bareEntry(id.slice("skill:".length));
+    total +=
+      installed.get(id) ??
+      (sessions > bare ? Math.round((chars - bare * bareChars) / (sessions - bare)) : bareChars);
+  }
+  return Math.ceil((total * 11) / 10);
+};
+
+/**
+ * The settings change that gives Claude Code's skill listing room for every description, per
+ * machine. Claude Code gives the listing `SLASH_COMMAND_TOOL_CHAR_BUDGET` characters when that
+ * variable is set, else `contextWindow × 4 × (skillListingBudgetFraction ?? 0.01)`; past it, the
+ * skills it has used least lose their descriptions. The Fix sets the variable in settings.json's
+ * `env`, as a string since `env` holds strings: an absolute budget needs no knowledge of the
+ * fraction or context window the machine has, where a fraction scaled from the default could
+ * lower one the user already raised. Each machine gets the budget its own listing needs.
+ */
+export const listingBudgetFixes = (sheet: RuleSheet, line: Line, unfiltered: Unfiltered): Fix[] => {
+  if (sheet.harness !== "claude-code") return [];
   // The budget is the machine's setting, so every machine the line holds for gets it, also one
   // where the skill is installed nowhere loadsheet reads, such as a project's or a bundled skill.
   return uniqueFixes(
-    line.machines.map((machine) => ({
-      machine,
-      action: "set",
-      path: userSettingsPath(sheet, machine),
-      set: { key: "skillListingBudgetFraction", value: fraction },
-    })),
+    line.machines.flatMap((machine) => {
+      const budget = listingBudget(sheet, machine, unfiltered);
+      if (budget === undefined) return [];
+      return [
+        {
+          machine,
+          action: "set" as const,
+          path: userSettingsPath(sheet, machine),
+          set: { key: "env.SLASH_COMMAND_TOOL_CHAR_BUDGET", value: String(budget) },
+        },
+      ];
+    }),
   );
 };

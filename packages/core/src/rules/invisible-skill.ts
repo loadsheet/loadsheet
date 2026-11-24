@@ -11,7 +11,7 @@ export const invisibleSkill = defineRule({
   id: "invisible-skill",
   needs: ["listing"],
   enough: (sheet, options) => sheet.sessions >= options.minSessions,
-  run: ({ sheets, options }) => {
+  run: ({ sheets, options, unfiltered }) => {
     const hits = hitsByItem(sheets, (line, sheet) => {
       const { sessions, bare } = line.exposure;
       return (
@@ -38,7 +38,9 @@ export const invisibleSkill = defineRule({
           byModel: sum(group, ({ line }) => line.use.byModel),
           byUser: sum(group, ({ line }) => line.use.byUser),
         },
-        fixes: uniqueFixes(group.flatMap(({ sheet, line }) => listingBudgetFixes(sheet, line))),
+        fixes: uniqueFixes(
+          group.flatMap(({ sheet, line }) => listingBudgetFixes(sheet, line, unfiltered)),
+        ),
       });
     }
     return findings.sort(byWaste);
