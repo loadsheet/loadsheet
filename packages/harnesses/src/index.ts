@@ -1,6 +1,20 @@
 import { claudeCode } from "./claude-code.ts";
 
-export { claudeCode, claudeCodeListedChars } from "./claude-code.ts";
+export {
+  claudeCode,
+  claudeCodeAgentChars,
+  claudeCodeDescription,
+  claudeCodeListedChars,
+} from "./claude-code.ts";
+export { claudeConfigDir } from "./claude-code-machine.ts";
+export { claudeTranscripts, instructionName, type ClaudeState } from "./claude-code-transcripts.ts";
+export {
+  FLEETRC_MANIFEST,
+  readManagers,
+  SKILLS_LOCK,
+  skillsLockPath,
+  type Manager,
+} from "./managed.ts";
 export { packInventory, type PackListing } from "./pack.ts";
 export { readSkillMd, type SkillMd } from "./skill-md.ts";
 

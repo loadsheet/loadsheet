@@ -227,6 +227,8 @@ importers:
         specifier: workspace:*
         version: link:../schema
 
+  packages/fixtures: {}
+
   packages/harnesses:
     dependencies:
       '@loadsheet/kit':
@@ -238,6 +240,10 @@ importers:
       tinyaml:
         specifier: 'catalog:'
         version: 0.1.2
+    devDependencies:
+      '@loadsheet/fixtures':
+        specifier: workspace:*
+        version: link:../fixtures
 
   packages/kit:
     dependencies:

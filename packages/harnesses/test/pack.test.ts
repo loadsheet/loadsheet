@@ -107,7 +107,7 @@ describe("Claude Code pack inventory", () => {
         scope: "plugin",
         managedBy: "plugin",
         pack: "acme/kit",
-        listed: "- kit:reviewer: Reviews.\n".length,
+        listed: "- kit:reviewer: Reviews. (Tools: All tools)\n".length,
         modelInvocable: true,
       },
       {

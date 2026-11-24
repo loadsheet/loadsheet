@@ -9,8 +9,8 @@ export interface PackListing {
   harness: string;
   /** The description the harness lists for an entry. */
   description(skill: SkillMd): string | undefined;
-  /** Characters the harness's listing spends on an entry with this name and frontmatter. */
-  listedChars(name: string, skill: SkillMd): number;
+  /** Characters the harness's listing spends on an entry of this kind, name and frontmatter. */
+  listedChars(name: string, skill: SkillMd, kind: Kind): number;
 }
 
 const PLUGIN_MANIFEST = ".claude-plugin/plugin.json";
@@ -70,7 +70,7 @@ export const packInventory = async (files: Files, listing: PackListing): Promise
     // a path in the Report; the folder names those entries instead.
     const named = skill.name !== undefined && !/[\\/<>\p{Cc}]/u.test(skill.name);
     const name = qualify(named && !file.startsWith("commands/") ? skill.name! : fallback);
-    const listed = listing.listedChars(name, skill);
+    const listed = listing.listedChars(name, skill, kind);
     const item: Item = {
       id: `${kind}:${name}`,
       ref: { kind, name },
