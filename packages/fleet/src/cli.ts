@@ -1242,7 +1242,6 @@ async function fleetRunCommand(loaded: Awaited<ReturnType<typeof loadManifest>>)
   const tagged = (tag: string) => self?.tags.some((own) => own.toLowerCase() === tag.toLowerCase());
   const results = await fleetRun(targets, words, timeout, {
     here: named.length === 0 || named.some((entry) => isTag(entry) && tagged(entry)),
-    magicDNS: self?.dns,
   });
   const lines = (host: string, text: string) =>
     text === "" ? "" : `${text.replace(/\r?\n$/, "").replace(/(?<=^|\n)/g, `${host}: `)}\n`;

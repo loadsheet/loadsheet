@@ -1,5 +1,7 @@
+import { mkdtemp, rm } from "node:fs/promises";
 import { isIP } from "node:net";
-import { homedir, hostname } from "node:os";
+import { homedir, hostname, tmpdir } from "node:os";
+import { basename, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { exec, type ExecResult } from "./exec.ts";
 import { dict, isRecord, readJsonOrNothing, writeJson } from "./fs.ts";
@@ -707,41 +709,27 @@ export interface RunResult {
 }
 
 /**
- * Whether a fleet entry is this machine for certain: it names no user or port, and its name is this
- * machine's hostname or `magicDNS`, its MagicDNS name when Tailscale was asked, or, for a bare
- * label, the first label of either.
- */
-function isThisMachine(entry: string, magicDNS = ""): boolean {
-  const { machine, user, port } = sshTarget(entry);
-  if (user || port) return false;
-  const name = hostKey(machine);
-  return [hostname(), magicDNS].some((own) => {
-    const key = hostKey(own);
-    return key !== "" && (name === key || (!name.includes(".") && name === key.split(".")[0]));
-  });
-}
-
-/**
  * Runs `argv` over ssh on every target and, unless `here` is false, directly on this machine, from
- * the home folder where ssh starts a command; all at once. This machine comes first, and a target
- * that is it for certain (`isThisMachine`, given `magicDNS` when Tailscale was asked) runs there
- * directly instead. A host that is offline, does not answer or cannot be tried is unreachable, with
- * no exit code; a command still running after `timeoutMs` is stopped and has none either. Here that
- * stops what the command started as well; over ssh only the command itself.
+ * the home folder where ssh starts a command; all at once. This machine comes first. No name says
+ * for certain that a target is this machine (an ssh alias, its MagicDNS name and an address all can
+ * be), so when the command runs here each host is asked instead: one that has the folder made for
+ * this run, which only this user on this machine can, is left out. A host that is offline, does not
+ * answer or cannot be tried is unreachable, with no exit code; a command still running after
+ * `timeoutMs` has none either. Here it is stopped then, with what it started; over ssh the command
+ * itself is told to stop.
  */
 export async function fleetRun(
   targets: readonly FleetTarget[],
   argv: readonly [string, ...string[]],
   timeoutMs = 30_000,
-  { here = true, magicDNS }: { here?: boolean; magicDNS?: string } = {},
+  { here = true }: { here?: boolean } = {},
 ): Promise<RunResult[]> {
   const after = `${Math.round(timeoutMs / 1000)} s`;
-  const stopped = `timed out after ${after}, so the command was stopped`;
   const finished = (host: string, run: ExecResult): RunResult => ({
     host,
     reachable: true,
     ...(run.timedOut
-      ? { error: stopped }
+      ? { error: `timed out after ${after}, so the command was stopped` }
       : run.code === null
         ? { error: "the command ended on a signal" }
         : { exitCode: run.code }),
@@ -769,9 +757,14 @@ export async function fleetRun(
     return finished(hostname(), run);
   };
   const words = argv.map(quote).join(" ");
+  const own = here ? await mkdtemp(join(tmpdir(), "fleetrc-run-")) : undefined;
+  // The folder's random name goes in the note, so nothing the command writes can pass for it.
+  const isSelf = own === undefined ? undefined : `${NOTE} self ${basename(own)}`;
+  const self =
+    own === undefined ? "" : `if [ -O ${quote(own)} ]; then echo "${isSelf}" >&2; exit 0; fi; `;
   // The command's own exit status goes to stderr too, since ssh exits 255 when the connection drops.
-  const remoteCommand = `sh -c ${quote(`${ANSWERED}; (${watched(words)}); s=$?; echo "${NOTE} exit $s" >&2; exit $s`)}`;
-  const remote = async ({ host, offline, error }: FleetTarget): Promise<RunResult> => {
+  const remoteCommand = `sh -c ${quote(`${ANSWERED}; ${self}(${watched(words)}); s=$?; echo "${NOTE} exit $s" >&2; exit $s`)}`;
+  const remote = async ({ host, offline, error }: FleetTarget): Promise<RunResult | undefined> => {
     const unreachable = (why: string): RunResult => ({
       host,
       reachable: false,
@@ -784,13 +777,20 @@ export async function fleetRun(
     const tried = await ssh(host, remoteCommand, timeoutMs);
     if ("error" in tried) return unreachable(tried.error);
     const { run } = tried;
+    if (isSelf !== undefined && new RegExp(`^${isSelf}\r?$`, "m").test(run.stderr))
+      return undefined;
     const answered = new RegExp(`^${NOTE} answered\r?$`, "m").test(run.stderr);
-    // The exit line comes last, after stderr that may not end in a newline.
-    const exited = new RegExp(`${NOTE} exit (\\d+)\r?\n$`);
-    const exit = run.stderr.match(exited)?.[1];
-    const stderr = run.stderr
-      .replace(exited, "")
-      .replace(new RegExp(`^${NOTE} .*\r?\n?`, "gm"), "");
+    // The exit line follows stderr that may not end in a newline, and something the command left
+    // running may write after it. The last one is the command's.
+    const exited = [...run.stderr.matchAll(new RegExp(`${NOTE} exit (\\d+)\r?\n`, "g"))].at(-1);
+    const exit = exited?.[1];
+    const before = run.stderr.slice(0, exited?.index);
+    const later = exited === undefined ? "" : run.stderr.slice(exited.index + exited[0].length);
+    const stderr =
+      `${before}${later === "" || /(?:^|\n)$/.test(before) ? "" : "\n"}${later}`.replace(
+        new RegExp(`^${NOTE} .*\r?\n?`, "gm"),
+        "",
+      );
     if (!answered)
       return unreachable(
         run.timedOut
@@ -801,17 +801,20 @@ export async function fleetRun(
       return {
         host,
         reachable: true,
-        error: run.timedOut ? stopped : "the connection dropped before the command finished",
+        error: run.timedOut
+          ? `timed out after ${after}, so the command was told to stop`
+          : "the connection dropped before the command finished",
         stdout: run.stdout,
         stderr,
       };
     return { host, reachable: true, exitCode: Number(exit), stdout: run.stdout, stderr };
   };
-  const remotes = targets.filter(({ host }) => !isThisMachine(host, magicDNS));
-  return Promise.all([
-    ...(here || remotes.length < targets.length ? [local()] : []),
-    ...remotes.map(remote),
-  ]);
+  try {
+    const results = await Promise.all([...(here ? [local()] : []), ...targets.map(remote)]);
+    return results.filter((result) => result !== undefined);
+  } finally {
+    if (own !== undefined) await rm(own, { recursive: true, force: true });
+  }
 }
 
 function heldSource(run: NonNullable<HostResult["lastRun"]>, source: string): boolean {

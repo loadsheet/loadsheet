@@ -61,7 +61,9 @@ class Tail {
   }
   toString() {
     this.trim();
-    return this.head + this.chunks.join("");
+    // A line of its own where the middle went, so the two halves do not read as one line.
+    const cut = this.head && this.truncated ? "\n[...]\n" : "";
+    return this.head + cut + this.chunks.join("");
   }
 }
 
