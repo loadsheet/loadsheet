@@ -6,13 +6,15 @@ loadsheet is a CLI (`npx loadsheet`) that reads coding agents' session transcrip
 
 Each package's dependencies in `package.json` are the layering. Keep imports inside its row.
 
-| Package                            | May import                   | Must not know                                                               |
-| ---------------------------------- | ---------------------------- | --------------------------------------------------------------------------- |
-| `@loadsheet/schema`                | nothing at runtime           | anything else in the repo, Node                                             |
-| `@loadsheet/kit`                   | schema, Node                 | rules or findings                                                           |
-| `@loadsheet/harnesses`             | schema, kit                  | rules; the filesystem: an adapter receives lines and virtual files from kit |
-| `@loadsheet/core`                  | schema                       | kit, harnesses, `node:*`; it is isomorphic and runs in the browser          |
-| `loadsheet` (`packages/loadsheet`) | schema, kit, harnesses, core | nothing; it is the only place that parses argv                              |
+| Package                            | May import                            | Must not know                                                                                    |
+| ---------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `@loadsheet/schema`                | nothing at runtime                    | anything else in the repo, Node                                                                  |
+| `@loadsheet/kit`                   | schema, Node                          | rules or findings                                                                                |
+| `@loadsheet/harnesses`             | schema, kit                           | rules; the filesystem: an adapter receives lines and virtual files from kit                      |
+| `@loadsheet/core`                  | schema                                | kit, harnesses, `node:*`; it is isomorphic and runs in the browser                               |
+| `loadsheet` (`packages/loadsheet`) | schema, kit, harnesses, core, fleet   | nothing; with fleet's own commands, the only place that parses argv                              |
+| `@loadsheet/fleet`                 | Node, and the dependencies it bundles | schema, kit, harnesses, core, `loadsheet`; the name it runs under, which `run(argv, name)` takes |
+| `fleetrc` (`packages/fleetrc`)     | `@loadsheet/fleet`                    | anything but `run`; it is the bin npm `fleetrc` users run, and must keep behaving as before      |
 
 `vp lint` fails when `packages/core/src` or `packages/schema/src` imports a Node builtin, kit, harnesses or `loadsheet`.
 
