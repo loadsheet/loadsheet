@@ -229,6 +229,16 @@ export const buildScan = (input: {
 };
 
 /**
+ * The millisecond of a timestamp the schema takes. Date.parse reads fewer spellings than the
+ * schema: not a space for the `T` or before the offset, nor an offset of hours alone, as in `+02`.
+ */
+const instantOf = (timestamp: string): number => {
+  const [, day, time, zone, minutes = "00"] =
+    /^(.{10})[T ](.{8}(?:\.\d{1,3})?)\d* ?(Z|[+-]\d\d)(?::?(\d\d))?$/u.exec(timestamp) ?? [];
+  return Date.parse(`${day}T${time}${zone === "Z" ? "Z" : `${zone}:${minutes}`}`);
+};
+
+/**
  * Merges Scans of the same machine: counters are summed, everything else is unioned. The Scans
  * must cover different sessions, or those are counted twice. Where two Scans describe the same
  * item or harness differently, the later scan wins. Throws on Scans of different machines.
@@ -243,11 +253,11 @@ export const mergeScans = (first: Scan, ...rest: Scan[]): Scan => {
   }
   // Oldest first, by instant rather than by spelling, so the later scan's description of an item
   // or harness is the one kept.
-  const instant = (scan: Scan) => Date.parse(scan.scannedAt);
+  const instant = (scan: Scan) => instantOf(scan.scannedAt);
   const ordered = [...scans].sort((a, b) => instant(a) - instant(b));
   const latest = ordered.at(-1)!;
   // An instant is a millisecond: two Scans within the last one cannot be put in order, and neither
-  // can a Scan whose timestamp the schema takes and Date.parse does not, such as an offset of `+02`.
+  // can one whose time does not read.
   const tied =
     ordered.length > 1 &&
     (scans.some((scan) => Number.isNaN(instant(scan))) ||

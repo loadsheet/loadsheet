@@ -19,8 +19,8 @@
 // - harnesses loadsheet has no adapter for;
 // - references by content: a hook, an MCP command or an import that points into the folder;
 // - other data in the folder, such as an unpushed `.git`;
-// - `.git` and `node_modules` folders inside a skill, which it skips; a link under either name is
-//   followed to where it leads, and the folder there is not walked;
+// - real `.git` and `node_modules` folders, which it skips; a link under either name is followed
+//   as any other link;
 // - homes shared or synced between machines;
 // - hard links;
 // - anything that changes between the scan and the fix;
@@ -184,8 +184,7 @@ const walkTree = (
     const path = childOf(dir, name);
     const found = disk.lstat(path);
     if (!found) continue;
-    const skipped = SKIPPED.has(name);
-    if (skipped && found.kind === "dir") continue;
+    if (found.kind === "dir" && SKIPPED.has(name)) continue;
     budget.left -= 1;
     if (budget.left < 0) throw new Unknown();
     needs.add(found.id);
@@ -193,7 +192,7 @@ const walkTree = (
       walkTree(disk, path, found, needs, walked, budget);
     } else if (found.kind === "link") {
       const { place } = follow(disk, dir, name, needs);
-      if (place?.entry.kind === "dir" && !skipped) {
+      if (place?.entry.kind === "dir") {
         walkTree(disk, place.path, place.entry, needs, walked, budget);
       }
     }

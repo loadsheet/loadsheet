@@ -497,6 +497,22 @@ describe("reaches, by hand", () => {
     ).toEqual({ "~/s/a": ["~/s/b", "~/s/c"], "~/s/b": [], "~/s/c": [] });
   });
 
+  it("a link named node_modules to a folder that links into a skill needs that skill", () => {
+    expect(
+      reachesIn(
+        "skipped-name-folder",
+        [
+          ...skill("real/s/p"),
+          ...skill("real/s/x"),
+          ...skill("real/s/shared"),
+          { link: "real/s/shared/data.md", to: "../p/SKILL.md" },
+          { link: "real/s/x/node_modules", to: "../shared" },
+        ],
+        ["~/s/p", "~/s/x", "~/s/shared"],
+      ),
+    ).toEqual({ "~/s/p": ["~/s/shared", "~/s/x"], "~/s/x": [], "~/s/shared": ["~/s/x"] });
+  });
+
   it("a name or a link target that is not UTF-8 is unknown and every other Item lists it", () => {
     const base = join(tmp, "not-utf8");
     build(base, [...skill("real/s/a"), ...skill("real/s/b"), ...skill("real/s/c")]);

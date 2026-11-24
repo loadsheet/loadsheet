@@ -243,17 +243,26 @@ describe("mergeScans", () => {
     }
   });
 
-  it("keeps no reach when a Scan's time is in a spelling Date.parse does not read", () => {
+  it.each([
+    "2026-11-24T15:02:00+02",
+    "2026-11-24 15:02:00.5 +0200",
+    "2026-11-24T15:02:00.123456789+02:00",
+  ])("orders a Scan stamped %s by its instant", (scannedAt) => {
     const [shared] = scanOf([{ harness: "h", facts }]).items;
-    const at = (scannedAt: string, items: Scan["items"]): Scan => ({
-      ...scanOf([{ harness: "h", facts: [] }]),
-      scannedAt,
-      items,
-    });
-    const older = parseScan(at("2026-11-24T15:00:00.000001+02", [{ ...shared!, reaches: [] }]));
-    const latest = at("2026-11-24T13:00:00.500Z", [shared!]);
-    for (const merged of [mergeScans(older, latest), mergeScans(latest, older)]) {
-      expect(merged.items).toEqual([shared]);
+    const at = (time: string, items: Scan["items"]): Scan =>
+      parseScan({ ...scanOf([{ harness: "h", facts: [] }]), scannedAt: time, items });
+    const first = at("2026-11-24T13:00:00Z", [shared!]);
+    const second = at("2026-11-24T13:01:00Z", [{ ...shared!, reaches: [] }]);
+    const latest = at(scannedAt, [shared!]);
+    const merged = [
+      mergeScans(latest, second),
+      mergeScans(second, latest),
+      // The order a cache of parts is folded in: the newest first, then an older one.
+      mergeScans(mergeScans(latest, first), second),
+    ];
+    for (const scan of merged) {
+      expect(scan.scannedAt).toBe(scannedAt);
+      expect(scan.items).toEqual([shared]);
     }
   });
 });
