@@ -264,10 +264,13 @@ const removeOne = (
     // A plugin's skills come and go with the plugin, and an update replaces its files.
     case "plugin":
       return undefined;
-    // `rm -r` would take whatever else it reaches too, so such a folder is hidden instead. The
+    // `rm -r` would take whatever else is at its path or the Scan says it reaches, so such a
+    // folder is hidden instead; a copy under its id elsewhere on the disk stays where it is. The
     // path goes without a trailing slash: with one, `rm -r` of a link empties the folder it leads to.
     case "hand":
-      return reach!.some((other) => other.id !== item.id || other.path !== item.path)
+      return reach!.some((other) =>
+        other.path === item.path ? other.id !== item.id : item.reaches!.includes(other.path),
+      )
         ? hide()
         : { ...remove, run: `rm -r ${shellPath(item.path.replace(/\/+$/u, ""))}` };
   }

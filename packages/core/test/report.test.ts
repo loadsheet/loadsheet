@@ -819,6 +819,18 @@ describe("duplicate", () => {
       "a command an installer manages, which removes by name",
       scan("laptop", { items: [skill("deploy"), { ...command, managedBy: "fleetrc" }] }),
     ],
+    [
+      "a command whose Scan does not say what removing it reaches",
+      scan("laptop", {
+        items: [skill("deploy"), skill("deploy", { ...command, reaches: undefined })],
+      }),
+    ],
+    [
+      "a command whose removal reaches the skill that is loaded",
+      scan("laptop", {
+        items: [skill("deploy"), { ...command, reaches: ["~/.claude/skills/deploy"] }],
+      }),
+    ],
   ])("gives no fix for %s", (_, built) => {
     const { findings } = findingsOf([built], "duplicate");
     expect(findings.map((f) => [f.id, f.fixes])).toEqual([["duplicate:skill:deploy", []]]);
@@ -1390,6 +1402,17 @@ describe("fixes", () => {
   it("writes `rm -r` without a trailing slash, which would empty a link's folder", () => {
     const [finding] = dead([skill("idle", { path: "~/.claude/skills/idle/" })]);
     expect(finding!.fixes.map((fix) => fix.run)).toEqual(["rm -r ~/.claude/skills/idle"]);
+  });
+
+  it("removes each copy of a dead skill made by hand, unless one reaches the other", () => {
+    const project = { scope: "project" as const, path: "~/work/app/.claude/skills/idle" };
+    const runs = (mine: Partial<Item>, other: Partial<Item>) =>
+      dead([skill("idle", mine), skill("idle", { ...project, ...other })])
+        .find((f) => f.id === "dead-skill:skill:idle")!
+        .fixes.map((fix) => fix.run);
+    expect(runs({}, {})).toEqual(["rm -r ~/.claude/skills/idle", `rm -r ${project.path}`]);
+    // The Scan says removing mine reaches the project's copy, and not the other way round.
+    expect(runs({ reaches: [project.path] }, {})).toEqual([undefined, `rm -r ${project.path}`]);
   });
 
   it("removes a dead skill whose content another, used skill at another place shares", () => {
