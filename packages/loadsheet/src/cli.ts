@@ -24,7 +24,7 @@ Options:
   --config <path>       Config file (default $XDG_CONFIG_HOME/loadsheet/config.json,
                         else ~/.config/loadsheet/config.json)
   --days <n>            Days of history to read (default 30)
-  --harness <id>        Read only this harness, repeatable (${ids}); a pack is weighed
+  --harness <id>        Report only this harness, repeatable (${ids}); a pack is weighed
                         for one (default ${claudeCode.id})
   --ignore <id>         Leave an item out of the findings, repeatable, as kind:name
   --via <name>          Read only sessions started from this entrypoint, repeatable

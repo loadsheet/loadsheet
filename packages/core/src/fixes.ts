@@ -175,12 +175,20 @@ const removeOne = (
   const table = HARNESSES[sheet.harness];
   const hide = () =>
     table ? withMachine(machine, table.hide(item) ?? table.off?.(item, sheet, machine)) : undefined;
-  const usedBy = unfiltered.usedBy(item.id);
+  // Two harnesses can read one folder's name differently and so give it two ids. A remove takes
+  // the folder, so use and loaders are those of every Item of this machine at this path.
+  const here = [
+    item,
+    ...unfiltered.items(machine).filter((o) => o.path === item.path && o.id !== item.id),
+  ];
+  const usedBy = [...new Set(here.flatMap((copy) => unfiltered.usedBy(copy.id)))];
   // This harness used it in sessions the filters left out, so nothing about it is dead there.
   if (usedBy.includes(sheet.harness)) return undefined;
   // Another harness that loads this path uses it, or cannot tell whether it does on this machine:
   // hide it from this one, or turn it off here.
-  const others = item.harnesses.filter((harness) => harness !== sheet.harness);
+  const others = here
+    .flatMap((copy) => copy.harnesses)
+    .filter((harness) => harness !== sheet.harness);
   if (others.some((other) => usedBy.includes(other) || !unfiltered.tellsUse(machine, other))) {
     return hide();
   }
@@ -201,21 +209,27 @@ const removeOne = (
     // unlinks it from every agent; other machines follow at their next sync, after a commit and
     // push when the manifest lives in a repository. So only a fleet Report that read every machine
     // and found no use of the skill anywhere, where every harness that loads a copy of it can tell
-    // use, gives it; otherwise it is hidden or turned off here. It takes a name that matches a
-    // source id as that whole source, so a skill named like a source any machine links from gets
-    // no command.
+    // use, gives it; otherwise it is hidden or turned off here. A copy is an Item with this id, or
+    // a folder of this name that fleetrc links, since a machine or a harness can read the folder's
+    // name differently. The command takes a name that matches a source id as that whole source, so
+    // a skill named like a source any machine links from gets no command.
     case "fleetrc": {
-      const blind = unfiltered.machines.some((other) =>
+      const key = fleetrcKey(baseName(item.path));
+      const kept = unfiltered.machines.some((other) =>
         unfiltered
           .items(other)
+          .filter(
+            (copy) =>
+              copy.id === item.id ||
+              (copy.managedBy === "fleetrc" && fleetrcKey(baseName(copy.path)) === key),
+          )
           .some(
             (copy) =>
-              copy.id === item.id &&
+              unfiltered.usedBy(copy.id).length > 0 ||
               copy.harnesses.some((harness) => !unfiltered.tellsUse(other, harness)),
           ),
       );
-      if (!unfiltered.wholeFleet || usedBy.length || blind) return hide();
-      const key = fleetrcKey(baseName(item.path));
+      if (!unfiltered.wholeFleet || usedBy.length || kept) return hide();
       const source = unfiltered
         .items()
         .some((other) => other.managedBy === "fleetrc" && fleetrcKey(other.pack ?? "") === key);

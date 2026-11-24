@@ -623,6 +623,35 @@ describe("fixes", () => {
     ]);
   });
 
+  it("keeps a folder another harness uses under an id of its own", () => {
+    // `name: weekly  report` is `weekly` to Claude Code and `weekly report` to Codex.
+    const path = "~/.agents/skills/weekly";
+    const findings = report([
+      scan("laptop", {
+        coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
+        items: [skill("weekly", { path }), skill("weekly report", { harnesses: ["codex"], path })],
+        sessions: [...sessions(30), ...sessions(30, {}, "codex")],
+        cells: [
+          cell("weekly", 25),
+          cell("weekly report", 25, { harness: "codex", byUser: 2, byModel: 2 }),
+        ],
+      }),
+    ]).findings;
+    expect(findings.map((f) => [f.id, f.fixes])).toEqual([
+      [
+        "dead-skill:skill:weekly",
+        [
+          {
+            machine: "laptop",
+            action: "hide-from-model",
+            path: "~/.agents/skills/weekly/SKILL.md",
+            set: { key: "disable-model-invocation", value: true },
+          },
+        ],
+      ],
+    ]);
+  });
+
   it("reads another harness's use before any filter, and keeps a path whose other harness cannot tell use", () => {
     const shared = skill("idle", {
       harnesses: ["claude-code", "codex"],
@@ -939,6 +968,12 @@ describe("fixes", () => {
       items: [{ ...linked, harnesses: ["claude-code", "codex"] }],
     });
     expect(fixesOf([laptop, blind])).toEqual([...hidden, { ...hidden[0]!, machine: "server" }]);
+    // The server reads the same linked folder under another name, and uses it.
+    const renamed = scan("server", {
+      items: [{ ...linked, id: "skill:idle-report", ref: { kind: "skill", name: "idle-report" } }],
+      cells: [cell("idle-report", 25, { byModel: 3 })],
+    });
+    expect(fixesOf([laptop, renamed])).toEqual(hidden);
     // Codex on the server used it, which the sheet of the harnesses read does not show.
     const server = scan("server", {
       coverage: [coverage("server", "codex")],
