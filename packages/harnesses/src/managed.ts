@@ -36,11 +36,10 @@ const readJson = async (files: Files, path: string): Promise<unknown> => {
   }
 };
 
-/**
- * A source that is a plain identifier such as `owner/repo`: not a local path on any system, which
- * may name the home directory, and not a URL, which may carry credentials.
- */
-const plainSource = (source: string) => /^(?=.{1,128}$)[\w-][\w.-]*(?:\/[\w.-]+)*$/u.test(source);
+/** A fleetrc source id, as fleetrc's manifest allows it: one word, never a path. */
+const FLEETRC_SOURCE = /^(?=.{1,128}$)[a-z\d][a-z\d._-]*$/iu;
+/** A source the skills CLI fetched, such as `owner/repo`: one or two words, none of them `..`. */
+const SKILLS_SOURCE = /^(?=.{1,128}$)[\w-][\w.-]*(?:\/[\w-][\w.-]*)?$/u;
 
 /** Name to source, for the links fleetrc's manifest says it made in `dir`. */
 const fleetrcLinks = async (files: Files, dir: string) => {
@@ -53,7 +52,7 @@ const fleetrcLinks = async (files: Files, dir: string) => {
   return links;
 };
 
-/** Name to source, for the skills the skills CLI's lock (version 3 or later) records. */
+/** Name to source, for the skills the skills CLI's lock (version 3 or later) records; a source that is not an identifier is left out. */
 const lockedSkills = async (files: Files) => {
   const skills = new Map<string, string | undefined>();
   // The XDG lock wins, the way the CLI reads it when XDG_STATE_HOME is set.
@@ -67,8 +66,11 @@ const lockedSkills = async (files: Files) => {
   if (!isRecord(lock) || typeof lock.version !== "number" || lock.version < 3) return skills;
   if (!isRecord(lock.skills)) return skills;
   for (const [name, entry] of Object.entries(lock.skills)) {
-    const source = isRecord(entry) && typeof entry.source === "string" ? entry.source : undefined;
-    skills.set(name, source || undefined);
+    // A local source is a path on this machine, whatever it looks like; a URL may carry credentials.
+    const fetched =
+      isRecord(entry) && typeof entry.sourceType === "string" && entry.sourceType !== "local";
+    const source = fetched && typeof entry.source === "string" ? entry.source : "";
+    skills.set(name, SKILLS_SOURCE.test(source) ? source : undefined);
   }
   return skills;
 };
@@ -90,9 +92,8 @@ export const readManagers = async (
   return (name) => {
     const fleetrc = links.get(name);
     const managedBy = fleetrc !== undefined ? "fleetrc" : locked.has(name) ? "skills" : "hand";
-    const source = fleetrc ?? locked.get(name);
-    return source !== undefined && plainSource(source)
-      ? { managedBy, pack: source }
-      : { managedBy };
+    const pack =
+      fleetrc === undefined ? locked.get(name) : FLEETRC_SOURCE.test(fleetrc) ? fleetrc : undefined;
+    return pack === undefined ? { managedBy } : { managedBy, pack };
   };
 };

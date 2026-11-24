@@ -286,8 +286,8 @@ describe("claudeTranscripts", () => {
       line({ type: "user", entrypoint: "/home/jo/bin", message: { content: "hi" } }),
       attachment({
         type: "skill_listing",
-        names: ["two  spaces", " edge", "<x>"],
-        content: "- two  spaces: A\n-  edge: B\n- <x>: C",
+        names: ["two  spaces", " edge", "<x>", "zero\u200bwidth"],
+        content: "- two  spaces: A\n-  edge: B\n- <x>: C\n- zero\u200bwidth: D",
       }),
       attachment({
         type: "instructions",
@@ -412,21 +412,48 @@ describe("claudeTranscripts", () => {
     ]);
   });
 
+  it("counts a typed command whose name has a space only when the session listed that skill", () => {
+    const typed = (name: string) => [
+      line({
+        type: "user",
+        message: {
+          content: `<command-message>${name}</command-message>\n<command-name>/${name}</command-name>`,
+        },
+      }),
+      line({ type: "user", isMeta: true, message: { content: [{ type: "text", text: "body" }] } }),
+    ];
+    const { facts } = parseAll([
+      line({ type: "user", message: { content: "hi" } }),
+      attachment({ type: "skill_listing", names: ["code review"], content: "- code review: R" }),
+      ...typed("private client notes"),
+      ...typed("code review"),
+    ]);
+    expect(facts.filter((fact) => fact.type === "used")).toEqual([
+      { type: "used", day: "2026-03-02", via: "cli", item: "skill:code review", by: "user" },
+    ]);
+  });
+
   it("keeps a malformed MCP server name out of State", () => {
-    const { state } = parseAll([
+    const { facts, state } = parseAll([
       line({ type: "user", message: { content: "hi" } }),
       attachment({
         type: "deferred_tools_delta",
-        addedNames: ["mcp__home/jo/srv__tool", "mcp__ok__tool"],
-        addedLines: ["a", "b"],
+        addedNames: ["mcp__home/jo/srv__tool", "mcp__nul\u0000l__tool", "mcp__ok__tool"],
+        addedLines: ["a", "b", "c"],
       }),
       attachment({
         type: "mcp_instructions_delta",
-        addedNames: ["x".repeat(129)],
-        addedBlocks: ["c"],
+        addedNames: ["x".repeat(129), "/home/jo/PRIVATE/server", "C:\\jo\\server", "my.server"],
+        addedBlocks: ["c", "d", "e", "fg"],
       }),
     ]);
-    expect(state.mcp).toEqual({ ok: 2 });
+    expect(state.mcp).toEqual({ ok: 2, my_server: 2 });
+    const turn = parseAll(
+      [assistant([{ type: "tool_use", name: "mcp__nul\u0000l__tool", input: {} }])],
+      state,
+    );
+    expect(turn.facts.filter((fact) => fact.type === "used")).toEqual([]);
+    expect(facts).toHaveLength(1);
   });
 
   describe("a project's instruction files", () => {

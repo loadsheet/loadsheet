@@ -84,8 +84,15 @@ const readJson = async (files: Files, path: string): Promise<Record<string, unkn
   }
 };
 
+/** A name loadsheet will put in an id: no spaces, markup, quotes, path separators or invisible characters. */
+export const NAME = /^[^\s<>"'`/\\\p{C}]{1,128}$/u;
+/** A skill's name may also hold one plain space between words, as Claude Code allows. */
+export const SKILL_NAME = /^(?=.{1,128}$)[^\s<>"'`/\\\p{C}]+(?: [^\s<>"'`/\\\p{C}]+)*$/u;
+
 /** The name Claude Code gives an MCP server in its tool names: anything but `[A-Za-z0-9_-]` becomes `_`. */
 export const mcpToolName = (name: string) => name.replace(/[^A-Za-z0-9_-]/gu, "_");
+/** A server's name as a tool name carries it. */
+export const MCP_NAME = /^[A-Za-z0-9_-]{1,128}$/u;
 
 /** A server's config without the values that carry secrets, so its digest says when it changed. */
 const mcpDigest = (server: unknown) => {
@@ -293,10 +300,10 @@ export const claudeInventory = async (files: Files): Promise<Item[]> => {
           name = relative.replaceAll("/", ":");
           path = file;
         } else {
-          // A skill and a subagent go by their frontmatter name, a skill by its folder without one.
+          // A skill and a subagent go by their frontmatter name. Claude Code refuses one it cannot
+          // show, such as a name with two spaces in a row, and goes by the folder or file instead.
           const declared = readSkillMd((await files.text(file)) ?? "").name;
-          name =
-            declared && !/[\\/<>\p{Cc}]/u.test(declared) ? declared : relative.split("/").pop()!;
+          name = declared && SKILL_NAME.test(declared) ? declared : relative.split("/").pop()!;
           path = kind === "skill" ? `${dir}/${relative}` : file;
         }
         const item = await fileItem(files, file, {

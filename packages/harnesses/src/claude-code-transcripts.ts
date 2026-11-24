@@ -3,7 +3,7 @@
 // tool calls and usage, `user` lines slash commands.
 import type { Fact, TranscriptFormat } from "@loadsheet/kit";
 import type { Day, Id } from "@loadsheet/schema";
-import { mcpToolName } from "./claude-code-machine.ts";
+import { MCP_NAME, mcpToolName, NAME, SKILL_NAME } from "./claude-code-machine.ts";
 
 /**
  * What one transcript remembers between lines: the session's day, entrypoint and version, which
@@ -44,10 +44,6 @@ const BUILT_IN_AGENTS = [
 ];
 /** Claude Code's placeholder model for messages that never reached the API. */
 const SYNTHETIC_MODEL = "<synthetic>";
-/** A name loadsheet will put in an id: no spaces, markup, quotes or path separators. */
-const NAME = /^[^\s<>"'`/\\]{1,128}$/u;
-/** A skill's name may also hold one plain space between words, as Claude Code allows. */
-const SKILL_NAME = /^(?=.{1,128}$)[^\s<>"'`/\\]+(?: [^\s<>"'`/\\]+)*$/u;
 const COMMAND =
   /^\s*<command-message>[^<]*<\/command-message>\s*<command-name>\/?([^<]+)<\/command-name>/u;
 
@@ -60,7 +56,7 @@ const count = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 
 /** The server in a tool name `mcp__<server>__<tool>`. */
-const mcpServer = (tool: string) => /^mcp__(.+?)__./u.exec(tool)?.[1];
+const mcpServer = (tool: string) => /^mcp__([A-Za-z0-9_-]{1,128}?)__./u.exec(tool)?.[1];
 
 /** Where an instruction id names a project's file. */
 const PROJECT = "project/";
@@ -175,6 +171,10 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
     };
     const used = (item: Id, by: "model" | "user") =>
       facts.push({ type: "used", day, via, item, by });
+    // The model or the user wrote this name, so one with a space counts only when the session
+    // listed that skill.
+    const skillNamed = (name: string) =>
+      NAME.test(name) || (SKILL_NAME.test(name) && state.listed[`skill:${name}`] === true);
 
     if (type === "attachment") {
       // A subagent's listing is its parent's to count, and the parent counts it.
@@ -211,8 +211,9 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
         case "mcp_instructions_delta": {
           const blocks = Array.isArray(attachment.addedBlocks) ? attachment.addedBlocks : [];
           strings(attachment.addedNames).forEach((name, index) => {
-            const server = mcpToolName(name);
-            if (!NAME.test(server)) return;
+            // A server is named in a config file, so a name with a path in it is not one.
+            const server = /[/\\]/u.test(name) ? "" : mcpToolName(name);
+            if (!MCP_NAME.test(server)) return;
             const block = blocks[index];
             state.mcp[server] =
               (state.mcp[server] ?? 0) + (typeof block === "string" ? block.length : 0);
@@ -223,7 +224,7 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
           const lines = Array.isArray(attachment.addedLines) ? attachment.addedLines : [];
           strings(attachment.addedNames).forEach((tool, index) => {
             const server = mcpServer(tool);
-            if (server === undefined || !NAME.test(server)) return;
+            if (server === undefined) return;
             const text = lines[index];
             state.mcp[server] =
               (state.mcp[server] ?? 0) + (typeof text === "string" ? text.length + 1 : 0);
@@ -264,7 +265,7 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
       if (command !== undefined && record.isMeta === true) used(`skill:${command}`, "user");
       const match = COMMAND.exec(userText(record.message) ?? "");
       const name = match?.[1]?.trim();
-      if (name !== undefined && SKILL_NAME.test(name)) state.command = name;
+      if (name !== undefined && skillNamed(name)) state.command = name;
       return facts;
     }
     delete state.command;
@@ -287,9 +288,7 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
         if (block.name === "Skill") {
           const name =
             typeof input.skill === "string" ? input.skill.trim().replace(/^\//u, "") : "";
-          // The model writes this name, so one with a space counts only when the session listed it.
-          if (NAME.test(name) || (SKILL_NAME.test(name) && state.listed[`skill:${name}`]))
-            used(`skill:${name}`, "model");
+          if (skillNamed(name)) used(`skill:${name}`, "model");
         } else if (block.name === "Agent" || block.name === "Task") {
           const name =
             typeof input.subagent_type === "string"
@@ -300,7 +299,7 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
           }
         } else {
           const server = mcpServer(block.name);
-          if (server !== undefined && NAME.test(server)) used(`mcp:${server}`, "model");
+          if (server !== undefined) used(`mcp:${server}`, "model");
         }
       }
     }

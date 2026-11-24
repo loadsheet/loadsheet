@@ -37,7 +37,7 @@ const home = {
   "~/.claude/skills/.fleetrc-manifest.json": JSON.stringify({
     version: 1,
     links: {
-      alpha: { target: "/home/jo/.claude/skills/alpha", kind: "skill", source: "onmax/skills" },
+      alpha: { target: "/home/jo/.claude/skills/alpha", kind: "skill", source: "onmax-skills" },
     },
   }),
   "~/.claude/skills/alpha/SKILL.md": skill("alpha", "Does alpha."),
@@ -105,7 +105,7 @@ describe("Claude Code machine inventory", () => {
         id: "skill:alpha",
         scope: "user",
         managedBy: "fleetrc",
-        pack: "onmax/skills",
+        pack: "onmax-skills",
         path: "~/.claude/skills/alpha",
         listed: "- alpha: Does alpha.\n".length,
         modelInvocable: true,
@@ -238,36 +238,50 @@ describe("Claude Code machine inventory", () => {
     expect(items.some((item) => item.scope === "plugin")).toBe(false);
   });
 
-  it("keeps an installer's source out of pack unless it is a plain identifier", async () => {
-    const items = await summary({
-      ...home,
-      "~/.claude/skills/.fleetrc-manifest.json": JSON.stringify({
-        version: 1,
-        links: { alpha: { source: "~/src/skills" } },
-      }),
-      "~/.agents/.skill-lock.json": JSON.stringify({
-        version: 3,
-        skills: {
-          beta: { source: "/home/jo/src/beta" },
-          gone: { source: "https://jo:sekrit@git.example.com/x.git" },
-          windows: { source: "C:\\Users\\jo\\skills" },
-          quiet: { source: "mine" },
-          repo: { source: "jo/agent-skills.v2" },
-        },
-      }),
-      "~/.claude/skills/windows/SKILL.md": skill("windows", "Does."),
-      "~/.claude/skills/repo/SKILL.md": skill("repo", "Does."),
-    });
-    const managed = (id: string) => {
+  it("keeps an installer's source out of pack unless it is an identifier", async () => {
+    const lock = (skills: Record<string, object>) =>
+      summary({
+        ...home,
+        "~/.claude/skills/.fleetrc-manifest.json": JSON.stringify({ version: 1, links: {} }),
+        "~/.agents/.skill-lock.json": JSON.stringify({ version: 3, skills }),
+      });
+    const pack = (items: Awaited<ReturnType<typeof summary>>, id: string) => {
       const { managedBy, pack } = items.find((item) => item.id === id)!;
       return { managedBy, pack };
     };
-    expect(managed("skill:alpha")).toEqual({ managedBy: "fleetrc", pack: undefined });
-    expect(managed("skill:beta")).toEqual({ managedBy: "skills", pack: undefined });
-    expect(managed("skill:gone")).toEqual({ managedBy: "skills", pack: undefined });
-    expect(managed("skill:windows")).toEqual({ managedBy: "skills", pack: undefined });
-    expect(managed("skill:quiet")).toEqual({ managedBy: "skills", pack: "mine" });
-    expect(managed("skill:repo")).toEqual({ managedBy: "skills", pack: "jo/agent-skills.v2" });
+    const skills = await lock({
+      alpha: { source: "/home/jo/src/alpha", sourceType: "local" },
+      // A local folder can look like owner/repo; only its type tells.
+      beta: { source: "client/private-skills", sourceType: "local" },
+      gone: { source: "https://jo:sekrit@git.example.com/x.git", sourceType: "git" },
+      quiet: { source: "work/../private", sourceType: "github" },
+    });
+    for (const id of ["skill:alpha", "skill:beta", "skill:gone", "skill:quiet"]) {
+      expect(pack(skills, id)).toEqual({ managedBy: "skills", pack: undefined });
+    }
+    const untyped = await lock({ alpha: { source: "jo/agent-skills" } });
+    expect(pack(untyped, "skill:alpha")).toEqual({ managedBy: "skills", pack: undefined });
+    const fetched = await lock({ alpha: { source: "jo/agent-skills.v2", sourceType: "github" } });
+    expect(pack(fetched, "skill:alpha")).toEqual({
+      managedBy: "skills",
+      pack: "jo/agent-skills.v2",
+    });
+
+    const fleetrc = async (source: string) =>
+      pack(
+        await summary({
+          ...home,
+          "~/.claude/skills/.fleetrc-manifest.json": JSON.stringify({
+            version: 1,
+            links: { alpha: { source } },
+          }),
+        }),
+        "skill:alpha",
+      );
+    for (const source of ["~/src/skills", "client/private-skills", "C:\\Users\\jo\\skills", ".."]) {
+      expect(await fleetrc(source)).toEqual({ managedBy: "fleetrc", pack: undefined });
+    }
+    expect(await fleetrc("mine")).toEqual({ managedBy: "fleetrc", pack: "mine" });
   });
 
   it("names a skill by its frontmatter name, and finds its installer by its folder", async () => {
@@ -285,6 +299,20 @@ describe("Claude Code machine inventory", () => {
       pack: "mine",
       listed: "- deploy: Deploys.\n".length,
     });
+  });
+
+  it("names a skill by its folder when Claude Code refuses its frontmatter name", async () => {
+    const items = await summary({
+      ...home,
+      "~/.claude/skills/deploy/SKILL.md": skill('"deploy  staging"', "Deploys."),
+      "~/.claude/skills/ship/SKILL.md": skill("ship\u200bit", "Ships."),
+      "~/.claude/skills/review/SKILL.md": skill("code review", "Reviews."),
+    });
+    const ids = (folder: string) =>
+      items.filter((item) => item.path === `~/.claude/skills/${folder}`).map((item) => item.id);
+    expect(ids("deploy")).toEqual(["skill:deploy"]);
+    expect(ids("ship")).toEqual(["skill:ship"]);
+    expect(ids("review")).toEqual(["skill:code review"]);
   });
 
   it("namespaces an installed plugin without a manifest by its installed name", async () => {
@@ -334,7 +362,7 @@ describe("Claude Code machine inventory", () => {
       ...home,
       "~/.local/state/skills/.skill-lock.json": JSON.stringify({
         version: 3,
-        skills: { beta: { source: "other/repo" } },
+        skills: { beta: { source: "other/repo", sourceType: "github" } },
       }),
     });
     expect(items.find((item) => item.id === "skill:beta")?.pack).toBe("other/repo");
