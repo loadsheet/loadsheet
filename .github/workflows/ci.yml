@@ -73,7 +73,7 @@ jobs:
       - name: Install fish and zsh
         run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends fish zsh
       - name: Test
-        run: pnpm test
+        run: pnpm test --project packages
       # Keep the full suite on the oldest Vite+ runtime as well as the current Node.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
