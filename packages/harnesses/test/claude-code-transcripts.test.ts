@@ -71,8 +71,9 @@ describe("a sanitized Claude Code session", () => {
       { type: "listed", ...at, item: "instructions:CLAUDE.md", chars: 6586, bare: false },
       { type: "listed", ...at, item: "instructions:file-1.md", chars: 1167, bare: false },
       { type: "listed", ...at, item: "instructions:file-2.md", chars: 2782, bare: false },
-      { type: "listed", ...at, item: "instructions:dir-5/AGENTS.md", chars: 20155, bare: false },
       { type: "listed", ...at, item: "instructions:memory/MEMORY.md", chars: 703, bare: false },
+      // A project's file is counted when the turn starts, under one id for every project.
+      { type: "listed", ...at, item: "instructions:project/AGENTS.md", chars: 20155, bare: false },
     ]);
 
     // Two Skill calls, two slash commands, one general-purpose Agent (built in, so not counted)
@@ -231,6 +232,7 @@ describe("claudeTranscripts", () => {
       }),
       assistant([], { message: { model: "<synthetic>", content: [], usage: { input_tokens: 9 } } }),
       assistant([{ type: "tool_use", name: "Agent", input: { subagent_type: "Explore" } }]),
+      assistant([{ type: "tool_use", name: "Agent", input: { subagent_type: "fork" } }]),
       assistant([
         { type: "tool_use", name: "Task", input: { subagent_type: "rev" } },
         skillCall("/p:s"),
@@ -295,6 +297,7 @@ describe("claudeTranscripts", () => {
           { path: "/home/jo/.claude/rules/team/b.md", type: "User", content: "xyz" },
         ],
       }),
+      line({ type: "user", message: { content: "next" } }),
     ]);
     expect(facts).toEqual([
       { type: "session", day: "2026-03-02", via: "unknown", version: "2.1.0" },
@@ -302,7 +305,15 @@ describe("claudeTranscripts", () => {
         type: "listed",
         day: "2026-03-02",
         via: "unknown",
-        item: "instructions:~/CLAUDE.md",
+        item: "instructions:rules/team/b.md",
+        chars: 3,
+        bare: false,
+      },
+      {
+        type: "listed",
+        day: "2026-03-02",
+        via: "unknown",
+        item: "instructions:project/CLAUDE.md",
         chars: 1,
         bare: false,
       },
@@ -310,16 +321,8 @@ describe("claudeTranscripts", () => {
         type: "listed",
         day: "2026-03-02",
         via: "unknown",
-        item: "instructions:app/.claude/rules/a.md",
+        item: "instructions:project/rules/a.md",
         chars: 2,
-        bare: false,
-      },
-      {
-        type: "listed",
-        day: "2026-03-02",
-        via: "unknown",
-        item: "instructions:rules/team/b.md",
-        chars: 3,
         bare: false,
       },
     ]);
@@ -330,5 +333,148 @@ describe("claudeTranscripts", () => {
     expect(
       instructionName("/home/jo/.claude/projects/-home-jo-app/memory/MEMORY.md", "AutoMem"),
     ).toBe("memory/MEMORY.md");
+  });
+
+  it("names a user's and a managed file as the machine inventory does", () => {
+    expect(instructionName("/home/jo/.claude/CLAUDE.md", "User")).toBe("CLAUDE.md");
+    expect(instructionName("/home/jo/.claude/rules/team/b.md", "User")).toBe("rules/team/b.md");
+    expect(instructionName("/etc/claude-code/CLAUDE.md", "Managed")).toBe("CLAUDE.md");
+    expect(instructionName("C:\\ProgramData\\ClaudeCode\\rules\\x.md", "Managed")).toBe(
+      "rules/x.md",
+    );
+  });
+
+  it("names every project's file without its folder", () => {
+    expect(instructionName("/home/jo/work/app/CLAUDE.md", "Project")).toBe("project/CLAUDE.md");
+    expect(instructionName("/home/jo/work/app/AGENTS.md", "Project")).toBe("project/AGENTS.md");
+    expect(instructionName("/home/jo/work/app/.claude/CLAUDE.md", "Project")).toBe(
+      "project/CLAUDE.md",
+    );
+    expect(instructionName("/home/jo/work/app/CLAUDE.local.md", "Local")).toBe(
+      "project/CLAUDE.local.md",
+    );
+    expect(instructionName("/home/jo/work/app/pkg/CLAUDE.md", "Project")).toBe("project/CLAUDE.md");
+    expect(instructionName("/home/jo/work/app/.claude/rules/team/a.md", "Project")).toBe(
+      "project/rules/team/a.md",
+    );
+    expect(instructionName("/home/jo/CLAUDE.md", "Project")).toBe("project/CLAUDE.md");
+    expect(instructionName("C:\\Users\\jo\\app\\CLAUDE.md", "Project")).toBe("project/CLAUDE.md");
+    expect(instructionName("CLAUDE.md", "Project")).toBe("project/CLAUDE.md");
+    expect(instructionName("", "Project")).toBeUndefined();
+  });
+
+  it("puts no project or worktree folder in an id", () => {
+    const folder = "zz-secret-worktree-7f3a";
+    const { facts, state } = parseAll([
+      line({ type: "user", message: { content: "hi" } }),
+      attachment({
+        type: "instructions",
+        files: [
+          { path: `/home/jo/.t3/worktrees/${folder}/CLAUDE.md`, type: "Project", content: "a" },
+          { path: `/srv/${folder}/.claude/rules/style.md`, type: "Project", content: "b" },
+          { path: `/srv/${folder}/sub/AGENTS.md`, type: "Project", content: "c" },
+          { path: `/srv/${folder}/CLAUDE.local.md`, type: "Local", content: "d" },
+          { path: `/home/jo/.claude/projects/${folder}/memory/MEMORY.md`, type: "AutoMem" },
+        ],
+      }),
+      line({ type: "user", message: { content: "next" } }),
+    ]);
+    const items = listedOf(facts, "instructions:").map((fact) => fact.item);
+    expect(items).toEqual([
+      "instructions:memory/MEMORY.md",
+      "instructions:project/CLAUDE.md",
+      "instructions:project/rules/style.md",
+      "instructions:project/AGENTS.md",
+      "instructions:project/CLAUDE.local.md",
+    ]);
+    expect(items.filter((item) => item.includes(folder))).toEqual([]);
+    expect(JSON.stringify(state)).not.toContain(folder);
+  });
+
+  describe("a project's instruction files", () => {
+    const files = (...list: [string, string, string?][]) =>
+      attachment({
+        type: "instructions",
+        files: list.map(([path, content, type = "Project"]) => ({ path, type, content })),
+      });
+    const prompt = line({ type: "user", message: { content: "go" } });
+    const project = (facts: readonly Fact[]) => listedOf(facts, "instructions:project/");
+
+    it("counts one Fact per id, with the characters of every file behind it, from one line", () => {
+      const { facts } = parseAll([
+        prompt,
+        files(["/a/app/CLAUDE.md", "12345"], ["/a/app/pkg/CLAUDE.md", "123"]),
+        assistant([]),
+      ]);
+      expect(project(facts)).toEqual([
+        {
+          type: "listed",
+          day: "2026-03-02",
+          via: "cli",
+          item: "instructions:project/CLAUDE.md",
+          chars: 8,
+          bare: false,
+        },
+      ]);
+    });
+
+    it("adds up one id's files across consecutive attachment lines", () => {
+      const { facts } = parseAll([
+        prompt,
+        files(["/a/app/CLAUDE.md", "12345"], ["/a/app/AGENTS.md", "1"]),
+        attachment({ type: "skill_listing", names: [], content: "" }),
+        files(["/a/app/.claude/CLAUDE.md", "1234"]),
+        assistant([]),
+      ]);
+      expect(project(facts).map(({ item, chars }) => [item, chars])).toEqual([
+        ["instructions:project/CLAUDE.md", 9],
+        ["instructions:project/AGENTS.md", 1],
+      ]);
+    });
+
+    it("holds them in State, as plain JSON, until the turn starts", () => {
+      const first = parseAll([prompt, files(["/a/app/CLAUDE.md", "12"])]);
+      expect(project(first.facts)).toEqual([]);
+      const saved = JSON.parse(JSON.stringify(first.state)) as ClaudeState;
+      expect(project(parseAll([assistant([])], saved).facts).map(({ chars }) => chars)).toEqual([
+        2,
+      ]);
+    });
+
+    it("does not count a file that loads later for an id the session listed", () => {
+      const { facts } = parseAll([
+        prompt,
+        files(["/a/app/CLAUDE.md", "12345"]),
+        assistant([]),
+        line({ type: "system", subtype: "compact_boundary" }),
+        files(
+          ["/a/app/CLAUDE.md", "12345"],
+          ["/a/app/pkg/CLAUDE.md", "123"],
+          ["/a/app/AGENTS.md", "1"],
+        ),
+        prompt,
+      ]);
+      expect(project(facts).map(({ item, chars }) => [item, chars])).toEqual([
+        ["instructions:project/CLAUDE.md", 5],
+        ["instructions:project/AGENTS.md", 1],
+      ]);
+    });
+
+    it("lists user rules and memory at once, each under its own name", () => {
+      const { facts } = parseAll([
+        prompt,
+        files(
+          ["/home/jo/.claude/rules/a.md", "12", "User"],
+          ["/home/jo/.claude/rules/b.md", "123", "User"],
+          ["/home/jo/.claude/projects/-x/memory/MEMORY.md", "1", "AutoMem"],
+          ["/home/jo/.claude/projects/-y/memory/MEMORY.md", "1234", "AutoMem"],
+        ),
+      ]);
+      expect(listedOf(facts, "instructions:").map(({ item, chars }) => [item, chars])).toEqual([
+        ["instructions:rules/a.md", 2],
+        ["instructions:rules/b.md", 3],
+        ["instructions:memory/MEMORY.md", 1],
+      ]);
+    });
   });
 });

@@ -23,13 +23,19 @@ export interface ClaudeState {
   builtIn: Record<string, true>;
   /** MCP servers seen in this turn's attachments, and their characters, until the turn starts. */
   mcp: Record<string, number>;
+  /** Project instruction ids seen in this turn's attachments, and their characters, likewise. */
+  project: Record<Id, number>;
   /** A slash command whose expansion the next line should carry. */
   command?: string;
 }
 
-/** Subagents every Claude Code ships; a subagent's own transcript has no listing to say so. */
+/**
+ * Subagents every Claude Code ships; a subagent's own transcript has no listing to say so. `fork`
+ * is the session forking itself, which no listing names.
+ */
 const BUILT_IN_AGENTS = [
   "general-purpose",
+  "fork",
   "Explore",
   "Plan",
   "statusline-setup",
@@ -54,17 +60,18 @@ const count = (value: unknown) =>
 /** The server in a tool name `mcp__<server>__<tool>`. */
 const mcpServer = (tool: string) => /^mcp__(.+?)__./u.exec(tool)?.[1];
 
-const HOME = /^(?:(?:var\/)?home\/[^/]+|Users\/[^/]+|root|[A-Za-z]:\/Users\/[^/]+)$/u;
+/** Where an instruction id names a project's file. */
+const PROJECT = "project/";
 
 /**
  * An instruction file's name: `CLAUDE.md` and `rules/...` for the user's own, as the machine
- * inventory names them; `project/CLAUDE.md` for a project's, its folder and file name only;
- * `memory/MEMORY.md` for every project's auto memory. A home directory reads as `~`, so no user
- * name gets in.
+ * inventory names them; `memory/MEMORY.md` for every project's auto memory; and for any project's
+ * file, the home directory's included, `project/` and its file name, or `project/rules/...` for a
+ * rule under `.claude/rules`. No folder gets in: every worktree would be an id of its own, and its
+ * name is the user's.
  */
 export const instructionName = (path: string, type: string): string | undefined => {
-  const normalized = path.replaceAll("\\", "/");
-  const parts = normalized.split("/").filter(Boolean);
+  const parts = path.replaceAll("\\", "/").split("/").filter(Boolean);
   const file = parts.at(-1);
   if (!file) return undefined;
   if (type === "AutoMem") return `memory/${file}`;
@@ -73,10 +80,10 @@ export const instructionName = (path: string, type: string): string | undefined 
     return rules !== -1 && rules < parts.length - 1 ? parts.slice(rules).join("/") : file;
   }
   const dot = parts.lastIndexOf(".claude");
-  const folderAt = dot > 0 && dot < parts.length - 1 ? dot - 1 : parts.length - 2;
-  if (folderAt < 0) return file;
-  const folder = HOME.test(parts.slice(0, folderAt + 1).join("/")) ? "~" : parts[folderAt]!;
-  return [folder, ...parts.slice(folderAt + 1)].join("/");
+  if (dot !== -1 && parts[dot + 1] === "rules" && dot + 2 < parts.length) {
+    return PROJECT + parts.slice(dot + 1).join("/");
+  }
+  return PROJECT + file;
 };
 
 /**
@@ -118,7 +125,7 @@ const userText = (message: unknown) => {
 export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
   // Every line loadsheet reads carries its entrypoint; request logs and titles do not.
   markers: ['"entrypoint"'],
-  initial: () => ({ started: false, tokens: false, listed: {}, builtIn: {}, mcp: {} }),
+  initial: () => ({ started: false, tokens: false, listed: {}, builtIn: {}, mcp: {}, project: {} }),
   parse(line, state) {
     let record: unknown;
     try {
@@ -220,11 +227,17 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
           break;
         }
         case "instructions": {
+          // Project files share ids, so one id's files add up until the turn starts, as MCP
+          // servers do. A file that loads later for an id the session listed, such as one
+          // reloaded after /compact, is not counted again.
           for (const file of Array.isArray(attachment.files) ? attachment.files : []) {
             if (!isRecord(file) || typeof file.path !== "string") continue;
             const name = instructionName(file.path, typeof file.type === "string" ? file.type : "");
+            if (name === undefined) continue;
+            const item = `instructions:${name}`;
             const chars = typeof file.content === "string" ? file.content.length : 0;
-            if (name !== undefined) listed(`instructions:${name}`, chars, false);
+            if (!name.startsWith(PROJECT)) listed(item, chars, false);
+            else if (!state.listed[item]) state.project[item] = (state.project[item] ?? 0) + chars;
           }
           break;
         }
@@ -232,11 +245,14 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
       return facts;
     }
 
-    // A turn's attachments arrive one line each; its MCP servers are counted once they are all in.
+    // A turn's attachments arrive one line each; its MCP servers and project instruction files are
+    // counted once they are all in.
     for (const [server, chars] of Object.entries(state.mcp)) {
       if (NAME.test(server)) listed(`mcp:${server}`, chars, false);
     }
     state.mcp = {};
+    for (const [item, chars] of Object.entries(state.project)) listed(item, chars, false);
+    state.project = {};
 
     if (type === "user") {
       const command = state.command;
