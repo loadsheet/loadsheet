@@ -1,3 +1,4 @@
+import * as NodeCrypto from "node:crypto";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -174,6 +175,14 @@ const appendTranscript = async (home: string, sid: string, text: string, mtime: 
   await NodeFSP.appendFile(path, text);
   await NodeFSP.utimes(path, mtime, mtime);
 };
+
+/** A cache document with the sum of what it now holds, as loadsheet would have written it. */
+const summed = (stored: { salt: string; strings: string[]; files: object }) => ({
+  ...stored,
+  sum: NodeCrypto.createHash("sha256")
+    .update(JSON.stringify([stored.salt, stored.strings, stored.files]))
+    .digest("hex"),
+});
 
 const scan = (home: string, cacheDir: string | false, tool = "loadsheet@0.0.0-test") =>
   scanMachine({
@@ -482,15 +491,48 @@ describe("the scan cache", () => {
     expect(rewritten.sessions[0]!.fixedTokens).toBe(4321 + 800);
   });
 
+  it("reads again a transcript rewritten at the same size with its old mtime put back", async () => {
+    const home = await makeHome("same-mtime", SESSIONS);
+    await scan(home, cacheDir());
+    // Long enough for the file system to give the rewrite a ctime of its own.
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    const sid = SESSIONS[0]!.sid;
+    await writeTranscript(home, sid, transcript({ ...SESSIONS[0]!, tokens: 4321 }), RECENT);
+
+    const rewritten = await scan(home, cacheDir());
+    expect(rewritten).toEqual(await cold(home));
+    expect(rewritten.sessions[0]!.fixedTokens).toBe(4321 + 800);
+  });
+
+  it("starts cold on a cache changed by anything else, however well formed", async () => {
+    const home = await makeHome("edited", SESSIONS.slice(0, 1));
+    await scan(home, cacheDir());
+    // The cached state forgets that the session was measured; resuming would measure it again.
+    const file = NodePath.join(cacheDir(), "fake.json");
+    const stored = JSON.parse(await NodeFSP.readFile(file, "utf8"));
+    const state = (Object.values(stored.files)[0] as unknown[])[7] as unknown[];
+    const measured = state.indexOf(stored.strings.indexOf("measured")) + 1;
+    expect(state[measured]).toBe(true);
+    state[measured] = false;
+    await NodeFSP.writeFile(file, JSON.stringify(stored));
+
+    const sid = SESSIONS[0]!.sid;
+    await appendTranscript(home, sid, `${JSON.stringify({ t: "usage", sid, tokens: 9 })}\n`, LATER);
+    const resumed = await scan(home, cacheDir());
+    expect(resumed).toEqual(await cold(home));
+    expect(resumed.sessions.map((cell) => cell.measured)).toEqual([1]);
+  });
+
   it("reads a transcript from the start when resuming from its cached state fails", async () => {
     const home = await makeHome("bad-state", SESSIONS.slice(0, 1));
     await scan(home, cacheDir());
     // The cached state's `listed` becomes null, so the next list line throws in the parser.
     const file = NodePath.join(cacheDir(), "fake.json");
     const stored = JSON.parse(await NodeFSP.readFile(file, "utf8"));
-    const state = (Object.values(stored.files)[0] as unknown[])[6] as unknown[];
+    const state = (Object.values(stored.files)[0] as unknown[])[7] as unknown[];
     state[state.indexOf(stored.strings.indexOf("listed")) + 1] = null;
-    await NodeFSP.writeFile(file, JSON.stringify(stored));
+    await NodeFSP.writeFile(file, JSON.stringify(summed(stored)));
 
     const sid = SESSIONS[0]!.sid;
     const list = { t: "list", sid, items: [{ id: "skill:alpha", chars: 30, bare: false }] };
@@ -546,8 +588,8 @@ describe("the scan cache", () => {
     const stored = JSON.parse(await NodeFSP.readFile(file, "utf8"));
     const keys = Object.keys(stored.files);
     expect(keys).toHaveLength(SESSIONS.length);
-    stored.files[keys[0]!][7] = [[], [0, 0, 0, [stored.strings.length, 1, 0, 0, 0, 0]], []];
-    await NodeFSP.writeFile(file, JSON.stringify(stored));
+    stored.files[keys[0]!][8] = [[], [0, 0, 0, [stored.strings.length, 1, 0, 0, 0, 0]], []];
+    await NodeFSP.writeFile(file, JSON.stringify(summed(stored)));
 
     parsed = 0;
     expect(await scan(home, cacheDir())).toEqual(expected);

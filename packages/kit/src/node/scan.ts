@@ -30,7 +30,11 @@ export interface ScanMachineOptions {
   readonly now?: Date;
   /** Where things are; default this user's home and environment. */
   readonly place?: Place;
-  /** The cache directory, or false to read every transcript in full and write nothing; default `defaultCacheDir(place)`. */
+  /**
+   * The cache directory, or false to read every transcript in full and write nothing; default
+   * `defaultCacheDir(place)`. It is loadsheet's own: loadsheet makes it readable by this user
+   * only, and writes no cache in a directory it cannot make so.
+   */
   readonly cacheDir?: string | false;
   /** Transcript files read at once; default 16. */
   readonly concurrency?: number;
@@ -128,7 +132,10 @@ const readTranscripts = async (
   await eachLimited(files, options.concurrency, async (file) => {
     const key = cache?.key(file.path);
     const cached = key === undefined ? undefined : cache?.get(key);
-    const unchanged = cached?.size === file.size && cached.mtimeMs === file.mtimeMs;
+    const unchanged =
+      cached?.size === file.size &&
+      cached.mtimeMs === file.mtimeMs &&
+      cached.ctimeMs === file.ctimeMs;
     if (cached && unchanged && !cached.hasTail) {
       kept.set(key!, cached);
       tallies.push(cached.tally);
@@ -146,6 +153,7 @@ const readTranscripts = async (
       kept.set(key, {
         size: file.size,
         mtimeMs: file.mtimeMs,
+        ctimeMs: file.ctimeMs,
         // A compressed file is read in full, so only its tail Facts make it worth reading again.
         hasTail: file.path.endsWith(".zst")
           ? read.tail.length > 0

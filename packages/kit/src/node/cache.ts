@@ -5,20 +5,21 @@
 // On disk every string is an index into one table per cache file, and counters are flat tuples
 // grouped by day, harness and entrypoint, because thousands of transcripts repeat the same names.
 import { createHash, randomBytes } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Cell, SessionCell } from "@loadsheet/schema";
 import type { Tally, TranscriptFormat, VersionSeen } from "../index.ts";
 import type { ReadPosition } from "./reader.ts";
 
 /** The layout of a cache file; a change here starts every cache cold. */
-const CACHE_LAYOUT = 1;
+const CACHE_LAYOUT = 2;
 
 /** What the cache keeps for one transcript file. */
 export interface CachedFile {
-  /** The file's size and mtime when it was read, to skip a file that has not changed. */
+  /** The file's size, mtime and ctime when it was read, to skip a file that has not changed. */
   readonly size: number;
   readonly mtimeMs: number;
+  readonly ctimeMs: number;
   /** Whether it ended in an unterminated line, which is read again every run. */
   readonly hasTail: boolean;
   /** Where reading stopped, after the last complete line. */
@@ -46,6 +47,10 @@ export const defaultCacheDir = (place: {
 }): string => join(place.env.XDG_CACHE_HOME || join(place.home, ".cache"), "loadsheet");
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
+
+/** A hash of what a cache file holds, so one cut short or changed by anything else opens empty. */
+const checksum = (salt: unknown, strings: unknown, files: unknown) =>
+  sha256(JSON.stringify([salt, strings, files]));
 
 /** Changes when the harness's parser does, so a new format starts cold. */
 const formatFingerprint = (format: TranscriptFormat<unknown>) =>
@@ -95,10 +100,14 @@ class Decoder {
     return this.strings[value]!;
   }
 
-  /** A `YYYY-MM-DD` day, which the window filter compares as a string. */
+  /** A `YYYY-MM-DD` calendar day, which the window filter compares as a string. */
   day(value: unknown): string {
     const text = this.text(value);
     if (!DAY.test(text)) throw new Malformed();
+    const time = Date.parse(`${text}T00:00:00Z`);
+    if (Number.isNaN(time) || new Date(time).toISOString().slice(0, 10) !== text) {
+      throw new Malformed();
+    }
     return text;
   }
 
@@ -271,13 +280,15 @@ const decodeTally = (raw: unknown, decoder: Decoder): Tally => {
   return { sessions, cells, versions };
 };
 
-// A CachedFile encodes as [size, mtimeMs, hasTail (0 or 1), offset, guardLength, guardHash, state, tally].
+// A CachedFile encodes as
+// [size, mtimeMs, ctimeMs, hasTail (0 or 1), offset, guardLength, guardHash, state, tally].
 
 const encodeFile = (file: CachedFile, state: unknown, table: StringTable): unknown[] => {
   const { position } = file;
   return [
     file.size,
     file.mtimeMs,
+    file.ctimeMs,
     file.hasTail ? 1 : 0,
     position.offset,
     position.guardLength,
@@ -289,15 +300,17 @@ const encodeFile = (file: CachedFile, state: unknown, table: StringTable): unkno
 
 /** The entry and its encoded state, which is decoded only when a read resumes from it. */
 const decodeFile = (raw: unknown, decoder: Decoder): { file: CachedFile; state: unknown } => {
-  if (!Array.isArray(raw) || raw.length !== 8) throw new Malformed();
-  const [size, mtimeMs, hasTail, offset, guardLength, guardHash, state, tally] = raw;
-  if (typeof mtimeMs !== "number" || (hasTail !== 0 && hasTail !== 1)) throw new Malformed();
+  if (!Array.isArray(raw) || raw.length !== 9) throw new Malformed();
+  const [size, mtimeMs, ctimeMs, hasTail, offset, guardLength, guardHash, state, tally] = raw;
+  if (typeof mtimeMs !== "number" || typeof ctimeMs !== "number") throw new Malformed();
+  if (hasTail !== 0 && hasTail !== 1) throw new Malformed();
   checkValue(state, decoder);
   let decoded: { value: unknown } | undefined;
   const strings = decoder.strings;
   const file: CachedFile = {
     size: decoder.count(size),
     mtimeMs,
+    ctimeMs,
     hasTail: hasTail === 1,
     position: {
       offset: decoder.count(offset),
@@ -314,8 +327,9 @@ const decodeFile = (raw: unknown, decoder: Decoder): { file: CachedFile; state: 
 };
 
 /**
- * Opens one harness's cache in `dir`. A missing, corrupt or stale cache (another tool version
- * or transcript format) opens empty, so the run starts cold; a malformed entry opens as a miss.
+ * Opens one harness's cache in `dir`. A missing or stale cache (another tool version or
+ * transcript format), and one whose contents are not what loadsheet wrote, opens empty, so the
+ * run starts cold; a malformed entry opens as a miss.
  */
 export const openCache = async (
   dir: string,
@@ -340,7 +354,8 @@ export const openCache = async (
     typeof stored.salt === "string" &&
     Array.isArray(stored.strings) &&
     stored.strings.every((text) => typeof text === "string") &&
-    isRecord(stored.files)
+    isRecord(stored.files) &&
+    stored.sum === checksum(stored.salt, stored.strings, stored.files)
   ) {
     salt = stored.salt;
     entries = new Map(Object.entries(stored.files));
@@ -396,8 +411,11 @@ export const openCache = async (
           salt: keySalt,
           strings: table.strings,
           files,
+          sum: checksum(keySalt, table.strings, files),
         };
         await mkdir(dir, { recursive: true, mode: 0o700 });
+        // A directory that was already there keeps its mode, so the names in it could be listed.
+        await chmod(dir, 0o700);
         await writeFile(temporary, JSON.stringify(document), { mode: 0o600 });
         await rename(temporary, file);
       } catch {

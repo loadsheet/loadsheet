@@ -1,3 +1,4 @@
+import * as NodeCrypto from "node:crypto";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -41,6 +42,7 @@ const cell = (day: string, via: string, item: string, n: number) => ({
 const cachedFile = (seed: number): CachedFile => ({
   size: 1000 + seed,
   mtimeMs: 1763980000000.5 + seed,
+  ctimeMs: 1763980000001.25 + seed,
   hasTail: seed % 2 === 1,
   position: {
     offset: 900 + seed,
@@ -90,11 +92,26 @@ const cachedFile = (seed: number): CachedFile => ({
 
 const cacheFile = () => NodePath.join(dir, "fake.json");
 
-const readStored = async () =>
-  JSON.parse(await NodeFSP.readFile(cacheFile(), "utf8")) as {
-    strings: string[];
-    files: Record<string, unknown[]>;
-  };
+interface Stored {
+  salt: string;
+  strings: string[];
+  files: Record<string, unknown[]>;
+  sum: string;
+}
+
+const readStored = async () => JSON.parse(await NodeFSP.readFile(cacheFile(), "utf8")) as Stored;
+
+/** Writes `stored` the way loadsheet would have, with the sum of what it now holds. */
+const writeStored = (stored: Stored) =>
+  NodeFSP.writeFile(
+    cacheFile(),
+    JSON.stringify({
+      ...stored,
+      sum: NodeCrypto.createHash("sha256")
+        .update(JSON.stringify([stored.salt, stored.strings, stored.files]))
+        .digest("hex"),
+    }),
+  );
 
 describe("the scan cache file", () => {
   it("gives back the CachedFiles it saved, state included", async () => {
@@ -157,19 +174,22 @@ describe("the scan cache file", () => {
     const damages: Array<(entry: unknown[], strings: string[]) => void> = [
       (entry) => entry.pop(),
       (entry) => (entry[0] = -1),
-      (entry) => (entry[2] = true),
-      (entry, strings) => ((entry[7] as unknown[][])[1]![0] = strings.length),
-      (entry) => (((entry[7] as unknown[][])[1]![3] as unknown[])[1] = 1.5),
-      (entry) => (entry[7] as unknown[][])[0]!.push(1),
-      (entry) => (entry[6] = [0]),
-      (entry) => (entry[6] = { a: [], b: [] }),
-      (entry) => (entry[6] = "NaN"),
-      (entry) => (entry[6] = { a: ["01"] }),
-      (entry) => (entry[7] = "tally"),
+      (entry) => (entry[2] = "then"),
+      (entry) => (entry[3] = true),
+      (entry, strings) => ((entry[8] as unknown[][])[1]![0] = strings.length),
+      (entry) => (((entry[8] as unknown[][])[1]![3] as unknown[])[1] = 1.5),
+      (entry) => (entry[8] as unknown[][])[0]!.push(1),
+      (entry) => (entry[7] = [0]),
+      (entry) => (entry[7] = { a: [], b: [] }),
+      (entry) => (entry[7] = "NaN"),
+      (entry) => (entry[7] = { a: ["01"] }),
+      (entry) => (entry[8] = "tally"),
       // A day that is a string but not YYYY-MM-DD, in sessions, a cell group and versions.
-      (entry, strings) => ((entry[7] as unknown[][])[0]![0] = strings.indexOf("fake")),
-      (entry, strings) => ((entry[7] as unknown[][])[1]![0] = strings.indexOf("cli")),
-      (entry, strings) => ((entry[7] as unknown[][])[2]![1] = strings.indexOf("1.2.0")),
+      (entry, strings) => ((entry[8] as unknown[][])[0]![0] = strings.indexOf("fake")),
+      (entry, strings) => ((entry[8] as unknown[][])[1]![0] = strings.indexOf("cli")),
+      (entry, strings) => ((entry[8] as unknown[][])[2]![1] = strings.indexOf("1.2.0")),
+      // A day no calendar has, which parseScan would refuse.
+      (entry, strings) => ((entry[8] as unknown[][])[0]![0] = strings.push("2026-11-31") - 1),
     ];
     for (const damage of damages) {
       await (
@@ -182,11 +202,29 @@ describe("the scan cache file", () => {
       );
       const stored = await readStored();
       damage(stored.files.bad!, stored.strings);
-      await NodeFSP.writeFile(cacheFile(), JSON.stringify(stored));
+      await writeStored(stored);
 
       const cache = await open();
       expect(cache.get("bad"), damage.toString()).toBeUndefined();
       expect(cache.get("good")).toEqual(cachedFile(1));
     }
+  });
+
+  it("opens empty a file whose contents are not the ones it saved", async () => {
+    await (await open()).save(new Map([["one", cachedFile(1)]]));
+    const stored = await readStored();
+    expect((await open()).get("one")).toEqual(cachedFile(1));
+
+    // A well-formed entry with one counter changed, which no check of its shape would catch.
+    (stored.files.one![8] as number[][])[0]![3] = 7;
+    await NodeFSP.writeFile(cacheFile(), JSON.stringify(stored));
+    expect((await open()).get("one")).toBeUndefined();
+  });
+
+  it("makes a cache directory that was already there private", async () => {
+    await NodeFSP.chmod(dir, 0o755);
+    await (await open()).save(new Map([["one", cachedFile(1)]]));
+    expect((await NodeFSP.stat(dir)).mode & 0o777).toBe(0o700);
+    expect((await NodeFSP.stat(cacheFile())).mode & 0o777).toBe(0o600);
   });
 });
