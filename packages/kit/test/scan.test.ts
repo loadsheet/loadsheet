@@ -3,7 +3,14 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import { CANARY, findCanary, findCanaryInDir } from "@loadsheet/fixtures";
-import { parseScan, type Cell, type Item, type Scan, type SessionCell } from "@loadsheet/schema";
+import {
+  isHomePath,
+  parseScan,
+  type Cell,
+  type Item,
+  type Scan,
+  type SessionCell,
+} from "@loadsheet/schema";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { defineHarness, mergeScans, sha256, type Fact, type Harness } from "../src/index.ts";
 import { scanMachine, scanWindow } from "../src/node/index.ts";
@@ -745,4 +752,22 @@ describe("link targets", () => {
       "~/.claude/skills/weekly": undefined,
     });
   });
+
+  // The checkout stands in for another user's home: a temp folder is not under a home root.
+  it.skipIf(!isHomePath(process.cwd()))(
+    "marks nothing for a link that leads into another home",
+    async () => {
+      const other = await NodeFSP.mkdtemp(NodePath.join(process.cwd(), "node_modules", ".other-"));
+      try {
+        await skillAt(`${other}/shared`);
+        await NodeFSP.symlink(`${other}/shared`, `${home}/.agents/skills/shared`);
+        expect(await targets(home)).toEqual({
+          "~/.agents/skills/shared": undefined,
+          "~/.claude/skills/weekly": undefined,
+        });
+      } finally {
+        await NodeFSP.rm(other, { recursive: true, force: true });
+      }
+    },
+  );
 });

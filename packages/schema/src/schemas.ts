@@ -84,6 +84,8 @@ const windowOf = (text: string) =>
 // writer replaces the real one with ~.
 const HOME = String.raw`(?:/home/|/Users/|/var/home/|/root(?:/|$)|[A-Za-z]:[\\/])`;
 const NOT_HOME = new RegExp(`^(?!${HOME})`);
+/** Whether a path is an absolute path into a home folder, which a Scan or Report never holds. */
+export const isHomePath = (path: string) => !NOT_HOME.test(path);
 const relativePath = (text: string) =>
   v.pipe(
     v.string(),

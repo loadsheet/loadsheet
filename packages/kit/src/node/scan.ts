@@ -1,6 +1,6 @@
 import { readFile, realpath, stat } from "node:fs/promises";
 import { homedir, hostname } from "node:os";
-import type { Day, Item, Scan } from "@loadsheet/schema";
+import { isHomePath, type Day, type Item, type Scan } from "@loadsheet/schema";
 import {
   buildScan,
   foldFacts,
@@ -62,7 +62,8 @@ const homeKey = (path: string, home: string) => {
 /**
  * `items`, each with `target` where a link is on the way to its path: where the path really is,
  * keyed like the path. A path that resolves to itself, or to itself under the real home when the
- * home is behind a link, gets none, as does a project's path and one that no longer resolves.
+ * home is behind a link, gets none, as does a project's path, one that no longer resolves, and
+ * one that leads into another user's home.
  */
 const withTargets = async (items: readonly Item[], home: string): Promise<Item[]> => {
   const root = home.replace(/\/+$/u, "");
@@ -76,7 +77,9 @@ const withTargets = async (items: readonly Item[], home: string): Promise<Item[]
       const real = await realpath(absolute).catch(() => undefined);
       if (real === undefined || real === absolute) return item;
       if (rest !== undefined && real === `${realHome}${rest}`) return item;
-      return { ...item, target: homeKey(real, realHome) };
+      const target = homeKey(real, realHome);
+      // Another user's home stays out of a Scan. A removal here cannot reach it: the path is a link.
+      return isHomePath(target) ? item : { ...item, target };
     }),
   );
 };

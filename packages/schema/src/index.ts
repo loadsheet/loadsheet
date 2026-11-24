@@ -1,9 +1,9 @@
 import * as v from "valibot";
-import { ConfigSchema, ReportSchema, RULES, SIGNALS, ScanSchema } from "./schemas.ts";
+import { ConfigSchema, isHomePath, ReportSchema, RULES, SIGNALS, ScanSchema } from "./schemas.ts";
 import type { Config, Id, Kind, Ref, Report, ResolvedConfig, Scan } from "./types.ts";
 
 export type * from "./types.ts";
-export { ConfigSchema, ReportSchema, RULES, SIGNALS, ScanSchema };
+export { ConfigSchema, isHomePath, ReportSchema, RULES, SIGNALS, ScanSchema };
 
 /** One reason a document did not validate, at a JSON path such as `$.sheet[0].lines[3].path`. */
 export interface SchemaIssue {
