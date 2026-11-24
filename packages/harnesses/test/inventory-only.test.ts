@@ -351,6 +351,8 @@ describe("OpenCode", () => {
           servers: { kettle: { command: ["k"] }, idle: { command: ["i"] } },
           legacy: { type: "local", command: ["l"] },
           kept: { type: "local", command: ["c"] },
+          // Turned off here and defined in the later file.
+          early: { enabled: false },
         },
       }),
       "~/.config/opencode/opencode.jsonc": JSON.stringify({
@@ -358,6 +360,7 @@ describe("OpenCode", () => {
           servers: { kettle: { command: ["k2"] }, idle: { disabled: true } },
           legacy: { enabled: false },
           stray: { enabled: true },
+          early: { type: "local", command: ["e"] },
         },
       }),
     });

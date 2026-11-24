@@ -94,18 +94,23 @@ const configServers = async (files: Files, path: string) => {
 const mcpServers = async (files: Files, paths: readonly string[]): Promise<Item[]> => {
   const merged = new Map<
     string,
-    { name: string; v1: boolean; path: string; config: Record<string, unknown> }
+    { name: string; v1: boolean; runs: boolean; path: string; config: Record<string, unknown> }
   >();
   for (const path of paths) {
     for (const [key, server] of await configServers(files, path)) {
       const known = merged.get(key);
-      // A V1 entry that only overrides fields, such as `enabled`, of a server defined earlier.
-      if (!server.runs && !known) continue;
-      merged.set(key, { ...server, path, config: { ...known?.config, ...server.config } });
+      // A V1 entry may only set fields, such as `enabled`, of a server another file defines.
+      merged.set(key, {
+        ...server,
+        runs: server.runs || (known?.runs ?? false),
+        path,
+        config: { ...known?.config, ...server.config },
+      });
     }
   }
   const items: Item[] = [];
-  for (const { name, v1, path, config } of merged.values()) {
+  for (const { name, v1, runs, path, config } of merged.values()) {
+    if (!runs) continue;
     if (v1 ? config.enabled === false : config.disabled === true) continue;
     items.push(mcpItem(HARNESS, name, path, await mcpConfigDigest(config)));
   }
