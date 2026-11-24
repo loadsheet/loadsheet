@@ -1,0 +1,9 @@
+{
+  "window": 3650,
+  "rules": {
+    "dead-skill": {
+      "minSessions": 5,
+      "minDays": 1
+    }
+  }
+}

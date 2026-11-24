@@ -10,4 +10,4 @@ export {
   type RuleSheet,
   type Unfiltered,
 } from "./rules/rule.ts";
-export { renderText } from "./text.ts";
+export { PROMPT_DOC, renderText } from "./text.ts";
