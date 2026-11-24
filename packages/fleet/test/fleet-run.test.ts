@@ -89,6 +89,36 @@ describe.skipIf(isWindows)("fleet run", () => {
     expect(run.stdout).toBe("box: one\nbox: two\n");
   });
 
+  it("returns at the deadline when the command exited and left a process holding its output", async () => {
+    const m = machine();
+    const manifest = m.manifest({ agents: ["claude-code"], sources: [], fleet: ["box"] });
+    const started = Date.now();
+    const run = await m.runWith(
+      { env: fakeSsh(m) },
+      "fleet",
+      "run",
+      "--manifest",
+      manifest,
+      "--timeout",
+      "2",
+      "--json",
+      "--",
+      "sh",
+      "-c",
+      "sleep 20 & echo started",
+    );
+    expect(Date.now() - started).toBeLessThan(15_000);
+    const stopped = {
+      reachable: true,
+      stdout: "started\n",
+      error: "timed out after 2 s, so the command was stopped",
+    };
+    expect(JSON.parse(run.stdout)).toEqual([
+      { host: hostname(), ...stopped },
+      { host: "box", ...stopped },
+    ]);
+  });
+
   it("needs a command after --", async () => {
     const m = machine();
     const manifest = m.manifest({ agents: ["claude-code"], sources: [], fleet: ["box"] });

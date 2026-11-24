@@ -175,6 +175,8 @@ export function exec(command: string, args: readonly string[], options: ExecOpti
       ? setTimeout(() => {
           timedOut = true;
           killTree(child);
+          // The command exited, and something it started still holds its output open.
+          if (exited) finish(child.exitCode);
         }, options.timeoutMs)
       : undefined;
     child.on("error", (error) => {
