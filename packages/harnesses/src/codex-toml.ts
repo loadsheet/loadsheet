@@ -73,8 +73,8 @@ const leftOpen = (line: string): string | undefined => {
 const KEY_VALUE =
   /^\s*((?:"(?:[^"\\]|\\.)*"|'[^']*'|[^\s=#"'])(?:"(?:[^"\\]|\\.)*"|'[^']*'|[^=#"'])*?)\s*=\s*(.*)$/u;
 const BOOLEAN = /^(true|false)\s*(?:#.*)?$/u;
-const ONE_LINE_ARRAY = /^\[(.*)\]\s*(?:#.*)?$/u;
-const STRING = /"((?:[^"\\]|\\.)*)"|'([^']*)'/gu;
+/** A string, a comment or an array's closing bracket, in the text of a string array. */
+const ARRAY_TOKEN = /"((?:[^"\\]|\\.)*)"|'([^']*)'|(#)[^\n]*|(\])/gu;
 
 const unquote = (match: RegExpMatchArray) => {
   if (match[2] !== undefined) return match[2];
@@ -86,15 +86,35 @@ const unquote = (match: RegExpMatchArray) => {
 };
 
 /**
- * The booleans and one-line string arrays of a TOML file, by dotted key such as
- * `compat.claude.skills`: what the Grok adapter reads from `~/.grok/config.toml`. Every other value,
- * an array that spans lines, and the entries of `[[...]]` tables are skipped without being kept.
+ * Adds the strings of a string array's text, from after its `[`, to `into`; true once its `]` is
+ * reached. Comments are skipped, and anything else between the strings is ignored.
+ */
+const arrayStrings = (text: string, into: string[]): boolean => {
+  for (const match of text.matchAll(ARRAY_TOKEN)) {
+    if (match[4] !== undefined) return true;
+    if (match[3] === undefined) into.push(unquote(match));
+  }
+  return false;
+};
+
+/**
+ * The booleans and string arrays of a TOML file, by dotted key such as `compat.claude.skills`:
+ * what the Grok adapter reads from `~/.grok/config.toml`. An array may span lines. Every other
+ * value and the entries of `[[...]]` tables are skipped without being kept.
  */
 export const readTomlFlags = (source: string): Map<string, boolean | string[]> => {
   const flags = new Map<string, boolean | string[]>();
   let table: string[] | undefined = [];
   let multiline: string | undefined;
+  let array: { key: string; strings: string[] } | undefined;
   for (const line of source.replace(/\r\n?/gu, "\n").split("\n")) {
+    if (array) {
+      if (arrayStrings(line, array.strings)) {
+        flags.set(array.key, array.strings);
+        array = undefined;
+      }
+      continue;
+    }
     if (multiline !== undefined) {
       if (line.split(multiline).length % 2 === 0) multiline = undefined;
       continue;
@@ -116,9 +136,12 @@ export const readTomlFlags = (source: string): Map<string, boolean | string[]> =
     const key = [...table, ...keyParts(entry[1]!)].join(".");
     const value = entry[2]!.trim();
     const boolean = BOOLEAN.exec(value);
-    const array = ONE_LINE_ARRAY.exec(value);
     if (boolean) flags.set(key, boolean[1] === "true");
-    else if (array) flags.set(key, [...array[1]!.matchAll(STRING)].map(unquote));
+    else if (value.startsWith("[")) {
+      const strings: string[] = [];
+      if (arrayStrings(value.slice(1), strings)) flags.set(key, strings);
+      else array = { key, strings };
+    }
   }
   return flags;
 };

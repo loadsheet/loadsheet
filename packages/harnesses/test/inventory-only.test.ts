@@ -168,6 +168,25 @@ describe("Grok", () => {
       ),
     ]);
   });
+
+  it("reads a list in config.toml that spans lines", async () => {
+    const items = await inventoryOf(grok, {
+      "~/.grok/config.toml": [
+        "disabled_mcp_servers = [",
+        '  "noisy", # too chatty ]',
+        "  'idle',",
+        "]",
+        "[mcp_servers.kettle]",
+        'command = "kettle-mcp"',
+        "[mcp_servers.noisy]",
+        'command = "noisy-mcp"',
+        "[mcp_servers.idle]",
+        'command = "idle-mcp"',
+        "",
+      ].join("\n"),
+    });
+    expect(items.map((item) => item.id)).toEqual(["mcp:kettle"]);
+  });
 });
 
 describe("Pi", () => {
