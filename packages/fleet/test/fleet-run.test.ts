@@ -212,6 +212,24 @@ describe.skipIf(isWindows)("fleet run", () => {
     ]);
   });
 
+  it("prefixes each CRLF line once", async () => {
+    const m = machine();
+    const manifest = m.manifest({ agents: ["claude-code"], sources: [], fleet: ["box"] });
+    const run = await m.runWith(
+      { env: fakeSsh(m) },
+      "fleet",
+      "run",
+      "box",
+      "--manifest",
+      manifest,
+      "--",
+      "printf",
+      "one\\r\\ntwo\\r\\n",
+    );
+    expect(run.code, run.stderr).toBe(0);
+    expect(run.stdout).toBe("box: one\r\nbox: two\n");
+  });
+
   it("runs on this machine alone when the fleet is empty", async () => {
     const m = machine();
     const manifest = m.manifest({ agents: ["claude-code"], sources: [], fleet: [] });

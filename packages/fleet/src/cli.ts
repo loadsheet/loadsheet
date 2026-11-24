@@ -1245,7 +1245,7 @@ async function fleetRunCommand(loaded: Awaited<ReturnType<typeof loadManifest>>)
     magicDNS: self?.dns,
   });
   const lines = (host: string, text: string) =>
-    text === "" ? "" : `${text.replace(/\r?\n$/, "").replace(/^/gm, `${host}: `)}\n`;
+    text === "" ? "" : `${text.replace(/\r?\n$/, "").replace(/(?<=^|\n)/g, `${host}: `)}\n`;
   for (const { host, stderr } of results) process.stderr.write(lines(host, stderr));
   if (json)
     emit(
