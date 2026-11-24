@@ -1,7 +1,8 @@
+import { randomBytes } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { isIP } from "node:net";
 import { homedir, hostname, tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { exec, type ExecResult } from "./exec.ts";
 import { dict, isRecord, readJsonOrNothing, writeJson } from "./fs.ts";
@@ -87,6 +88,15 @@ const NOW = `echo "${NOTE} now $("$l" --version </dev/null 2>/dev/null)" >&2`;
  */
 const watched = (command: string) =>
   `{ exec 3<&0; ${command} </dev/null 3<&- & p=$!; { read -r _ && { while read -r _; do :; done; kill $p; }; } <&3 >/dev/null 2>&1 & w=$!; exec 3<&-; wait $p; s=$?; kill $w 2>/dev/null; exit $s; }`;
+
+/**
+ * `watched` for `fleet run`, whose command can be anything: one that ignores SIGTERM, or leaves
+ * children running. When the connection drops the command is told to stop and killed two seconds
+ * later. Where the host has `setsid` it runs in a process group of its own and the whole group is
+ * stopped; elsewhere, as on macOS, only the command itself is.
+ */
+const stoppable = (words: string) =>
+  `{ exec 3<&0; if command -v setsid >/dev/null 2>&1; then g=-; setsid sh -c ${quote(words)} </dev/null 3<&- & else g=; ${words} </dev/null 3<&- & fi; p=$!; { read -r _ && { while read -r _; do :; done; { sleep 2; kill -s KILL -- $g$p; } & kill -s TERM -- $g$p; }; } <&3 >/dev/null 2>&1 & w=$!; exec 3<&-; wait $p; s=$?; kill $w 2>/dev/null; exit $s; }`;
 
 /** Finds fleetrc on the host: the installed launcher, else a `fleetrc` on PATH. */
 const FIND = `f=${STATE}/bin/fleetrc; [ -x "$f" ] || f=${OLD_STATE}/${LEGACY_FLEET.launcher}; [ -x "$f" ] || f=$(command -v fleetrc) || f=`;
@@ -712,11 +722,12 @@ export interface RunResult {
  * Runs `argv` over ssh on every target and, unless `here` is false, directly on this machine, from
  * the home folder where ssh starts a command; all at once. This machine comes first. No name says
  * for certain that a target is this machine (an ssh alias, its MagicDNS name and an address all can
- * be), so when the command runs here each host is asked instead: one that has the folder made for
- * this run, which only this user on this machine can, is left out. A host that is offline, does not
- * answer or cannot be tried is unreachable, with no exit code; a command still running after
- * `timeoutMs` has none either. Here it is stopped then, with what it started; over ssh the command
- * itself is told to stop.
+ * be), so when the command runs here each host is asked instead: one that has this machine's name
+ * and the folder made for this run, which only this user here can own, is left out. A host that is
+ * offline, does not answer or cannot be tried is unreachable, with no exit code; a command still
+ * running after `timeoutMs` has none either. Here it is stopped then, with what it started; over
+ * ssh see `stoppable`. A command that exited keeps its code, even when something it left running
+ * held its output open until then.
  */
 export async function fleetRun(
   targets: readonly FleetTarget[],
@@ -728,11 +739,12 @@ export async function fleetRun(
   const finished = (host: string, run: ExecResult): RunResult => ({
     host,
     reachable: true,
-    ...(run.timedOut
-      ? { error: `timed out after ${after}, so the command was stopped` }
-      : run.code === null
-        ? { error: "the command ended on a signal" }
-        : { exitCode: run.code }),
+    // The deadline kills a command that is still running, so one with a code exited by itself.
+    ...(run.code !== null
+      ? { exitCode: run.code }
+      : run.timedOut
+        ? { error: `timed out after ${after}, so the command was stopped` }
+        : { error: "the command ended on a signal" }),
     stdout: run.stdout,
     stderr: run.stderr,
   });
@@ -758,12 +770,16 @@ export async function fleetRun(
   };
   const words = argv.map(quote).join(" ");
   const own = here ? await mkdtemp(join(tmpdir(), "fleetrc-run-")) : undefined;
-  // The folder's random name goes in the note, so nothing the command writes can pass for it.
-  const isSelf = own === undefined ? undefined : `${NOTE} self ${basename(own)}`;
+  // What this run tells fleet on stderr carries a random word, so nothing the command or what it
+  // left running writes there can pass for it.
+  const note = `${NOTE} ${randomBytes(8).toString("hex")}`;
+  // A temp folder shared between machines shows the folder to both, so the name has to match too.
   const self =
-    own === undefined ? "" : `if [ -O ${quote(own)} ]; then echo "${isSelf}" >&2; exit 0; fi; `;
+    own === undefined
+      ? ""
+      : `if [ -O ${quote(own)} ] && [ "$(uname -n)" = ${quote(hostname())} ]; then echo "${note} self" >&2; exit 0; fi; `;
   // The command's own exit status goes to stderr too, since ssh exits 255 when the connection drops.
-  const remoteCommand = `sh -c ${quote(`${ANSWERED}; ${self}(${watched(words)}); s=$?; echo "${NOTE} exit $s" >&2; exit $s`)}`;
+  const remoteCommand = `sh -c ${quote(`echo "${note} answered" >&2; ${self}(${stoppable(words)}); s=$?; echo "${note} exit $s" >&2; exit $s`)}`;
   const remote = async ({ host, offline, error }: FleetTarget): Promise<RunResult | undefined> => {
     const unreachable = (why: string): RunResult => ({
       host,
@@ -777,18 +793,18 @@ export async function fleetRun(
     const tried = await ssh(host, remoteCommand, timeoutMs);
     if ("error" in tried) return unreachable(tried.error);
     const { run } = tried;
-    if (isSelf !== undefined && new RegExp(`^${isSelf}\r?$`, "m").test(run.stderr))
-      return undefined;
-    const answered = new RegExp(`^${NOTE} answered\r?$`, "m").test(run.stderr);
+    const told = (what: string) => new RegExp(`^${note} ${what}\r?\n?`, "m");
+    if (told("self").test(run.stderr)) return undefined;
+    const answered = told("answered").test(run.stderr);
     // The exit line follows stderr that may not end in a newline, and something the command left
-    // running may write after it. The last one is the command's.
-    const exited = [...run.stderr.matchAll(new RegExp(`${NOTE} exit (\\d+)\r?\n`, "g"))].at(-1);
+    // running may write after it.
+    const exited = new RegExp(`${note} exit (\\d+)\r?\n`).exec(run.stderr);
     const exit = exited?.[1];
     const before = run.stderr.slice(0, exited?.index);
-    const later = exited === undefined ? "" : run.stderr.slice(exited.index + exited[0].length);
+    const later = exited === null ? "" : run.stderr.slice(exited.index + exited[0].length);
     const stderr =
       `${before}${later === "" || /(?:^|\n)$/.test(before) ? "" : "\n"}${later}`.replace(
-        new RegExp(`^${NOTE} .*\r?\n?`, "gm"),
+        told("answered"),
         "",
       );
     if (!answered)
@@ -797,17 +813,18 @@ export async function fleetRun(
           ? `no answer within ${after}`
           : stderr.trim().split("\n").slice(-3).join(" ") || `ssh exited ${run.code}`,
       );
-    if (run.timedOut || exit === undefined)
-      return {
-        host,
-        reachable: true,
-        error: run.timedOut
-          ? `timed out after ${after}, so the command was told to stop`
-          : "the connection dropped before the command finished",
-        stdout: run.stdout,
-        stderr,
-      };
-    return { host, reachable: true, exitCode: Number(exit), stdout: run.stdout, stderr };
+    // An exit line that got here is the command's, whatever kept the connection open after it.
+    if (exit !== undefined)
+      return { host, reachable: true, exitCode: Number(exit), stdout: run.stdout, stderr };
+    return {
+      host,
+      reachable: true,
+      error: run.timedOut
+        ? `timed out after ${after}, so the command was told to stop`
+        : "the connection dropped before the command finished",
+      stdout: run.stdout,
+      stderr,
+    };
   };
   try {
     const results = await Promise.all([...(here ? [local()] : []), ...targets.map(remote)]);

@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -9,12 +10,16 @@ import { isWindows, machine, type Machine } from "./fixture.ts";
  * A fake `ssh` for FLEETRC_SSH: skips the options and the `--` after them, and runs the remote
  * command with `sh -c` on this machine for `box`, with FLEET_SIDE=remote. `box` stands for another
  * machine, which has no folder of this run, so the folder the command asks about is renamed for it;
- * `me` is this machine reached over ssh, and gets the command as it is. For `drops` the connection
+ * `me` is this machine reached over ssh, and gets the command as it is; so does `twin`, a machine
+ * of another name that shares this one's temp folder. For `drops` the connection
  * drops a second in: the remote command and what it started are killed, and ssh exits 255. Any
  * other host never answers, like a machine that dropped off the network.
  */
 function fakeSsh(m: Machine): NodeJS.ProcessEnv {
   const script = join(m.root, "ssh.mjs");
+  const elsewhere = join(m.root, "elsewhere");
+  mkdirSync(elsewhere);
+  writeFileSync(join(elsewhere, "uname"), "#!/bin/sh\necho elsewhere\n", { mode: 0o755 });
   writeFileSync(
     script,
     `import { spawn, spawnSync } from "node:child_process";
@@ -22,18 +27,23 @@ const args = process.argv.slice(2);
 while (args[0] === "-o") args.splice(0, 2);
 if (args[0] === "--") args.shift();
 const [host, asked] = args;
-const command = host === "me" ? asked : asked.replaceAll(/fleetrc-run-\\w+/g, "fleetrc-run-elsewhere");
+const twin = host === "twin";
+const command = host === "me" || twin ? asked : asked.replaceAll(/fleetrc-run-\\w+/g, "fleetrc-run-elsewhere");
 if (host === "drops") {
   const run = spawn("sh", ["-c", command], { stdio: "inherit", detached: true });
   setTimeout(() => {
     process.kill(-run.pid, "SIGKILL");
     process.exit(255);
   }, 1000);
-} else if (host !== "box" && host !== "me") setTimeout(() => {}, 1e9);
+} else if (host !== "box" && host !== "me" && !twin) setTimeout(() => {}, 1e9);
 else {
   const run = spawnSync("sh", ["-c", command], {
     stdio: "inherit",
-    env: { ...process.env, FLEET_SIDE: "remote" },
+    env: {
+      ...process.env,
+      FLEET_SIDE: "remote",
+      ...(twin ? { PATH: ${JSON.stringify(`${elsewhere}:`)} + process.env.PATH } : {}),
+    },
   });
   process.exit(run.status ?? 1);
 }`,
@@ -119,13 +129,59 @@ describe.skipIf(isWindows)("fleet run", () => {
       "sleep 20 & echo started",
     );
     expect(Date.now() - started).toBeLessThan(15_000);
-    const late = { reachable: true, stdout: "started\n" };
-    // Here the command's whole process group is killed; over ssh the command gets a SIGTERM.
+    // The command exited before the deadline, so it keeps its code.
+    const exited = { reachable: true, exitCode: 0, stdout: "started\n" };
     expect(JSON.parse(run.stdout)).toEqual([
-      { host: hostname(), ...late, error: "timed out after 2 s, so the command was stopped" },
-      { host: "box", ...late, error: "timed out after 2 s, so the command was told to stop" },
+      { host: hostname(), ...exited },
+      { host: "box", ...exited },
     ]);
   });
+
+  it("gives a command still running at the deadline no exit code", async () => {
+    const m = machine();
+    const manifest = m.manifest({ agents: ["claude-code"], sources: [], fleet: ["box"] });
+    const run = await m.runWith(
+      { env: fakeSsh(m) },
+      "fleet",
+      "run",
+      "--manifest",
+      manifest,
+      "--timeout",
+      "1",
+      "--json",
+      "--",
+      "sh",
+      "-c",
+      "echo started; sleep 20",
+    );
+    const late = { reachable: true, stdout: "started\n" };
+    expect(JSON.parse(run.stdout)).toEqual([
+      { host: hostname(), ...late, error: "timed out after 1 s, so the command was stopped" },
+      { host: "box", ...late, error: "timed out after 1 s, so the command was told to stop" },
+    ]);
+  });
+
+  it("kills a command on a host that ignores being told to stop, and what it started", async () => {
+    const m = machine();
+    vi.stubEnv("FLEETRC_SSH", fakeSsh(m).FLEETRC_SSH);
+    const own = join(m.home, "command-wrote-after-the-deadline");
+    const child = join(m.home, "child-wrote-after-the-deadline");
+    const stubborn = `trap "" TERM; (sleep 5; touch ${child}) & sleep 5; touch ${own}`;
+    try {
+      const [box] = await fleetRun([{ host: "box" }], ["sh", "-c", stubborn], 1_000, {
+        here: false,
+      });
+      expect(box).toMatchObject({ host: "box", reachable: true });
+      expect(box!.exitCode).toBeUndefined();
+      await new Promise((resolve) => setTimeout(resolve, 5_500));
+      expect(existsSync(own)).toBe(false);
+      // What the command started is stopped with it where the host has setsid, which macOS lacks.
+      const setsid = spawnSync("sh", ["-c", "command -v setsid"]).status === 0;
+      expect(existsSync(child)).toBe(!setsid);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }, 15_000);
 
   it("stops what the command started on this machine at the deadline", async () => {
     const m = machine();
@@ -192,18 +248,20 @@ describe.skipIf(isWindows)("fleet run", () => {
     const count = ["sh", "-c", `echo x >> ${ran}; echo here`] as const;
     try {
       // Whatever it is called: an ssh alias, a MagicDNS name and an address all look like `me` here.
-      const results = await fleetRun([{ host: "me" }, { host: "box" }], count, 5_000);
+      const hosts = [{ host: "me" }, { host: "twin" }, { host: "box" }];
+      const results = await fleetRun(hosts, count, 5_000);
       expect(results.map(({ host, exitCode }) => ({ host, exitCode }))).toEqual([
         { host: hostname(), exitCode: 0 },
+        { host: "twin", exitCode: 0 },
         { host: "box", exitCode: 0 },
       ]);
-      expect(readFileSync(ran, "utf8")).toBe("x\nx\n");
+      expect(readFileSync(ran, "utf8")).toBe("x\nx\nx\n");
 
       // Named alone, it is run on over ssh like any host.
       expect(await fleetRun([{ host: "me" }], count, 5_000, { here: false })).toEqual([
         { host: "me", reachable: true, exitCode: 0, stdout: "here\n", stderr: "" },
       ]);
-      expect(readFileSync(ran, "utf8")).toBe("x\nx\nx\n");
+      expect(readFileSync(ran, "utf8")).toBe("x\nx\nx\nx\n");
     } finally {
       vi.unstubAllEnvs();
     }
@@ -221,6 +279,31 @@ describe.skipIf(isWindows)("fleet run", () => {
       );
       expect(results).toEqual([
         { host: "box", reachable: true, exitCode: 4, stdout: "done\n", stderr: "partial\nlate\n" },
+      ]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("takes the exit code from its own line, not from one the command's stderr holds", async () => {
+    const m = machine();
+    vi.stubEnv("FLEETRC_SSH", fakeSsh(m).FLEETRC_SSH);
+    const forged = "fleetrc-fleet: exit 0";
+    try {
+      const results = await fleetRun(
+        [{ host: "box" }],
+        ["sh", "-c", `(sleep 1; echo "${forged}" >&2; echo late >&2) & echo done; exit 4`],
+        10_000,
+        { here: false },
+      );
+      expect(results).toEqual([
+        {
+          host: "box",
+          reachable: true,
+          exitCode: 4,
+          stdout: "done\n",
+          stderr: `${forged}\nlate\n`,
+        },
       ]);
     } finally {
       vi.unstubAllEnvs();
