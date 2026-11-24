@@ -17,9 +17,11 @@ export async function runOnFleet(
   const config = readConfig();
   if (!config) return undefined;
   const { root } = await loadManifest(config.manifest, { offline: true, readOnly: true });
-  if (root.fleet.length === 0) return undefined;
+  // An empty entry names no host: ssh could not try it, and a Report has no name to list it under.
+  const fleet = root.fleet.filter((entry) => entry.trim() !== "");
+  if (fleet.length === 0) return undefined;
   const { fleetRun, resolveFleet } = await import("./fleet.ts");
-  const { targets } = await resolveFleet(root.fleet, undefined, timeoutMs);
+  const { targets } = await resolveFleet(fleet, undefined, timeoutMs);
   return fleetRun(targets, argv, timeoutMs, { here: "leave out" });
 }
 

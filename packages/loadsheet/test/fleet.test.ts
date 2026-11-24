@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseReport, parseScan } from "@loadsheet/schema";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
+import { fleetScans } from "../src/fleet.ts";
 
 // Runs the built CLI, so `pnpm build` comes first.
 const cli = fileURLToPath(new URL("../dist/cli.mjs", import.meta.url));
@@ -213,6 +214,32 @@ describe("loadsheet with a fleet", () => {
       expect.objectContaining({ name: hostname(), reachable: true }),
       { name: "gone", reachable: false, error: "offline" },
     ]);
+  });
+
+  it("leaves a fleet name to the host that has it, whatever another host calls itself", () => {
+    const scan = JSON.parse(loadsheet(["--scan", "--days", "3650"]).stdout);
+    const { scans, machines } = fleetScans(parseScan({ ...scan, machine: "desk" }), [
+      {
+        host: "alias",
+        reachable: true,
+        exitCode: 0,
+        stdout: JSON.stringify({ ...scan, machine: "build" }),
+        stderr: "",
+      },
+      { host: "build", reachable: false, stdout: "", stderr: "", error: "offline in Tailscale" },
+    ]);
+    expect(scans.map((one) => one.machine)).toEqual(["desk", "build (alias)"]);
+    expect(machines).toEqual([{ name: "build", reachable: false, error: "offline" }]);
+  });
+
+  it("takes a fleet of empty entries for no fleet", () => {
+    rmSync(log, { force: true });
+    manifest(["", " "]);
+    const result = loadsheet(["--json"]);
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(parseReport(JSON.parse(result.stdout)).mode).toBe("local");
+    expect(sshCalls()).toBe(false);
   });
 
   it("--local and a machine with no fleet config start no ssh", () => {

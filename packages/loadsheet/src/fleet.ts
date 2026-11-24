@@ -59,8 +59,9 @@ export const scanOf = (result: RunResult): Scan | Unread => {
 /**
  * The Scans and unread machines of a fleet, this machine's Scan first, every machine under a name
  * no other has: buildReport keys Scans by machine, and two hosts may call themselves the same. A
- * Scan whose name is taken goes by its name and the fleet's name for the host, as in
- * `ubuntu (vps2)`, and if that is taken too, by a number after it.
+ * Scan whose name is taken, or is the fleet's name for another host, goes by its name and the
+ * fleet's name for its own host, as in `ubuntu (vps2)`, and if that is taken too, by a number
+ * after it.
  */
 export const fleetScans = (
   here: Scan,
@@ -82,7 +83,11 @@ export const fleetScans = (
       machines.push({ name: unique(result.host), reachable: false, error: scan });
       continue;
     }
-    const machine = unique(scan.machine, `${scan.machine} (${result.host})`);
+    const elsewhere = results.some((other) => other !== result && other.host === scan.machine);
+    const machine = unique(
+      ...(elsewhere ? [] : [scan.machine]),
+      `${scan.machine} (${result.host})`,
+    );
     scans.push({
       ...scan,
       machine,
