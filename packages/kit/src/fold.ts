@@ -177,7 +177,10 @@ export const coverageOf = (
 
 const itemKey = (item: Item) => [item.id, item.path].join(SEP);
 
-/** Items by id and path; the same item from two harnesses or two Scans lists both harnesses. */
+/**
+ * Items by id and path; the same item from two harnesses or two Scans lists both harnesses, and
+ * keeps the link target either one found.
+ */
 const unionItems = (lists: Iterable<readonly Item[]>): Item[] => {
   const items = new Map<string, Item>();
   for (const list of lists) {
@@ -185,7 +188,12 @@ const unionItems = (lists: Iterable<readonly Item[]>): Item[] => {
       const key = itemKey(item);
       const known = items.get(key);
       const harnesses = new Set([...(known?.harnesses ?? []), ...item.harnesses]);
-      items.set(key, { ...item, harnesses: [...harnesses].sort() });
+      const target = item.target ?? known?.target;
+      items.set(key, {
+        ...item,
+        harnesses: [...harnesses].sort(),
+        ...(target === undefined ? {} : { target }),
+      });
     }
   }
   return [...items.values()].sort(byKey(itemKey));

@@ -224,6 +224,11 @@ const ItemSchema = v.pipe(
     path: relativePath(
       "Its file or folder, relative to the home directory (`~/...`) or to the project.",
     ),
+    target: v.optional(
+      relativePath(
+        "Where `path` really is when a link is on the way to it, at the path or a folder above it, written like `path`; absent when `path` is where it is.",
+      ),
+    ),
     digest: v.pipe(
       v.string(),
       v.regex(/^[0-9a-f]{64}$/, "must be a lowercase hex sha256"),

@@ -615,3 +615,134 @@ describe("the scan cache", () => {
     expect(await findCanaryInDir(cacheDir(), forbidden(home, SESSIONS))).toEqual([]);
   });
 });
+
+describe("link targets", () => {
+  // Skills are the folders of SKILL.md files under `~/.agents/skills` and `~/.claude/skills`, and
+  // `~/.claude/named.txt` names more paths, one a line, as a harness config can.
+  const linker: Harness<FakeState> = defineHarness({
+    id: "linker",
+    signals: fake.signals,
+    inventory: async () => [],
+    machine: {
+      home: (place) => `${place.home}/.claude`,
+      sources: (place) => [
+        `${place.home}/.agents/skills`,
+        `${place.home}/.claude/skills`,
+        `${place.home}/.claude/named.txt`,
+      ],
+      roots: (place) => [`${place.home}/.claude/projects`],
+      async inventory(files) {
+        const named = ((await files.text("~/.claude/named.txt")) ?? "").split("\n");
+        const paths = [
+          ...files.paths
+            .filter((path) => path.endsWith("/SKILL.md"))
+            .map((path) => path.slice(0, -"/SKILL.md".length)),
+          ...named.filter(Boolean),
+        ];
+        return paths.map((path) => {
+          const name = path.split("/").at(-1)!;
+          return {
+            id: `skill:${name}`,
+            ref: { kind: "skill", name },
+            harnesses: ["linker"],
+            scope: "user",
+            managedBy: "hand",
+            path,
+            digest: "0".repeat(64),
+            chars: { listed: 1, body: 0 },
+            modelInvocable: true,
+          } satisfies Item;
+        });
+      },
+      transcripts: fake.machine!.transcripts,
+    },
+  });
+
+  const targets = async (home: string) => {
+    const scan = await scanMachine({
+      harnesses: [linker as Harness],
+      days: DAYS,
+      tool: "loadsheet@0.0.0-test",
+      machine: "test-machine",
+      now: NOW,
+      place: { home, env: {} },
+      cacheDir: false,
+    });
+    expect(parseScan(scan)).toEqual(scan);
+    return Object.fromEntries(scan.items.map((item) => [item.path, item.target]));
+  };
+
+  const skillAt = async (folder: string) => {
+    await NodeFSP.mkdir(folder, { recursive: true });
+    await NodeFSP.writeFile(`${folder}/SKILL.md`, "---\nname: x\n---\n");
+  };
+
+  let home: string;
+  beforeEach(async () => {
+    home = NodePath.join(tmp, "home");
+    await NodeFSP.mkdir(`${home}/.agents/skills`, { recursive: true });
+    await skillAt(`${home}/.claude/skills/weekly`);
+  });
+
+  it("marks a link to a skill's folder with the folder", async () => {
+    await NodeFSP.symlink(`${home}/.claude/skills/weekly`, `${home}/.agents/skills/weekly`);
+    expect(await targets(home)).toEqual({
+      "~/.agents/skills/weekly": "~/.claude/skills/weekly",
+      "~/.claude/skills/weekly": undefined,
+    });
+  });
+
+  it("marks a link to a folder inside another skill's folder", async () => {
+    await skillAt(`${home}/.claude/skills/weekly/child`);
+    await NodeFSP.symlink(`${home}/.claude/skills/weekly/child`, `${home}/.agents/skills/child`);
+    expect(await targets(home)).toEqual({
+      "~/.agents/skills/child": "~/.claude/skills/weekly/child",
+      "~/.claude/skills/weekly": undefined,
+      "~/.claude/skills/weekly/child": undefined,
+    });
+  });
+
+  it("marks every path under a linked parent folder", async () => {
+    await NodeFSP.rm(`${home}/.agents/skills`, { recursive: true });
+    await NodeFSP.symlink(`${home}/.claude/skills`, `${home}/.agents/skills`);
+    expect(await targets(home)).toEqual({
+      "~/.agents/skills/weekly": "~/.claude/skills/weekly",
+      "~/.claude/skills/weekly": undefined,
+    });
+  });
+
+  it("marks nothing for a home that is itself behind a link, and keys targets under its real folder", async () => {
+    const link = NodePath.join(tmp, "home-link");
+    await NodeFSP.symlink(home, link);
+    await NodeFSP.symlink(`${home}/.claude/skills/weekly`, `${home}/.agents/skills/weekly`);
+    expect(await targets(link)).toEqual({
+      "~/.agents/skills/weekly": "~/.claude/skills/weekly",
+      "~/.claude/skills/weekly": undefined,
+    });
+  });
+
+  it("marks nothing for a link that leads nowhere, or for a project's path", async () => {
+    await NodeFSP.symlink(`${home}/.claude/skills/gone`, `${home}/.agents/skills/gone`);
+    await NodeFSP.writeFile(
+      `${home}/.claude/named.txt`,
+      "~/.agents/skills/gone\n.claude/skills/project\n",
+    );
+    expect(await targets(home)).toEqual({
+      "~/.agents/skills/gone": undefined,
+      ".claude/skills/project": undefined,
+      "~/.claude/skills/weekly": undefined,
+    });
+  });
+
+  it("marks an absolute path outside the home that a link leads from", async () => {
+    const outside = NodePath.join(await NodeFSP.realpath(tmp), "elsewhere");
+    await skillAt(`${outside}/real`);
+    await NodeFSP.symlink(`${outside}/real`, `${outside}/linked`);
+    await NodeFSP.writeFile(`${home}/.claude/named.txt`, `${outside}/linked\n${outside}/real\n`);
+    expect(await targets(home)).toEqual({
+      [`${outside}/linked`]: `${outside}/real`,
+      [`${outside}/real`]: undefined,
+      "~/.claude/skills/weekly": undefined,
+    });
+  });
+});

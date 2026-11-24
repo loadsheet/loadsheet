@@ -54,6 +54,8 @@ export interface Item {
   managedBy: ManagedBy;
   /** Its file or folder, relative to the home directory (`~/...`) or to the project. */
   path: string;
+  /** Where `path` really is when a link is on the way to it, at the path or a folder above it, written like `path`; absent when `path` is where it is. */
+  target?: string;
   /** The sha256 of its file content, as lowercase hex. */
   digest: string;
   /** Its size in characters: listed is paid by every session that lists or loads it, body only by a session that invokes it. */

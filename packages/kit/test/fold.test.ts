@@ -190,3 +190,28 @@ describe("mergeScans", () => {
     expect(() => mergeScans(a, { ...a, machine: "n" })).toThrow(/one machine/);
   });
 });
+
+describe("buildScan", () => {
+  it("keeps the link target either harness found when their Items merge", () => {
+    const linked = { ...item("a", "h"), target: "~/.claude/skills/a" };
+    for (const order of [
+      [linked, item("a", "g")],
+      [item("a", "g"), linked],
+    ]) {
+      const scan = buildScan({
+        tool: "loadsheet@0.0.0",
+        machine: "m",
+        scannedAt: "2026-11-24T00:00:00.000Z",
+        window: ["2026-11-01", "2026-11-24"],
+        harnesses: order.map((one): HarnessScan => ({
+          harness: one.harnesses[0]!,
+          installed: true,
+          signals,
+          items: [one],
+          tally: foldFacts(one.harnesses[0]!, []),
+        })),
+      });
+      expect(scan.items).toEqual([{ ...linked, harnesses: ["g", "h"] }]);
+    }
+  });
+});

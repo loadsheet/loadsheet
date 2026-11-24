@@ -1,6 +1,6 @@
-import { readFile, stat } from "node:fs/promises";
+import { readFile, realpath, stat } from "node:fs/promises";
 import { homedir, hostname } from "node:os";
-import type { Day, Scan } from "@loadsheet/schema";
+import type { Day, Item, Scan } from "@loadsheet/schema";
 import {
   buildScan,
   foldFacts,
@@ -57,6 +57,28 @@ const homeKey = (path: string, home: string) => {
   const root = home.replace(/\/+$/u, "");
   if (path === root) return "~";
   return path.startsWith(`${root}/`) ? `~/${path.slice(root.length + 1)}` : path;
+};
+
+/**
+ * `items`, each with `target` where a link is on the way to its path: where the path really is,
+ * keyed like the path. A path that resolves to itself, or to itself under the real home when the
+ * home is behind a link, gets none, as does a project's path and one that no longer resolves.
+ */
+const withTargets = async (items: readonly Item[], home: string): Promise<Item[]> => {
+  const root = home.replace(/\/+$/u, "");
+  const realHome = await realpath(root).catch(() => root);
+  return Promise.all(
+    items.map(async (item) => {
+      const rest =
+        item.path === "~" ? "" : item.path.startsWith("~/") ? item.path.slice(1) : undefined;
+      if (rest === undefined && !item.path.startsWith("/")) return item;
+      const absolute = rest === undefined ? item.path : `${root}${rest}`;
+      const real = await realpath(absolute).catch(() => undefined);
+      if (real === undefined || real === absolute) return item;
+      if (rest !== undefined && real === `${realHome}${rest}`) return item;
+      return { ...item, target: homeKey(real, realHome) };
+    }),
+  );
 };
 
 /** A source file a harness names, such as `~/.claude.json`, which grows with use past MAX_FILE_BYTES. */
@@ -186,9 +208,9 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
     const machine = harness.machine;
     if (!machine) continue;
     const installed = await exists(machine.home(place));
-    const items = await machine.inventory(
-      await sourceFiles(machine.sources(place), place.home),
-      place,
+    const items = await withTargets(
+      await machine.inventory(await sourceFiles(machine.sources(place), place.home), place),
+      place.home,
     );
     const tallies = await readTranscripts(machine, harness.id, place, sinceMs, {
       tool: options.tool,

@@ -182,6 +182,12 @@
             "pattern": "^(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
             "description": "Its file or folder, relative to the home directory (`~/...`) or to the project."
           },
+          "target": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
+            "description": "Where `path` really is when a link is on the way to it, at the path or a folder above it, written like `path`; absent when `path` is where it is."
+          },
           "digest": {
             "type": "string",
             "pattern": "^[0-9a-f]{64}$",
