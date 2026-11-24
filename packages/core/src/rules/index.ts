@@ -1,7 +1,7 @@
-import type { RuleId, Signal } from "@loadsheet/schema";
 import { deadPack } from "./dead-pack.ts";
 import { deadSkill } from "./dead-skill.ts";
 import { drift } from "./drift.ts";
+import { duplicate } from "./duplicate.ts";
 import { expensiveDescription } from "./expensive-description.ts";
 import { harnessMismatch } from "./harness-mismatch.ts";
 import { heavyInstructions } from "./heavy-instructions.ts";
@@ -18,17 +18,10 @@ export const rules: Rule[] = [
   manualOnly as Rule,
   expensiveDescription as Rule,
   deadPack as Rule,
+  duplicate as Rule,
   heavyInstructions as Rule,
   idleMcp as Rule,
   harnessMismatch as Rule,
   drift as Rule,
   shortHistory as Rule,
 ];
-
-/**
- * The signals each rule not written yet will need, so a report can say why it did not run.
- * A rule moves from here into `rules` when it is written.
- */
-export const pendingRules: Partial<Record<RuleId, Signal[]>> = {
-  duplicate: [],
-};

@@ -660,6 +660,106 @@ describe("dead-pack", () => {
   });
 });
 
+describe("duplicate", () => {
+  const command = skill("deploy", { path: "~/.claude/commands/deploy.md" });
+  const codex = (path: string, extra: Partial<Item> = {}) =>
+    skill("deploy", { harnesses: ["codex"], path, ...extra });
+  const onCodex = (items: Item[]) =>
+    scan("laptop", {
+      coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
+      sessions: [...sessions(30), ...sessions(30, {}, "codex")],
+      items,
+    });
+  const same = { digest: "c".repeat(64), pack: "acme/kit", managedBy: "skills" as const };
+
+  it.each([
+    [
+      "fires for a skill and a command of one name",
+      scan("laptop", { items: [skill("deploy"), command] }),
+      ["skill:deploy"],
+    ],
+    [
+      "fires for two contents in two Codex folders",
+      onCodex([codex("~/.codex/skills/deploy"), codex("~/.agents/skills/deploy")]),
+      ["skill:deploy"],
+    ],
+    [
+      "holds for two links to one content from one source",
+      onCodex([codex("~/.codex/skills/deploy", same), codex("~/.agents/skills/deploy", same)]),
+      [],
+    ],
+    [
+      "holds for one folder two harnesses load",
+      onCodex([skill("deploy", { harnesses: ["claude-code", "codex"] })]),
+      [],
+    ],
+    [
+      "holds for one skill on each of two machines",
+      scan("laptop", { items: [skill("deploy")] }),
+      [],
+    ],
+  ])("%s", (_, built, expected) => {
+    const result = findingsOf([built, scan("server", { items: [skill("deploy")] })], "duplicate");
+    expect(result.items).toEqual(expected);
+    expect(result.skipped).toEqual([]);
+  });
+
+  it("dedupes the command Claude Code skips for the skill of its name, by its path", () => {
+    const { findings } = findingsOf(
+      [scan("laptop", { items: [skill("deploy"), command] })],
+      "duplicate",
+    );
+    expect(findings).toEqual([
+      {
+        id: "duplicate:skill:deploy",
+        rule: "duplicate",
+        level: "fix",
+        item: "skill:deploy",
+        where: [{ machine: "laptop", harness: "claude-code" }],
+        evidence: { copies: 2 },
+        fixes: [
+          {
+            machine: "laptop",
+            action: "dedupe",
+            path: "~/.claude/commands/deploy.md",
+            run: "rm -r ~/.claude/commands/deploy.md",
+          },
+        ],
+      },
+    ]);
+  });
+
+  it.each([
+    [
+      "Codex, which lists both",
+      onCodex([codex("~/.codex/skills/deploy"), codex("~/.agents/skills/deploy")]),
+    ],
+    [
+      "a skill in use, whose copies share its id",
+      scan("laptop", {
+        items: [skill("deploy"), command],
+        cells: [cell("deploy", 30, { byUser: 1 })],
+      }),
+    ],
+    [
+      "a command beside a project's skill, where precedence and kind disagree",
+      scan("laptop", {
+        items: [
+          skill("deploy", { scope: "project", path: "~/work/app/.claude/skills/deploy" }),
+          command,
+        ],
+      }),
+    ],
+    [
+      "a command an installer manages, which removes by name",
+      scan("laptop", { items: [skill("deploy"), { ...command, managedBy: "fleetrc" }] }),
+    ],
+  ])("gives no fix for %s", (_, built) => {
+    const { findings } = findingsOf([built], "duplicate");
+    expect(findings.map((f) => [f.id, f.fixes])).toEqual([["duplicate:skill:deploy", []]]);
+  });
+});
+
 describe("heavy-instructions", () => {
   it.each([
     ["fires past maxChars", 12001, ["instructions:CLAUDE.md"]],

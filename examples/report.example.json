@@ -1556,7 +1556,7 @@
     {
       "id": "duplicate:skill:git-commit",
       "rule": "duplicate",
-      "level": "cut",
+      "level": "fix",
       "item": "skill:git-commit",
       "where": [
         {
@@ -1565,20 +1565,9 @@
         }
       ],
       "evidence": {
-        "copies": 2,
-        "sessions": 140
+        "copies": 2
       },
-      "savesTokens": {
-        "value": 32,
-        "basis": "estimated"
-      },
-      "fixes": [
-        {
-          "machine": "laptop",
-          "action": "dedupe",
-          "path": "~/.codex/skills/git-commit"
-        }
-      ]
+      "fixes": []
     },
     {
       "id": "heavy-instructions:instructions:monorepo/CLAUDE.md",

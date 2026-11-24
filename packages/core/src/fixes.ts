@@ -29,6 +29,8 @@ interface HarnessFixes {
   skillsAgent?: string;
   /** Whether a bare listing is the user's own choice, not the listing's budget. */
   bareByChoice?: (item: Item) => boolean;
+  /** Of one skill's copies on a machine, those the harness does not load, when its order tells. */
+  shadowed?: (copies: Item[]) => Item[];
 }
 
 /** A path under Claude Code's config directory, which the first group names. */
@@ -96,6 +98,16 @@ const HARNESSES: Record<string, HarnessFixes> = {
     // `skillOverrides: name-only` lists the skill as the bare `- name`, which is all its Item lists.
     bareByChoice: (item) =>
       item.modelInvocable && item.chars.listed === `- ${item.ref.name}\n`.length,
+    // "If a skill and a command share the same name, the skill takes precedence" (Claude Code's
+    // skills documentation), so a command is shadowed by a skill in the same config directory.
+    shadowed: (copies) => {
+      const skills = copies.filter((item) => /\/skills\/[^/]+$/u.test(item.path));
+      return copies.filter(
+        (item) =>
+          /\/commands\/.+\.md$/u.test(item.path) &&
+          skills.some((skill) => claudeConfigDir(skill.path) === claudeConfigDir(item.path)),
+      );
+    },
   },
   codex: {
     // Codex reads the setting only from `agents/openai.yaml` in the skill's folder, which only a
@@ -269,6 +281,33 @@ export const removeFixes = (sheet: RuleSheet, line: Line, unfiltered: Unfiltered
   uniqueFixes(
     installsOf(sheet, line).flatMap((install) => removeOne(sheet, install, unfiltered) ?? []),
   );
+
+/**
+ * Removes the copies of a skill that a harness does not load, because another copy on the same
+ * machine shadows them, through the same guard as `removeFixes`: only its action changes, to
+ * `dedupe`. Only a copy made by hand is removed, by its path: an installer removes by name, which
+ * would take the copy that is loaded. A copy the guard would only hide, or keep, gets nothing, and
+ * so does every copy of a harness whose order loadsheet does not know. The guard reads use by id,
+ * which every copy shares, so a duplicate in use gets nothing either.
+ */
+export const dedupeFixes = (sheet: RuleSheet, installs: Install[], unfiltered: Unfiltered) => {
+  const shadowed = HARNESSES[sheet.harness]?.shadowed;
+  if (!shadowed) return [];
+  const byMachine = new Map<string, Install[]>();
+  for (const install of installs) {
+    byMachine.set(install.machine, [...(byMachine.get(install.machine) ?? []), install]);
+  }
+  return uniqueFixes(
+    [...byMachine.values()].flatMap((copies) => {
+      const lost = new Set(shadowed(copies.map(({ item }) => item)));
+      return copies.flatMap((install) => {
+        if (!lost.has(install.item) || install.item.managedBy !== "hand") return [];
+        const fix = removeOne(sheet, install, unfiltered);
+        return fix?.action === "remove" ? [{ ...fix, action: "dedupe" as const }] : [];
+      });
+    }),
+  );
+};
 
 /** Shortens the file that holds a skill's description, for each of these installs. */
 export const shortenFixes = (installs: Install[]): Fix[] =>

@@ -9,7 +9,7 @@ import type {
   Where,
 } from "@loadsheet/schema";
 import { RULES } from "@loadsheet/schema";
-import { pendingRules, rules } from "./rules/index.ts";
+import { rules } from "./rules/index.ts";
 import {
   NOTHING_UNFILTERED,
   type Rule,
@@ -41,9 +41,9 @@ export interface RuleInput {
 /**
  * Runs every enabled rule once over the sheets that can answer it. A sheet whose harness grades a
  * needed signal none is skipped as missing-signal, one with too little history as not-enough-data;
- * a disabled rule, or one not written yet whose signals are all there, is left out. A fix-level
- * finding whose every machine and harness a cut finding for the same item holds for is dropped,
- * and an item finding whose every place a cut finding for its pack holds for.
+ * a disabled rule is left out. A fix-level finding whose every machine and harness a cut finding
+ * for the same item holds for is dropped, and an item finding whose every place a cut finding for
+ * its pack holds for.
  */
 export const runRules = ({ mode, sheets, config, unfiltered = NOTHING_UNFILTERED }: RuleInput) => {
   const findings: Finding[] = [];
@@ -56,19 +56,19 @@ export const runRules = ({ mode, sheets, config, unfiltered = NOTHING_UNFILTERED
   const byId = new Map(rules.map((rule) => [rule.id, rule]));
   for (const id of RULES as readonly RuleId[]) {
     if (!config.rules[id].enabled) continue;
-    const rule = byId.get(id) as Rule | undefined;
-    const needs = rule?.needs ?? pendingRules[id] ?? [];
+    const rule = byId.get(id) as Rule;
+    const needs = rule.needs;
     const options = config.rules[id];
     const ready: RuleSheet[] = [];
     for (const sheet of visible) {
       const missing = needs.filter((signal) => sheet.signals[signal] === "none");
       if (missing.length) {
         skipped.push({ rule: id, harness: sheet.harness, reason: "missing-signal", missing });
-      } else if (rule?.enough && !rule.enough(sheet, options, config)) {
+      } else if (rule.enough && !rule.enough(sheet, options, config)) {
         skipped.push({ rule: id, harness: sheet.harness, reason: "not-enough-data" });
       } else ready.push(sheet);
     }
-    if (!rule || !ready.length) continue;
+    if (!ready.length) continue;
     findings.push(...rule.run({ mode, sheets: ready, options, config, unfiltered }));
   }
   const place = (item: Id, { machine, harness }: Where) => JSON.stringify([item, machine, harness]);

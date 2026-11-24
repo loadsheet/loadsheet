@@ -336,6 +336,8 @@ const noFixReason = (report: Report, finding: Finding): string => {
       return "every session that loads the file pays for all of it; trim what the agent does not need.";
     case "idle-mcp":
       return "every session lists the server; turn it off where you do not need it.";
+    case "duplicate":
+      return "loadsheet cannot tell which copy the harness skips, or that none is in use; keep one and remove the others with the tool that installed them.";
     case "dead-pack": {
       const lines = report.sheet.flatMap((sheet) => sheet.lines);
       if (lines.some((line) => line.pack === finding.pack && line.managedBy === "plugin"))

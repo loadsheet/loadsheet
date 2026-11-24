@@ -153,6 +153,7 @@ describe("renderText on the fleet example", () => {
 
   it("says why a finding has no fix, in the rule's own words", () => {
     expect(text).toContain("No fix: its copies on laptop, server differ;");
+    expect(text).toContain("No fix: loadsheet cannot tell which copy the harness skips");
     expect(text).toContain(
       "No fix: its skills come with a plugin. Turning the plugin off in /plugin",
     );
