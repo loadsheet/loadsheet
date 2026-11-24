@@ -243,8 +243,11 @@ export const mergeScans = (first: Scan, ...rest: Scan[]): Scan => {
   }
   // Oldest first, by instant rather than by spelling, so the later scan's description of an item
   // or harness is the one kept.
-  const ordered = [...scans].sort((a, b) => Date.parse(a.scannedAt) - Date.parse(b.scannedAt));
+  const instant = (scan: Scan) => Date.parse(scan.scannedAt);
+  const ordered = [...scans].sort((a, b) => instant(a) - instant(b));
   const latest = ordered.at(-1)!;
+  // An instant is a millisecond: two Scans within the last one cannot be put in order.
+  const tied = ordered.length > 1 && instant(ordered.at(-2)!) === instant(latest);
 
   const counters = new Accumulator();
   for (const scan of ordered) {
@@ -278,11 +281,13 @@ export const mergeScans = (first: Scan, ...rest: Scan[]): Scan => {
   // What an Item reaches was worked out on the disk as it was at its Scan. Only the latest Scan
   // speaks for the disk now, so an Item it does not hold keeps none, and neither does one that
   // reaches a path the latest Scan does not hold, which an older Scan's Item must not stand in for.
+  // When two Scans tie for latest, none does.
   const current = new Set(latest.items.map(itemKey));
   const paths = new Set(latest.items.map((item) => item.path));
   const asOf = (item: Item): Item => {
     if (item.reaches === undefined) return item;
-    if (current.has(itemKey(item)) && item.reaches.every((path) => paths.has(path))) return item;
+    if (!tied && current.has(itemKey(item)) && item.reaches.every((path) => paths.has(path)))
+      return item;
     const rest = { ...item };
     delete rest.reaches;
     return rest;

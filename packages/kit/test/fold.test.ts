@@ -228,4 +228,18 @@ describe("mergeScans", () => {
       expect(merged.scannedAt).toBe(latest.scannedAt);
     }
   });
+
+  it("keeps no reach when two Scans tie for the latest millisecond", () => {
+    const [shared] = scanOf([{ harness: "h", facts }]).items;
+    const at = (scannedAt: string, items: Scan["items"]): Scan => ({
+      ...scanOf([{ harness: "h", facts: [] }]),
+      scannedAt,
+      items,
+    });
+    const older = at("2026-11-24T13:00:00.000001Z", [{ ...shared!, reaches: [] }]);
+    const latest = at("2026-11-24T13:00:00.000002Z", [shared!]);
+    for (const merged of [mergeScans(older, latest), mergeScans(latest, older)]) {
+      expect(merged.items).toEqual([shared]);
+    }
+  });
 });
