@@ -1,6 +1,6 @@
 import { gzipSync } from "node:zlib";
 import { describe, expect, it } from "vite-plus/test";
-import { githubFiles, parseGithubUrl, readTar } from "../src/node/index.ts";
+import { githubFiles, githubUrl, parseGithubUrl, readTar } from "../src/node/index.ts";
 
 const encoder = new TextEncoder();
 
@@ -92,6 +92,17 @@ describe("readTar", () => {
       ]),
     );
     expect([...files.keys()]).toEqual([name]);
+  });
+});
+
+describe("githubUrl", () => {
+  it("drops credentials, the query and the fragment", () => {
+    expect(githubUrl("https://user:secret@github.com/o/r.git?token=secret#readme")).toBe(
+      "https://github.com/o/r",
+    );
+    expect(githubUrl("https://github.com/o/r/tree/v1/packs/a%20b/?x=/home/someone")).toBe(
+      "https://github.com/o/r/tree/v1/packs/a%20b",
+    );
   });
 });
 

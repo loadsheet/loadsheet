@@ -12,13 +12,18 @@ describe("readSkillMd", () => {
       name: "tidy",
       description: "Tidies things.",
       whenToUse: "When it is messy.",
+      firstLine: "# Title",
       disableModelInvocation: false,
       bodyChars: body.length,
     });
   });
 
   it("treats a file without frontmatter as all body", () => {
-    expect(readSkillMd("# Just text\n")).toEqual({ disableModelInvocation: false, bodyChars: 12 });
+    expect(readSkillMd("\n  # Just text\nMore\n")).toEqual({
+      firstLine: "# Just text",
+      disableModelInvocation: false,
+      bodyChars: 20,
+    });
   });
 
   it("folds a multi-line description", () => {
@@ -46,6 +51,7 @@ describe("readSkillMd", () => {
 
   it("ignores frontmatter that is not valid YAML", () => {
     expect(readSkillMd("---\nname: [unclosed\n---\nbody")).toEqual({
+      firstLine: "body",
       disableModelInvocation: false,
       bodyChars: 4,
     });

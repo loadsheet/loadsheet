@@ -49,6 +49,15 @@ export const parseGithubUrl = (input: string): GithubSource => {
   };
 };
 
+/** The URL of what a GitHub URL points at, without its query, fragment or credentials. */
+export const githubUrl = (input: string): string => {
+  const { owner, repo, ref, subdir } = parseGithubUrl(input);
+  const tree = ref
+    ? `/tree/${[ref, ...(subdir?.split("/") ?? [])].map(encodeURIComponent).join("/")}`
+    : "";
+  return `https://github.com/${owner}/${repo}${tree}`;
+};
+
 const decoder = new TextDecoder();
 
 const field = (block: Uint8Array, start: number, length: number) => {

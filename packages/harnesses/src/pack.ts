@@ -7,6 +7,8 @@ import { readSkillMd, type SkillMd } from "./skill-md.ts";
 export interface PackListing {
   /** The harness id that goes on each item. */
   harness: string;
+  /** The description the harness lists for an entry. */
+  description(skill: SkillMd): string | undefined;
   /** Characters the harness's listing spends on an entry with this name and frontmatter. */
   listedChars(name: string, skill: SkillMd): number;
 }
@@ -63,8 +65,10 @@ export const packInventory = async (files: Files, listing: PackListing): Promise
     const source = await files.text(file);
     if (source === undefined) continue;
     const skill = readSkillMd(source);
-    // Commands are named after their file; skills and subagents by their frontmatter name.
-    const name = qualify(file.startsWith("commands/") ? fallback : (skill.name ?? fallback));
+    // Commands are named after their file; skills and subagents by their frontmatter name. A name
+    // with a slash would read as a path in the Report, so the folder names the entry instead.
+    const named = skill.name !== undefined && !/[\\/]/u.test(skill.name);
+    const name = qualify(named && !file.startsWith("commands/") ? skill.name! : fallback);
     const listed = listing.listedChars(name, skill);
     const item: Item = {
       id: `${kind}:${name}`,
@@ -78,7 +82,8 @@ export const packInventory = async (files: Files, listing: PackListing): Promise
       modelInvocable: !skill.disableModelInvocation,
     };
     if (pack) item.pack = pack;
-    if (skill.description) item.description = skill.description;
+    const description = listing.description(skill);
+    if (description) item.description = description;
     items.push(item);
   }
   return items;

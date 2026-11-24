@@ -12,6 +12,18 @@ describe("claudeCodeListedChars", () => {
     expect(claudeCodeListedChars("x", readSkillMd(""))).toBe("- x\n".length);
   });
 
+  it("counts the body's first line for a skill with no description", () => {
+    const parsed = readSkillMd("---\nname: x\n---\n\n# Does it\n\nMore.\n");
+    expect(claudeCodeListedChars("x", parsed)).toBe("- x: # Does it\n".length);
+  });
+
+  it("counts at most 1,536 characters of description and when_to_use together", () => {
+    const parsed = readSkillMd(
+      `---\ndescription: ${"d".repeat(1000)}\nwhen_to_use: ${"w".repeat(1000)}\n---\n`,
+    );
+    expect(claudeCodeListedChars("x", parsed)).toBe("- x: \n".length + 1536);
+  });
+
   it("counts nothing for a skill the model may not invoke", () => {
     const parsed = readSkillMd("---\ndescription: D\ndisable-model-invocation: true\n---\n");
     expect(claudeCodeListedChars("x", parsed)).toBe(0);
@@ -107,6 +119,13 @@ describe("Claude Code pack inventory", () => {
         modelInvocable: false,
       },
     ]);
+  });
+
+  it("names a skill after its folder when its frontmatter name holds a slash", async () => {
+    const items = await claudeCode.inventory(
+      memoryFiles({ "skills/tidy/SKILL.md": "---\nname: /home/someone/tidy\n---\n" }, "acme/solo"),
+    );
+    expect(items.map((item) => item.id)).toEqual(["skill:tidy"]);
   });
 
   it("names a skill after its folder when the frontmatter has no name, and a root SKILL.md after the pack", async () => {

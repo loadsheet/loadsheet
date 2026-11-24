@@ -4,7 +4,7 @@ import { parseArgs } from "node:util";
 import { packReport, renderText } from "@loadsheet/core";
 import { claudeCode, findHarness, harnesses } from "@loadsheet/harnesses";
 import type { Files } from "@loadsheet/kit";
-import { dirFiles, githubFiles } from "@loadsheet/kit/node";
+import { dirFiles, githubFiles, githubUrl } from "@loadsheet/kit/node";
 import { resolveConfig } from "@loadsheet/schema";
 import pkg from "../package.json" with { type: "json" };
 
@@ -73,7 +73,7 @@ try {
 const report = packReport({
   items: await harness.inventory(files),
   harness,
-  source: isUrl ? target : basename(resolve(target)),
+  source: isUrl ? githubUrl(target) : basename(resolve(target)),
   config: resolveConfig(),
   now: new Date(),
   tool: `loadsheet@${pkg.version}`,

@@ -6,6 +6,8 @@ export interface SkillMd {
   name?: string;
   /** The frontmatter's `description`, trimmed. */
   description?: string;
+  /** The first non-empty line after the frontmatter, trimmed: what Claude Code lists for a skill with no description. */
+  firstLine?: string;
   /** The frontmatter's `when_to_use`, trimmed. */
   whenToUse?: string;
   /** Whether the frontmatter sets `disable-model-invocation: true`. */
@@ -49,8 +51,10 @@ export const readSkillMd = (source: string): SkillMd => {
   const name = text(data.name);
   const description = text(data.description);
   const whenToUse = text(data.when_to_use);
+  const firstLine = /\S.*/u.exec(body)?.[0].trim();
   if (name) skill.name = name;
   if (description) skill.description = description;
+  if (firstLine) skill.firstLine = firstLine;
   if (whenToUse) skill.whenToUse = whenToUse;
   return skill;
 };
