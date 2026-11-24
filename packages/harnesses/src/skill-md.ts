@@ -10,7 +10,7 @@ export interface SkillMd {
   firstLine?: string;
   /** The frontmatter's `when_to_use`, trimmed. */
   whenToUse?: string;
-  /** Whether the frontmatter sets `disable-model-invocation: true`. */
+  /** Whether the frontmatter sets `disable-model-invocation` to true, yes, on or 1. */
   disableModelInvocation: boolean;
   /** Characters after the frontmatter: what a session loads when it invokes the file. */
   bodyChars: number;
@@ -43,9 +43,10 @@ export const readSkillMd = (source: string): SkillMd => {
       // Unreadable frontmatter: the harness would not see its fields either.
     }
   }
-  const disable = data["disable-model-invocation"];
   const skill: SkillMd = {
-    disableModelInvocation: disable === true || disable === "true",
+    disableModelInvocation: /^(?:true|yes|on|1)$/iu.test(
+      text(data["disable-model-invocation"]) ?? "",
+    ),
     bodyChars: body.length,
   };
   const name = text(data.name);

@@ -12,9 +12,16 @@ describe("claudeCodeListedChars", () => {
     expect(claudeCodeListedChars("x", readSkillMd(""))).toBe("- x\n".length);
   });
 
-  it("counts the body's first line for a skill with no description", () => {
-    const parsed = readSkillMd("---\nname: x\n---\n\n# Does it\n\nMore.\n");
-    expect(claudeCodeListedChars("x", parsed)).toBe("- x: # Does it\n".length);
+  it("counts the body's first line, without its heading marker and up to 100 characters, for a skill with no description", () => {
+    const parsed = readSkillMd("---\nname: x\n---\n\n## Does it\n\nMore.\n");
+    expect(claudeCodeListedChars("x", parsed)).toBe("- x: Does it\n".length);
+    const long = readSkillMd(`# ${"h".repeat(400)}\n`);
+    expect(claudeCodeListedChars("x", long)).toBe("- x: \n".length + 100);
+  });
+
+  it("counts `<` and `>` as the `&lt;` and `&gt;` Claude Code lists", () => {
+    const parsed = readSkillMd("---\ndescription: Wraps <b> tags.\n---\n");
+    expect(claudeCodeListedChars("x", parsed)).toBe("- x: Wraps &lt;b&gt; tags.\n".length);
   });
 
   it("counts at most 1,536 characters of description and when_to_use together", () => {
@@ -24,10 +31,13 @@ describe("claudeCodeListedChars", () => {
     expect(claudeCodeListedChars("x", parsed)).toBe("- x: \n".length + 1536);
   });
 
-  it("counts nothing for a skill the model may not invoke", () => {
-    const parsed = readSkillMd("---\ndescription: D\ndisable-model-invocation: true\n---\n");
-    expect(claudeCodeListedChars("x", parsed)).toBe(0);
-  });
+  it.each(["true", "yes", "On", "1"])(
+    "counts nothing for a skill with disable-model-invocation: %s",
+    (value) => {
+      const parsed = readSkillMd(`---\ndescription: D\ndisable-model-invocation: ${value}\n---\n`);
+      expect(claudeCodeListedChars("x", parsed)).toBe(0);
+    },
+  );
 });
 
 describe("Claude Code pack inventory", () => {
@@ -121,11 +131,27 @@ describe("Claude Code pack inventory", () => {
     ]);
   });
 
-  it("names a skill after its folder when its frontmatter name holds a slash", async () => {
+  it("names a skill after its folder when its frontmatter name holds a slash or a line break", async () => {
     const items = await claudeCode.inventory(
-      memoryFiles({ "skills/tidy/SKILL.md": "---\nname: /home/someone/tidy\n---\n" }, "acme/solo"),
+      memoryFiles(
+        {
+          "skills/tidy/SKILL.md": "---\nname: /home/someone/tidy\n---\n",
+          "skills/sweep/SKILL.md": "---\nname: |\n  first\n  second\n---\n",
+        },
+        "acme/solo",
+      ),
     );
-    expect(items.map((item) => item.id)).toEqual(["skill:tidy"]);
+    expect(items.map((item) => item.id)).toEqual(["skill:sweep", "skill:tidy"]);
+  });
+
+  it("gives a manual-only skill with no description none, and a listed one its first line", async () => {
+    const items = await claudeCode.inventory(
+      memoryFiles({
+        "a/SKILL.md": "---\ndisable-model-invocation: true\n---\n# Private steps\n",
+        "b/SKILL.md": "# Tidies things\n",
+      }),
+    );
+    expect(items.map((item) => item.description)).toEqual([undefined, "Tidies things"]);
   });
 
   it("names a skill after its folder when the frontmatter has no name, and a root SKILL.md after the pack", async () => {

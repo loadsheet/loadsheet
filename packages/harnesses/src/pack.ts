@@ -65,9 +65,10 @@ export const packInventory = async (files: Files, listing: PackListing): Promise
     const source = await files.text(file);
     if (source === undefined) continue;
     const skill = readSkillMd(source);
-    // Commands are named after their file; skills and subagents by their frontmatter name. A name
-    // with a slash would read as a path in the Report, so the folder names the entry instead.
-    const named = skill.name !== undefined && !/[\\/]/u.test(skill.name);
+    // Commands are named after their file; skills and subagents by their frontmatter name. Claude
+    // Code refuses a name with a control character, `<` or `>`, and one with a slash would read as
+    // a path in the Report; the folder names those entries instead.
+    const named = skill.name !== undefined && !/[\\/<>\p{Cc}]/u.test(skill.name);
     const name = qualify(named && !file.startsWith("commands/") ? skill.name! : fallback);
     const listed = listing.listedChars(name, skill);
     const item: Item = {
