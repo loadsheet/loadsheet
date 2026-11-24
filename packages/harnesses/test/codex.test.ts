@@ -584,11 +584,11 @@ describe("codex machine", () => {
       memoryFiles({
         "~/.agents/.skill-lock.json": JSON.stringify({
           version: 3,
-          skills: { locked: { source: "acme/skills" } },
+          skills: { locked: { source: "acme/skills", sourceType: "github" } },
         }),
         "~/.agents/skills/.fleetrc-manifest.json": JSON.stringify({
           version: 1,
-          links: { linked: { target: "/home/u/.agents/skills/linked", source: "onmax/skills" } },
+          links: { linked: { target: "/home/u/.agents/skills/linked", source: "onmax-skills" } },
         }),
         "~/.agents/skills/linked/SKILL.md": skillMd("linked", "Linked."),
         "~/.agents/skills/locked/SKILL.md": skillMd("locked", "Locked."),
@@ -599,7 +599,7 @@ describe("codex machine", () => {
     );
     expect(items.map((item) => [item.id, item.managedBy, item.pack])).toEqual([
       ["skill:mine", "hand", undefined],
-      ["skill:linked", "fleetrc", "onmax/skills"],
+      ["skill:linked", "fleetrc", "onmax-skills"],
       ["skill:locked", "skills", "acme/skills"],
       ["skill:kit:lint", "plugin", "kit"],
     ]);
