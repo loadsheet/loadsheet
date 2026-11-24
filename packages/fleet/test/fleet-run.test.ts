@@ -163,6 +163,27 @@ describe.skipIf(isWindows)("fleet run", () => {
     }
   });
 
+  it("runs an entry here only when it is this machine for certain, and tries the rest over ssh", async () => {
+    const m = machine();
+    vi.stubEnv("FLEETRC_SSH", fakeSsh(m).FLEETRC_SSH);
+    const label = hostname().split(".")[0];
+    const elsewhere = [`${label}.example`, `ssh://review@${label}:2222`];
+    try {
+      const results = await fleetRun(
+        [hostname(), "me.tail.ts.net", ...elsewhere].map((host) => ({ host })),
+        ["sh", "-c", "echo here"],
+        2_000,
+        { here: false, magicDNS: "me.tail.ts.net" },
+      );
+      expect(results).toEqual([
+        { host: hostname(), reachable: true, exitCode: 0, stdout: "here\n", stderr: "" },
+        ...elsewhere.map((host) => expect.objectContaining({ host, reachable: false })),
+      ]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("needs a command after --", async () => {
     const m = machine();
     const manifest = m.manifest({ agents: ["claude-code"], sources: [], fleet: ["box"] });

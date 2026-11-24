@@ -706,24 +706,33 @@ export interface RunResult {
   error?: string;
 }
 
-/** Whether a fleet entry names this machine, by its hostname or the first label of it. */
-function isThisMachine(host: string): boolean {
-  const own = hostname().toLowerCase();
-  const name = hostKey(sshTarget(host).machine);
-  return name === own || name === own.split(".")[0] || name.split(".")[0] === own;
+/**
+ * Whether a fleet entry is this machine for certain: it names no user or port, and its name is this
+ * machine's hostname or `magicDNS`, its MagicDNS name when Tailscale was asked, or, for a bare
+ * label, the first label of either.
+ */
+function isThisMachine(entry: string, magicDNS = ""): boolean {
+  const { machine, user, port } = sshTarget(entry);
+  if (user || port) return false;
+  const name = hostKey(machine);
+  return [hostname(), magicDNS].some((own) => {
+    const key = hostKey(own);
+    return key !== "" && (name === key || (!name.includes(".") && name === key.split(".")[0]));
+  });
 }
 
 /**
  * Runs `argv` over ssh on every target and, unless `here` is false, directly on this machine, from
  * the home folder where ssh starts a command; all at once. This machine comes first, and a target
- * that names it runs there directly instead. A host that is offline, does not answer or cannot be tried is unreachable, with no exit
- * code; a command still running after `timeoutMs` is stopped and has none either.
+ * that is it for certain (`isThisMachine`, given `magicDNS` when Tailscale was asked) runs there
+ * directly instead. A host that is offline, does not answer or cannot be tried is unreachable, with
+ * no exit code; a command still running after `timeoutMs` is stopped and has none either.
  */
 export async function fleetRun(
   targets: readonly FleetTarget[],
   argv: readonly [string, ...string[]],
   timeoutMs = 30_000,
-  { here = true }: { here?: boolean } = {},
+  { here = true, magicDNS }: { here?: boolean; magicDNS?: string } = {},
 ): Promise<RunResult[]> {
   const after = `${Math.round(timeoutMs / 1000)} s`;
   const stopped = `timed out after ${after}, so the command was stopped`;
@@ -795,7 +804,7 @@ export async function fleetRun(
       };
     return { host, reachable: true, exitCode: Number(exit), stdout: run.stdout, stderr };
   };
-  const remotes = targets.filter(({ host }) => !isThisMachine(host));
+  const remotes = targets.filter(({ host }) => !isThisMachine(host, magicDNS));
   return Promise.all([
     ...(here || remotes.length < targets.length ? [local()] : []),
     ...remotes.map(remote),
@@ -927,6 +936,8 @@ export interface Tailnet {
   peers: TailscalePeer[];
   /** False when the tailnet has MagicDNS off, so only a peer's Tailscale IP reaches it. */
   magicDNS: boolean;
+  /** This machine, which Tailscale lists under Self: its MagicDNS name, or "". */
+  self?: { dns: string };
 }
 
 /** The machines on the tailnet other than this one, or why Tailscale could not list them. */
@@ -959,7 +970,11 @@ export async function tailnet(timeoutMs = 10_000): Promise<Tailnet | { error: st
   });
   // Older Tailscale versions leave CurrentTailnet out; MagicDNS is on unless it says otherwise.
   const current = isRecord(parsed.CurrentTailnet) ? parsed.CurrentTailnet : {};
-  return { peers, magicDNS: current.MagicDNSEnabled !== false };
+  return {
+    peers,
+    magicDNS: current.MagicDNSEnabled !== false,
+    self: { dns: typeof self.DNSName === "string" ? self.DNSName.replace(/\.$/, "") : "" },
+  };
 }
 
 /**
@@ -1158,6 +1173,8 @@ export async function resolveFleet(
   targets: FleetTarget[];
   warnings: string[];
   enrollment: Map<string, FleetTarget[] | null>;
+  /** This machine as Tailscale lists it, when Tailscale was asked. */
+  self?: Tailnet["self"];
 }> {
   const warnings: string[] = [];
   const tagNames = new Set(entries.filter(isTag).map((entry) => entry.toLowerCase()));
@@ -1381,7 +1398,12 @@ export async function resolveFleet(
     if (matches.length > 0)
       enrollment.set(entry, requiredTargets.length === matches.length ? requiredTargets : null);
   }
-  return { targets: [...targets], warnings, enrollment };
+  return {
+    targets: [...targets],
+    warnings,
+    enrollment,
+    ...("peers" in answer && answer.self && { self: answer.self }),
+  };
 }
 
 /**

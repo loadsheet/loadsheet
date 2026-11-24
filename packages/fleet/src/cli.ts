@@ -1237,9 +1237,12 @@ async function fleetRunCommand(loaded: Awaited<ReturnType<typeof loadManifest>>)
   const bad = entries.filter(isTag).flatMap((entry) => tagProblem(entry) ?? []);
   if (bad.length > 0) usage(bad.join("; "));
   const timeout = fleetTimeout(30_000);
-  const { targets } = await fleetTargets(entries, timeout, "status");
+  const { targets, self } = await fleetTargets(entries, timeout, "status");
   // Hosts named on the command line narrow the run to them, as for fleet sync.
-  const results = await fleetRun(targets, words, timeout, { here: named.length === 0 });
+  const results = await fleetRun(targets, words, timeout, {
+    here: named.length === 0,
+    magicDNS: self?.dns,
+  });
   const lines = (host: string, text: string) =>
     text === "" ? "" : `${text.replace(/\r?\n$/, "").replace(/^/gm, `${host}: `)}\n`;
   for (const { host, stderr } of results) process.stderr.write(lines(host, stderr));
@@ -1276,7 +1279,7 @@ async function fleetTargets(
   action: FleetAction,
   setup?: InitSetup,
 ) {
-  const { targets, warnings, enrollment } = await resolveFleet(entries, undefined, timeout, {
+  const { targets, warnings, enrollment, self } = await resolveFleet(entries, undefined, timeout, {
     action,
     version,
     dryRun,
@@ -1293,7 +1296,7 @@ async function fleetTargets(
           .map((target) => `${target.host}${target.offline ? " (offline)" : ""}`)
           .join(", ")}`,
       );
-  return { targets, enrollment };
+  return { targets, enrollment, self };
 }
 
 /**
