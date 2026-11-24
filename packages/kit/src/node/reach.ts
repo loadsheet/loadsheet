@@ -169,7 +169,10 @@ const follow = (disk: Disk, from: string, path: string, way: Set<string>): Walke
   return walked;
 };
 
-/** Adds every entry of the real folder at `dir` to `needs`, and for each link in it, where it leads. */
+/**
+ * Adds every entry of the real folder at `dir` to `needs`, and for each link in it, where it leads.
+ * Folders wait in a list, not in a call each: a chain of links can be thousands of folders deep.
+ */
 const walkTree = (
   disk: Disk,
   dir: string,
@@ -178,22 +181,23 @@ const walkTree = (
   walked: Set<string>,
   budget: { left: number },
 ) => {
-  if (walked.has(entry.id)) return;
-  walked.add(entry.id);
-  for (const name of disk.readdir(dir)) {
-    const path = childOf(dir, name);
-    const found = disk.lstat(path);
-    if (!found) continue;
-    if (found.kind === "dir" && SKIPPED.has(name)) continue;
-    budget.left -= 1;
-    if (budget.left < 0) throw new Unknown();
-    needs.add(found.id);
-    if (found.kind === "dir") {
-      walkTree(disk, path, found, needs, walked, budget);
-    } else if (found.kind === "link") {
-      const { place } = follow(disk, dir, name, needs);
-      if (place?.entry.kind === "dir") {
-        walkTree(disk, place.path, place.entry, needs, walked, budget);
+  const folders = [{ dir, entry }];
+  for (let folder = folders.pop(); folder; folder = folders.pop()) {
+    if (walked.has(folder.entry.id)) continue;
+    walked.add(folder.entry.id);
+    for (const name of disk.readdir(folder.dir)) {
+      const path = childOf(folder.dir, name);
+      const found = disk.lstat(path);
+      if (!found) continue;
+      if (found.kind === "dir" && SKIPPED.has(name)) continue;
+      budget.left -= 1;
+      if (budget.left < 0) throw new Unknown();
+      needs.add(found.id);
+      if (found.kind === "dir") {
+        folders.push({ dir: path, entry: found });
+      } else if (found.kind === "link") {
+        const { place } = follow(disk, folder.dir, name, needs);
+        if (place?.entry.kind === "dir") folders.push({ dir: place.path, entry: place.entry });
       }
     }
   }

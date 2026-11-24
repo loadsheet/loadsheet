@@ -513,6 +513,33 @@ describe("reaches, by hand", () => {
     ).toEqual({ "~/s/p": ["~/s/shared", "~/s/x"], "~/s/x": [], "~/s/shared": ["~/s/x"] });
   });
 
+  // In a Node of its own: the test runner's call stack is deeper than the one the CLI runs on.
+  it("a chain of links through thousands of folders is walked to its end", () => {
+    const last = 3900;
+    const base = join(tmp, "deep-chain");
+    build(base, [
+      ...Array.from({ length: last }, (_, i): Op => ({
+        link: `real/s/${i}/node_modules`,
+        to: `../${i + 1}`,
+      })),
+      { file: "real/s/0/SKILL.md", text: "skill" },
+      { file: `real/s/${last}/SKILL.md`, text: "skill" },
+    ]);
+    const items = [join(base, "real/s/0"), join(base, `real/s/${last}`)];
+    const script = `
+      import { reachesOf } from ${JSON.stringify(new URL("../src/node/reach.ts", import.meta.url).href)};
+      const found = reachesOf(${JSON.stringify(items)}, ${JSON.stringify(join(base, "real"))});
+      console.log(JSON.stringify([...found]));`;
+    const printed = execFileSync(process.execPath, ["--input-type=module", "-e", script], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    expect(JSON.parse(printed)).toEqual([
+      [items[0], []],
+      [items[1], [items[0]]],
+    ]);
+  });
+
   it("a name or a link target that is not UTF-8 is unknown and every other Item lists it", () => {
     const base = join(tmp, "not-utf8");
     build(base, [...skill("real/s/a"), ...skill("real/s/b"), ...skill("real/s/c")]);
