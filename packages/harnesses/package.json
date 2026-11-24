@@ -28,7 +28,8 @@
   },
   "dependencies": {
     "@loadsheet/kit": "workspace:*",
-    "@loadsheet/schema": "workspace:*"
+    "@loadsheet/schema": "workspace:*",
+    "tinyaml": "catalog:"
   },
   "engines": {
     "node": ">=22.12.0"
