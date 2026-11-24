@@ -190,12 +190,84 @@ function openZstdDecoder() {
   return state;
 }
 
+const ZSTD_MAGIC = 0xfd2fb528;
+/** The first of the sixteen magic numbers a skippable frame may start with. */
+const ZSTD_SKIPPABLE_MAGIC = 0x184d2a50;
+
+/**
+ * Follows a zstd stream's frames and blocks without decoding them, to tell whether the stream
+ * stops where a frame does. Node 24's decoder throws on a frame cut short; Node 22's ends as if
+ * the frame were whole. The layout is RFC 8878, section 3.1.
+ */
+function zstdFrameTracker() {
+  type Field = "magic" | "descriptor" | "skippable" | "block" | "unknown";
+  const bytes = Buffer.alloc(4);
+  let field: Field = "magic";
+  let want = 4;
+  let have = 0;
+  /** Bytes to pass over before the field starts. */
+  let skip = 0;
+  let checksum = 0;
+  let frames = 0;
+  const expect = (next: Field, size: number, after: number) => {
+    field = next;
+    want = size;
+    have = 0;
+    skip = after;
+  };
+  const read = () => {
+    if (field === "magic") {
+      const magic = bytes.readUInt32LE(0);
+      if (magic === ZSTD_MAGIC) expect("descriptor", 1, 0);
+      else if (magic >>> 4 === ZSTD_SKIPPABLE_MAGIC >>> 4) expect("skippable", 4, 0);
+      else return expect("unknown", 0, 0);
+      frames += 1;
+    } else if (field === "skippable") {
+      expect("magic", 4, bytes.readUInt32LE(0));
+    } else if (field === "descriptor") {
+      const descriptor = bytes[0]!;
+      const singleSegment = (descriptor >> 5) & 1;
+      const contentSize = descriptor >> 6 === 0 ? singleSegment : 1 << (descriptor >> 6);
+      const dictionaryId = [0, 1, 2, 4][descriptor & 3]!;
+      checksum = (descriptor >> 2) & 1 ? 4 : 0;
+      expect("block", 3, (singleSegment ? 0 : 1) + dictionaryId + contentSize);
+    } else {
+      const header = bytes.readUIntLE(0, 3);
+      const type = (header >> 1) & 3;
+      if (type === 3) return expect("unknown", 0, 0);
+      // A run-length block stores its one byte, whatever size it decodes to.
+      const stored = type === 1 ? 1 : header >> 3;
+      if (header & 1) expect("magic", 4, stored + checksum);
+      else expect("block", 3, stored);
+    }
+  };
+  return {
+    write(chunk: Buffer) {
+      let at = 0;
+      while (at < chunk.length && field !== "unknown") {
+        const passed = Math.min(skip, chunk.length - at);
+        skip -= passed;
+        at += passed;
+        const taken = Math.min(want - have, chunk.length - at);
+        chunk.copy(bytes, have, at, at + taken);
+        have += taken;
+        at += taken;
+        if (skip === 0 && have === want) read();
+      }
+    },
+    /** At least one frame, and nothing after the last one's end. */
+    whole: () => field === "magic" && have === 0 && skip === 0 && frames > 0,
+  };
+}
+
 /**
  * Decodes every frame of a zstd stream, reading the output as it comes so the decoder never
  * holds more than its own buffer. Node's decoder closes when a frame ends inside a chunk and
- * drops the rest of that chunk, so the rest goes to a new decoder.
+ * drops the rest of that chunk, so the rest goes to a new decoder. Throws on a stream that is
+ * empty or stops inside a frame.
  */
 async function* zstdFrames(input: AsyncIterable<Buffer>): AsyncGenerator<Buffer> {
+  const tracker = zstdFrameTracker();
   let current = openZstdDecoder();
   async function* decodedUntil(reached: () => boolean): AsyncGenerator<Buffer> {
     for (;;) {
@@ -208,6 +280,7 @@ async function* zstdFrames(input: AsyncIterable<Buffer>): AsyncGenerator<Buffer>
   }
   try {
     for await (const chunk of input) {
+      tracker.write(chunk);
       let rest = chunk;
       while (rest.length > 0) {
         const { decoder } = current;
@@ -228,6 +301,7 @@ async function* zstdFrames(input: AsyncIterable<Buffer>): AsyncGenerator<Buffer>
         }
       }
     }
+    if (!tracker.whole()) throw new Error("the zstd stream is empty or stops inside a frame");
     current.decoder.end();
     yield* decodedUntil(() => current.ended);
   } finally {

@@ -310,6 +310,60 @@ describe("readTranscript", () => {
     },
   );
 
+  it.runIf(typeof NodeZlib.zstdCompressSync === "function")(
+    "reads a .jsonl.zst file cut anywhere only when the cut is where a frame ends",
+    async () => {
+      const path = NodePath.join(dir, "t.jsonl.zst");
+      const frames = [line(1) + line(2), line(3), line(4) + line(5)].map((frame) =>
+        NodeZlib.zstdCompressSync(frame),
+      );
+      const file = Buffer.concat(frames);
+      const ends = new Map([
+        [frames[0]!.length, [1, 2]],
+        [frames[0]!.length + frames[1]!.length, [1, 2, 3]],
+      ]);
+      for (let cut = 0; cut < file.length; cut += 1) {
+        await NodeFSP.writeFile(path, file.subarray(0, cut));
+        for (const chunkBytes of [file.length, 5]) {
+          const result = await readTranscript(path, counting, undefined, { chunkBytes });
+          expect(result?.records.map((entry) => entry.n) ?? null, `cut at ${cut}`).toEqual(
+            ends.get(cut) ?? null,
+          );
+        }
+      }
+    },
+  );
+
+  it.runIf(typeof NodeZlib.zstdCompressSync === "function")(
+    "follows the blocks, checksum and skippable frames of a .jsonl.zst file",
+    async () => {
+      const path = NodePath.join(dir, "t.jsonl.zst");
+      // Past zstd's 128 KiB block size: several compressed blocks, then run-length ones.
+      let body = line(1);
+      for (const record of generate(7, 6000, 40).toString().split(/\r?\n/u)) body += record + "\n";
+      body += JSON.stringify({ k: "noise", text: "a".repeat(400_000) }) + "\n" + line(2);
+      const checked = NodeZlib.zstdCompressSync(body, {
+        params: { [NodeZlib.constants.ZSTD_c_checksumFlag]: 1 },
+      });
+      const skippable = Buffer.from([0x53, 0x2a, 0x4d, 0x18, 3, 0, 0, 0, 1, 2, 3]);
+      const file = Buffer.concat([skippable, checked, NodeZlib.zstdCompressSync(line(3))]);
+
+      await NodeFSP.writeFile(path, file);
+      const whole = await readTranscript(path, counting);
+      expect(whole!.records.at(0)!.n).toBe(1);
+      expect(whole!.records.slice(-2).map((entry) => entry.n)).toEqual([2, 3]);
+
+      await NodeFSP.writeFile(path, file.subarray(0, skippable.length + checked.length));
+      const first = await readTranscript(path, counting);
+      expect(first!.records.at(-1)!.n).toBe(2);
+
+      for (const cut of [skippable.length - 1, skippable.length + checked.length - 1]) {
+        await NodeFSP.writeFile(path, file.subarray(0, cut));
+        expect(await readTranscript(path, counting), `cut at ${cut}`).toBeNull();
+      }
+    },
+  );
+
   it("returns null for a corrupt .zst file", async () => {
     const path = NodePath.join(dir, "t.jsonl.zst");
     await NodeFSP.writeFile(path, "not a zstd frame");
