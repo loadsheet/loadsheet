@@ -24,6 +24,7 @@
 
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
+import type { Transform } from "node:stream";
 import * as NodeZlib from "node:zlib";
 
 export interface TranscriptFile {
@@ -84,13 +85,11 @@ function fnv1a(buffer: Buffer): number {
   return hash >>> 0;
 }
 
-/** Walks `root` for `.jsonl` and `.jsonl.zst` files (or files named `fileName`) modified at or after `sinceMs`, in readdir order. */
+/** Walks `root` for `.jsonl` and `.jsonl.zst` files modified at or after `sinceMs`, in readdir order. */
 export async function listTranscriptFiles(
   root: string,
   sinceMs: number,
-  options?: { readonly fileName?: string },
 ): Promise<{ files: TranscriptFile[]; failedPaths: number }> {
-  const fileName = options?.fileName;
   const candidates: string[] = [];
   let failedPaths = 0;
   const walk = async (dir: string): Promise<void> => {
@@ -104,11 +103,7 @@ export async function listTranscriptFiles(
     for (const entry of entries) {
       const child = NodePath.join(dir, entry.name);
       if (entry.isDirectory()) await walk(child);
-      else if (
-        fileName !== undefined
-          ? entry.name === fileName
-          : entry.name.endsWith(".jsonl") || entry.name.endsWith(".jsonl.zst")
-      ) {
+      else if (entry.name.endsWith(".jsonl") || entry.name.endsWith(".jsonl.zst")) {
         candidates.push(child);
       }
     }
@@ -168,11 +163,53 @@ export function lineGate(markers: readonly [string, ...string[]]): (line: Buffer
   return (line) => pattern.test(line.toString("latin1"));
 }
 
-type ZstdDecompress = () => NodeJS.ReadWriteStream;
+type ZstdDecompress = () => Transform & { readonly bytesWritten: number };
 
 /** `zlib.createZstdDecompress` landed in Node 22.15 and 23.8; older runtimes cannot read `.zst`. */
 const createZstdDecompress = (NodeZlib as { createZstdDecompress?: ZstdDecompress })
   .createZstdDecompress;
+
+/** One zstd frame's decoder: what it decoded so far, and whether it finished or failed. */
+function openZstdFrame() {
+  const decoder = createZstdDecompress!();
+  const decoded: Buffer[] = [];
+  decoder.on("data", (chunk: Buffer) => decoded.push(chunk));
+  const failed = new Promise<never>((_, reject) => decoder.once("error", reject));
+  const done = Promise.race([new Promise((resolve) => decoder.once("end", resolve)), failed]);
+  failed.catch(() => undefined);
+  done.catch(() => undefined);
+  return { decoder, decoded, failed, done };
+}
+
+/**
+ * Decodes every frame of a zstd stream. Node's decoder closes when a frame ends inside a chunk
+ * and drops the rest of that chunk, so the rest goes to a new decoder.
+ */
+async function* zstdFrames(input: AsyncIterable<Buffer>): AsyncGenerator<Buffer> {
+  let frame = openZstdFrame();
+  try {
+    for await (const chunk of input) {
+      let rest = chunk;
+      while (rest.length > 0) {
+        const { decoder } = frame;
+        const before = decoder.bytesWritten;
+        const written = new Promise<void>((resolve) => decoder.write(rest, () => resolve()));
+        await Promise.race([written, frame.failed]);
+        const used = decoder.bytesWritten - before;
+        if (used === 0) throw new Error("the zstd decoder read nothing");
+        rest = rest.subarray(used);
+        if (rest.length > 0) await frame.done;
+        yield* frame.decoded.splice(0);
+        if (rest.length > 0) frame = openZstdFrame();
+      }
+    }
+    frame.decoder.end();
+    await frame.done;
+    yield* frame.decoded.splice(0);
+  } finally {
+    frame.decoder.destroy();
+  }
+}
 
 /**
  * Reads a JSONL transcript from `resumeFrom` when its guard still matches, else from the start.
@@ -230,9 +267,7 @@ export async function readTranscript<State, Entry>(
       autoClose: false,
       highWaterMark: chunkBytes,
     });
-    const stream: AsyncIterable<Buffer> = compressed
-      ? input.compose(createZstdDecompress!())
-      : input;
+    const stream: AsyncIterable<Buffer> = compressed ? zstdFrames(input) : input;
 
     for await (const chunk of stream) {
       let lineStart = 0;

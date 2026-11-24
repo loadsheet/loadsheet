@@ -290,6 +290,26 @@ describe("readTranscript", () => {
     },
   );
 
+  it.runIf(typeof NodeZlib.zstdCompressSync === "function")(
+    "reads every frame of a .jsonl.zst file, wherever a chunk ends",
+    async () => {
+      const path = NodePath.join(dir, "t.jsonl.zst");
+      const frames = [line(1) + line(2), line(3, "日本"), line(4) + line(5)];
+      const file = Buffer.concat(frames.map((frame) => NodeZlib.zstdCompressSync(frame)));
+      await NodeFSP.writeFile(path, file);
+      for (const chunkBytes of [file.length, 7, 1]) {
+        const result = await readTranscript(path, counting, undefined, { chunkBytes });
+        expect(result!.records.map((entry) => entry.n)).toEqual([1, 2, 3, 4, 5]);
+      }
+
+      for (const broken of [file.subarray(0, -3), Buffer.concat([file, Buffer.from("junk")])]) {
+        await NodeFSP.writeFile(path, broken);
+        expect(await readTranscript(path, counting)).toBeNull();
+        expect(await readTranscript(path, counting, undefined, { chunkBytes: 7 })).toBeNull();
+      }
+    },
+  );
+
   it("returns null for a corrupt .zst file", async () => {
     const path = NodePath.join(dir, "t.jsonl.zst");
     await NodeFSP.writeFile(path, "not a zstd frame");
@@ -319,11 +339,7 @@ describe("listTranscriptFiles", () => {
     expect(listed.failedPaths).toBe(0);
   });
 
-  it("matches an exact file name and counts a missing root as failed", async () => {
-    await NodeFSP.writeFile(NodePath.join(dir, "history.jsonl"), "");
-    await NodeFSP.writeFile(NodePath.join(dir, "other.jsonl"), "");
-    const listed = await listTranscriptFiles(dir, 0, { fileName: "history.jsonl" });
-    expect(listed.files.map((file) => NodePath.basename(file.path))).toEqual(["history.jsonl"]);
+  it("counts a missing root as failed", async () => {
     expect((await listTranscriptFiles(NodePath.join(dir, "none"), 0)).failedPaths).toBe(1);
   });
 });

@@ -87,12 +87,12 @@ function strings(value: unknown, out: string[] = []): string[] {
   return out;
 }
 
-// Every string blanked: what must survive sanitizing.
+// Every string blanked and every key dropped: what must survive sanitizing.
 function shape(value: unknown): unknown {
   if (typeof value === "string") return "";
   if (Array.isArray(value)) return value.map(shape);
   if (typeof value === "object" && value !== null) {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, shape(item)]));
+    return { values: Object.values(value).map(shape) };
   }
   return value;
 }
@@ -115,13 +115,18 @@ describe("sanitize with an empty policy", () => {
     }
   });
 
-  it.each([5, 6])("keeps structure, keys and numbers, seed %i", (seed) => {
+  it.each([5, 6])("keeps structure and numbers, seed %i", (seed) => {
     const next = random(seed);
     for (let round = 0; round < 100; round += 1) {
       const input = generateJson(next);
       const output = sanitize(input);
       expect(shape(output)).toEqual(shape(input));
       expect(strings(output).every((text) => text === CANARY)).toBe(true);
+      expect(sanitize(input, { keys: ["K0", "K1", "K2", "K3", "K4"] })).toEqual(
+        JSON.parse(
+          JSON.stringify(input, (_, item: unknown) => (typeof item === "string" ? CANARY : item)),
+        ),
+      );
     }
   });
 
@@ -129,25 +134,39 @@ describe("sanitize with an empty policy", () => {
     const input = '{"a":"x"}\r\n\n[1,"y"]\nnot json\n{"b":2}';
     const output = sanitizeJsonl(input);
     expect(output.split("\n")).toEqual([
-      `{"a":"${CANARY}"}\r`,
+      `{"key-1":"${CANARY}"}\r`,
       "",
       `[1,"${CANARY}"]`,
       CANARY,
-      '{"b":2}',
+      '{"key-2":2}',
     ]);
   });
 });
 
-describe("keys that came from data", () => {
-  it("replaces a key that is not a plain identifier, and still matches rules on the original", () => {
-    const input = {
-      files: { "/home/someone/notes.md": "text", "a b": "text", "SKILL.md": "text" },
-      kept: { "/home/someone/notes.md": "enum" },
-    };
-    expect(sanitize(input, { rules: { "kept.*": "keep" } })).toEqual({
-      files: { "key-1": CANARY, "key-2": CANARY, "SKILL.md": CANARY },
-      kept: { "key-1": "enum" },
+describe("object keys", () => {
+  const input = {
+    "0b5e1c7e-6a0f-4f0e-9b1a-2f6f3a1d9c55": { type: "user" },
+    env: { CUSTOMER_API_TOKEN: "value", "customer-name.md": "text" },
+  };
+
+  it("replaces every key under an empty policy, the same key always with the same name", () => {
+    expect(sanitize([input, { env: 1 }])).toEqual([
+      { "key-1": { "key-2": CANARY }, "key-3": { "key-4": CANARY, "key-5": CANARY } },
+      { "key-3": 1 },
+    ]);
+  });
+
+  it("keeps the keys the policy lists and the keys its rules name, and matches rules on the original", () => {
+    const policy: Policy = { keys: ["env"], rules: { "*.type": "keep", "env.*": "length" } };
+    expect(sanitize(input, policy)).toEqual({
+      "key-1": { type: "user" },
+      env: { "key-2": canaryText(5), "key-3": canaryText(4) },
     });
+  });
+
+  it("refuses to keep a key that a generated key could be named", () => {
+    expect(() => sanitize({}, { keys: ["key-2"] })).toThrow("key-2");
+    expect(() => sanitize({}, { rules: { "a.key-7": "keep" } })).toThrow("key-7");
   });
 });
 
@@ -224,7 +243,7 @@ describe("policy actions", () => {
     ]) {
       const output = sanitize({ t: text }, { rules: { t: "length" } }) as { t: string };
       expect(output.t).toHaveLength(text.length);
-      if (text.length >= CANARY.length) expect(output.t).toContain(CANARY);
+      expect(findCanary(output)).toEqual(text === "" ? [] : ["$.t"]);
     }
   });
 
@@ -254,6 +273,7 @@ describe("policy actions", () => {
         "/home/someone/work/app/.claude/skills/deploy/SKILL.md",
         "/Users/someone/work/app/notes.txt",
         "relative/notes.txt",
+        "relative/dump.customer-internal",
       ],
       policy,
     );
@@ -261,6 +281,15 @@ describe("policy actions", () => {
       "~/dir-1/dir-2/.claude/dir-3/dir-4/SKILL.md",
       "~/dir-1/dir-2/file-1.txt",
       "dir-5/file-1.txt",
+      "dir-5/file-2",
+    ]);
+  });
+
+  it("pathPseudonym keeps only the extensions it is given", () => {
+    const policy: Policy = { rules: { "*": pathPseudonym({ extensions: [".log"] }) } };
+    expect(sanitize(["a/run.log", "a/notes.md"], policy)).toEqual([
+      "dir-1/file-1.log",
+      "dir-1/file-2",
     ]);
   });
 });
@@ -275,6 +304,12 @@ describe("findCanary", () => {
     };
     expect(findCanary(value)).toEqual(["$.a[1].b", `$["key ${CANARY}"]`, '$["odd key"][0][0]']);
     expect(findCanary({ clean: "nothing", n: 1 })).toEqual([]);
+  });
+
+  it("finds canary text of any length, and any slice of it", () => {
+    const output = sanitize(["hello", "x".repeat(40)], { rules: { "*": "length" } });
+    expect(findCanary(output)).toEqual(["$[0]", "$[1]"]);
+    expect(findCanary({ cut: canaryText(40).slice(17, 19) })).toEqual(["$.cut"]);
   });
 
   it("catches a deliberately leaky transform", () => {
@@ -303,10 +338,14 @@ describe("findCanaryInDir", () => {
       '{"a":1}\n' + JSON.stringify({ t: 'say "hi"\n' }) + "\n",
     );
     await NodeFSP.writeFile(NodePath.join(dir, "unicode.jsonl"), '{"t":"\\u0073ecret"}\n');
-    expect(await findCanaryInDir(dir)).toEqual([NodePath.join("nested", "raw.txt")]);
+    await NodeFSP.writeFile(NodePath.join(dir, "indented.json"), '{\n  "t": "\\u0073ecret"\n}\n');
+    await NodeFSP.writeFile(NodePath.join(dir, "short.json"), JSON.stringify({ t: canaryText(2) }));
+    expect(await findCanaryInDir(dir)).toEqual([NodePath.join("nested", "raw.txt"), "short.json"]);
     expect(await findCanaryInDir(dir, ['say "hi"\n', "secret"])).toEqual([
       "escaped.jsonl",
+      "indented.json",
       NodePath.join("nested", "raw.txt"),
+      "short.json",
       "unicode.jsonl",
     ]);
   });

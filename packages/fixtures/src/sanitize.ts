@@ -1,12 +1,12 @@
 /** Marks every free-text position of a fixture; it must never reach a Scan, a Report or the cache. */
 export const CANARY = "CANARY-LS";
 
-/**
- * Canary text exactly `length` UTF-16 code units long (the unit loadsheet counts characters in).
- * Text shorter than the canary holds only a prefix of it, so findCanary cannot see it.
- */
+/** What length-preserving canary text is made of. One character, so any slice of the text still leaks visibly. */
+export const CANARY_FILL = "¤";
+
+/** Canary text exactly `length` UTF-16 code units long (the unit loadsheet counts characters in). */
 export function canaryText(length: number): string {
-  return CANARY.repeat(Math.ceil(length / CANARY.length)).slice(0, length);
+  return CANARY_FILL.repeat(length);
 }
 
 export type JsonPath = readonly (string | number)[];
@@ -36,15 +36,19 @@ export interface Policy {
    * Path pattern to action; the first pattern that matches wins. A pattern is dot-separated
    * segments: a key, `*` for any one key or index, `**` for any number of segments.
    * A value no rule matches is default-denied: strings become the canary, other values recurse.
-   * A key that is not a plain identifier (it holds a slash, a space, an `@`) came from data,
-   * so it becomes a `key-N` pseudonym; rules match the original key.
    */
   readonly rules?: Readonly<Record<string, Action>>;
+  /**
+   * Object keys to keep, wherever they sit. A key can hold data (a session id, a file name, an
+   * environment variable), so every other key becomes a `key-N` pseudonym. A key that a rule
+   * pattern names is kept too. Rules match the original keys.
+   */
+  readonly keys?: readonly string[];
 }
 
 type Matcher = (path: JsonPath) => boolean;
 
-const PLAIN_KEY = /^[\w$.-]+$/;
+const GENERATED_KEY = /^key-\d+$/;
 
 function compile(pattern: string): Matcher {
   const segments = pattern === "" ? [] : pattern.split(".");
@@ -72,6 +76,17 @@ export function createSanitizer(policy: Policy = {}): Sanitizer {
   const rules = Object.entries(policy.rules ?? {}).map(
     ([pattern, action]) => [compile(pattern), action] as const,
   );
+  const keptKeys = new Set(policy.keys);
+  for (const pattern of Object.keys(policy.rules ?? {})) {
+    for (const segment of pattern.split(".")) {
+      if (segment !== "" && segment !== "*" && segment !== "**") keptKeys.add(segment);
+    }
+  }
+  for (const key of keptKeys) {
+    if (GENERATED_KEY.test(key)) {
+      throw new Error(`the policy keeps the key ${key}, which a generated key could also be named`);
+    }
+  }
   const names = new Map<string, Map<string, string>>();
   const taken = new Map<string, string>();
 
@@ -102,7 +117,7 @@ export function createSanitizer(policy: Policy = {}): Sanitizer {
     if (typeof value === "object" && value !== null) {
       return Object.fromEntries(
         Object.entries(value).map(([key, item]) => [
-          PLAIN_KEY.test(key) ? key : pseudonym("key", key),
+          keptKeys.has(key) ? key : pseudonym("key", key),
           walk(item, [...path, key]),
         ]),
       );
@@ -137,12 +152,18 @@ export const sanitize = (value: unknown, policy?: Policy): unknown =>
 export const sanitizeJsonl = (text: string, policy?: Policy): string =>
   createSanitizer(policy).sanitizeJsonl(text);
 
+const EXTENSIONS = [".md", ".json", ".jsonl", ".yaml", ".yml", ".toml", ".txt", ".ts", ".js"];
+
 /**
  * An action for file paths: a home directory becomes `~`, every other segment a `dir-N` pseudonym,
- * and the file name a `file-N` pseudonym with its extension. Names in `keep` stay (`SKILL.md`, `.claude`).
+ * and the file name a `file-N` pseudonym. Names in `keep` stay (`SKILL.md`, `.claude`). A file
+ * keeps its extension only when `extensions` lists it; any other suffix can be a name.
  */
-export function pathPseudonym(options: { readonly keep?: readonly string[] } = {}): Action {
+export function pathPseudonym(
+  options: { readonly keep?: readonly string[]; readonly extensions?: readonly string[] } = {},
+): Action {
   const keep = new Set(options.keep);
+  const extensions = new Set(options.extensions ?? EXTENSIONS);
   return (value, { pseudonym }) => {
     if (typeof value !== "string") return CANARY;
     const separator = value.includes("\\") && !value.includes("/") ? "\\" : "/";
@@ -160,7 +181,7 @@ export function pathPseudonym(options: { readonly keep?: readonly string[] } = {
       if (index < last) return pseudonym("dir", segment);
       const dot = segment.lastIndexOf(".");
       const extension = dot > 0 ? segment.slice(dot) : "";
-      return pseudonym("file", segment) + extension;
+      return pseudonym("file", segment) + (extensions.has(extension) ? extension : "");
     });
     return (home ? "~" : "") + mapped.join(separator);
   };
