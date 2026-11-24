@@ -92,11 +92,11 @@ const watched = (command: string) =>
 /**
  * `watched` for `fleet run`, whose command can be anything: one that ignores SIGTERM, or leaves
  * children running. When the connection drops the command is told to stop and killed two seconds
- * later. Where the host has `setsid` it runs in a process group of its own and the whole group is
- * stopped; elsewhere, as on macOS, only the command itself is.
+ * later. It runs in a process group of its own, which `setsid` gives it, or `perl` where there is
+ * none, as on macOS, and the whole group is stopped; a host with neither stops only the command.
  */
 const stoppable = (words: string) =>
-  `{ exec 3<&0; if command -v setsid >/dev/null 2>&1; then g=-; setsid sh -c ${quote(words)} </dev/null 3<&- & else g=; ${words} </dev/null 3<&- & fi; p=$!; { read -r _ && { while read -r _; do :; done; { sleep 2; kill -s KILL -- $g$p; } & kill -s TERM -- $g$p; }; } <&3 >/dev/null 2>&1 & w=$!; exec 3<&-; wait $p; s=$?; kill $w 2>/dev/null; exit $s; }`;
+  `{ exec 3<&0; g=-; if command -v setsid >/dev/null 2>&1; then setsid sh -c ${quote(words)} </dev/null 3<&- & elif command -v perl >/dev/null 2>&1; then perl -e 'setpgrp(0, 0); exec @ARGV' sh -c ${quote(words)} </dev/null 3<&- & else g=; ${words} </dev/null 3<&- & fi; p=$!; { read -r _ && { while read -r _; do :; done; { sleep 2; kill -s KILL -- $g$p; } & kill -s TERM -- $g$p; }; } <&3 >/dev/null 2>&1 & w=$!; exec 3<&-; wait $p; s=$?; kill $w 2>/dev/null; exit $s; }`;
 
 /** Finds fleetrc on the host: the installed launcher, else a `fleetrc` on PATH. */
 const FIND = `f=${STATE}/bin/fleetrc; [ -x "$f" ] || f=${OLD_STATE}/${LEGACY_FLEET.launcher}; [ -x "$f" ] || f=$(command -v fleetrc) || f=`;

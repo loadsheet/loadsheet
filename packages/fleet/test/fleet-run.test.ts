@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -11,7 +11,8 @@ import { isWindows, machine, type Machine } from "./fixture.ts";
  * command with `sh -c` on this machine for `box`, with FLEET_SIDE=remote. `box` stands for another
  * machine, which has no folder of this run, so the folder the command asks about is renamed for it;
  * `me` is this machine reached over ssh, and gets the command as it is; so does `twin`, a machine
- * of another name that shares this one's temp folder. For `drops` the connection
+ * of another name that shares this one's temp folder. `mac` is a `box` without `setsid`: its PATH
+ * holds a shell, `sleep`, `touch` and `perl` only. For `drops` the connection
  * drops a second in: the remote command and what it started are killed, and ssh exits 255. Any
  * other host never answers, like a machine that dropped off the network.
  */
@@ -20,6 +21,12 @@ function fakeSsh(m: Machine): NodeJS.ProcessEnv {
   const elsewhere = join(m.root, "elsewhere");
   mkdirSync(elsewhere);
   writeFileSync(join(elsewhere, "uname"), "#!/bin/sh\necho elsewhere\n", { mode: 0o755 });
+  const bare = join(m.root, "bare");
+  mkdirSync(bare);
+  for (const tool of ["sh", "sleep", "touch", "perl"]) {
+    const found = spawnSync("sh", ["-c", `command -v ${tool}`], { encoding: "utf8" }).stdout.trim();
+    if (found) symlinkSync(found, join(bare, tool));
+  }
   writeFileSync(
     script,
     `import { spawn, spawnSync } from "node:child_process";
@@ -35,14 +42,16 @@ if (host === "drops") {
     process.kill(-run.pid, "SIGKILL");
     process.exit(255);
   }, 1000);
-} else if (host !== "box" && host !== "me" && !twin) setTimeout(() => {}, 1e9);
+} else if (!["box", "mac", "me", "twin"].includes(host)) setTimeout(() => {}, 1e9);
 else {
   const run = spawnSync("sh", ["-c", command], {
     stdio: "inherit",
     env: {
       ...process.env,
       FLEET_SIDE: "remote",
+      FLEET_HOST: host,
       ...(twin ? { PATH: ${JSON.stringify(`${elsewhere}:`)} + process.env.PATH } : {}),
+      ...(host === "mac" ? { PATH: ${JSON.stringify(bare)} } : {}),
     },
   });
   process.exit(run.status ?? 1);
@@ -166,18 +175,26 @@ describe.skipIf(isWindows)("fleet run", () => {
     vi.stubEnv("FLEETRC_SSH", fakeSsh(m).FLEETRC_SSH);
     const own = join(m.home, "command-wrote-after-the-deadline");
     const child = join(m.home, "child-wrote-after-the-deadline");
-    const stubborn = `trap "" TERM; (sleep 5; touch ${child}) & sleep 5; touch ${own}`;
+    const stubborn = `trap "" TERM; (sleep 5; touch ${child}-$FLEET_HOST) & sleep 5; touch ${own}-$FLEET_HOST`;
+    const has = (tool: string) => spawnSync("sh", ["-c", `command -v ${tool}`]).status === 0;
     try {
-      const [box] = await fleetRun([{ host: "box" }], ["sh", "-c", stubborn], 1_000, {
-        here: false,
-      });
-      expect(box).toMatchObject({ host: "box", reachable: true });
-      expect(box!.exitCode).toBeUndefined();
+      const results = await fleetRun(
+        [{ host: "box" }, { host: "mac" }],
+        ["sh", "-c", stubborn],
+        1_000,
+        { here: false },
+      );
+      for (const result of results) {
+        expect(result).toMatchObject({ reachable: true });
+        expect(result.exitCode).toBeUndefined();
+      }
       await new Promise((resolve) => setTimeout(resolve, 5_500));
-      expect(existsSync(own)).toBe(false);
-      // What the command started is stopped with it where the host has setsid, which macOS lacks.
-      const setsid = spawnSync("sh", ["-c", "command -v setsid"]).status === 0;
-      expect(existsSync(child)).toBe(!setsid);
+      expect(existsSync(`${own}-box`)).toBe(false);
+      expect(existsSync(`${own}-mac`)).toBe(false);
+      // What the command started stops with it: its process group comes from setsid, or from perl
+      // on a host without it, such as macOS.
+      expect(existsSync(`${child}-box`)).toBe(!has("setsid") && !has("perl"));
+      expect(existsSync(`${child}-mac`)).toBe(!has("perl"));
     } finally {
       vi.unstubAllEnvs();
     }
