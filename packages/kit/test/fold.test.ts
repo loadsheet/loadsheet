@@ -198,7 +198,7 @@ describe("buildScan", () => {
     expect(items(scan)).toEqual(["skill:a", "skill:g", "skill:listed-by-g"]);
   });
 
-  it("keeps a cell whose item a harness listed outside the window", () => {
+  it("drops a cell whose item a harness listed only outside the window", () => {
     const scan = buildScan({
       tool: "loadsheet@0.0.0",
       machine: "m",
@@ -210,11 +210,18 @@ describe("buildScan", () => {
           installed: true,
           signals,
           items: [],
-          tally: foldFacts("h", [listed, used("skill:listed-by-g"), used("skill:unknown")]),
+          tally: foldFacts("h", [
+            listed,
+            used("skill:listed-by-g"),
+            { ...listed, day: "2026-11-12", item: "skill:listed-inside" },
+            used("skill:listed-inside"),
+          ]),
         },
       ],
     });
-    expect(items(scan)).toEqual(["skill:listed-by-g"]);
+    // A Scan is its window's sessions and nothing else: the same sessions give the same Scan
+    // whatever older transcripts sit beside them.
+    expect(items(scan)).toEqual(["skill:listed-inside"]);
   });
 });
 
