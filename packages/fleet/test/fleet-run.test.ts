@@ -1,7 +1,8 @@
 import { writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
+import { fleetRun } from "../src/fleet.ts";
 import { isWindows, machine, type Machine } from "./fixture.ts";
 
 /**
@@ -117,6 +118,22 @@ describe.skipIf(isWindows)("fleet run", () => {
       { host: hostname(), ...stopped },
       { host: "box", ...stopped },
     ]);
+  });
+
+  it("still sees that a host answered after its command wrote more stderr than is kept", async () => {
+    const m = machine();
+    vi.stubEnv("FLEETRC_SSH", fakeSsh(m).FLEETRC_SSH);
+    try {
+      const [box] = await fleetRun(
+        [{ host: "box" }],
+        ["sh", "-c", "head -c 68000000 /dev/zero >&2; echo done"],
+        30_000,
+        { here: false },
+      );
+      expect(box).toMatchObject({ host: "box", reachable: true, exitCode: 0, stdout: "done\n" });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("needs a command after --", async () => {

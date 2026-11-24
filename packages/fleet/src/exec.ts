@@ -22,20 +22,31 @@ export interface ExecOptions {
   signal?: AbortSignal;
   /** Characters of stdout and of stderr to keep, from the end. Defaults to 1 MiB each. */
   maxOutput?: number;
+  /** Characters of stderr to keep from the start as well, so the lines a command writes first survive. */
+  stderrHead?: number;
 }
 
 const DEFAULT_MAX_OUTPUT = 1024 * 1024;
 
-/** Keeps the last `max` characters of a stream without holding all of it. */
+/** Keeps the last `max` characters of a stream, and its first `headMax`, without holding all of it. */
 class Tail {
+  private head = "";
   private chunks: string[] = [];
   private size = 0;
   truncated = false;
   private readonly max: number;
-  constructor(max: number) {
+  private readonly headMax: number;
+  constructor(max: number, headMax = 0) {
     this.max = max;
+    this.headMax = headMax;
   }
   push(chunk: string) {
+    if (this.head.length < this.headMax) {
+      const taken = chunk.slice(0, this.headMax - this.head.length);
+      this.head += taken;
+      chunk = chunk.slice(taken.length);
+      if (!chunk) return;
+    }
     this.chunks.push(chunk);
     this.size += chunk.length;
     if (this.size > this.max * 2) this.trim();
@@ -50,7 +61,7 @@ class Tail {
   }
   toString() {
     this.trim();
-    return this.chunks.join("");
+    return this.head + this.chunks.join("");
   }
 }
 
@@ -112,7 +123,7 @@ export function exec(command: string, args: readonly string[], options: ExecOpti
     running.add(child);
     const max = options.maxOutput ?? DEFAULT_MAX_OUTPUT;
     const stdout = new Tail(max);
-    const stderr = new Tail(max);
+    const stderr = new Tail(max, options.stderrHead);
     let timedOut = false;
     let done = false;
     let stopping: Promise<void> | undefined;

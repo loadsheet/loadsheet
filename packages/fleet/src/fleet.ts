@@ -379,9 +379,11 @@ async function ssh(
     remoteCommand,
   ];
   // Output is read whole, so it is not cut to the default tail. stdin stays open for `watched`.
+  // stderr keeps its start too, where the host's `answered` line is, however much follows it.
   const run = await exec(command, args, {
     timeoutMs,
     maxOutput: 64 * 1024 * 1024,
+    stderrHead: 64 * 1024,
     input: "fleet\n",
     holdStdin: true,
   });
