@@ -534,6 +534,31 @@ describe("fixes", () => {
     ]);
   });
 
+  it("turns a skill off in Codex's own config when an installer owns its folder and another harness uses it", () => {
+    const shared = skill("idle", {
+      harnesses: ["claude-code", "codex"],
+      managedBy: "fleetrc",
+      path: "~/.agents/skills/idle",
+    });
+    const fixes = (items: Item[]) =>
+      dead(items, {
+        coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
+        sessions: [sessions(30), sessions(30, {}, "codex")],
+        cells: [cell("idle", 25, { byModel: 2 }), cell("idle", 25, { harness: "codex" })],
+      }).find((f) => f.rule === "dead-skill")!.fixes;
+    expect(fixes([shared])).toEqual([
+      {
+        machine: "laptop",
+        action: "set",
+        path: "~/.codex/config.toml",
+        set: { key: 'skills.config[path="~/.agents/skills/idle/SKILL.md"].enabled', value: false },
+      },
+    ]);
+    // A plugin's path holds its version, so an entry for it would not last.
+    const plugin = { ...shared, managedBy: "plugin" as const, scope: "plugin" as const };
+    expect(fixes([plugin])).toEqual([]);
+  });
+
   it.each([
     [
       "skills",

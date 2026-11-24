@@ -23,6 +23,8 @@ type Change = Omit<Fix, "machine">;
 interface HarnessFixes {
   /** The change that hides one install, or none when no change to it would last. */
   hide: (item: Item) => Change | undefined;
+  /** The change that turns one install off in this harness alone, where another harness uses its path. */
+  off?: (item: Item) => Change | undefined;
   /** The skills CLI's `--agent` id for this harness. */
   skillsAgent?: string;
   /** Whether a bare listing is the user's own choice, not the listing's budget. */
@@ -89,6 +91,17 @@ const HARNESSES: Record<string, HarnessFixes> = {
             set: { key: "policy.allow_implicit_invocation", value: false },
           }
         : undefined,
+    // Codex's own config turns a skill off by its SKILL.md path, for the model and for `$name`, and
+    // expands `~` in it. The key names the `[[skills.config]]` entry with that path, to add when
+    // there is none. A plugin's path holds its version, so an entry for it would not last.
+    off: (item) =>
+      item.managedBy === "plugin"
+        ? undefined
+        : {
+            action: "set",
+            path: "~/.codex/config.toml",
+            set: { key: `skills.config[path="${skillFile(item.path)}"].enabled`, value: false },
+          },
     skillsAgent: "codex",
   },
 };
@@ -140,8 +153,9 @@ const removeOne = (
   usedBy: string[],
 ): Fix | undefined => {
   const table = HARNESSES[sheet.harness];
-  const hide = () => (table ? withMachine(machine, table.hide(item)) : undefined);
-  // Another harness that loads this path still uses it: hide it from this one instead.
+  const hide = () =>
+    table ? withMachine(machine, table.hide(item) ?? table.off?.(item)) : undefined;
+  // Another harness that loads this path still uses it: hide it from this one, or turn it off here.
   if (item.harnesses.some((harness) => harness !== sheet.harness && usedBy.includes(harness))) {
     return hide();
   }
