@@ -4,7 +4,7 @@ import { parse } from "tinyaml";
 import { readCodexConfig, type SkillRule } from "./codex-toml.ts";
 import { CODEX_INSTRUCTIONS, codexTranscripts } from "./codex-transcripts.ts";
 import { readManagers, skillsLockPath, type Manager } from "./managed.ts";
-import { normalPath } from "./path.ts";
+import { isAbsolute, normalPath } from "./path.ts";
 import { readSkillMd, type SkillMd } from "./skill-md.ts";
 
 /** Codex cuts a listed description to this many characters, the last three being `...`. */
@@ -351,9 +351,13 @@ const machineInventory = async (files: Files, place?: Place): Promise<Item[]> =>
 /** The name a server's tools go under, `mcp__<name>`: characters a tool name cannot hold become `_`. */
 export const codexMcpName = (server: string) => server.replace(/[^A-Za-z0-9_-]/gu, "_");
 
+/** Codex's home: `CODEX_HOME` when set, a relative one under the working directory as Codex takes it. */
 const codexHome = (place: Place) => {
   const configured = place.env.CODEX_HOME?.replace(/\/+$/u, "");
-  return configured ? normalPath(configured) : `${place.home}/.codex`;
+  if (!configured) return `${place.home}/.codex`;
+  return normalPath(
+    isAbsolute(configured) ? configured : `${place.cwd ?? place.home}/${configured}`,
+  );
 };
 
 /** Codex (OpenAI's coding agent): its packs, its home directory and its rollout transcripts. */

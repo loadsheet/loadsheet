@@ -57,6 +57,25 @@ describe("a home folder an environment variable names", () => {
   });
 });
 
+describe("a relative CODEX_HOME", () => {
+  it("is read under the working directory, and its Items keep their ~ paths", () => {
+    const home = homeWith("env-relative", {
+      "AGENTS.md": "Invented rules.\n",
+      "skills/sample/SKILL.md": "---\nname: sample\ndescription: A sample skill.\n---\n",
+    });
+    for (const value of [".", "./"]) {
+      const result = run(home, { CODEX_HOME: value }, "--scan", "--harness", "codex");
+      expect(result.stderr).toBe("");
+      const scan = parseScan(JSON.parse(result.stdout));
+      expect(scan.items.map((item) => [item.id, item.path])).toEqual([
+        ["instructions:~/.codex/AGENTS.md", "~/AGENTS.md"],
+        ["skill:sample", "~/skills/sample"],
+      ]);
+      expect(result.stdout).not.toContain(root);
+    }
+  });
+});
+
 describe("a use of something neither installed nor listed", () => {
   const claudeLine = (line: Record<string, unknown>) => ({
     entrypoint: "cli",
@@ -172,5 +191,24 @@ describe("a use of something neither installed nor listed", () => {
         developer("<tools>\n- mcp__harbor\n</tools>\n- mcp__PRIVATE-TOOL-INSTRUCTIONS"),
       ]),
     );
+  });
+
+  it("a string in config.toml that opens on the line where another closes", () => {
+    const home = homeWith("codex-toml", {
+      ".codex/config.toml": [
+        "[mcp_servers.harbor]",
+        'args = [ """first',
+        'end""", """second',
+        "[mcp_servers.PRIVATE-ARG-TEXT]",
+        'end""" ]',
+        "",
+      ].join("\n"),
+    });
+    for (const args of [["--scan"], ["--json", "--local"]]) {
+      const result = run(home, {}, ...args);
+      expect(result.stderr).toBe("");
+      expect(result.stdout).toContain("mcp:harbor");
+      expect(result.stdout).not.toContain("PRIVATE");
+    }
   });
 });

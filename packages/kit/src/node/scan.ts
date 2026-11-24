@@ -184,7 +184,11 @@ const readTranscripts = async (
  */
 export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> => {
   const now = options.now ?? new Date();
-  const place: Place = options.place ?? { home: homedir(), env: process.env };
+  const place: Place = options.place ?? {
+    home: homedir(),
+    env: process.env,
+    cwd: process.cwd(),
+  };
   const cacheDir = options.cacheDir ?? defaultCacheDir(place);
   const concurrency = options.concurrency ?? 16;
   const { window, sinceMs } = scanWindow(now, options.days);

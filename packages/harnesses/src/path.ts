@@ -1,3 +1,6 @@
+/** Whether `path` starts at a root: `/`, or a drive such as `C:\`. */
+export const isAbsolute = (path: string) => path.startsWith("/") || /^[A-Za-z]:[\\/]/u.test(path);
+
 /**
  * `path` by its spelling alone: repeated `/`, `.` segments and a trailing `/` dropped, and each `..`
  * taking back the segment before it, as kit does to a source path before it keys it under home. So

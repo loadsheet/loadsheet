@@ -141,7 +141,9 @@ const readSkillListing = (body: string, state: CodexState, emit: (fact: ListedIn
   const chars = new Map<string, { chars: number; bare: boolean }>();
   for (const line of lines) {
     const match = SKILL_LINE.exec(line);
-    if (!match) continue;
+    // Codex writes a skill's name and description on one line, so a line whose name is not a
+    // skill's name is other text, such as a description's second line holding a path.
+    if (!match || !SKILL_NAME.test(match[1]!)) continue;
     const name = match[1]!;
     const known = chars.get(name);
     chars.set(name, {
@@ -389,7 +391,7 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
           if (body === undefined) continue;
           readServers(
             body.split("\n").flatMap((entry) => {
-              const match = /^- mcp__([^:\s]+)(?:: .*)?$/u.exec(entry);
+              const match = /^- mcp__([A-Za-z0-9_-]+)(?:: .*)?$/u.exec(entry);
               return match ? [[match[1]!, entry.length + 1] as [string, number]] : [];
             }),
           );

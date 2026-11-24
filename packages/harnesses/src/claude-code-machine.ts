@@ -12,13 +12,12 @@ import {
 } from "./claude-code-listing.ts";
 import { readManagers, skillsLockPath, type Manager } from "./managed.ts";
 import { packInventory } from "./pack.ts";
-import { normalPath } from "./path.ts";
+import { isAbsolute, normalPath } from "./path.ts";
 import { readSkillMd, SKILL_NAME } from "./skill-md.ts";
 
 const HARNESS = "claude-code";
 
 const trimSlash = (path: string) => (path.length > 1 ? path.replace(/\/+$/u, "") : path);
-const isAbsolute = (path: string) => path.startsWith("/") || /^[A-Za-z]:[\\/]/u.test(path);
 
 /** Claude Code's config directory: `CLAUDE_CONFIG_DIR` when set, else `~/.claude`. */
 export const claudeConfigDir = (place: Place): string => {

@@ -62,11 +62,11 @@ const closeOf = (line: string, triple: string, from = 0): number => {
 };
 
 /**
- * The triple quote a line opens and does not close. Strings on the line are read past and a comment
- * ends it, so a quote inside either opens nothing.
+ * The triple quote a line opens at or after `from` and does not close. Strings on the line are read
+ * past and a comment ends it, so a quote inside either opens nothing.
  */
-const leftOpen = (line: string): string | undefined => {
-  for (let at = 0; at < line.length; at++) {
+const leftOpen = (line: string, from = 0): string | undefined => {
+  for (let at = from; at < line.length; at++) {
     const quote = line[at]!;
     if (quote === "#") return undefined;
     if (quote !== '"' && quote !== "'") continue;
@@ -81,6 +81,15 @@ const leftOpen = (line: string): string | undefined => {
     while (at < line.length && line[at] !== quote) at += quote === '"' && line[at] === "\\" ? 2 : 1;
   }
   return undefined;
+};
+
+/**
+ * The multi-line string still open after a line read inside `triple`: the same one when the line
+ * does not close it, else whichever the rest of the line opens, as in `end""", """next`.
+ */
+const stillOpen = (line: string, triple: string): string | undefined => {
+  const end = closeOf(line, triple);
+  return end === -1 ? triple : leftOpen(line, end + 3);
 };
 
 const KEY_VALUE =
@@ -129,7 +138,7 @@ export const readTomlFlags = (source: string): Map<string, boolean | string[]> =
       continue;
     }
     if (multiline !== undefined) {
-      if (closeOf(line, multiline) !== -1) multiline = undefined;
+      multiline = stillOpen(line, multiline);
       continue;
     }
     if (/^\s*#/u.test(line)) continue;
@@ -171,7 +180,7 @@ export const readCodexConfig = (source: string): CodexConfig => {
 
   for (const line of source.replace(/\r\n?/gu, "\n").split("\n")) {
     if (multiline !== undefined) {
-      if (closeOf(line, multiline) !== -1) multiline = undefined;
+      multiline = stillOpen(line, multiline);
       continue;
     }
     if (/^\s*#/u.test(line)) continue;
