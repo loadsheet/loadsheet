@@ -193,6 +193,14 @@ describe("loadsheet (this machine)", () => {
     }
   });
 
+  it("a --via that is a path is an invalid flag, not a Report", () => {
+    const result = local("--json", "--via", "/home/someone/private");
+    expect(result.status).toBe(2);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("Invalid flags");
+    expect(result.stderr).toContain("$.via.include[0]");
+  });
+
   it("a missing --config file exits 2", () => {
     const result = local("--config", join(root, "nope.json"));
     expect(result.status).toBe(2);

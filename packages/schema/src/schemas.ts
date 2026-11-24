@@ -150,6 +150,53 @@ const IdSchema = v.pipe(
 );
 const id = (text: string) => describe(IdSchema, text);
 
+// What a config may name, in the shapes the adapters accept, so a typo or a private path in a
+// filter never reaches a Report's `config`: words without markup, quotes, slashes or invisible
+// characters, joined by single spaces. JSON Schema takes no regex flags, so the invisible
+// characters are spelled out: the controls and the format characters a name could hide behind.
+const CHAR = String.raw`[^\s<>"'\x60/\\\x00-\x1f\x7f-\x9f\xad\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff\ufff9-\ufffb]`;
+const WORD = `${CHAR}+(?: ${CHAR}+)*`;
+const ENTRYPOINT = new RegExp(String.raw`^(?=.{1,128}$)${WORD}$`);
+// An instruction file is named by its path under the harness's home: words joined by slashes,
+// with a leading ~/ at most and no . or .. step.
+const STEP = String.raw`(?!\.\.?(?:/|$))${WORD}`;
+const CONFIG_ID = new RegExp(
+  String.raw`^(?:(?:skill|mcp|subagent):(?=.{1,128}$)${WORD}|instructions:(?=.{1,256}$)(?:~/)?${STEP}(?:/${STEP})*)$`,
+);
+const entrypoints = (text: string) =>
+  describe(
+    v.array(
+      v.pipe(
+        v.string(),
+        v.regex(ENTRYPOINT, "must be an entrypoint name: no slashes, quotes or markup"),
+      ),
+    ),
+    text,
+  );
+const harnessIds = (text: string) =>
+  describe(
+    v.array(
+      v.pipe(
+        v.string(),
+        v.regex(/^[a-z][a-z0-9-]*$/, "must be a harness id: lowercase letters, digits and hyphens"),
+      ),
+    ),
+    text,
+  );
+const ignored = (text: string) =>
+  describe(
+    v.array(
+      v.pipe(
+        v.string(),
+        v.regex(
+          CONFIG_ID,
+          "must be kind:name: a skill, mcp or subagent name without slashes, or instructions and a file's path under the harness's home",
+        ),
+      ),
+    ),
+    text,
+  );
+
 const RefSchema = v.pipe(
   v.looseObject({
     kind: describe(KindSchema, "What the piece of context is."),
@@ -374,17 +421,17 @@ const configSchema = v.pipe(
         v.description("Days of history to read, default 30."),
       ),
     ),
-    harnesses: v.optional(strings("Read only these harness ids.")),
+    harnesses: v.optional(harnessIds("Read only these harness ids.")),
     via: v.optional(
       v.pipe(
         strict({
-          include: v.optional(strings("Read only sessions from these entrypoints.")),
-          exclude: v.optional(strings("Skip sessions from these entrypoints.")),
+          include: v.optional(entrypoints("Read only sessions from these entrypoints.")),
+          exclude: v.optional(entrypoints("Skip sessions from these entrypoints.")),
         }),
         v.description("Filter sessions by entrypoint or originator."),
       ),
     ),
-    ignore: v.optional(describe(v.array(IdSchema), "Item ids never reported.")),
+    ignore: v.optional(ignored("Item ids never reported.")),
     rules: v.optional(
       v.pipe(
         strict({
@@ -422,15 +469,15 @@ const configSchema = v.pipe(
 const ResolvedConfigSchema = v.pipe(
   v.looseObject({
     window: v.pipe(v.number(), v.integer(), v.minValue(1), v.description("Days of history read.")),
-    harnesses: v.optional(strings("Only these harness ids were read, when set.")),
+    harnesses: v.optional(harnessIds("Only these harness ids were read, when set.")),
     via: v.pipe(
       v.looseObject({
-        include: strings("Only sessions from these entrypoints were read, when not empty."),
-        exclude: strings("Sessions from these entrypoints were skipped."),
+        include: entrypoints("Only sessions from these entrypoints were read, when not empty."),
+        exclude: entrypoints("Sessions from these entrypoints were skipped."),
       }),
       v.description("The entrypoint filter."),
     ),
-    ignore: describe(v.array(IdSchema), "Item ids never reported."),
+    ignore: ignored("Item ids never reported."),
     // A rule added after 0.0.1 must be optional here, or its loadsheet could not read an older Report.
     rules: v.pipe(
       v.looseObject({

@@ -16,7 +16,8 @@
     "harnesses": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]*$"
       },
       "description": "Read only these harness ids."
     },
@@ -26,14 +27,16 @@
         "include": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^(?=.{1,128}$)[^\\s<>\"'\\x60/\\\\\\x00-\\x1f\\x7f-\\x9f\\xad\\u061c\\u180e\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u206f\\ufeff\\ufff9-\\ufffb]+(?: [^\\s<>\"'\\x60/\\\\\\x00-\\x1f\\x7f-\\x9f\\xad\\u061c\\u180e\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u206f\\ufeff\\ufff9-\\ufffb]+)*$"
           },
           "description": "Read only sessions from these entrypoints."
         },
         "exclude": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^(?=.{1,128}$)[^\\s<>\"'\\x60/\\\\\\x00-\\x1f\\x7f-\\x9f\\xad\\u061c\\u180e\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u206f\\ufeff\\ufff9-\\ufffb]+(?: [^\\s<>\"'\\x60/\\\\\\x00-\\x1f\\x7f-\\x9f\\xad\\u061c\\u180e\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u206f\\ufeff\\ufff9-\\ufffb]+)*$"
           },
           "description": "Skip sessions from these entrypoints."
         }
@@ -46,8 +49,7 @@
       "type": "array",
       "items": {
         "type": "string",
-        "pattern": "^(skill|instructions|mcp|subagent):(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
-        "description": "A piece of context's id, `${kind}:${name}`."
+        "pattern": "^(?:(?:skill|mcp|subagent):(?=.{1,128}$)[^\\s<>\"'\\x60/\\\\\\x00-\\x1f\\x7f-\\x9f\\xad\\u061c\\u180e\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u206f\\ufeff\\ufff9-\\ufffb]+(?: [^\\s<>\"'\\x60/\\\\\\x00-\\x1f\\x7f-\\x9f\\xad\\u061c\\u180e\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u206f\\ufeff\\ufff9-\\ufffb]+)*|instructions:(?=.{1,256}$)(?:~\\/)?(?!\\.\\.?(?:\\/|$))[^\\s<>\"'\\x60/\\\\\\x00-\\x1f\\x7f-\\x9f\\xad\\u061c\\u180e\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u206f\\ufeff\\ufff9-\\ufffb]+(?: [^\\s<>\"'\\x60/\\\\\\x00-\\x1f\\x7f-\\x9f\\xad\\u061c\\u180e\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u206f\\ufeff\\ufff9-\\ufffb]+)*(?:\\/(?!\\.\\.?(?:\\/|$))[^\\s<>\"'\\x60/\\\\\\x00-\\x1f\\x7f-\\x9f\\xad\\u061c\\u180e\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u206f\\ufeff\\ufff9-\\ufffb]+(?: [^\\s<>\"'\\x60/\\\\\\x00-\\x1f\\x7f-\\x9f\\xad\\u061c\\u180e\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u206f\\ufeff\\ufff9-\\ufffb]+)*)*)$"
       },
       "description": "Item ids never reported."
     },
