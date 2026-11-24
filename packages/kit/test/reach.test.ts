@@ -479,6 +479,40 @@ describe("reaches, by hand", () => {
     },
   );
 
+  it("a link named node_modules or .git is followed to where it leads", () => {
+    expect(
+      reachesIn(
+        "skipped-name",
+        [
+          ...skill("real/s/a"),
+          ...skill("real/s/b"),
+          ...skill("real/s/c"),
+          { file: "real/s/a/content.md", text: "resource" },
+          { link: "real/s/b/node_modules", to: "../a/content.md" },
+          { link: "real/s/c/.git", to: "../a" },
+          { file: "real/s/a/node_modules/dep/index.js", text: "" },
+        ],
+        ["~/s/a", "~/s/b", "~/s/c"],
+      ),
+    ).toEqual({ "~/s/a": ["~/s/b", "~/s/c"], "~/s/b": [], "~/s/c": [] });
+  });
+
+  it("a name or a link target that is not UTF-8 is unknown and every other Item lists it", () => {
+    const base = join(tmp, "not-utf8");
+    build(base, [...skill("real/s/a"), ...skill("real/s/b"), ...skill("real/s/c")]);
+    const bytes = (text: string) => Buffer.concat([Buffer.from(text), Buffer.from([0xff])]);
+    // b links to a file of a under a name that is not UTF-8; c under a plain name, through a
+    // target that is not.
+    symlinkSync("../a/SKILL.md", bytes(join(base, "real/s/b/")));
+    symlinkSync(bytes("../a/"), join(base, "real/s/c/link"));
+    const reaches = reachesOf(["~/s/a", "~/s/b", "~/s/c"], join(base, "real"));
+    expect(Object.fromEntries(reaches)).toEqual({
+      "~/s/a": ["~/s/b", "~/s/c"],
+      "~/s/b": undefined,
+      "~/s/c": undefined,
+    });
+  });
+
   it("a folder over the cap is unknown and every other Item lists it", () => {
     const ops: Op[] = [...skill("real/s/a"), ...skill("real/s/b")];
     for (let index = 0; index < MAX_REACH_ENTRIES; index += 1) {

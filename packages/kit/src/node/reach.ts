@@ -9,8 +9,9 @@
 // link inside, the way to where it leads and, for a folder, that tree too. P reaches X when P's
 // roots meet X's needs (X is, lies inside or leads through P), or X's roots meet P's way (P lies
 // inside X, so removing it takes part of X). An Item whose needs cannot be worked out (a
-// permission error, a link loop, a tree over MAX_REACH_ENTRIES, a path that is neither under the
-// home nor absolute) gets no `reaches`, and every other Item lists it.
+// permission error, a link loop, a tree over MAX_REACH_ENTRIES, a name or link target that is not
+// UTF-8, a path that is neither under the home nor absolute) gets no `reaches`, and every other
+// Item lists it.
 //
 // What it does not see:
 // - links into the folder from folders loadsheet does not read, such as a project or another
@@ -18,7 +19,8 @@
 // - harnesses loadsheet has no adapter for;
 // - references by content: a hook, an MCP command or an import that points into the folder;
 // - other data in the folder, such as an unpushed `.git`;
-// - `.git` and `node_modules` folders inside a skill, which it skips;
+// - `.git` and `node_modules` folders inside a skill, which it skips; a link under either name is
+//   followed to where it leads, and the folder there is not walked;
 // - homes shared or synced between machines;
 // - hard links;
 // - anything that changes between the scan and the fix;
@@ -53,6 +55,12 @@ const childOf = (dir: string, name: string) => (dir === "/" ? `/${name}` : `${di
 const parentOf = (path: string) => path.slice(0, Math.max(path.lastIndexOf("/"), 1));
 const componentsOf = (path: string) => path.split("/").filter((part) => part && part !== ".");
 
+/**
+ * Whether Node put U+FFFD for bytes that are not UTF-8 when it read this name or link target: the
+ * string then names another entry, or none. A name that holds the character itself counts too.
+ */
+const undecoded = (text: string) => text.includes("\uFFFD");
+
 /** `lstat`, `readlink` and `readdir`, each asked once per path. */
 const memoDisk = () => {
   const memo = <T>(read: (path: string) => T) => {
@@ -82,18 +90,24 @@ const memoDisk = () => {
     }
   });
   const readlink = memo((path) => {
+    let target;
     try {
-      return readlinkSync(path);
+      target = readlinkSync(path);
     } catch {
       throw new Unknown();
     }
+    if (undecoded(target)) throw new Unknown();
+    return target;
   });
   const readdir = memo((path) => {
+    let names;
     try {
-      return readdirSync(path);
+      names = readdirSync(path);
     } catch {
       throw new Unknown();
     }
+    if (names.some(undecoded)) throw new Unknown();
+    return names;
   });
   return { lstat, readlink, readdir };
 };
@@ -167,18 +181,19 @@ const walkTree = (
   if (walked.has(entry.id)) return;
   walked.add(entry.id);
   for (const name of disk.readdir(dir)) {
-    if (SKIPPED.has(name)) continue;
-    budget.left -= 1;
-    if (budget.left < 0) throw new Unknown();
     const path = childOf(dir, name);
     const found = disk.lstat(path);
     if (!found) continue;
+    const skipped = SKIPPED.has(name);
+    if (skipped && found.kind === "dir") continue;
+    budget.left -= 1;
+    if (budget.left < 0) throw new Unknown();
     needs.add(found.id);
     if (found.kind === "dir") {
       walkTree(disk, path, found, needs, walked, budget);
     } else if (found.kind === "link") {
       const { place } = follow(disk, dir, name, needs);
-      if (place?.entry.kind === "dir") {
+      if (place?.entry.kind === "dir" && !skipped) {
         walkTree(disk, place.path, place.entry, needs, walked, budget);
       }
     }

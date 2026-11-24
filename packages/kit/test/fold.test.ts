@@ -242,4 +242,18 @@ describe("mergeScans", () => {
       expect(merged.items).toEqual([shared]);
     }
   });
+
+  it("keeps no reach when a Scan's time is in a spelling Date.parse does not read", () => {
+    const [shared] = scanOf([{ harness: "h", facts }]).items;
+    const at = (scannedAt: string, items: Scan["items"]): Scan => ({
+      ...scanOf([{ harness: "h", facts: [] }]),
+      scannedAt,
+      items,
+    });
+    const older = parseScan(at("2026-11-24T15:00:00.000001+02", [{ ...shared!, reaches: [] }]));
+    const latest = at("2026-11-24T13:00:00.500Z", [shared!]);
+    for (const merged of [mergeScans(older, latest), mergeScans(latest, older)]) {
+      expect(merged.items).toEqual([shared]);
+    }
+  });
 });
