@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import {
+  chmodSync,
   cpSync,
   existsSync,
   mkdirSync,
@@ -33,13 +34,23 @@ const reportIn = (html: string): { text: string; report: Report } => {
   return { text: match[1]!, report: parseReport(JSON.parse(match[1]!)) };
 };
 
+/** Every entry under `dir`, with a regular file's text: a folder to compare before and after. */
+const snapshot = (dir: string) =>
+  readdirSync(dir, { recursive: true, withFileTypes: true })
+    .map((entry) => {
+      const path = join(entry.parentPath, entry.name);
+      return `${path}\n${entry.isFile() ? readFileSync(path, "utf8") : ""}`;
+    })
+    .sort();
+
 let root: string;
 let env: Record<string, string>;
-const run = (args: string[], options: { cwd?: string; web?: string } = {}) =>
+const run = (args: string[], options: { cwd?: string; web?: string; timeout?: number } = {}) =>
   spawnSync(process.execPath, [cli, ...args], {
     encoding: "utf8",
     cwd: options.cwd ?? root,
     env: { ...env, LOADSHEET_WEB_DIR: options.web ?? stub },
+    timeout: options.timeout,
   });
 
 beforeAll(() => {
@@ -193,20 +204,77 @@ describe("loadsheet build", () => {
   });
 
   it.each([
-    ["a path no disk holds", "missing/bad\u0000name", 2],
-    ["a path that is not there", "missing/gone.js", 0],
-  ])("deletes nothing before it stops at a marker that lists %s", (_, listed, status) => {
+    ["a path no disk holds", () => "missing/bad\u0000name", 2],
+    ["a name too long for a disk", () => "x".repeat(300), 2],
+    ["a path outside the folder", () => "../outside.txt", 2],
+    ["a path that leaves the folder on its way", () => "assets/../../outside.txt", 2],
+    [
+      "an absolute path, though it is inside the folder",
+      (out: string) => join(out, "index.html"),
+      2,
+    ],
+    ["a path that is not there", () => "missing/gone.js", 0],
+  ])("changes nothing before it stops at a marker that lists %s", (_, listed, status) => {
     const out = mkdtempSync(join(root, "listed-"));
     expect(run(["build", "pack", "--out", out]).status).toBe(0);
     const marker = JSON.parse(readFileSync(join(out, MARKER), "utf8")) as { files: string[] };
-    writeFileSync(join(out, MARKER), JSON.stringify({ files: [...marker.files, listed] }));
+    writeFileSync(join(out, MARKER), JSON.stringify({ files: [...marker.files, listed(out)] }));
     writeFileSync(join(out, "index.html"), "the last build's page");
+    // An empty folder of the user's, where the marker lists a file that is not there.
+    mkdirSync(join(out, "missing"));
+    writeFileSync(join(out, "..", "outside.txt"), "the user's file");
+    const before = snapshot(out);
     const result = run(["build", "pack", "--out", out]);
     expect(result.status).toBe(status);
-    expect(existsSync(join(out, "assets", "app.js"))).toBe(true);
-    if (status === 2)
-      expect(readFileSync(join(out, "index.html"), "utf8")).toBe("the last build's page");
+    expect(readFileSync(join(out, "..", "outside.txt"), "utf8")).toBe("the user's file");
+    expect(existsSync(join(out, "missing"))).toBe(true);
+    if (status === 2) expect(snapshot(out)).toEqual(before);
     else expect(reportIn(readFileSync(join(out, "index.html"), "utf8")).report.source).toBe("pack");
+  });
+
+  it("stops with exit 2 at a link that leads nowhere in place of its folder", () => {
+    const out = join(root, "dangling");
+    symlinkSync(join(root, "nowhere"), out);
+    const result = run(["build", "pack", "--out", out]);
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("is not a folder");
+    expect(existsSync(join(root, "nowhere"))).toBe(false);
+  });
+
+  it("stops with exit 2 at a pipe in place of its marker, without reading it", () => {
+    const out = mkdtempSync(join(root, "pipe-"));
+    expect(spawnSync("mkfifo", [join(out, MARKER)]).status).toBe(0);
+    const result = run(["build", "pack", "--out", out], { timeout: 20_000 });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("did not write");
+    expect(readdirSync(out)).toEqual([MARKER]);
+  });
+
+  // Root reads a file whatever its mode.
+  describe.skipIf(process.getuid?.() === 0)("what it cannot read", () => {
+    it("stops with exit 2 at a folder it cannot list", () => {
+      const out = mkdtempSync(join(root, "unlisted-"));
+      writeFileSync(join(out, "a"), "a");
+      chmodSync(out, 0o300);
+      const result = run(["build", "pack", "--out", out]);
+      chmodSync(out, 0o700);
+      expect(result.status).toBe(2);
+      expect(result.stderr).toContain("cannot be read");
+      expect(readdirSync(out)).toEqual(["a"]);
+    });
+
+    it("leaves the last build as it was when a file of the web UI cannot be read", () => {
+      const out = mkdtempSync(join(root, "kept-"));
+      expect(run(["build", "pack", "--out", out]).status).toBe(0);
+      const before = snapshot(out);
+      const web = mkdtempSync(join(root, "unread-web-"));
+      cpSync(stub, web, { recursive: true });
+      chmodSync(join(web, "assets", "app.js"), 0o000);
+      const result = run(["build", "pack", "--out", out], { web });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("Cannot read the web UI");
+      expect(snapshot(out)).toEqual(before);
+    });
   });
 
   it.each([[["build", "pack"]], [["pack", "--ui"]]])(

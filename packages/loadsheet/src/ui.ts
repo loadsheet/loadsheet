@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, readdirSync, readFileSync, rmdirSync, rmSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
-import { dirname, extname, join, relative, resolve, sep } from "node:path";
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseReport, type Report } from "@loadsheet/schema";
 import pkg from "../package.json" with { type: "json" };
@@ -117,29 +117,61 @@ const buildReport = (forward: string[]): Report => {
 
 /** Writes the page into `out`, which must be missing, empty, or a folder this command wrote. */
 const writeBuild = async (out: string, web: string, html: string) => {
-  const files = distFiles(web);
+  // The page's files are read before `out` is looked at, so one that cannot be read changes nothing.
+  let bodies: (readonly [string, string | Buffer])[];
+  try {
+    bodies = distFiles(web).map(
+      (file) => [file, file === "index.html" ? html : readFileSync(join(web, file))] as const,
+    );
+  } catch (error) {
+    fail(`Cannot read the web UI: ${(error as Error).message}`, 1);
+  }
+  const files = bodies.map(([file]) => file);
+  const unreadable = `${out} cannot be read; name an empty or missing folder with --out`;
   let previous: string[] = [];
-  if (existsSync(out)) {
-    if (!lstatSync(out).isDirectory())
-      fail(`${out} is not a folder; loadsheet build writes a folder`);
-    const entries = readdirSync(out);
+  let folder;
+  try {
+    // Not through a link: one that leads nowhere is still in the way of a folder.
+    folder = lstatSync(out, { throwIfNoEntry: false });
+  } catch {
+    fail(unreadable);
+  }
+  if (folder) {
+    if (!folder.isDirectory()) fail(`${out} is not a folder; loadsheet build writes a folder`);
+    let entries;
+    try {
+      entries = readdirSync(out);
+    } catch {
+      fail(unreadable);
+    }
     if (entries.length > 0) {
+      const marker = join(out, MARKER);
+      let link = false;
       try {
-        const marker: unknown = JSON.parse(readFileSync(join(out, MARKER), "utf8"));
-        const listed = (marker as { files?: unknown } | null)?.files;
-        // No path holds a NUL, so a list with one is not a build's.
-        const path = (file: unknown) => typeof file === "string" && !file.includes("\0");
+        // Only a regular file is read: a pipe in its place would never end.
+        const found = lstatSync(marker);
+        link = found.isSymbolicLink();
+        if (!found.isFile()) throw new Error("no marker file");
+        const listed = (JSON.parse(readFileSync(marker, "utf8")) as { files?: unknown } | null)
+          ?.files;
+        // A build lists relative paths inside its folder, and no path holds a NUL: a list with
+        // anything else is not a build's, and none of it is replaced.
+        const path = (file: unknown) =>
+          typeof file === "string" &&
+          !file.includes("\0") &&
+          !isAbsolute(file) &&
+          resolve(out, file).startsWith(out + sep);
         if (!Array.isArray(listed) || !listed.every(path)) throw new Error("no file list");
         previous = listed;
       } catch {
         fail(
-          `${out} holds files loadsheet build did not write; name an empty or missing folder with --out`,
+          link
+            ? `${marker} is a link; loadsheet build writes and deletes through no link`
+            : `${out} holds files loadsheet build did not write; name an empty or missing folder with --out`,
         );
       }
     }
   }
-  // The marker's paths that stay inside the folder: the only ones a build may replace.
-  previous = previous.filter((file) => resolve(out, file).startsWith(out + sep));
   // A file the last build did not write is the user's: stop before touching anything.
   const mine = new Set([...previous, MARKER]);
   for (const file of files) {
@@ -191,10 +223,10 @@ const writeBuild = async (out: string, web: string, html: string) => {
     join(out, MARKER),
     `${JSON.stringify({ tool: `loadsheet@${pkg.version}`, files })}\n`,
   );
-  for (const file of files) {
+  for (const [file, body] of bodies) {
     const target = join(out, file);
     await mkdir(dirname(target), { recursive: true });
-    await writeFile(target, file === "index.html" ? html : readFileSync(join(web, file)));
+    await writeFile(target, body);
   }
 };
 
