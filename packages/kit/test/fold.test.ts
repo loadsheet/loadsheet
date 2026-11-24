@@ -161,6 +161,63 @@ const scanOf = (parts: Array<{ harness: string; facts: Fact[] }>): Scan =>
     })),
   });
 
+describe("buildScan", () => {
+  const used = (item: string): Fact => ({
+    type: "used",
+    day: "2026-11-20",
+    via: "cli",
+    item,
+    by: "model",
+  });
+  const listed: Fact = {
+    type: "listed",
+    day: "2026-11-02",
+    via: "cli",
+    item: "skill:listed-by-g",
+    chars: 3,
+    bare: true,
+  };
+  const items = (scan: Scan) => [...new Set(scan.cells.map((cell) => cell.item))].sort();
+
+  it("keeps a used item's cells only when some harness installed or listed it", () => {
+    const scan = scanOf([
+      {
+        harness: "h",
+        facts: [
+          used("skill:unknown"),
+          used("subagent:unknown"),
+          used("mcp:unknown"),
+          used("instructions:unknown"),
+          used("skill:g"),
+          used("skill:listed-by-g"),
+          used("skill:a"),
+        ],
+      },
+      { harness: "g", facts: [listed] },
+    ]);
+    expect(items(scan)).toEqual(["skill:a", "skill:g", "skill:listed-by-g"]);
+  });
+
+  it("keeps a cell whose item a harness listed outside the window", () => {
+    const scan = buildScan({
+      tool: "loadsheet@0.0.0",
+      machine: "m",
+      scannedAt: "2026-11-24T00:00:00.000Z",
+      window: ["2026-11-10", "2026-11-24"],
+      harnesses: [
+        {
+          harness: "h",
+          installed: true,
+          signals,
+          items: [],
+          tally: foldFacts("h", [listed, used("skill:listed-by-g"), used("skill:unknown")]),
+        },
+      ],
+    });
+    expect(items(scan)).toEqual(["skill:listed-by-g"]);
+  });
+});
+
 describe("mergeScans", () => {
   const other: Fact[] = [
     { type: "session", day: "2026-11-02", via: "cli", version: "2.0.0" },
