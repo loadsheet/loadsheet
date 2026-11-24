@@ -178,8 +178,8 @@ export const coverageOf = (
 const itemKey = (item: Item) => [item.id, item.path].join(SEP);
 
 /**
- * Items by id and path; the same item from two harnesses or two Scans lists both harnesses, and
- * keeps the link target either one found.
+ * Items by id and path; the same item from two harnesses or two Scans lists both harnesses. The
+ * later one's other fields stand, so what it reaches is never joined from two Scans.
  */
 const unionItems = (lists: Iterable<readonly Item[]>): Item[] => {
   const items = new Map<string, Item>();
@@ -188,12 +188,7 @@ const unionItems = (lists: Iterable<readonly Item[]>): Item[] => {
       const key = itemKey(item);
       const known = items.get(key);
       const harnesses = new Set([...(known?.harnesses ?? []), ...item.harnesses]);
-      const target = item.target ?? known?.target;
-      items.set(key, {
-        ...item,
-        harnesses: [...harnesses].sort(),
-        ...(target === undefined ? {} : { target }),
-      });
+      items.set(key, { ...item, harnesses: [...harnesses].sort() });
     }
   }
   return [...items.values()].sort(byKey(itemKey));
@@ -279,6 +274,16 @@ export const mergeScans = (first: Scan, ...rest: Scan[]): Scan => {
     }
   }
 
+  // What an Item reaches was worked out on the disk as it was at its Scan. Only the latest Scan
+  // speaks for the disk now, so an Item it does not hold keeps none.
+  const current = new Set(latest.items.map(itemKey));
+  const asOf = (item: Item): Item => {
+    if (item.reaches === undefined || current.has(itemKey(item))) return item;
+    const rest = { ...item };
+    delete rest.reaches;
+    return rest;
+  };
+
   const starts = scans.map((scan) => scan.window[0]).sort();
   const ends = scans.map((scan) => scan.window[1]).sort();
   return {
@@ -288,7 +293,7 @@ export const mergeScans = (first: Scan, ...rest: Scan[]): Scan => {
     scannedAt: latest.scannedAt,
     window: [starts[0]!, ends.at(-1)!],
     coverage: [...coverage.values()].sort(byKey((entry) => entry.harness)),
-    items: unionItems(ordered.map((scan) => scan.items)),
+    items: unionItems(ordered.map((scan) => scan.items)).map(asOf),
     sessions: total.sessions,
     cells: total.cells,
   };

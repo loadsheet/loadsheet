@@ -189,29 +189,24 @@ describe("mergeScans", () => {
     const a = scanOf([{ harness: "h", facts }]);
     expect(() => mergeScans(a, { ...a, machine: "n" })).toThrow(/one machine/);
   });
-});
 
-describe("buildScan", () => {
-  it("keeps the link target either harness found when their Items merge", () => {
-    const linked = { ...item("a", "h"), target: "~/.claude/skills/a" };
-    for (const order of [
-      [linked, item("a", "g")],
-      [item("a", "g"), linked],
-    ]) {
-      const scan = buildScan({
-        tool: "loadsheet@0.0.0",
-        machine: "m",
-        scannedAt: "2026-11-24T00:00:00.000Z",
-        window: ["2026-11-01", "2026-11-24"],
-        harnesses: order.map((one): HarnessScan => ({
-          harness: one.harnesses[0]!,
-          installed: true,
-          signals,
-          items: [one],
-          tally: foldFacts(one.harnesses[0]!, []),
-        })),
-      });
-      expect(scan.items).toEqual([{ ...linked, harnesses: ["g", "h"] }]);
+  it("takes what an Item reaches from the latest Scan alone", () => {
+    const [shared, own] = scanOf([{ harness: "h", facts }]).items;
+    const at = (scannedAt: string, items: Scan["items"]): Scan => ({
+      ...scanOf([{ harness: "h", facts: [] }]),
+      scannedAt,
+      items,
+    });
+    // The older Scan worked out both; the latest holds one of them and could not work it out.
+    const older = at("2026-11-23T00:00:00.000Z", [
+      { ...shared!, reaches: [own!.path] },
+      { ...own!, reaches: [] },
+    ]);
+    const latest = at("2026-11-24T00:00:00.000Z", [shared!]);
+    for (const merged of [mergeScans(older, latest), mergeScans(latest, older)]) {
+      expect(merged.items).toEqual([shared, own]);
     }
+    const known = at("2026-11-24T00:00:00.000Z", [{ ...shared!, reaches: [] }]);
+    expect(mergeScans(older, known).items).toEqual([{ ...shared!, reaches: [] }, own]);
   });
 });

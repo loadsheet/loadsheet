@@ -84,8 +84,6 @@ const windowOf = (text: string) =>
 // writer replaces the real one with ~.
 const HOME = String.raw`(?:/home/|/Users/|/var/home/|/root(?:/|$)|[A-Za-z]:[\\/])`;
 const NOT_HOME = new RegExp(`^(?!${HOME})`);
-/** Whether a path is an absolute path into a home folder, which a Scan or Report never holds. */
-export const isHomePath = (path: string) => !NOT_HOME.test(path);
 const relativePath = (text: string) =>
   v.pipe(
     v.string(),
@@ -226,9 +224,16 @@ const ItemSchema = v.pipe(
     path: relativePath(
       "Its file or folder, relative to the home directory (`~/...`) or to the project.",
     ),
-    target: v.optional(
-      relativePath(
-        "Where `path` really is when a link is on the way to it, at the path or a folder above it, written like `path`; absent when `path` is where it is.",
+    reaches: v.optional(
+      v.pipe(
+        v.array(
+          relativePath(
+            "Its file or folder, relative to the home directory (`~/...`) or to the project.",
+          ),
+        ),
+        v.description(
+          "The paths of the other Items of this machine that removing this one would take or break, worked out on the machine's disk; absent when that is not known.",
+        ),
       ),
     ),
     digest: v.pipe(
