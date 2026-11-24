@@ -208,5 +208,24 @@ describe("mergeScans", () => {
     }
     const known = at("2026-11-24T00:00:00.000Z", [{ ...shared!, reaches: [] }]);
     expect(mergeScans(older, known).items).toEqual([{ ...shared!, reaches: [] }, own]);
+    // The latest Scan names a path it does not hold: an older Scan's Item does not stand in for it.
+    const beyond = at("2026-11-24T00:00:00.000Z", [{ ...shared!, reaches: [own!.path] }]);
+    expect(mergeScans(older, beyond).items).toEqual([shared, own]);
+  });
+
+  it("orders Scans by instant, however the time is written", () => {
+    const [shared] = scanOf([{ harness: "h", facts }]).items;
+    const at = (scannedAt: string, items: Scan["items"]): Scan => ({
+      ...scanOf([{ harness: "h", facts: [] }]),
+      scannedAt,
+      items,
+    });
+    // As text, "…00.001Z" sorts before "…00Z".
+    const older = at("2026-11-24T13:00:00Z", [{ ...shared!, reaches: [] }]);
+    const latest = at("2026-11-24T13:00:00.001Z", [shared!]);
+    for (const merged of [mergeScans(older, latest), mergeScans(latest, older)]) {
+      expect(merged.items).toEqual([shared]);
+      expect(merged.scannedAt).toBe(latest.scannedAt);
+    }
   });
 });

@@ -241,8 +241,9 @@ export const mergeScans = (first: Scan, ...rest: Scan[]): Scan => {
       "mergeScans merges Scans of one machine; Scans of different machines stay separate",
     );
   }
-  // Oldest first, so the later scan's description of an item or harness is the one kept.
-  const ordered = [...scans].sort(byKey((scan) => scan.scannedAt));
+  // Oldest first, by instant rather than by spelling, so the later scan's description of an item
+  // or harness is the one kept.
+  const ordered = [...scans].sort((a, b) => Date.parse(a.scannedAt) - Date.parse(b.scannedAt));
   const latest = ordered.at(-1)!;
 
   const counters = new Accumulator();
@@ -275,10 +276,13 @@ export const mergeScans = (first: Scan, ...rest: Scan[]): Scan => {
   }
 
   // What an Item reaches was worked out on the disk as it was at its Scan. Only the latest Scan
-  // speaks for the disk now, so an Item it does not hold keeps none.
+  // speaks for the disk now, so an Item it does not hold keeps none, and neither does one that
+  // reaches a path the latest Scan does not hold, which an older Scan's Item must not stand in for.
   const current = new Set(latest.items.map(itemKey));
+  const paths = new Set(latest.items.map((item) => item.path));
   const asOf = (item: Item): Item => {
-    if (item.reaches === undefined || current.has(itemKey(item))) return item;
+    if (item.reaches === undefined) return item;
+    if (current.has(itemKey(item)) && item.reaches.every((path) => paths.has(path))) return item;
     const rest = { ...item };
     delete rest.reaches;
     return rest;
