@@ -3,6 +3,7 @@ import {
   chmodSync,
   cpSync,
   existsSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -19,7 +20,7 @@ import { fileURLToPath } from "node:url";
 import { parseReport, type Report } from "@loadsheet/schema";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 import pkg from "../package.json" with { type: "json" };
-import { injectReport, MARKER } from "../src/ui.ts";
+import { injectReport, MARKER, writeBuild } from "../src/ui.ts";
 
 // Runs the built CLI, so `pnpm build` comes first. The web UI is a stub with one module script and
 // one asset, named by LOADSHEET_WEB_DIR.
@@ -127,6 +128,26 @@ describe("loadsheet build", () => {
     expect(run(["build", join(root, "pack")], { cwd }).status).toBe(0);
     expect(existsSync(join(cwd, "loadsheet-report", "index.html"))).toBe(true);
   });
+
+  it.each([false, true])(
+    "replaces a hard-linked marker without rewriting the other file (lists itself: %s)",
+    async (listsItself) => {
+      const out = mkdtempSync(join(root, "hard-linked-marker-"));
+      const other = join(mkdtempSync(join(root, "saved-marker-")), "marker.json");
+      const files = ["assets/app.js", "index.html"];
+      const original = JSON.stringify({ files: listsItself ? [...files, MARKER] : files });
+      const marker = join(out, MARKER);
+      writeFileSync(other, original);
+      linkSync(other, marker);
+
+      await writeBuild(out, stub, "<html></html>");
+      expect(readFileSync(other, "utf8")).toBe(original);
+      expect(JSON.parse(readFileSync(marker, "utf8"))).toEqual({
+        tool: `loadsheet@${pkg.version}`,
+        files,
+      });
+    },
+  );
 
   it.each([
     [
