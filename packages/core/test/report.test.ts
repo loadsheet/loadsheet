@@ -195,6 +195,39 @@ describe("invisible-skill", () => {
     expect(value).toBeLessThanOrEqual(1);
   });
 
+  it("raises the budget on every machine it holds for, also where the skill is installed nowhere loadsheet reads", () => {
+    const hidden = [cell("hidden", 10, { bare: 8 }), ...seen];
+    const built = report(
+      [
+        // The settings sit in the config directory the machine's user Items are under.
+        scan("laptop", {
+          items: [
+            skill("mine", { path: "~/.config/claude/skills/mine" }),
+            skill("work", { scope: "project", path: "work/.claude/skills/work" }),
+          ],
+          cells: hidden,
+        }),
+        // Only a project's Item: its directory is not the machine's.
+        scan("server", {
+          items: [skill("work", { scope: "project", path: "app/.claude/skills/work" })],
+          cells: hidden,
+        }),
+      ],
+      only("invisible-skill"),
+    );
+    expect(
+      built.findings.map((f) => [f.item, f.fixes.map((fix) => [fix.machine, fix.path])]),
+    ).toEqual([
+      [
+        "skill:hidden",
+        [
+          ["laptop", "~/.config/claude/settings.json"],
+          ["server", "~/.claude/settings.json"],
+        ],
+      ],
+    ]);
+  });
+
   it("skips a harness without listing and one with fewer sessions than minSessions", () => {
     const blind = scan("laptop", {
       coverage: [coverage("laptop", "claude-code", { signals: { ...EXACT, listing: "none" } })],
@@ -516,6 +549,7 @@ describe("fixes", () => {
       { managedBy: "fleetrc" },
       { action: "remove", path: "~/.claude/skills/idle", run: "fleetrc remove idle" },
     ],
+    // A plugin update replaces the file a hide would edit, so nothing lasts.
     [
       "plugin",
       {
@@ -524,11 +558,7 @@ describe("fixes", () => {
         pack: "kit",
         path: "~/.claude/plugins/cache/m/kit/1.0.0/skills/idle",
       },
-      {
-        action: "hide-from-model",
-        path: "~/.claude/plugins/cache/m/kit/1.0.0/skills/idle/SKILL.md",
-        set: { key: "disable-model-invocation", value: true },
-      },
+      undefined,
     ],
     [
       "hand, with a space",
@@ -541,7 +571,125 @@ describe("fixes", () => {
     ],
   ] as const)("a dead skill managed by %s", (_, extra, fix) => {
     const [finding] = dead([skill("idle", extra as Partial<Item>)]);
-    expect(finding!.fixes).toEqual([{ machine: "laptop", ...fix }]);
+    expect(finding!.fixes).toEqual(fix ? [{ machine: "laptop", ...fix }] : []);
+  });
+
+  it("gives a plugin's skill no fix in either harness, and keeps the finding", () => {
+    const plugin = (harness: string, path: string) =>
+      skill("manual", {
+        harnesses: [harness],
+        managedBy: "plugin",
+        scope: "plugin",
+        pack: "kit",
+        path,
+      });
+    const findings = report([
+      scan("laptop", {
+        coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
+        items: [
+          plugin("claude-code", "~/.claude/plugins/cache/m/kit/1.0.0/skills/manual"),
+          plugin("codex", "~/.codex/plugins/cache/m/kit/1.0.0/skills/manual"),
+        ],
+        sessions: [sessions(30), sessions(30, {}, "codex")],
+        cells: [
+          cell("manual", 30, { byUser: 3 }),
+          cell("manual", 30, { byUser: 3, harness: "codex" }),
+        ],
+      }),
+    ]).findings;
+    expect(findings.map((f) => [f.rule, f.where.map((w) => w.harness), f.fixes])).toEqual([
+      ["manual-only", ["claude-code", "codex"], []],
+    ]);
+    // Removing it from one harness while the other still uses it would hide it, which does not last.
+    const dead = report([
+      scan("laptop", {
+        coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
+        items: [
+          skill("idle", {
+            harnesses: ["claude-code", "codex"],
+            managedBy: "plugin",
+            scope: "plugin",
+            pack: "kit",
+            path: "~/.claude/plugins/cache/m/kit/1.0.0/skills/idle",
+          }),
+        ],
+        sessions: [sessions(30), sessions(30, {}, "codex")],
+        cells: [cell("idle", 25), cell("idle", 25, { harness: "codex", byModel: 2 })],
+      }),
+    ]).findings;
+    expect(dead.map((f) => [f.rule, f.fixes])).toEqual([["dead-skill", []]]);
+  });
+
+  it.each(["skills", "fleetrc"] as const)(
+    "gives a Codex skill %s manages no hide fix, since the file would not last; Claude Code's goes in settings",
+    (managedBy) => {
+      const installed = (harness: string, path: string) =>
+        skill("manual", { harnesses: [harness], managedBy, pack: "acme", path });
+      const findings = report([
+        scan("laptop", {
+          coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
+          items: [
+            installed("claude-code", "~/.claude/skills/manual"),
+            installed("codex", "~/.agents/skills/manual"),
+          ],
+          sessions: [sessions(30), sessions(30, {}, "codex")],
+          cells: [
+            cell("manual", 30, { byUser: 3 }),
+            cell("manual", 30, { byUser: 3, harness: "codex" }),
+          ],
+        }),
+      ]).findings;
+      expect(findings.map((f) => [f.rule, f.fixes])).toEqual([
+        [
+          "manual-only",
+          [
+            {
+              machine: "laptop",
+              action: "hide-from-model",
+              path: "~/.claude/settings.json",
+              set: { key: "skillOverrides.manual", value: "user-invocable-only" },
+            },
+          ],
+        ],
+      ]);
+    },
+  );
+
+  it("runs one command once on a machine: fleetrc removes the skill from every agent", () => {
+    const linked = (harness: string, path: string) =>
+      skill("idle", { harnesses: [harness], managedBy: "fleetrc", pack: "mine", path });
+    const findings = report([
+      scan("laptop", {
+        coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
+        items: [
+          linked("claude-code", "~/.claude/skills/idle"),
+          linked("codex", "~/.agents/skills/idle"),
+        ],
+        sessions: [sessions(30), sessions(30, {}, "codex")],
+        cells: [cell("idle", 25), cell("idle", 25, { harness: "codex" })],
+      }),
+    ]).findings;
+    expect(findings.map((f) => [f.rule, f.fixes])).toEqual([
+      [
+        "dead-skill",
+        [
+          {
+            machine: "laptop",
+            action: "remove",
+            path: "~/.claude/skills/idle",
+            run: "fleetrc remove idle",
+          },
+        ],
+      ],
+    ]);
+  });
+
+  it("gives no fleetrc command for a skill named like a source, which fleetrc would remove whole", () => {
+    const [finding] = dead([
+      skill("idle", { managedBy: "fleetrc", pack: "Idle" }),
+      skill("other", { managedBy: "fleetrc", pack: "Idle", path: "~/.claude/skills/other" }),
+    ]);
+    expect(finding).toMatchObject({ id: "dead-skill:skill:idle", fixes: [] });
   });
 
   it("a harness without a fix table gets the path and no command, and nothing to hide", () => {

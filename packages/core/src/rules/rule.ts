@@ -32,6 +32,8 @@ export interface RuleSheet {
   lines: Line[];
   /** Every install of an item this harness loads, by machine then path; empty in pack mode. */
   installs: (item: Id) => Install[];
+  /** Every Item this harness loads on a machine, by path; empty in pack mode. */
+  itemsOn: (machine: string) => Item[];
 }
 
 /** What a rule sees: every sheet that can answer it, and its thresholds. */

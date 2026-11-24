@@ -53,7 +53,15 @@ export const packReport = ({
   const { findings, skipped } = runRules({
     mode: "pack",
     sheets: [
-      { harness: harness.id, sessions: 0, days: 0, signals: NO_SIGNALS, lines, installs: () => [] },
+      {
+        harness: harness.id,
+        sessions: 0,
+        days: 0,
+        signals: NO_SIGNALS,
+        lines,
+        installs: () => [],
+        itemsOn: () => [],
+      },
     ],
     config,
   });

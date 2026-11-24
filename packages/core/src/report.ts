@@ -3,6 +3,7 @@ import type {
   Day,
   Grade,
   Id,
+  Item,
   Line,
   Machine,
   Report,
@@ -68,15 +69,20 @@ const buildSheet = (
   keep: (cell: { via: string }) => boolean,
 ): { sheet: Sheet; rules: RuleSheet } => {
   const installs = new Map<Id, Install[]>();
+  const itemsOn = new Map<string, Item[]>();
   for (const scan of scans) {
     for (const item of scan.items) {
       if (!item.harnesses.includes(harness)) continue;
       installs.set(item.id, [...(installs.get(item.id) ?? []), { machine: scan.machine, item }]);
+      const onMachine = itemsOn.get(scan.machine) ?? [];
+      onMachine.push(item);
+      itemsOn.set(scan.machine, onMachine);
     }
   }
   for (const list of installs.values()) {
     list.sort((a, b) => compare(a.machine, b.machine) || compare(a.item.path, b.item.path));
   }
+  for (const list of itemsOn.values()) list.sort((a, b) => compare(a.path, b.path));
 
   let sessions = 0;
   let fixedTokens = 0;
@@ -167,6 +173,7 @@ const buildSheet = (
       signals: worstSignals(active.length ? active : coverage),
       lines,
       installs: (item) => installs.get(item) ?? [],
+      itemsOn: (machine) => itemsOn.get(machine) ?? [],
     },
   };
 };
