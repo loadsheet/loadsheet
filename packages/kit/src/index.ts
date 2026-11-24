@@ -95,6 +95,8 @@ export interface Place {
   readonly home: string;
   /** The environment, for variables that move a harness's home, such as `CLAUDE_CONFIG_DIR`. */
   readonly env: Readonly<Record<string, string | undefined>>;
+  /** The working directory, absolute, for a harness that takes a relative variable under it; home when absent. */
+  readonly cwd?: string;
 }
 
 /** What a harness keeps on a machine. Paths are absolute and joined with `/`. */
