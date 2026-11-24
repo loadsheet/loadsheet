@@ -50,8 +50,10 @@ Change nothing until I accept a fix.
    - `dedupe`: the same item is installed more than once; remove the copy at `path` with its
      `run` command, or ask me how when there is none.
    - A finding with no fixes: tell me about it and change nothing.
-5. When done, rerun `npx loadsheet --json` and tell me which findings are gone, which remain,
-   and what each session now saves.
+5. When done, rerun `npx loadsheet --json`. loadsheet reads past sessions, so a finding can
+   stay until new sessions have run without the item: tell me which fixes are in place on disk
+   (an item you removed no longer has a `path` on its line in `sheet[].lines`), which findings
+   are gone, which remain, and what each session will save.
 ```
 
 Without an agent, `npx loadsheet` prints the same findings and fixes as text.
