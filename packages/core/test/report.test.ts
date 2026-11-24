@@ -664,12 +664,11 @@ describe("fixes", () => {
 
   it("keeps a folder another harness reaches through a link", () => {
     const mine = skill("weekly");
-    // `~/.agents/skills/weekly` links to it: the same file, so the same digest. Codex reads its
-    // name its own way, and uses it.
+    // `~/.agents/skills/weekly` links to it. Codex reads its name its own way, and uses it.
     const link = skill("weekly report", {
       harnesses: ["codex"],
       path: "~/.agents/skills/weekly",
-      digest: mine.digest,
+      target: mine.path,
     });
     const fixes = dead([mine, link], {
       coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
@@ -677,6 +676,58 @@ describe("fixes", () => {
       cells: [cell("weekly", 25), cell("weekly report", 25, { harness: "codex", byUser: 2 })],
     }).find((f) => f.rule === "dead-skill")!.fixes;
     expect(fixes.map((fix) => [fix.action, fix.run])).toEqual([["hide-from-model", undefined]]);
+  });
+
+  it("keeps a folder holding a skill another harness reaches through a link to it", () => {
+    // `~/.agents/skills/child` links to a folder inside `weekly`, and Codex uses it: `rm -r` of
+    // `weekly` would take it.
+    const mine = skill("weekly");
+    const child = skill("child", {
+      harnesses: ["codex"],
+      path: "~/.agents/skills/child",
+      target: `${mine.path}/child`,
+    });
+    const findings = report([
+      scan("laptop", {
+        coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
+        items: [mine, child],
+        sessions: [...sessions(30), ...sessions(30, {}, "codex")],
+        cells: [cell("weekly", 25), cell("child", 25, { harness: "codex", byModel: 2 })],
+      }),
+    ]).findings;
+    expect(findings.find((f) => f.rule === "dead-skill")!.fixes).toEqual([
+      {
+        machine: "laptop",
+        action: "hide-from-model",
+        path: "~/.claude/skills/weekly/SKILL.md",
+        set: { key: "disable-model-invocation", value: true },
+      },
+    ]);
+  });
+
+  it("removes a dead skill whose content another, used skill at another place shares", () => {
+    const mine = skill("weekly");
+    const other = skill("report", {
+      harnesses: ["codex"],
+      path: "~/.agents/skills/report",
+      digest: mine.digest,
+    });
+    const findings = report([
+      scan("laptop", {
+        coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
+        items: [mine, other],
+        sessions: [...sessions(30), ...sessions(30, {}, "codex")],
+        cells: [cell("weekly", 25), cell("report", 25, { harness: "codex", byModel: 2 })],
+      }),
+    ]).findings;
+    expect(findings.find((f) => f.rule === "dead-skill")!.fixes).toEqual([
+      {
+        machine: "laptop",
+        action: "remove",
+        path: "~/.claude/skills/weekly",
+        run: "rm -r ~/.claude/skills/weekly",
+      },
+    ]);
   });
 
   it("reads another harness's use before any filter, and keeps a path whose other harness cannot tell use", () => {
@@ -1001,10 +1052,19 @@ describe("fixes", () => {
       cells: [cell("idle-report", 25, { byModel: 3 })],
     });
     expect(fixesOf([laptop, renamed])).toEqual(hidden);
-    // Codex on the server uses a skill inside the linked folder, which the unlink would take too.
+    // Codex on the server uses `~/.agents/skills/child`, a link through the linked folder to a
+    // skill inside its source, which the unlink would take too.
+    const source = "~/.config/fleetrc/sources/mine/idle";
     const nested = scan("server", {
       coverage: [coverage("server", "claude-code"), coverage("server", "codex")],
-      items: [linked, skill("child", { harnesses: ["codex"], path: `${linked.path}/child` })],
+      items: [
+        { ...linked, target: source },
+        skill("child", {
+          harnesses: ["codex"],
+          path: "~/.agents/skills/child",
+          target: `${source}/child`,
+        }),
+      ],
       sessions: [...sessions(30), ...sessions(30, {}, "codex")],
       cells: [cell("child", 25, { harness: "codex", byModel: 3 })],
     });
