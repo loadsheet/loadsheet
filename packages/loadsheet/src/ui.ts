@@ -116,7 +116,7 @@ const buildReport = (forward: string[]): Report => {
 };
 
 /** Writes the page into `out`, which must be missing, empty, or a folder this command wrote. */
-const writeBuild = async (out: string, web: string, html: string) => {
+export const writeBuild = async (out: string, web: string, html: string) => {
   // The page's files are read before `out` is looked at, so one that cannot be read changes nothing.
   let bodies: (readonly [string, string | Buffer])[];
   try {
@@ -205,9 +205,10 @@ const writeBuild = async (out: string, web: string, html: string) => {
     }
   }
   // Only a file the loop above found is deleted: a listed path that is not there needs no removal.
+  const marker = join(out, MARKER);
   for (const file of previous) {
     const path = resolve(out, file);
-    if (!there.has(path)) continue;
+    if (path === marker || !there.has(path)) continue;
     rmSync(path, { force: true });
     // Folders the last build made go too, once nothing else is left in them.
     for (let dir = dirname(path); dir.startsWith(out + sep); dir = dirname(dir)) {
@@ -219,10 +220,10 @@ const writeBuild = async (out: string, web: string, html: string) => {
     }
   }
   await mkdir(out, { recursive: true });
-  await writeFile(
-    join(out, MARKER),
-    `${JSON.stringify({ tool: `loadsheet@${pkg.version}`, files })}\n`,
-  );
+  if (there.has(marker)) rmSync(marker, { force: true });
+  await writeFile(marker, `${JSON.stringify({ tool: `loadsheet@${pkg.version}`, files })}\n`, {
+    flag: "wx",
+  });
   for (const [file, body] of bodies) {
     const target = join(out, file);
     await mkdir(dirname(target), { recursive: true });
