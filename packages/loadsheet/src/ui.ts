@@ -52,7 +52,10 @@ const distFiles = (dir: string): string[] =>
     .map((entry) => relative(dir, join(entry.parentPath, entry.name)).split(sep).join("/"))
     .sort();
 
-/** Splits this command's own flags from the ones the default command takes. */
+/**
+ * Splits this command's own flags from the ones the default command takes. After `--` every word is
+ * the default command's: a pack may be named `--ui`.
+ */
 const parse = (argv: string[]) => {
   const build = argv[0] === "build";
   const rest = build ? argv.slice(1) : argv;
@@ -60,29 +63,41 @@ const parse = (argv: string[]) => {
   let port: string | undefined;
   let ui = false;
   let help = false;
+  let version = false;
+  let scan = false;
   const forward: string[] = [];
   for (let index = 0; index < rest.length; index += 1) {
     const arg = rest[index]!;
+    if (arg === "--") {
+      forward.push(...rest.slice(index));
+      break;
+    }
     const value = (flag: string) => {
       if (arg.startsWith(`${flag}=`)) return arg.slice(flag.length + 1);
       const next = rest[(index += 1)];
-      if (next === undefined) fail(`${flag} takes a value\n\n${usage}`);
+      // A value that starts with a dash goes after `=`, so a forgotten value takes no option for one.
+      if (next === undefined || next.startsWith("-"))
+        fail(`${flag} takes a value; write one that starts with - as ${flag}=<value>\n\n${usage}`);
       return next;
     };
     if (arg === "--out" || arg.startsWith("--out=")) out = value("--out");
     else if (arg === "--port" || arg.startsWith("--port=")) port = value("--port");
     else if (arg === "--ui") ui = true;
     else if (arg === "--help" || arg === "-h") help = true;
+    else if (arg === "--version" || arg === "-v") version = true;
+    else if (arg === "--scan") scan = true;
     else if (arg === "--json") continue;
     else forward.push(arg);
   }
-  return { build, ui, out, port, help, forward };
+  return { build, ui, out, port, help, version, scan, forward };
 };
 
 /** The Report the default command prints for these flags, or its exit code when it fails. */
 const buildReport = (forward: string[]): Report => {
   const cli = process.argv[1]!;
-  const child = spawnSync(process.execPath, [...process.execArgv, cli, ...forward, "--json"], {
+  // --json goes first: after a `--` in `forward` it would be a pack, and a first word such as
+  // `fleet` would be a command.
+  const child = spawnSync(process.execPath, [...process.execArgv, cli, "--json", ...forward], {
     stdio: ["inherit", "pipe", "inherit"],
     maxBuffer: 1 << 30,
     encoding: "utf8",
@@ -126,13 +141,23 @@ const writeBuild = async (out: string, web: string, html: string) => {
     if (!mine.has(file) && existsSync(join(out, file)))
       fail(`${join(out, file)} is not loadsheet build's; it will not overwrite it`);
   }
-  // A link on the way to a file leads out of the folder, where nothing is loadsheet build's.
+  // Every path is looked at before any is changed, so a build that stops has changed nothing. A link
+  // on the way to a file leads out of the folder, where nothing is loadsheet build's; a folder where
+  // a file goes, or a file where a folder goes, is the user's change to the last build.
   for (const file of [...previous, ...files, MARKER]) {
+    const parts = relative(out, resolve(out, file)).split(sep);
     let path = out;
-    for (const part of relative(out, resolve(out, file)).split(sep)) {
+    for (const [index, part] of parts.entries()) {
       path = join(path, part);
-      if (lstatSync(path, { throwIfNoEntry: false })?.isSymbolicLink())
+      const found = lstatSync(path, { throwIfNoEntry: false });
+      if (!found) break;
+      if (found.isSymbolicLink())
         fail(`${path} is a link; loadsheet build writes and deletes through no link`);
+      const last = index === parts.length - 1;
+      if (last ? !found.isFile() : !found.isDirectory())
+        fail(
+          `${path} is not the ${last ? "file" : "folder"} loadsheet build wrote; name an empty or missing folder with --out`,
+        );
     }
   }
   for (const file of previous) {
@@ -192,10 +217,14 @@ const serve = (web: string, html: string, port: number) => {
       });
       response.end(request.method === "HEAD" ? undefined : body);
     };
-    // A page on another site that resolves its name to 127.0.0.1 sends its own Host.
-    const host = request.headers.host ?? "";
+    // A page on another site that resolves its name to 127.0.0.1 sends its own Host. One Host only:
+    // of two, `headers.host` holds the first and a proxy may route on the second.
+    const hosts = request.headersDistinct.host ?? [];
     const { port: bound } = server.address() as { port: number };
-    if (host !== `127.0.0.1:${bound}` && host !== `localhost:${bound}`)
+    if (
+      hosts.length !== 1 ||
+      (hosts[0] !== `127.0.0.1:${bound}` && hosts[0] !== `localhost:${bound}`)
+    )
       return send(421, "Misdirected request\n");
     if (request.method !== "GET" && request.method !== "HEAD")
       return send(405, "Method not allowed\n");
@@ -230,15 +259,19 @@ const serve = (web: string, html: string, port: number) => {
 };
 
 export async function run(argv: string[]): Promise<void> {
-  const { build, ui, out, port, help, forward } = parse(argv);
+  const { build, ui, out, port, help, version, scan, forward } = parse(argv);
   if (help) {
     process.stdout.write(usage);
+    process.exit(0);
+  }
+  if (version) {
+    process.stdout.write(`${pkg.version}\n`);
     process.exit(0);
   }
   if (build && ui) fail(`build writes the page and --ui serves it; pick one\n\n${usage}`);
   if (!build && out !== undefined) fail(`--out is for loadsheet build\n\n${usage}`);
   if (!ui && port !== undefined) fail(`--port is for loadsheet --ui\n\n${usage}`);
-  if (forward.includes("--scan")) fail(`--scan prints a Scan, not a Report to show\n\n${usage}`);
+  if (scan) fail(`--scan prints a Scan, not a Report to show\n\n${usage}`);
   const portNumber = port === undefined ? 0 : Number(port);
   if (port !== undefined && (!/^\d+$/u.test(port) || portNumber < 1 || portNumber > 65_535))
     fail(`--port takes a port from 1 to 65535, got ${port}`);
@@ -247,7 +280,8 @@ export async function run(argv: string[]): Promise<void> {
   const web = resolve(
     process.env.LOADSHEET_WEB_DIR || fileURLToPath(new URL("./web/", import.meta.url)),
   );
-  if (!existsSync(join(web, "index.html")))
+  // A page that is a link is not copied, so it is no page to put the Report into.
+  if (!lstatSync(join(web, "index.html"), { throwIfNoEntry: false })?.isFile())
     fail("This build of loadsheet has no web UI, so it cannot run build or --ui.", 1);
 
   const html = injectReport(readFileSync(join(web, "index.html"), "utf8"), buildReport(forward));

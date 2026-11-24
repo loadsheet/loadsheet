@@ -11,12 +11,13 @@ import {
   writeFileSync,
 } from "node:fs";
 import { request } from "node:http";
-import { createServer } from "node:net";
+import { connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseReport, type Report } from "@loadsheet/schema";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
+import pkg from "../package.json" with { type: "json" };
 import { injectReport, MARKER } from "../src/ui.ts";
 
 // Runs the built CLI, so `pnpm build` comes first. The web UI is a stub with one module script and
@@ -172,6 +173,25 @@ describe("loadsheet build", () => {
     if (name === MARKER) expect(readFileSync(join(elsewhere, "marker"), "utf8")).toBe(marker);
   });
 
+  it.each([
+    ["a folder in place of its page", "index.html", "assets/app.js"],
+    ["a file in place of its folder", "assets", "index.html"],
+  ])("stops with exit 2 at %s, with every other file as it was", (_, name, other) => {
+    const out = mkdtempSync(join(root, "swapped-"));
+    expect(run(["build", "pack", "--out", out]).status).toBe(0);
+    const kept = readFileSync(join(out, other), "utf8");
+    const marker = readFileSync(join(out, MARKER), "utf8");
+    rmSync(join(out, name), { recursive: true });
+    if (name === "assets") writeFileSync(join(out, name), "the user's file");
+    else mkdirSync(join(out, name));
+    const result = run(["build", "pack", "--out", out]);
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("loadsheet build wrote");
+    expect(readFileSync(join(out, other), "utf8")).toBe(kept);
+    expect(readFileSync(join(out, MARKER), "utf8")).toBe(marker);
+    expect(readdirSync(out).sort()).toEqual([MARKER, "assets", "index.html"]);
+  });
+
   it.each([[["build", "pack"]], [["pack", "--ui"]]])(
     "%j without a web UI stops with one line",
     (args: string[]) => {
@@ -183,10 +203,57 @@ describe("loadsheet build", () => {
     },
   );
 
+  it("takes a web UI whose page is a link for no web UI, and writes nothing", () => {
+    const web = mkdtempSync(join(root, "linked-web-"));
+    symlinkSync(join(stub, "index.html"), join(web, "index.html"));
+    const out = join(root, "from-linked-web");
+    const result = run(["build", "pack", "--out", out], { web });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("has no web UI");
+    expect(existsSync(out)).toBe(false);
+  });
+
   it.each([[["pack", "--out", "x"]], [["build", "pack", "--ui"]], [["--ui", "--port", "http"]]])(
     "%j is a usage error",
     (args: string[]) => {
       expect(run(args).status).toBe(2);
+    },
+  );
+
+  it("takes no option for the value of --out", () => {
+    const cwd = mkdtempSync(join(root, "no-value-"));
+    const result = run(["build", join(root, "pack"), "--out", "--scan"], { cwd });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("--out takes a value");
+    expect(readdirSync(cwd)).toEqual([]);
+    expect(run(["build", join(root, "pack"), "--out=--dashed"], { cwd }).status).toBe(0);
+    expect(readdirSync(cwd)).toEqual(["--dashed"]);
+  });
+
+  it.each(["--ui", "--scan", "fleet", "build"])(
+    "reads %s as a pack where the default command would",
+    (name) => {
+      const cwd = mkdtempSync(join(root, "named-"));
+      cpSync(join(fixtures, "pack"), join(cwd, name), { recursive: true });
+      const dashed = name.startsWith("-");
+      const printed = run(["--json", ...(dashed ? ["--", name] : [name])], { cwd });
+      expect(printed.status).toBe(0);
+      expect(parseReport(JSON.parse(printed.stdout)).source).toBe(name);
+      const result = run(["build", "--out", "site", ...(dashed ? ["--", name] : [name])], { cwd });
+      expect(result.stderr).toBe("");
+      expect(result.status).toBe(0);
+      expect(reportIn(readFileSync(join(cwd, "site", "index.html"), "utf8")).report.source).toBe(
+        name,
+      );
+    },
+  );
+
+  it.each([[["build", "--version"]], [["--ui", "-v"]]])(
+    "%j prints the version",
+    (args: string[]) => {
+      const result = run(args);
+      expect(result.stdout).toBe(`${pkg.version}\n`);
+      expect(result.status).toBe(0);
     },
   );
 
@@ -261,6 +328,25 @@ describe("loadsheet --ui", () => {
     expect((await get(port, "/%E0%A4%A")).status).toBe(400);
     // A page elsewhere that resolves its own name to 127.0.0.1 is turned away.
     expect((await get(port, "/", "evil.example")).status).toBe(421);
+    // So is a request with two Hosts, whichever comes first.
+    for (const hosts of [
+      [`127.0.0.1:${port}`, "evil.example"],
+      ["evil.example", `127.0.0.1:${port}`],
+    ]) {
+      const head = await new Promise<string>((done, failed) => {
+        const socket = connect(port, "127.0.0.1", () =>
+          socket.end(
+            `GET / HTTP/1.1\r\n${hosts.map((host) => `Host: ${host}\r\n`).join("")}Connection: close\r\n\r\n`,
+          ),
+        );
+        let text = "";
+        socket.setEncoding("utf8");
+        socket.on("data", (chunk: string) => (text += chunk));
+        socket.on("end", () => done(text));
+        socket.on("error", failed);
+      });
+      expect(head.split("\r\n")[0], hosts.join(", ")).toBe("HTTP/1.1 421 Misdirected Request");
+    }
 
     child.kill("SIGINT");
     expect(await exited).toBe(0);
