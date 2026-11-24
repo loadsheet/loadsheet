@@ -58,20 +58,22 @@ export const scanOf = (result: RunResult): Scan | Unread => {
 
 /**
  * The Scans and unread machines of a fleet, this machine's Scan first, every machine under a name
- * no other has: buildReport keys Scans by machine, and two hosts may call themselves the same. A
- * Scan whose name is taken, or is the fleet's name for another host, goes by its name and the
- * fleet's name for its own host, as in `ubuntu (vps2)`, and if that is taken too, by a number
- * after it.
+ * no other has: buildReport keys Scans by machine, and two hosts may call themselves the same. No
+ * machine takes the fleet's name for another host. A Scan whose name is not free goes by its name
+ * and the fleet's name for its own host, as in `ubuntu (vps2)`, and if that is not free either, by
+ * a number after it.
  */
 export const fleetScans = (
   here: Scan,
   results: readonly RunResult[],
 ): { scans: Scan[]; machines: Machine[] } => {
   const taken = new Set([here.machine]);
-  const unique = (...names: string[]) => {
-    let name = names.find((candidate) => !taken.has(candidate));
+  const unique = (result: RunResult, ...names: string[]) => {
+    const free = (name: string) =>
+      !taken.has(name) && (name === result.host || !results.some(({ host }) => host === name));
+    let name = names.find(free);
     for (let n = 2; name === undefined; n++)
-      if (!taken.has(`${names[0]} #${n}`)) name = `${names[0]} #${n}`;
+      if (free(`${names[0]} #${n}`)) name = `${names[0]} #${n}`;
     taken.add(name);
     return name;
   };
@@ -80,14 +82,10 @@ export const fleetScans = (
   for (const result of results) {
     const scan = scanOf(result);
     if (typeof scan === "string") {
-      machines.push({ name: unique(result.host), reachable: false, error: scan });
+      machines.push({ name: unique(result, result.host), reachable: false, error: scan });
       continue;
     }
-    const elsewhere = results.some((other) => other !== result && other.host === scan.machine);
-    const machine = unique(
-      ...(elsewhere ? [] : [scan.machine]),
-      `${scan.machine} (${result.host})`,
-    );
+    const machine = unique(result, scan.machine, `${scan.machine} (${result.host})`);
     scans.push({
       ...scan,
       machine,

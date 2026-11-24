@@ -227,9 +227,13 @@ describe("loadsheet with a fleet", () => {
         stderr: "",
       },
       { host: "build", reachable: false, stdout: "", stderr: "", error: "offline in Tailscale" },
+      { host: "build (alias)", reachable: false, stdout: "", stderr: "", error: "refused" },
     ]);
-    expect(scans.map((one) => one.machine)).toEqual(["desk", "build (alias)"]);
-    expect(machines).toEqual([{ name: "build", reachable: false, error: "offline" }]);
+    expect(scans.map((one) => one.machine)).toEqual(["desk", "build #2"]);
+    expect(machines).toEqual([
+      { name: "build", reachable: false, error: "offline" },
+      { name: "build (alias)", reachable: false, error: "offline" },
+    ]);
   });
 
   it("takes a fleet of empty entries for no fleet", () => {
