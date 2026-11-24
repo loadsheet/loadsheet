@@ -83,7 +83,8 @@ export const readCodexConfig = (source: string): CodexConfig => {
         continue;
       }
     }
-    const opens = /"""|'''/u.exec(line)?.[0];
+    // Where a value starts; a triple quote in a comment after a value opens nothing.
+    const opens = /(?:^|[=[,])\s*("""|''')/u.exec(line)?.[1];
     if (opens && line.split(opens).length % 2 === 0) {
       multiline = opens;
       continue;

@@ -1,5 +1,4 @@
 import type { Fact, TranscriptFormat } from "@loadsheet/kit";
-import { SKILL_NAME } from "./skill-md.ts";
 
 /** The user instruction file's item name: Codex loads `AGENTS.md` (or `AGENTS.override.md`) from its home. */
 export const CODEX_INSTRUCTIONS = "~/.codex/AGENTS.md";
@@ -14,7 +13,8 @@ export interface CodexState {
   copying: boolean;
   /**
    * When the session began, in whole seconds since the epoch. A copied `task_started` started
-   * before it; the session's own first one starts at or after it.
+   * before it; the session's own first one starts at or after it. One that does not say when it
+   * started counts as copied, which leaves a fork unmeasured sooner than measured as its parent.
    */
   since?: number;
   tokens: boolean;
@@ -37,6 +37,8 @@ const MCP_REF = /\bmcp__([A-Za-z0-9_-]+)/gu;
 /** The whole fragment Codex injects for a `$skill` mention, tags and all. */
 const USER_SKILL =
   /^<skill>\n<name>([^<\n]+)<\/name>\n<path>[^<\n]+<\/path>(?:\n<resource_access>[^\n]*<\/resource_access>)?\n[\s\S]*\n<\/skill>$/u;
+/** A name Codex takes for a skill: words with single spaces between them, and no markup, path or invisible characters. */
+const SKILL_NAME = /^(?=.{1,128}$)[^\s<>/\\\p{C}]+(?: [^\s<>/\\\p{C}]+)*$/u;
 /** The tool whose input is code that can call MCP tools; shell tools are never scanned for `mcp__`. */
 const CODE_TOOL = "exec";
 /** An originator or source such as `codex_cli_rs` or `T3 Code`; anything else is not kept. */
@@ -353,9 +355,9 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
       // A fork's copy holds the parent's `task_started` events too, all started before the fork.
       if (
         payload.type === "task_started" &&
-        (typeof payload.started_at !== "number" ||
-          state.since === undefined ||
-          payload.started_at >= state.since)
+        typeof payload.started_at === "number" &&
+        state.since !== undefined &&
+        payload.started_at >= state.since
       ) {
         state.copying = false;
       }

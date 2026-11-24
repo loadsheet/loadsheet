@@ -52,7 +52,11 @@ const exec = (input: string) => ({
   payload: { type: "custom_tool_call", name: "exec", input },
 });
 const turn = { type: "turn_context", payload: {} };
-const taskStarted = { type: "event_msg", payload: { type: "task_started" } };
+/** A task that started in the second `meta()` says the session began, as every real one says when. */
+const taskStarted = {
+  type: "event_msg",
+  payload: { type: "task_started", started_at: Date.parse("2026-11-09T23:58:59.000Z") / 1000 },
+};
 /** The fragment Codex injects for a `$name` mention. */
 const skillMention = (name: string, path = `/home/u/.agents/skills/${name}/SKILL.md`) =>
   user(`<skill>\n<name>${name}</name>\n<path>${path}</path>\nBody\n</skill>`);
@@ -203,9 +207,11 @@ describe("codex listing", () => {
       skillMention("/home/x/private"),
       user("<skill>\n<name>review</name>\nwhat the user typed"),
       skillMention("review"),
+      skillMention("team's-review"),
     ]);
     expect(facts.flatMap((fact) => (fact.type === "used" ? [fact.item] : []))).toEqual([
       "skill:review",
+      "skill:team's-review",
     ]);
   });
 
@@ -421,6 +427,8 @@ describe("codex sessions", () => {
       meta({ forked_from_id: "parent", source: { subagent: { thread_spawn: {} } } }),
       meta({ originator: "parent" }),
       developer(skillsSection(["- a: A. (file: r0/a/SKILL.md)"], ["/s"])),
+      { type: "event_msg", payload: { type: "task_started" } },
+      tokenCount(800),
       startedAt("2026-11-09T23:50:00.000Z"),
       turn,
       skillMention("a", "/s/a/SKILL.md"),
@@ -730,6 +738,7 @@ describe("codex machine", () => {
   it("lists nothing for a skill `[[skills.config]]` turns off, by name or by path", async () => {
     const items = await machine.inventory(
       memoryFiles({
+        "~/.agents/skills/other/SKILL.md": skillMd("other", "Other."),
         "~/.codex/config.toml": [
           "[[skills.config]]",
           'name = "kit:lint"',
@@ -737,6 +746,10 @@ describe("codex machine", () => {
           "",
           "[[skills.config]]",
           "path = '/home/u/.agents/skills/shared/SKILL.md'",
+          "enabled = false",
+          "",
+          "[[skills.config]]",
+          "path = '/work/project/.agents/skills/other/SKILL.md'",
           "enabled = false",
           "",
           "[[skills.config]]",
@@ -753,9 +766,12 @@ describe("codex machine", () => {
         "~/.agents/skills/shared/SKILL.md": skillMd("shared", "Shared."),
         "~/.codex/plugins/cache/market/kit/1.0.0/skills/lint/SKILL.md": skillMd("lint", "Lints."),
       }),
+      { home: "/home/u", env: {} },
     );
     expect(items.map((item) => [item.id, item.chars.listed > 0, item.modelInvocable])).toEqual([
       ["skill:mine", true, true],
+      // The project's skill of the same folder names is another file.
+      ["skill:other", true, true],
       ["skill:shared", false, false],
       ["skill:kit:lint", false, false],
     ]);
@@ -781,9 +797,18 @@ describe("codex machine", () => {
 
   it("skips a comment that holds a triple quote in config.toml", () => {
     const { mcpServers } = readCodexConfig(
-      ['# a note with """ in it', "[mcp_servers.after]", 'command = "x"'].join("\n"),
+      [
+        '# a note with """ in it',
+        "[mcp_servers.first]",
+        'enabled = true # and """ here',
+        "[mcp_servers.after]",
+        'command = "x"',
+      ].join("\n"),
     );
-    expect([...mcpServers]).toEqual([["after", true]]);
+    expect([...mcpServers]).toEqual([
+      ["first", true],
+      ["after", true],
+    ]);
   });
 
   it("reads a pack's skills with their descriptions, named after its Codex plugin", async () => {

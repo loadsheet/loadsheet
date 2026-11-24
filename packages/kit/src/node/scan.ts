@@ -186,7 +186,10 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
     const machine = harness.machine;
     if (!machine) continue;
     const installed = await exists(machine.home(place));
-    const items = await machine.inventory(await sourceFiles(machine.sources(place), place.home));
+    const items = await machine.inventory(
+      await sourceFiles(machine.sources(place), place.home),
+      place,
+    );
     const tallies = await readTranscripts(machine, harness.id, place, sinceMs, {
       tool: options.tool,
       cacheDir,

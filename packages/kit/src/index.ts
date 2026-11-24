@@ -106,8 +106,11 @@ export interface MachineReader<State> {
    * Files, keyed `~/...` under the home directory and by absolute path elsewhere.
    */
   sources(place: Place): string[];
-  /** The pieces of context in those files, with paths as the Files keys them. */
-  inventory(files: Files): Promise<Item[]>;
+  /**
+   * The pieces of context in those files, with paths as the Files keys them. `place` is for telling
+   * which key an absolute path in a config file names; nothing of it goes into an Item.
+   */
+  inventory(files: Files, place?: Place): Promise<Item[]>;
   /** The directories its session transcripts are under. */
   roots(place: Place): string[];
   /** How its transcript lines become Facts. */

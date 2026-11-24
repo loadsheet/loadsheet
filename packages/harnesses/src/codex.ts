@@ -144,13 +144,17 @@ type Disabled = (name: string, file: string) => boolean;
 
 /**
  * Whether the last `[[skills.config]]` entry that selects a skill, by its name or its SKILL.md
- * path, turns it off. A key under home (`~/…`) matches the absolute path that ends in it.
+ * path, turns it off. A key under home (`~/…`) is the path under `home`, so a project's skill of
+ * the same folder names is another file.
  */
 const disabledBy =
-  (rules: readonly SkillRule[]): Disabled =>
+  (rules: readonly SkillRule[], home: string | undefined): Disabled =>
   (name, file) => {
-    const at = (path: string) =>
-      path === file || (file.startsWith("~/") && path.endsWith(file.slice(1)));
+    const absolute =
+      home !== undefined && file.startsWith("~/")
+        ? `${home.replace(/\/+$/u, "")}${file.slice(1)}`
+        : file;
+    const at = (path: string) => path === file || path === absolute;
     const rule = rules.findLast((entry) =>
       entry.name === undefined ? at(entry.path!) : entry.name === name,
     );
@@ -281,7 +285,7 @@ const topFile = (files: Files, name: string) =>
  * and the MCP servers `config.toml` names. Of `config.toml` only table names, `enabled` and the
  * `[[skills.config]]` selectors are read.
  */
-const machineInventory = async (files: Files): Promise<Item[]> => {
+const machineInventory = async (files: Files, place?: Place): Promise<Item[]> => {
   const configPath = topFile(files, "config.toml")[0];
   const configText = configPath === undefined ? undefined : await files.text(configPath);
   const config = readCodexConfig(configText ?? "");
@@ -299,7 +303,7 @@ const machineInventory = async (files: Files): Promise<Item[]> => {
     files,
     [...roots, ...plugins],
     undefined,
-    disabledBy(config.skills),
+    disabledBy(config.skills, place?.home),
   );
 
   const instructionPaths = [
