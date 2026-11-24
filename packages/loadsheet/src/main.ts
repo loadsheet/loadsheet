@@ -26,7 +26,8 @@ Usage: loadsheet [options]                     Scan this machine's sessions, and
 
 Options:
   --local               Report this machine alone, even when it has a fleet
-  --scan                Print this machine's Scan as JSON: what each machine of a fleet sends
+  --scan                Print this machine's Scan as JSON: what each machine of a fleet sends.
+                        It holds every session in --days; the other options shape a Report
   --timeout <seconds>   How long to wait for each machine of the fleet (default 300)
   --config <path>       Config file (default $XDG_CONFIG_HOME/loadsheet/config.json,
                         else ~/.config/loadsheet/config.json)
