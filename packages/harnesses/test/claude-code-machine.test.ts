@@ -264,6 +264,23 @@ describe("Claude Code machine inventory", () => {
     expect(managed("skill:quiet")).toEqual({ managedBy: "skills", pack: "mine" });
   });
 
+  it("names a skill by its frontmatter name, and finds its installer by its folder", async () => {
+    const items = await summary({
+      ...home,
+      "~/.claude/skills/deploy-staging/SKILL.md": skill("deploy", "Deploys."),
+      "~/.claude/skills/.fleetrc-manifest.json": JSON.stringify({
+        version: 1,
+        links: { "deploy-staging": { source: "mine" } },
+      }),
+    });
+    expect(items.find((item) => item.path === "~/.claude/skills/deploy-staging")).toMatchObject({
+      id: "skill:deploy",
+      managedBy: "fleetrc",
+      pack: "mine",
+      listed: "- deploy: Deploys.\n".length,
+    });
+  });
+
   it("applies the skills CLI's lock to skill folders only", async () => {
     const items = await summary({
       ...home,

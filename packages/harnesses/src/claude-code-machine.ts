@@ -288,19 +288,16 @@ export const claudeInventory = async (files: Files): Promise<Item[]> => {
         const top = relative.split("/")[0]!;
         let name: string;
         let path: string;
-        if (dir.endsWith("/skills")) {
-          // A user skill is named after its folder.
-          name = relative;
-          path = `${dir}/${relative}`;
-        } else if (kind === "skill") {
+        if (kind === "skill" && !dir.endsWith("/skills")) {
           // A command in a subfolder is named `folder:name`.
           name = relative.replaceAll("/", ":");
           path = file;
         } else {
+          // A skill and a subagent go by their frontmatter name, a skill by its folder without one.
           const declared = readSkillMd((await files.text(file)) ?? "").name;
           name =
             declared && !/[\\/<>\p{Cc}]/u.test(declared) ? declared : relative.split("/").pop()!;
-          path = file;
+          path = kind === "skill" ? `${dir}/${relative}` : file;
         }
         const item = await fileItem(files, file, {
           kind,
