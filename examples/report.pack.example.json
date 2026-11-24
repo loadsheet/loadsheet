@@ -1,0 +1,419 @@
+{
+  "$schema": "https://loadsheet.dev/schema/v1.json",
+  "schema": 1,
+  "tool": "loadsheet@0.0.1",
+  "generatedAt": "2026-11-24T10:02:37.004Z",
+  "mode": "pack",
+  "source": "https://github.com/northwind-ai/agent-skills",
+  "machines": [],
+  "window": ["2026-11-24", "2026-11-24"],
+  "config": {
+    "window": 30,
+    "via": {
+      "include": [],
+      "exclude": []
+    },
+    "ignore": [],
+    "rules": {
+      "invisible-skill": {
+        "enabled": true,
+        "minSessions": 5,
+        "bareShare": 0.5
+      },
+      "dead-skill": {
+        "enabled": true,
+        "minSessions": 20,
+        "minDays": 14
+      },
+      "manual-only": {
+        "enabled": true,
+        "minUserUses": 3
+      },
+      "expensive-description": {
+        "enabled": true,
+        "maxChars": 300
+      },
+      "dead-pack": {
+        "enabled": true,
+        "minSkills": 5
+      },
+      "duplicate": {
+        "enabled": true
+      },
+      "heavy-instructions": {
+        "enabled": true,
+        "maxChars": 12000
+      },
+      "idle-mcp": {
+        "enabled": true,
+        "minSessions": 20
+      },
+      "harness-mismatch": {
+        "enabled": true,
+        "minSessions": 1
+      },
+      "drift": {
+        "enabled": true
+      },
+      "short-history": {
+        "enabled": true,
+        "minDays": 30
+      }
+    }
+  },
+  "coverage": [
+    {
+      "machine": "pack",
+      "harness": "claude-code",
+      "installed": false,
+      "sessions": 0,
+      "versions": [],
+      "signals": {
+        "listing": "none",
+        "modelUse": "none",
+        "userUse": "none",
+        "instructions": "none",
+        "mcp": "none",
+        "tokens": "none"
+      }
+    }
+  ],
+  "sheet": [
+    {
+      "harness": "claude-code",
+      "sessions": 0,
+      "lines": [
+        {
+          "item": "skill:pr-description",
+          "ref": {
+            "kind": "skill",
+            "name": "pr-description"
+          },
+          "scope": "user",
+          "pack": "northwind-ai/agent-skills",
+          "managedBy": "skills",
+          "machines": [],
+          "path": "skills/pr-description",
+          "chars": {
+            "listed": 143,
+            "body": 1840
+          },
+          "tokens": {
+            "value": 36,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Writes a pull request title and body from the branch's commits and diff, following the repository's template when one exists."
+        },
+        {
+          "item": "skill:flaky-test-hunter",
+          "ref": {
+            "kind": "skill",
+            "name": "flaky-test-hunter"
+          },
+          "scope": "user",
+          "pack": "northwind-ai/agent-skills",
+          "managedBy": "skills",
+          "machines": [],
+          "path": "skills/flaky-test-hunter",
+          "chars": {
+            "listed": 137,
+            "body": 3120
+          },
+          "tokens": {
+            "value": 34,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Reruns a failing test in isolation, bisects recent commits and reports whether the failure is flaky or a regression."
+        },
+        {
+          "item": "skill:dependency-audit",
+          "ref": {
+            "kind": "skill",
+            "name": "dependency-audit"
+          },
+          "scope": "user",
+          "pack": "northwind-ai/agent-skills",
+          "managedBy": "skills",
+          "machines": [],
+          "path": "skills/dependency-audit",
+          "chars": {
+            "listed": 398,
+            "body": 5480
+          },
+          "tokens": {
+            "value": 100,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Lists outdated and vulnerable dependencies with the smallest safe upgrade for each, grouped by risk. Use when asked to audit, update or check dependencies; covers npm, pnpm, yarn, pip, poetry, cargo and go modules; explains breaking changes from changelogs; proposes a staged upgrade plan; and writes the commands to apply it, one package manager at a time, with rollback notes."
+        },
+        {
+          "item": "skill:migration-writer",
+          "ref": {
+            "kind": "skill",
+            "name": "migration-writer"
+          },
+          "scope": "user",
+          "pack": "northwind-ai/agent-skills",
+          "managedBy": "skills",
+          "machines": [],
+          "path": "skills/migration-writer",
+          "chars": {
+            "listed": 120,
+            "body": 2690
+          },
+          "tokens": {
+            "value": 30,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Drafts a reversible database migration for a schema change and checks it against the current models."
+        },
+        {
+          "item": "skill:perf-profile",
+          "ref": {
+            "kind": "skill",
+            "name": "perf-profile"
+          },
+          "scope": "user",
+          "pack": "northwind-ai/agent-skills",
+          "managedBy": "skills",
+          "machines": [],
+          "path": "skills/perf-profile",
+          "chars": {
+            "listed": 111,
+            "body": 2210
+          },
+          "tokens": {
+            "value": 28,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Profiles a slow command or endpoint and explains where the time goes, with the top three fixes."
+        },
+        {
+          "item": "skill:readme-refresh",
+          "ref": {
+            "kind": "skill",
+            "name": "readme-refresh"
+          },
+          "scope": "user",
+          "pack": "northwind-ai/agent-skills",
+          "managedBy": "skills",
+          "machines": [],
+          "path": "skills/readme-refresh",
+          "chars": {
+            "listed": 99,
+            "body": 1530
+          },
+          "tokens": {
+            "value": 25,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Updates a README's install, usage and example sections to match the current code."
+        },
+        {
+          "item": "skill:error-explainer",
+          "ref": {
+            "kind": "skill",
+            "name": "error-explainer"
+          },
+          "scope": "user",
+          "pack": "northwind-ai/agent-skills",
+          "managedBy": "skills",
+          "machines": [],
+          "path": "skills/error-explainer",
+          "chars": {
+            "listed": 103,
+            "body": 1270
+          },
+          "tokens": {
+            "value": 26,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Explains a stack trace or error message and points to the line most likely at fault."
+        },
+        {
+          "item": "skill:i18n-extract",
+          "ref": {
+            "kind": "skill",
+            "name": "i18n-extract"
+          },
+          "scope": "user",
+          "pack": "northwind-ai/agent-skills",
+          "managedBy": "skills",
+          "machines": [],
+          "path": "skills/i18n-extract",
+          "chars": {
+            "listed": 105,
+            "body": 2840
+          },
+          "tokens": {
+            "value": 26,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Finds hard-coded user-facing strings and moves them into the project's translation files."
+        },
+        {
+          "item": "instructions:AGENTS.md",
+          "ref": {
+            "kind": "instructions",
+            "name": "AGENTS.md"
+          },
+          "scope": "user",
+          "pack": "northwind-ai/agent-skills",
+          "managedBy": "skills",
+          "machines": [],
+          "path": "AGENTS.md",
+          "chars": {
+            "listed": 0,
+            "body": 2360
+          },
+          "tokens": {
+            "value": 590,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Conventions every skill in the pack follows."
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "expensive-description:skill:dependency-audit",
+      "rule": "expensive-description",
+      "level": "fix",
+      "item": "skill:dependency-audit",
+      "where": [
+        {
+          "machine": "pack",
+          "harness": "claude-code"
+        }
+      ],
+      "evidence": {
+        "listedChars": 398
+      },
+      "savesTokens": {
+        "value": 24,
+        "basis": "estimated"
+      },
+      "fixes": [
+        {
+          "machine": "pack",
+          "action": "shorten",
+          "path": "skills/dependency-audit/SKILL.md"
+        }
+      ]
+    }
+  ],
+  "skipped": [
+    {
+      "rule": "invisible-skill",
+      "harness": "claude-code",
+      "reason": "missing-signal",
+      "missing": ["listing"]
+    },
+    {
+      "rule": "dead-skill",
+      "harness": "claude-code",
+      "reason": "missing-signal",
+      "missing": ["listing", "modelUse", "userUse"]
+    },
+    {
+      "rule": "manual-only",
+      "harness": "claude-code",
+      "reason": "missing-signal",
+      "missing": ["userUse"]
+    },
+    {
+      "rule": "idle-mcp",
+      "harness": "claude-code",
+      "reason": "missing-signal",
+      "missing": ["mcp"]
+    },
+    {
+      "rule": "short-history",
+      "harness": "claude-code",
+      "reason": "missing-signal",
+      "missing": ["listing"]
+    }
+  ]
+}

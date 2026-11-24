@@ -1,0 +1,1719 @@
+{
+  "$schema": "https://loadsheet.dev/schema/v1.json",
+  "schema": 1,
+  "tool": "loadsheet@0.0.1",
+  "generatedAt": "2026-11-24T09:14:52.318Z",
+  "mode": "fleet",
+  "machines": [
+    {
+      "name": "laptop",
+      "reachable": true,
+      "scannedAt": "2026-11-24T09:14:03.551Z"
+    },
+    {
+      "name": "server",
+      "reachable": true,
+      "scannedAt": "2026-11-24T09:14:21.907Z"
+    },
+    {
+      "name": "mini",
+      "reachable": false,
+      "error": "ssh: connect to host mini port 22: Operation timed out"
+    }
+  ],
+  "window": ["2026-10-25", "2026-11-23"],
+  "config": {
+    "window": 30,
+    "via": {
+      "include": [],
+      "exclude": []
+    },
+    "ignore": [],
+    "rules": {
+      "invisible-skill": {
+        "enabled": true,
+        "minSessions": 5,
+        "bareShare": 0.5
+      },
+      "dead-skill": {
+        "enabled": true,
+        "minSessions": 20,
+        "minDays": 14
+      },
+      "manual-only": {
+        "enabled": true,
+        "minUserUses": 3
+      },
+      "expensive-description": {
+        "enabled": true,
+        "maxChars": 300
+      },
+      "dead-pack": {
+        "enabled": true,
+        "minSkills": 5
+      },
+      "duplicate": {
+        "enabled": true
+      },
+      "heavy-instructions": {
+        "enabled": true,
+        "maxChars": 12000
+      },
+      "idle-mcp": {
+        "enabled": true,
+        "minSessions": 20
+      },
+      "harness-mismatch": {
+        "enabled": true,
+        "minSessions": 1
+      },
+      "drift": {
+        "enabled": true
+      },
+      "short-history": {
+        "enabled": true,
+        "minDays": 30
+      }
+    }
+  },
+  "coverage": [
+    {
+      "machine": "laptop",
+      "harness": "claude-code",
+      "installed": true,
+      "sessions": 412,
+      "versions": ["2.4.1", "2.4.3"],
+      "firstDay": "2026-10-25",
+      "lastDay": "2026-11-23",
+      "signals": {
+        "listing": "exact",
+        "modelUse": "exact",
+        "userUse": "exact",
+        "instructions": "exact",
+        "mcp": "exact",
+        "tokens": "exact"
+      }
+    },
+    {
+      "machine": "laptop",
+      "harness": "codex",
+      "installed": true,
+      "sessions": 140,
+      "versions": ["0.71.0", "0.72.2"],
+      "firstDay": "2026-10-25",
+      "lastDay": "2026-11-23",
+      "signals": {
+        "listing": "exact",
+        "modelUse": "inferred",
+        "userUse": "none",
+        "instructions": "exact",
+        "mcp": "exact",
+        "tokens": "exact"
+      }
+    },
+    {
+      "machine": "laptop",
+      "harness": "cursor",
+      "installed": true,
+      "sessions": 0,
+      "versions": [],
+      "signals": {
+        "listing": "none",
+        "modelUse": "none",
+        "userUse": "none",
+        "instructions": "none",
+        "mcp": "none",
+        "tokens": "none"
+      }
+    },
+    {
+      "machine": "server",
+      "harness": "claude-code",
+      "installed": true,
+      "sessions": 186,
+      "versions": ["2.4.3"],
+      "firstDay": "2026-10-25",
+      "lastDay": "2026-11-23",
+      "signals": {
+        "listing": "exact",
+        "modelUse": "exact",
+        "userUse": "exact",
+        "instructions": "exact",
+        "mcp": "exact",
+        "tokens": "exact"
+      }
+    },
+    {
+      "machine": "server",
+      "harness": "codex",
+      "installed": true,
+      "sessions": 64,
+      "versions": ["0.72.2"],
+      "firstDay": "2026-11-06",
+      "lastDay": "2026-11-23",
+      "signals": {
+        "listing": "exact",
+        "modelUse": "inferred",
+        "userUse": "none",
+        "instructions": "exact",
+        "mcp": "exact",
+        "tokens": "exact"
+      }
+    },
+    {
+      "machine": "server",
+      "harness": "opencode",
+      "installed": true,
+      "sessions": 0,
+      "versions": [],
+      "signals": {
+        "listing": "none",
+        "modelUse": "none",
+        "userUse": "none",
+        "instructions": "none",
+        "mcp": "none",
+        "tokens": "none"
+      }
+    }
+  ],
+  "sheet": [
+    {
+      "harness": "claude-code",
+      "sessions": 598,
+      "fixedTokens": {
+        "value": 17317,
+        "basis": "measured"
+      },
+      "lines": [
+        {
+          "item": "instructions:CLAUDE.md",
+          "ref": {
+            "kind": "instructions",
+            "name": "CLAUDE.md"
+          },
+          "scope": "user",
+          "managedBy": "hand",
+          "machines": ["laptop", "server"],
+          "path": "~/.claude/CLAUDE.md",
+          "chars": {
+            "listed": 0,
+            "body": 5420
+          },
+          "tokens": {
+            "value": 1355,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 598,
+            "share": 1.0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          }
+        },
+        {
+          "item": "instructions:monorepo/CLAUDE.md",
+          "ref": {
+            "kind": "instructions",
+            "name": "monorepo/CLAUDE.md"
+          },
+          "scope": "project",
+          "managedBy": "hand",
+          "machines": ["laptop"],
+          "path": "~/work/monorepo/CLAUDE.md",
+          "chars": {
+            "listed": 0,
+            "body": 18460
+          },
+          "tokens": {
+            "value": 4615,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 169,
+            "share": 0.2826,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          }
+        },
+        {
+          "item": "instructions:infra/CLAUDE.md",
+          "ref": {
+            "kind": "instructions",
+            "name": "infra/CLAUDE.md"
+          },
+          "scope": "project",
+          "managedBy": "hand",
+          "machines": ["laptop", "server"],
+          "path": "~/work/infra/CLAUDE.md",
+          "chars": {
+            "listed": 0,
+            "body": 3110
+          },
+          "tokens": {
+            "value": 778,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 214,
+            "share": 0.3579,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          }
+        },
+        {
+          "item": "skill:commit-style",
+          "ref": {
+            "kind": "skill",
+            "name": "commit-style"
+          },
+          "scope": "user",
+          "pack": "acme-labs/agent-skills",
+          "managedBy": "skills",
+          "machines": ["laptop", "server"],
+          "path": "~/.claude/skills/commit-style",
+          "chars": {
+            "listed": 142,
+            "body": 1880
+          },
+          "tokens": {
+            "value": 36,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 598,
+            "share": 1.0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 259,
+            "byUser": 14,
+            "lastUsed": "2026-11-23"
+          }
+        },
+        {
+          "item": "skill:changelog-writer",
+          "ref": {
+            "kind": "skill",
+            "name": "changelog-writer"
+          },
+          "scope": "user",
+          "pack": "acme-labs/agent-skills",
+          "managedBy": "skills",
+          "machines": ["laptop", "server"],
+          "path": "~/.claude/skills/changelog-writer",
+          "chars": {
+            "listed": 168,
+            "body": 2650
+          },
+          "tokens": {
+            "value": 42,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 598,
+            "share": 1.0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 41,
+            "byUser": 4,
+            "lastUsed": "2026-11-23"
+          }
+        },
+        {
+          "item": "skill:sql-tuner",
+          "ref": {
+            "kind": "skill",
+            "name": "sql-tuner"
+          },
+          "scope": "user",
+          "pack": "acme-labs/agent-skills",
+          "managedBy": "skills",
+          "machines": ["laptop", "server"],
+          "path": "~/.claude/skills/sql-tuner",
+          "chars": {
+            "listed": 211,
+            "body": 4320
+          },
+          "tokens": {
+            "value": 53,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 598,
+            "share": 1.0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          }
+        },
+        {
+          "item": "skill:k8s-debug",
+          "ref": {
+            "kind": "skill",
+            "name": "k8s-debug"
+          },
+          "scope": "project",
+          "managedBy": "hand",
+          "machines": ["laptop", "server"],
+          "path": "~/work/infra/.claude/skills/k8s-debug",
+          "chars": {
+            "listed": 236,
+            "body": 3900
+          },
+          "tokens": {
+            "value": 59,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 214,
+            "share": 0.3579,
+            "bare": 175
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 1,
+            "lastUsed": "2026-11-16"
+          }
+        },
+        {
+          "item": "skill:release-checklist",
+          "ref": {
+            "kind": "skill",
+            "name": "release-checklist"
+          },
+          "scope": "user",
+          "managedBy": "hand",
+          "machines": ["laptop"],
+          "path": "~/.claude/skills/release-checklist",
+          "chars": {
+            "listed": 189,
+            "body": 2240
+          },
+          "tokens": {
+            "value": 47,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 412,
+            "share": 0.689,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 9,
+            "lastUsed": "2026-11-23"
+          }
+        },
+        {
+          "item": "skill:api-designer",
+          "ref": {
+            "kind": "skill",
+            "name": "api-designer"
+          },
+          "scope": "user",
+          "pack": "acme-labs/agent-skills",
+          "managedBy": "skills",
+          "machines": ["laptop", "server"],
+          "path": "~/.claude/skills/api-designer",
+          "chars": {
+            "listed": 742,
+            "body": 6130
+          },
+          "tokens": {
+            "value": 186,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 598,
+            "share": 1.0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 10,
+            "byUser": 1,
+            "lastUsed": "2026-11-23"
+          }
+        },
+        {
+          "item": "skill:pdf-forms",
+          "ref": {
+            "kind": "skill",
+            "name": "pdf-forms"
+          },
+          "scope": "user",
+          "managedBy": "hand",
+          "machines": ["laptop"],
+          "path": "~/.claude/skills/pdf-forms",
+          "chars": {
+            "listed": 158,
+            "body": 2970
+          },
+          "tokens": {
+            "value": 40,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 412,
+            "share": 0.689,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 2,
+            "byUser": 0,
+            "lastUsed": "2026-11-11"
+          }
+        },
+        {
+          "item": "skill:deploy-preview",
+          "ref": {
+            "kind": "skill",
+            "name": "deploy-preview"
+          },
+          "scope": "user",
+          "managedBy": "fleetrc",
+          "machines": ["laptop", "server"],
+          "path": "~/.claude/skills/deploy-preview",
+          "chars": {
+            "listed": 176,
+            "body": 1540
+          },
+          "tokens": {
+            "value": 44,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 598,
+            "share": 1.0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 22,
+            "byUser": 6,
+            "lastUsed": "2026-11-23"
+          }
+        },
+        {
+          "item": "skill:data-toolkit:csv-clean",
+          "ref": {
+            "kind": "skill",
+            "name": "data-toolkit:csv-clean"
+          },
+          "scope": "plugin",
+          "pack": "data-toolkit",
+          "managedBy": "plugin",
+          "machines": ["laptop"],
+          "path": "~/.claude/plugins/cache/data-toolkit/skills/csv-clean",
+          "chars": {
+            "listed": 182,
+            "body": 2410
+          },
+          "tokens": {
+            "value": 46,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 412,
+            "share": 0.689,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          }
+        },
+        {
+          "item": "skill:data-toolkit:chart-builder",
+          "ref": {
+            "kind": "skill",
+            "name": "data-toolkit:chart-builder"
+          },
+          "scope": "plugin",
+          "pack": "data-toolkit",
+          "managedBy": "plugin",
+          "machines": ["laptop"],
+          "path": "~/.claude/plugins/cache/data-toolkit/skills/chart-builder",
+          "chars": {
+            "listed": 204,
+            "body": 3880
+          },
+          "tokens": {
+            "value": 51,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 412,
+            "share": 0.689,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          }
+        },
+        {
+          "item": "skill:data-toolkit:sql-explain",
+          "ref": {
+            "kind": "skill",
+            "name": "data-toolkit:sql-explain"
+          },
+          "scope": "plugin",
+          "pack": "data-toolkit",
+          "managedBy": "plugin",
+          "machines": ["laptop"],
+          "path": "~/.claude/plugins/cache/data-toolkit/skills/sql-explain",
+          "chars": {
+            "listed": 195,
+            "body": 2760
+          },
+          "tokens": {
+            "value": 49,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 412,
+            "share": 0.689,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          }
+        },
+        {
+          "item": "skill:data-toolkit:schema-diff",
+          "ref": {
+            "kind": "skill",
+            "name": "data-toolkit:schema-diff"
+          },
+          "scope": "plugin",
+          "pack": "data-toolkit",
+          "managedBy": "plugin",
+          "machines": ["laptop"],
+          "path": "~/.claude/plugins/cache/data-toolkit/skills/schema-diff",
+          "chars": {
+            "listed": 177,
+            "body": 1990
+          },
+          "tokens": {
+            "value": 44,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 412,
+            "share": 0.689,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          }
+        },
+        {
+          "item": "skill:data-toolkit:notebook-tidy",
+          "ref": {
+            "kind": "skill",
+            "name": "data-toolkit:notebook-tidy"
+          },
+          "scope": "plugin",
+          "pack": "data-toolkit",
+          "managedBy": "plugin",
+          "machines": ["laptop"],
+          "path": "~/.claude/plugins/cache/data-toolkit/skills/notebook-tidy",
+          "chars": {
+            "listed": 166,
+            "body": 2130
+          },
+          "tokens": {
+            "value": 42,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 412,
+            "share": 0.689,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          }
+        },
+        {
+          "item": "skill:data-toolkit:parquet-peek",
+          "ref": {
+            "kind": "skill",
+            "name": "data-toolkit:parquet-peek"
+          },
+          "scope": "plugin",
+          "pack": "data-toolkit",
+          "managedBy": "plugin",
+          "machines": ["laptop"],
+          "path": "~/.claude/plugins/cache/data-toolkit/skills/parquet-peek",
+          "chars": {
+            "listed": 158,
+            "body": 1640
+          },
+          "tokens": {
+            "value": 40,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 412,
+            "share": 0.689,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          }
+        },
+        {
+          "item": "mcp:github",
+          "ref": {
+            "kind": "mcp",
+            "name": "github"
+          },
+          "scope": "user",
+          "managedBy": "hand",
+          "machines": ["laptop", "server"],
+          "path": "~/.claude.json",
+          "chars": {
+            "listed": 6840,
+            "body": 0
+          },
+          "tokens": {
+            "value": 1710,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 598,
+            "share": 1.0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 409,
+            "byUser": 0,
+            "lastUsed": "2026-11-23"
+          }
+        },
+        {
+          "item": "mcp:linear",
+          "ref": {
+            "kind": "mcp",
+            "name": "linear"
+          },
+          "scope": "user",
+          "managedBy": "hand",
+          "machines": ["laptop"],
+          "path": "~/.claude.json",
+          "chars": {
+            "listed": 4120,
+            "body": 0
+          },
+          "tokens": {
+            "value": 1030,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 412,
+            "share": 0.689,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          }
+        },
+        {
+          "item": "mcp:playwright",
+          "ref": {
+            "kind": "mcp",
+            "name": "playwright"
+          },
+          "scope": "user",
+          "managedBy": "hand",
+          "machines": ["laptop"],
+          "path": "~/.claude.json",
+          "chars": {
+            "listed": 5310,
+            "body": 0
+          },
+          "tokens": {
+            "value": 1328,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 412,
+            "share": 0.689,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 44,
+            "byUser": 0,
+            "lastUsed": "2026-11-23"
+          }
+        },
+        {
+          "item": "subagent:code-reviewer",
+          "ref": {
+            "kind": "subagent",
+            "name": "code-reviewer"
+          },
+          "scope": "user",
+          "managedBy": "fleetrc",
+          "machines": ["laptop", "server"],
+          "path": "~/.claude/agents/code-reviewer.md",
+          "chars": {
+            "listed": 214,
+            "body": 3080
+          },
+          "tokens": {
+            "value": 54,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 598,
+            "share": 1.0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 48,
+            "byUser": 0,
+            "lastUsed": "2026-11-23"
+          }
+        },
+        {
+          "item": "subagent:db-migrator",
+          "ref": {
+            "kind": "subagent",
+            "name": "db-migrator"
+          },
+          "scope": "user",
+          "managedBy": "hand",
+          "machines": ["laptop"],
+          "path": "~/.claude/agents/db-migrator.md",
+          "chars": {
+            "listed": 187,
+            "body": 2560
+          },
+          "tokens": {
+            "value": 47,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 412,
+            "share": 0.689,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 1,
+            "byUser": 0,
+            "lastUsed": "2026-11-16"
+          }
+        }
+      ]
+    },
+    {
+      "harness": "codex",
+      "sessions": 204,
+      "fixedTokens": {
+        "value": 11677,
+        "basis": "measured"
+      },
+      "lines": [
+        {
+          "item": "skill:commit-style",
+          "ref": {
+            "kind": "skill",
+            "name": "commit-style"
+          },
+          "scope": "user",
+          "pack": "acme-labs/agent-skills",
+          "managedBy": "skills",
+          "machines": ["laptop", "server"],
+          "path": "~/.agents/skills/commit-style",
+          "chars": {
+            "listed": 142,
+            "body": 1880
+          },
+          "tokens": {
+            "value": 36,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 204,
+            "share": 1.0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 65,
+            "byUser": 0,
+            "lastUsed": "2026-11-23"
+          }
+        },
+        {
+          "item": "skill:changelog-writer",
+          "ref": {
+            "kind": "skill",
+            "name": "changelog-writer"
+          },
+          "scope": "user",
+          "pack": "acme-labs/agent-skills",
+          "managedBy": "skills",
+          "machines": ["laptop"],
+          "path": "~/.agents/skills/changelog-writer",
+          "chars": {
+            "listed": 168,
+            "body": 2650
+          },
+          "tokens": {
+            "value": 42,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 140,
+            "share": 0.6863,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 6,
+            "byUser": 0,
+            "lastUsed": "2026-11-17"
+          }
+        },
+        {
+          "item": "mcp:github",
+          "ref": {
+            "kind": "mcp",
+            "name": "github"
+          },
+          "scope": "user",
+          "managedBy": "hand",
+          "machines": ["laptop", "server"],
+          "path": "~/.codex/config.toml",
+          "chars": {
+            "listed": 6840,
+            "body": 0
+          },
+          "tokens": {
+            "value": 1710,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 204,
+            "share": 1.0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 79,
+            "byUser": 0,
+            "lastUsed": "2026-11-23"
+          }
+        },
+        {
+          "item": "instructions:AGENTS.md",
+          "ref": {
+            "kind": "instructions",
+            "name": "AGENTS.md"
+          },
+          "scope": "user",
+          "managedBy": "hand",
+          "machines": ["laptop", "server"],
+          "path": "~/.codex/AGENTS.md",
+          "chars": {
+            "listed": 0,
+            "body": 4180
+          },
+          "tokens": {
+            "value": 1045,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 204,
+            "share": 1.0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          }
+        },
+        {
+          "item": "instructions:monorepo/AGENTS.md",
+          "ref": {
+            "kind": "instructions",
+            "name": "monorepo/AGENTS.md"
+          },
+          "scope": "project",
+          "managedBy": "hand",
+          "machines": ["laptop"],
+          "path": "~/work/monorepo/AGENTS.md",
+          "chars": {
+            "listed": 0,
+            "body": 7920
+          },
+          "tokens": {
+            "value": 1980,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 66,
+            "share": 0.3235,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          }
+        },
+        {
+          "item": "skill:git-commit",
+          "ref": {
+            "kind": "skill",
+            "name": "git-commit"
+          },
+          "scope": "user",
+          "pack": "acme-labs/agent-skills",
+          "managedBy": "skills",
+          "machines": ["laptop"],
+          "path": "~/.agents/skills/git-commit",
+          "chars": {
+            "listed": 131,
+            "body": 1720
+          },
+          "tokens": {
+            "value": 33,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 140,
+            "share": 0.6863,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 33,
+            "byUser": 0,
+            "lastUsed": "2026-11-20"
+          }
+        },
+        {
+          "item": "skill:terraform-plan",
+          "ref": {
+            "kind": "skill",
+            "name": "terraform-plan"
+          },
+          "scope": "project",
+          "managedBy": "hand",
+          "machines": ["laptop", "server"],
+          "path": "~/work/infra/.agents/skills/terraform-plan",
+          "chars": {
+            "listed": 226,
+            "body": 4410
+          },
+          "tokens": {
+            "value": 56,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 97,
+            "share": 0.4755,
+            "bare": 68
+          },
+          "use": {
+            "byModel": 1,
+            "byUser": 0,
+            "lastUsed": "2026-11-23"
+          }
+        },
+        {
+          "item": "skill:docx-builder",
+          "ref": {
+            "kind": "skill",
+            "name": "docx-builder"
+          },
+          "scope": "user",
+          "pack": "acme-labs/agent-skills",
+          "managedBy": "skills",
+          "machines": ["laptop", "server"],
+          "path": "~/.agents/skills/docx-builder",
+          "chars": {
+            "listed": 197,
+            "body": 5230
+          },
+          "tokens": {
+            "value": 49,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 204,
+            "share": 1.0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          }
+        },
+        {
+          "item": "skill:test-triage",
+          "ref": {
+            "kind": "skill",
+            "name": "test-triage"
+          },
+          "scope": "user",
+          "managedBy": "hand",
+          "machines": ["laptop", "server"],
+          "path": "~/.agents/skills/test-triage",
+          "chars": {
+            "listed": 173,
+            "body": 2080
+          },
+          "tokens": {
+            "value": 43,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 204,
+            "share": 1.0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 26,
+            "byUser": 0,
+            "lastUsed": "2026-11-23"
+          }
+        },
+        {
+          "item": "skill:openapi-lint",
+          "ref": {
+            "kind": "skill",
+            "name": "openapi-lint"
+          },
+          "scope": "user",
+          "managedBy": "fleetrc",
+          "machines": ["laptop", "server"],
+          "path": "~/.agents/skills/openapi-lint",
+          "chars": {
+            "listed": 161,
+            "body": 1460
+          },
+          "tokens": {
+            "value": 40,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 204,
+            "share": 1.0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 6,
+            "byUser": 0,
+            "lastUsed": "2026-11-17"
+          }
+        },
+        {
+          "item": "skill:incident-notes",
+          "ref": {
+            "kind": "skill",
+            "name": "incident-notes"
+          },
+          "scope": "user",
+          "managedBy": "hand",
+          "machines": ["server"],
+          "path": "~/.agents/skills/incident-notes",
+          "chars": {
+            "listed": 149,
+            "body": 1310
+          },
+          "tokens": {
+            "value": 37,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 64,
+            "share": 0.3137,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 3,
+            "byUser": 0,
+            "lastUsed": "2026-11-19"
+          }
+        },
+        {
+          "item": "skill:bench-compare",
+          "ref": {
+            "kind": "skill",
+            "name": "bench-compare"
+          },
+          "scope": "user",
+          "managedBy": "hand",
+          "machines": ["laptop"],
+          "path": "~/.agents/skills/bench-compare",
+          "chars": {
+            "listed": 188,
+            "body": 2950
+          },
+          "tokens": {
+            "value": 47,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 140,
+            "share": 0.6863,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 5,
+            "byUser": 0,
+            "lastUsed": "2026-11-17"
+          }
+        },
+        {
+          "item": "mcp:sentry",
+          "ref": {
+            "kind": "mcp",
+            "name": "sentry"
+          },
+          "scope": "user",
+          "managedBy": "hand",
+          "machines": ["laptop", "server"],
+          "path": "~/.codex/config.toml",
+          "chars": {
+            "listed": 3870,
+            "body": 0
+          },
+          "tokens": {
+            "value": 968,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 204,
+            "share": 1.0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 17,
+            "byUser": 0,
+            "lastUsed": "2026-11-23"
+          }
+        },
+        {
+          "item": "mcp:docs-search",
+          "ref": {
+            "kind": "mcp",
+            "name": "docs-search"
+          },
+          "scope": "user",
+          "managedBy": "hand",
+          "machines": ["laptop"],
+          "path": "~/.codex/config.toml",
+          "chars": {
+            "listed": 2240,
+            "body": 0
+          },
+          "tokens": {
+            "value": 560,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 140,
+            "share": 0.6863,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 26,
+            "byUser": 0,
+            "lastUsed": "2026-11-23"
+          }
+        },
+        {
+          "item": "subagent:explorer",
+          "ref": {
+            "kind": "subagent",
+            "name": "explorer"
+          },
+          "scope": "user",
+          "managedBy": "hand",
+          "machines": ["laptop", "server"],
+          "path": "~/.codex/agents/explorer.toml",
+          "chars": {
+            "listed": 164,
+            "body": 980
+          },
+          "tokens": {
+            "value": 41,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 204,
+            "share": 1.0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 29,
+            "byUser": 0,
+            "lastUsed": "2026-11-23"
+          }
+        },
+        {
+          "item": "subagent:test-runner",
+          "ref": {
+            "kind": "subagent",
+            "name": "test-runner"
+          },
+          "scope": "user",
+          "managedBy": "hand",
+          "machines": ["laptop"],
+          "path": "~/.codex/agents/test-runner.toml",
+          "chars": {
+            "listed": 171,
+            "body": 1120
+          },
+          "tokens": {
+            "value": 43,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 140,
+            "share": 0.6863,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 13,
+            "byUser": 0,
+            "lastUsed": "2026-11-23"
+          }
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "invisible-skill:skill:k8s-debug",
+      "rule": "invisible-skill",
+      "level": "fix",
+      "item": "skill:k8s-debug",
+      "where": [
+        {
+          "machine": "laptop",
+          "harness": "claude-code"
+        },
+        {
+          "machine": "server",
+          "harness": "claude-code"
+        }
+      ],
+      "evidence": {
+        "sessions": 214,
+        "bare": 175,
+        "bareShare": 0.818,
+        "byModel": 0,
+        "byUser": 1
+      },
+      "savesTokens": {
+        "value": 59,
+        "basis": "estimated"
+      },
+      "fixes": [
+        {
+          "machine": "laptop",
+          "action": "hide-from-model",
+          "path": "~/work/infra/.claude/skills/k8s-debug/SKILL.md",
+          "set": {
+            "key": "disable-model-invocation",
+            "value": true
+          }
+        },
+        {
+          "machine": "server",
+          "action": "hide-from-model",
+          "path": "~/work/infra/.claude/skills/k8s-debug/SKILL.md",
+          "set": {
+            "key": "disable-model-invocation",
+            "value": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "invisible-skill:skill:terraform-plan",
+      "rule": "invisible-skill",
+      "level": "fix",
+      "item": "skill:terraform-plan",
+      "where": [
+        {
+          "machine": "laptop",
+          "harness": "codex"
+        },
+        {
+          "machine": "server",
+          "harness": "codex"
+        }
+      ],
+      "evidence": {
+        "sessions": 97,
+        "bare": 68,
+        "bareShare": 0.701,
+        "byModel": 1,
+        "byUser": 0
+      },
+      "savesTokens": {
+        "value": 56,
+        "basis": "estimated"
+      },
+      "fixes": [
+        {
+          "machine": "laptop",
+          "action": "hide-from-model",
+          "path": "~/work/infra/.agents/skills/terraform-plan/SKILL.md",
+          "set": {
+            "key": "disable-model-invocation",
+            "value": true
+          }
+        },
+        {
+          "machine": "server",
+          "action": "hide-from-model",
+          "path": "~/work/infra/.agents/skills/terraform-plan/SKILL.md",
+          "set": {
+            "key": "disable-model-invocation",
+            "value": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "dead-skill:skill:sql-tuner",
+      "rule": "dead-skill",
+      "level": "cut",
+      "item": "skill:sql-tuner",
+      "where": [
+        {
+          "machine": "laptop",
+          "harness": "claude-code"
+        },
+        {
+          "machine": "server",
+          "harness": "claude-code"
+        }
+      ],
+      "evidence": {
+        "sessions": 598,
+        "days": 30,
+        "byModel": 0,
+        "byUser": 0
+      },
+      "savesTokens": {
+        "value": 53,
+        "basis": "estimated"
+      },
+      "fixes": [
+        {
+          "machine": "laptop",
+          "action": "remove",
+          "path": "~/.claude/skills/sql-tuner",
+          "run": "npx skills remove sql-tuner"
+        },
+        {
+          "machine": "server",
+          "action": "remove",
+          "path": "~/.claude/skills/sql-tuner",
+          "run": "npx skills remove sql-tuner"
+        }
+      ]
+    },
+    {
+      "id": "manual-only:skill:release-checklist",
+      "rule": "manual-only",
+      "level": "fix",
+      "item": "skill:release-checklist",
+      "where": [
+        {
+          "machine": "laptop",
+          "harness": "claude-code"
+        }
+      ],
+      "evidence": {
+        "sessions": 412,
+        "byModel": 0,
+        "byUser": 9
+      },
+      "savesTokens": {
+        "value": 47,
+        "basis": "estimated"
+      },
+      "fixes": [
+        {
+          "machine": "laptop",
+          "action": "hide-from-model",
+          "path": "~/.claude/skills/release-checklist/SKILL.md",
+          "set": {
+            "key": "disable-model-invocation",
+            "value": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "expensive-description:skill:api-designer",
+      "rule": "expensive-description",
+      "level": "fix",
+      "item": "skill:api-designer",
+      "where": [
+        {
+          "machine": "laptop",
+          "harness": "claude-code"
+        },
+        {
+          "machine": "server",
+          "harness": "claude-code"
+        }
+      ],
+      "evidence": {
+        "listedChars": 742,
+        "sessions": 598
+      },
+      "savesTokens": {
+        "value": 110,
+        "basis": "estimated"
+      },
+      "fixes": [
+        {
+          "machine": "laptop",
+          "action": "shorten",
+          "path": "~/.claude/skills/api-designer/SKILL.md"
+        },
+        {
+          "machine": "server",
+          "action": "shorten",
+          "path": "~/.claude/skills/api-designer/SKILL.md"
+        }
+      ]
+    },
+    {
+      "id": "dead-pack:claude-code",
+      "rule": "dead-pack",
+      "level": "cut",
+      "where": [
+        {
+          "machine": "laptop",
+          "harness": "claude-code"
+        }
+      ],
+      "evidence": {
+        "skills": 6,
+        "sessions": 412,
+        "uses": 0,
+        "listedChars": 1082
+      },
+      "savesTokens": {
+        "value": 272,
+        "basis": "estimated"
+      },
+      "fixes": [
+        {
+          "machine": "laptop",
+          "action": "remove",
+          "path": "~/.claude/plugins/cache/data-toolkit",
+          "run": "claude plugin uninstall data-toolkit"
+        }
+      ]
+    },
+    {
+      "id": "duplicate:skill:git-commit",
+      "rule": "duplicate",
+      "level": "cut",
+      "item": "skill:git-commit",
+      "where": [
+        {
+          "machine": "laptop",
+          "harness": "codex"
+        }
+      ],
+      "evidence": {
+        "copies": 2,
+        "sessions": 140
+      },
+      "savesTokens": {
+        "value": 32,
+        "basis": "estimated"
+      },
+      "fixes": [
+        {
+          "machine": "laptop",
+          "action": "dedupe",
+          "path": "~/.codex/skills/git-commit"
+        }
+      ]
+    },
+    {
+      "id": "heavy-instructions:instructions:monorepo/CLAUDE.md",
+      "rule": "heavy-instructions",
+      "level": "fix",
+      "item": "instructions:monorepo/CLAUDE.md",
+      "where": [
+        {
+          "machine": "laptop",
+          "harness": "claude-code"
+        }
+      ],
+      "evidence": {
+        "chars": 18460,
+        "sessions": 169
+      },
+      "savesTokens": {
+        "value": 1615,
+        "basis": "estimated"
+      },
+      "fixes": [
+        {
+          "machine": "laptop",
+          "action": "shorten",
+          "path": "~/work/monorepo/CLAUDE.md"
+        }
+      ]
+    },
+    {
+      "id": "idle-mcp:mcp:linear",
+      "rule": "idle-mcp",
+      "level": "cut",
+      "item": "mcp:linear",
+      "where": [
+        {
+          "machine": "laptop",
+          "harness": "claude-code"
+        }
+      ],
+      "evidence": {
+        "sessions": 412,
+        "calls": 0
+      },
+      "savesTokens": {
+        "value": 1030,
+        "basis": "estimated"
+      },
+      "fixes": [
+        {
+          "machine": "laptop",
+          "action": "remove",
+          "path": "~/.claude.json",
+          "run": "claude mcp remove linear"
+        }
+      ]
+    },
+    {
+      "id": "harness-mismatch:skill:pdf-forms",
+      "rule": "harness-mismatch",
+      "level": "cut",
+      "item": "skill:pdf-forms",
+      "where": [
+        {
+          "machine": "laptop",
+          "harness": "cursor"
+        }
+      ],
+      "evidence": {
+        "sessions": 0
+      },
+      "fixes": [
+        {
+          "machine": "laptop",
+          "action": "remove",
+          "path": "~/.cursor/skills/pdf-forms"
+        }
+      ]
+    },
+    {
+      "id": "drift:skill:deploy-preview",
+      "rule": "drift",
+      "level": "fix",
+      "item": "skill:deploy-preview",
+      "where": [
+        {
+          "machine": "laptop",
+          "harness": "claude-code"
+        },
+        {
+          "machine": "server",
+          "harness": "claude-code"
+        }
+      ],
+      "evidence": {
+        "machines": 2,
+        "variants": 2,
+        "listedChars": 176,
+        "listedCharsOnServer": 171
+      },
+      "fixes": [
+        {
+          "machine": "server",
+          "action": "set",
+          "path": "~/.config/fleetrc/manifest.toml",
+          "set": {
+            "key": "skills.deploy-preview.source",
+            "value": "laptop"
+          }
+        }
+      ]
+    },
+    {
+      "id": "short-history:codex",
+      "rule": "short-history",
+      "level": "info",
+      "where": [
+        {
+          "machine": "server",
+          "harness": "codex"
+        }
+      ],
+      "evidence": {
+        "days": 18,
+        "sessions": 64
+      },
+      "fixes": []
+    }
+  ],
+  "skipped": [
+    {
+      "rule": "dead-skill",
+      "harness": "codex",
+      "reason": "missing-signal",
+      "missing": ["userUse"]
+    },
+    {
+      "rule": "manual-only",
+      "harness": "codex",
+      "reason": "missing-signal",
+      "missing": ["userUse"]
+    },
+    {
+      "rule": "dead-skill",
+      "harness": "cursor",
+      "reason": "missing-signal",
+      "missing": ["listing", "modelUse", "userUse"]
+    },
+    {
+      "rule": "idle-mcp",
+      "harness": "opencode",
+      "reason": "not-enough-data"
+    },
+    {
+      "rule": "invisible-skill",
+      "harness": "opencode",
+      "reason": "not-enough-data"
+    }
+  ]
+}
