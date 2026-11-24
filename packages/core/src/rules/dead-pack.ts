@@ -6,6 +6,8 @@ import { byWaste, defineRule, type Install, type RuleSheet } from "./rule.ts";
 interface Member {
   line: Line;
   installs: Install[];
+  /** Whether its listings are the pack's: every install of it is, and every machine of its line holds one. */
+  own: boolean;
 }
 
 interface Hit {
@@ -15,9 +17,10 @@ interface Hit {
 
 /**
  * A pack none of whose skills on a harness's sheet is invoked, with at least minSkills of them dead
- * skills: listed in at least dead-skill's minSessions sessions over its minDays days. One finding
- * per pack, for all its skills; the engine drops their own findings. Each skill is removed through the dead skill's
- * guard, which offers nothing for a plugin's: turning a plugin off also turns off its hooks and
+ * skills: listed in at least dead-skill's minSessions sessions over its minDays days. A line's
+ * listings are summed over its machines, so a skill counts as listed, and toward the sessions, only
+ * when they are all the pack's. One finding per pack, for all its skills; the engine drops their
+ * own findings. Each skill is removed through the dead skill's guard, which offers nothing for a plugin's: turning a plugin off also turns off its hooks and
  * commands, which loadsheet does not read, so that is left to the user.
  */
 export const deadPack = defineRule({
@@ -32,18 +35,25 @@ export const deadPack = defineRule({
       const byPack = new Map<string, Member[]>();
       for (const line of sheet.lines) {
         if (line.ref.kind !== "skill") continue;
+        const all = sheet.installs(line.item);
         const installs = new Map<string, Install[]>();
-        for (const install of sheet.installs(line.item)) {
+        for (const install of all) {
           if (install.item.pack === undefined) continue;
           installs.set(install.item.pack, [...(installs.get(install.item.pack) ?? []), install]);
         }
         for (const [pack, own] of installs) {
-          byPack.set(pack, [...(byPack.get(pack) ?? []), { line, installs: own }]);
+          const mine =
+            own.length === all.length &&
+            line.machines.every((machine) => own.some((install) => install.machine === machine));
+          const member = { line, installs: own, own: mine };
+          byPack.set(pack, [...(byPack.get(pack) ?? []), member]);
         }
       }
       for (const [pack, members] of byPack) {
         if (members.some(({ line }) => line.use.byModel + line.use.byUser > 0)) continue;
-        const listed = members.filter(({ line }) => line.exposure.sessions >= minSessions);
+        const listed = members.filter(
+          ({ line, own }) => own && line.exposure.sessions >= minSessions,
+        );
         if (listed.length < options.minSkills) continue;
         hits.set(pack, [...(hits.get(pack) ?? []), { sheet, members }]);
       }
@@ -51,7 +61,7 @@ export const deadPack = defineRule({
     const findings: Finding[] = [];
     for (const [pack, group] of hits) {
       const sessions = (members: Member[]) =>
-        Math.max(...members.map(({ line }) => line.exposure.sessions));
+        Math.max(0, ...members.filter(({ own }) => own).map(({ line }) => line.exposure.sessions));
       const tokens = (members: Member[]) =>
         members.reduce((total, { line }) => total + line.tokens.value, 0);
       findings.push({

@@ -638,10 +638,12 @@ describe("dead-pack", () => {
   });
 
   it("holds only for the machines whose install is the pack's, whatever their names", () => {
+    // A sixth skill keeps minSkills listed, since `a`'s listings are not all the pack's.
+    const six = [...NAMES, "f"];
     for (const other of ["z-server", "a-server"]) {
       const built = report(
         [
-          { ...kit(), machine: "a-laptop" },
+          { ...kit(six), machine: "a-laptop" },
           scan(other, { items: [skill("a")], cells: [cell("a", 30)] }),
         ],
         { rules: { ...only("dead-pack").rules, "dead-skill": {} } },
@@ -655,9 +657,23 @@ describe("dead-pack", () => {
       ).toEqual([
         // The server's own copy of `a` is not the pack's, so its dead-skill finding stays.
         ["dead-skill:skill:a", ["a-laptop", other].sort(), ["a-laptop", other].sort()],
-        ["dead-pack:acme/kit", ["a-laptop"], NAMES.map(() => "a-laptop")],
+        ["dead-pack:acme/kit", ["a-laptop"], six.map(() => "a-laptop")],
       ]);
     }
+  });
+
+  it("counts only the listings that are the pack's, not another machine's copies", () => {
+    const laptop = scan("laptop", { items: NAMES.map((name) => packed(name)) });
+    const server = scan("server", {
+      items: NAMES.map((name) => skill(name)),
+      cells: NAMES.map((name) => cell(name, 29)),
+    });
+    const built = report([laptop, server], {
+      rules: { ...only("dead-pack").rules, "dead-skill": {} },
+    });
+    expect(built.findings.map((f) => f.id)).toEqual(
+      NAMES.map((name) => `dead-skill:skill:${name}`),
+    );
   });
 
   it("offers no fix for a plugin, whose hooks and commands loadsheet does not read", () => {
