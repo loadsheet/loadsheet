@@ -271,7 +271,7 @@ const evidenceOf = (finding: Finding): string => {
       break;
   }
   return Object.entries(e)
-    .map(([key, value]) => `${key} ${num(value)}`)
+    .map(([key, value]) => `${visible(key)} ${num(value)}`)
     .join(", ");
 };
 
@@ -282,11 +282,15 @@ interface FixEntry {
   key: string;
 }
 
-/** A finding's fixes, those that differ only by machine merged into one. */
-const entriesOf = (finding: Finding): FixEntry[] => {
+/** What a fix changes, whatever the machine. */
+const bodyKey = (fix: Omit<Fix, "machine">) =>
+  JSON.stringify([fix.action, fix.path, fix.run, fix.set?.key, fix.set?.value]);
+
+/** Fixes, those that differ only by machine merged into one. */
+const entriesOf = (fixes: Fix[]): FixEntry[] => {
   const entries = new Map<string, FixEntry>();
-  for (const { machine, ...fix } of finding.fixes) {
-    const key = JSON.stringify([fix.action, fix.path, fix.run, fix.set?.key, fix.set?.value]);
+  for (const { machine, ...fix } of fixes) {
+    const key = bodyKey(fix);
     const entry = entries.get(key) ?? { machines: [], fix, key };
     if (machine !== undefined && !entry.machines.includes(machine)) entry.machines.push(machine);
     entries.set(key, entry);
@@ -355,19 +359,40 @@ const findingsBlocks = (report: Report): { details: string[]; summary: string[] 
   const showMachine = report.machines.length > 1;
   const label = (finding: Finding) => finding.item ?? finding.pack ?? finding.id;
 
-  // A fix several findings share is printed once, with the findings it covers and every machine
-  // one of them names: a finding on one machine and another on two share that machine's fix.
-  const shared = new Map<string, { entry: FixEntry; covers: Finding[]; rule?: string }>();
+  // One machine's fix that several findings carry is printed once, with the findings it covers.
+  // Machines share its line only when their fix covers the same findings.
+  const fixKey = (fix: Fix) => JSON.stringify([fix.machine, bodyKey(fix)]);
+  const coveredBy = new Map<string, Finding[]>();
   for (const finding of report.findings) {
-    for (const entry of entriesOf(finding)) {
-      const known = shared.get(entry.key) ?? { entry: { ...entry, machines: [] }, covers: [] };
-      for (const machine of entry.machines)
-        if (!known.entry.machines.includes(machine)) known.entry.machines.push(machine);
-      known.covers.push(finding);
-      shared.set(entry.key, known);
+    for (const fix of finding.fixes) {
+      const covers = coveredBy.get(fixKey(fix)) ?? [];
+      if (!covers.includes(finding)) covers.push(finding);
+      coveredBy.set(fixKey(fix), covers);
     }
   }
-  for (const [key, known] of shared) if (known.covers.length < 2) shared.delete(key);
+  const sharedKey = (fix: Fix) => {
+    const covers = coveredBy.get(fixKey(fix))!;
+    if (covers.length < 2) return undefined;
+    return JSON.stringify([
+      bodyKey(fix),
+      covers.map((finding) => report.findings.indexOf(finding)),
+    ]);
+  };
+  const shared = new Map<string, { entry: FixEntry; covers: Finding[]; rule?: string }>();
+  for (const finding of report.findings) {
+    for (const fix of finding.fixes) {
+      const key = sharedKey(fix);
+      if (key === undefined) continue;
+      const { machine, ...body } = fix;
+      const known = shared.get(key) ?? {
+        entry: { machines: [], fix: body, key },
+        covers: coveredBy.get(fixKey(fix))!,
+      };
+      if (machine !== undefined && !known.entry.machines.includes(machine))
+        known.entry.machines.push(machine);
+      shared.set(key, known);
+    }
+  }
 
   const rules = [...new Set(report.findings.map((finding) => finding.rule))];
   const levelOf = (rule: string) =>
@@ -410,13 +435,13 @@ const findingsBlocks = (report: Report): { details: string[]; summary: string[] 
     const rows = new Map(findingRows(group).map((row, index) => [group[index]!, row]));
     for (const finding of fixable) {
       out.push(rows.get(finding)!);
-      for (const entry of entriesOf(finding)) {
-        const known = shared.get(entry.key);
-        if (!known) {
-          out.push(...fixLines(entry, showMachine, "    "));
-        } else if (known.rule === undefined) {
+      const own = finding.fixes.filter((fix) => sharedKey(fix) === undefined);
+      for (const entry of entriesOf(own)) out.push(...fixLines(entry, showMachine, "    "));
+      for (const key of new Set(finding.fixes.flatMap((fix) => sharedKey(fix) ?? []))) {
+        const known = shared.get(key)!;
+        if (known.rule === undefined) {
           known.rule = rule;
-          sharedHere.push(entry.key);
+          sharedHere.push(key);
         } else if (known.rule !== rule) {
           out.push(`      the fix shared with ${label(known.covers[0]!)}, under ${known.rule}`);
         }

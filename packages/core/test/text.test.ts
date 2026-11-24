@@ -246,30 +246,39 @@ describe("renderText", () => {
     expect(text).toContain("remove ~/.claude/skills/c  $ rm -r ~/.claude/skills/c");
   });
 
-  it("prints a machine's fix once when findings name different machines", () => {
+  it("prints a machine's fix once, and joins machines only when it covers the same findings", () => {
     const budget = (machine: string): Fix => ({
       machine,
       action: "set",
       path: "~/.claude/settings.json",
       set: { key: "env.SLASH_COMMAND_TOOL_CHAR_BUDGET", value: "24000" },
     });
-    const text = renderText(
-      report(
-        ["a", "b"].map((name) => line(name, 30)),
-        [
-          finding("invisible-skill", "a", [budget("desk"), budget("box")]),
-          finding("invisible-skill", "b", [budget("desk")]),
-        ],
-        {
-          machines: [
-            { name: "desk", reachable: true },
-            { name: "box", reachable: true },
+    const fleet = (fixesOfB: Fix[]) =>
+      renderText(
+        report(
+          ["a", "b"].map((name) => line(name, 30)),
+          [
+            finding("invisible-skill", "a", [budget("desk"), budget("box")]),
+            finding("invisible-skill", "b", fixesOfB),
           ],
-        },
-      ),
+          {
+            machines: [
+              { name: "desk", reachable: true },
+              { name: "box", reachable: true },
+            ],
+          },
+        ),
+      );
+    // b is bare on desk only: desk's fix covers both, box's fix covers a alone.
+    const uneven = fleet([budget("desk")]);
+    expect(occurrences(uneven, "on desk: set ~/.claude/settings.json")).toBe(1);
+    expect(uneven).toMatch(/skill:a .*\n {4}on box: set ~\/\.claude\/settings\.json/u);
+    expect(uneven).toContain("One fix for all 2 above:\n    on desk: set ~/.claude/settings.json");
+    const even = fleet([budget("desk"), budget("box")]);
+    expect(occurrences(even, "env.SLASH_COMMAND_TOOL_CHAR_BUDGET")).toBe(1);
+    expect(even).toContain(
+      "One fix for all 2 above:\n    on desk, box: set ~/.claude/settings.json",
     );
-    expect(occurrences(text, "env.SLASH_COMMAND_TOOL_CHAR_BUDGET")).toBe(1);
-    expect(text).toContain("on desk, box: set ~/.claude/settings.json");
   });
 
   it("shows a control character in a name, path or command instead of sending it", () => {
@@ -291,6 +300,7 @@ describe("renderText", () => {
               set: { key: "env.X", value: "a\u007fb\n" },
             },
           ]),
+          finding("made-up", "b", [], { evidence: { "odd\u001b[2J": 1 } }),
         ],
       ),
     );
@@ -298,6 +308,7 @@ describe("renderText", () => {
     expect(text).toContain("remove ~/.claude/skills/a\\u0009b  $ rm -r ~/.claude/skills/a\\u009bb");
     expect(text).toContain('env.X = "a\\u007fb\\n"');
     expect(text).toContain("skill:a\\u001b[2J");
+    expect(text).toContain("odd\\u001b[2J 1");
   });
 
   it("names the machine only when the report has more than one", () => {
