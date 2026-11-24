@@ -144,6 +144,25 @@ describe("codex listing", () => {
     });
   });
 
+  it("reads a section only up to its closing tag, and none without one", () => {
+    const listedItems = (...messages: string[]) =>
+      parseAll([meta(), ...messages.map(developer)])
+        .facts.filter((fact) => fact.type === "listed")
+        .map((fact) => (fact.type === "listed" ? fact.item : ""));
+    expect(
+      listedItems(
+        `${skillsSection([lines[0]!], roots)}\n- after: example (file: /invented/example/SKILL.md)`,
+        "<tools>\n- mcp__docs\n</tools>\n- mcp__after",
+      ),
+    ).toEqual(["skill:review", "mcp:docs"]);
+    expect(
+      listedItems(
+        skillsSection([lines[0]!], roots).replace("</skills_instructions>", ""),
+        "<tools>\n- mcp__docs",
+      ),
+    ).toEqual([]);
+  });
+
   it("reads the listing once, from world_state when it comes first", () => {
     const body = skillsSection(lines, roots).replace(
       /^<skills_instructions>|<\/skills_instructions>$/gu,
