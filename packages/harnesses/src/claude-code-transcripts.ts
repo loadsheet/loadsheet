@@ -287,7 +287,9 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
         if (block.name === "Skill") {
           const name =
             typeof input.skill === "string" ? input.skill.trim().replace(/^\//u, "") : "";
-          if (SKILL_NAME.test(name)) used(`skill:${name}`, "model");
+          // The model writes this name, so one with a space counts only when the session listed it.
+          if (NAME.test(name) || (SKILL_NAME.test(name) && state.listed[`skill:${name}`]))
+            used(`skill:${name}`, "model");
         } else if (block.name === "Agent" || block.name === "Task") {
           const name =
             typeof input.subagent_type === "string"

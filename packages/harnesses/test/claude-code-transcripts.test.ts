@@ -402,6 +402,16 @@ describe("claudeTranscripts", () => {
     ).toEqual(["skill:code review", "skill:code review"]);
   });
 
+  it("drops a Skill call whose name has a space and was never listed", () => {
+    const { facts } = parseAll([
+      line({ type: "user", message: { content: "hi" } }),
+      assistant([skillCall("review the payments module"), skillCall("deploy")]),
+    ]);
+    expect(facts.filter((fact) => fact.type === "used").map((fact) => fact.item)).toEqual([
+      "skill:deploy",
+    ]);
+  });
+
   it("keeps a malformed MCP server name out of State", () => {
     const { state } = parseAll([
       line({ type: "user", message: { content: "hi" } }),

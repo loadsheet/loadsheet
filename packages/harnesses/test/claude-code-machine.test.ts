@@ -250,9 +250,13 @@ describe("Claude Code machine inventory", () => {
         skills: {
           beta: { source: "/home/jo/src/beta" },
           gone: { source: "https://jo:sekrit@git.example.com/x.git" },
+          windows: { source: "C:\\Users\\jo\\skills" },
           quiet: { source: "mine" },
+          repo: { source: "jo/agent-skills.v2" },
         },
       }),
+      "~/.claude/skills/windows/SKILL.md": skill("windows", "Does."),
+      "~/.claude/skills/repo/SKILL.md": skill("repo", "Does."),
     });
     const managed = (id: string) => {
       const { managedBy, pack } = items.find((item) => item.id === id)!;
@@ -261,7 +265,9 @@ describe("Claude Code machine inventory", () => {
     expect(managed("skill:alpha")).toEqual({ managedBy: "fleetrc", pack: undefined });
     expect(managed("skill:beta")).toEqual({ managedBy: "skills", pack: undefined });
     expect(managed("skill:gone")).toEqual({ managedBy: "skills", pack: undefined });
+    expect(managed("skill:windows")).toEqual({ managedBy: "skills", pack: undefined });
     expect(managed("skill:quiet")).toEqual({ managedBy: "skills", pack: "mine" });
+    expect(managed("skill:repo")).toEqual({ managedBy: "skills", pack: "jo/agent-skills.v2" });
   });
 
   it("names a skill by its frontmatter name, and finds its installer by its folder", async () => {
