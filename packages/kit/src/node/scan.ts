@@ -14,7 +14,7 @@ import {
   type Tally,
 } from "../index.ts";
 import { defaultCacheDir, openCache, type CachedFile } from "./cache.ts";
-import { dirFiles, MAX_FILE_BYTES } from "./files.ts";
+import { dirFiles } from "./files.ts";
 import { listTranscriptFiles, readTranscript, type TranscriptFile } from "./reader.ts";
 
 export interface ScanMachineOptions {
@@ -55,6 +55,9 @@ const homeKey = (path: string, home: string) => {
   return path.startsWith(`${root}/`) ? `~/${path.slice(root.length + 1)}` : path;
 };
 
+/** A source file a harness names, such as `~/.claude.json`, which grows with use past MAX_FILE_BYTES. */
+const MAX_SOURCE_FILE_BYTES = 64 * 1024 * 1024;
+
 /** A harness's sources as one Files; a source that is missing or unreadable is left out. */
 const sourceFiles = async (sources: readonly string[], home: string): Promise<Files> => {
   const readers = new Map<string, () => Promise<string | undefined>>();
@@ -68,7 +71,9 @@ const sourceFiles = async (sources: readonly string[], home: string): Promise<Fi
       }
     } else if (info?.isFile()) {
       readers.set(key, async () =>
-        info.size > MAX_FILE_BYTES ? undefined : readFile(source, "utf8").catch(() => undefined),
+        info.size > MAX_SOURCE_FILE_BYTES
+          ? undefined
+          : readFile(source, "utf8").catch(() => undefined),
       );
     }
   }

@@ -331,6 +331,15 @@ describe("scanMachine", () => {
     expect(findCanary(result, forbidden(home, SESSIONS))).toEqual([]);
   });
 
+  it("reads a source file the harness names even when it is over 1 MiB", async () => {
+    const home = await makeHome("large", []);
+    const size = 2 * 1024 * 1024;
+    await NodeFSP.writeFile(`${home}/.fake/AGENTS.md`, "x".repeat(size));
+    const result = await cold(home);
+    const agents = result.items.find((item) => item.id === "instructions:AGENTS.md")!;
+    expect(agents.chars.listed).toBe(size);
+  });
+
   it("reports a harness whose home is missing as not installed", async () => {
     const result = await scan(NodePath.join(tmp, "empty-home"), false);
     expect(parseScan(result).coverage).toEqual([
