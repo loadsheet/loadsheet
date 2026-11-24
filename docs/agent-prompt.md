@@ -48,6 +48,9 @@ Change nothing until I accept a fix.
      installer or plugin (`pack` names it) and my edit would be overwritten; say so and suggest
      raising it with its author instead. Not in a pack's Report (`mode` is `pack`): there the
      files are the pack's own source, so edit them.
+   - `remove` with a `run`: before running it, look for links that point into `path` and for
+     work in it that exists nowhere else (`git status`, unpushed commits). If you find either,
+     stop and ask me.
    - `remove` with no `run`: ask me how to remove it; never guess a command.
    - `dedupe`: the same item is installed more than once; remove the copy at `path` with its
      `run` command, or ask me how when there is none.
