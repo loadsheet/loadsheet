@@ -681,6 +681,30 @@ describe("fixes", () => {
     expect(finding!.fixes).toEqual(fix ? [{ machine: "laptop", ...fix }] : []);
   });
 
+  it("hides a hand-made skill whose folder holds another skill, which `rm -r` would delete too", () => {
+    const [finding] = dead(
+      [
+        skill("idle", { harnesses: ["codex"], path: "~/.agents/skills/idle" }),
+        skill("child", { harnesses: ["codex"], path: "~/.agents/skills/idle/child" }),
+        // A sibling whose name starts the same is not inside the folder.
+        skill("idle-two", { harnesses: ["codex"], path: "~/.agents/skills/idle-two" }),
+      ],
+      {
+        coverage: [coverage("laptop", "codex")],
+        sessions: [sessions(30, {}, "codex")],
+        cells: [cell("idle", 25, { harness: "codex" })],
+      },
+    );
+    expect(finding!.fixes).toEqual([
+      {
+        machine: "laptop",
+        action: "hide-from-model",
+        path: "~/.agents/skills/idle/agents/openai.yaml",
+        set: { key: "policy.allow_implicit_invocation", value: false },
+      },
+    ]);
+  });
+
   it("gives a plugin's skill no fix in either harness, and keeps the finding", () => {
     const plugin = (harness: string, path: string) =>
       skill("manual", {

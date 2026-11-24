@@ -194,8 +194,15 @@ const removeOne = (
     // A plugin's skills come and go with the plugin, and an update replaces its files.
     case "plugin":
       return undefined;
-    case "hand":
-      return { ...remove, run: `rm -r ${shellPath(item.path)}` };
+    // A folder can hold skills of their own (Codex reads `parent/child/SKILL.md` as one), which
+    // `rm -r` would take too, so such a folder is hidden instead.
+    case "hand": {
+      const folder = `${item.path.replace(/\/+$/u, "")}/`;
+      const nested = unfiltered
+        .items(machine)
+        .some((other) => other !== item && other.path.startsWith(folder));
+      return nested ? hide() : { ...remove, run: `rm -r ${shellPath(item.path)}` };
+    }
   }
 };
 
