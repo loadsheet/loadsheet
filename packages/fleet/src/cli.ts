@@ -29,6 +29,7 @@ import {
   commandLine,
   fleet,
   type FleetAction,
+  fleetRun,
   fleetEntryProblem,
   fleetSuggestions,
   formatFleet,
@@ -244,10 +245,10 @@ const COMMANDS: Record<string, Command> = {
     options: ["dry-run", "json", "manifest"],
   },
   fleet: {
-    usage: "fleet sync|status|upgrade|init|add [host|tag:<name>...]",
+    usage: "fleet sync|status|upgrade|init|add|run [host|tag:<name>...] [-- <command>...]",
     summary: "Run on the manifest's machines over SSH, or add machines to it",
     details:
-      "fleet sync and fleet status take host names to run on fewer machines than the manifest lists. A tag:<name> stands for every machine on your tailnet with that Tailscale tag, as `tailscale status` lists them when the command runs. fleet add with no host suggests machines and tags on your tailnet. fleet upgrade installs this version on every host with npx. fleet init <host|tag:<name>...> sets new machines up from this one: on each, it runs `npx fleetrc init` with this machine's manifest, which must be in a repository, then adds the hosts to the fleet; --copy, --no-copy, --timer, --no-hooks and --force go to each host's init, and --force also sets up a host that has another manifest.",
+      "fleet sync and fleet status take host names to run on fewer machines than the manifest lists. A tag:<name> stands for every machine on your tailnet with that Tailscale tag, as `tailscale status` lists them when the command runs. fleet add with no host suggests machines and tags on your tailnet. fleet upgrade installs this version on every host with npx. fleet init <host|tag:<name>...> sets new machines up from this one: on each, it runs `npx fleetrc init` with this machine's manifest, which must be in a repository, then adds the hosts to the fleet; --copy, --no-copy, --timer, --no-hooks and --force go to each host's init, and --force also sets up a host that has another manifest. fleet run [host|tag:<name>...] -- <command> runs the command on this machine and over ssh on every host, and prints what each one wrote, line by line after its name; --json prints [{host, reachable, exitCode, stdout}] instead. Each host's stderr goes to stderr after its name.",
     options: [
       "dry-run",
       "json",
@@ -1118,17 +1119,27 @@ function checkFleetArgs(action: string | undefined) {
     (name) => values[name],
   );
   if (action !== "init" && initOnly.length > 0) usage(`only fleet init takes --${initOnly[0]}`);
-  if (!["sync", "status", "upgrade", "init", "add"].includes(action ?? ""))
-    usage("fleet takes sync, status, upgrade, init or add");
-  if (dryRun && (action === "status" || action === "upgrade"))
+  if (!["sync", "status", "upgrade", "init", "add", "run"].includes(action ?? ""))
+    usage("fleet takes sync, status, upgrade, init, add or run");
+  if (dryRun && (action === "status" || action === "upgrade" || action === "run"))
     usageError(
       action === "status"
         ? "fleet status changes nothing, so it has no --dry-run"
-        : `fleet upgrade has no --dry-run; \`${cliName()} fleet status\` shows each host's version`,
+        : action === "run"
+          ? "fleet run has no --dry-run"
+          : `fleet upgrade has no --dry-run; \`${cliName()} fleet status\` shows each host's version`,
     );
+  if (action === "run" && commandAfterDashes().length === 0)
+    usage("fleet run takes the command to run after --, as in fleet run -- uname -a");
 }
 
-async function fleetCommand(action: "sync" | "status" | "upgrade" | "init" | "add") {
+/** The words after the first `--`: the command `fleet run` runs. */
+const commandAfterDashes = () => {
+  const at = argv.indexOf("--");
+  return at < 0 ? [] : argv.slice(at + 1);
+};
+
+async function fleetCommand(action: "sync" | "status" | "upgrade" | "init" | "add" | "run") {
   if (action === "init") copyMode();
   const loaded = await loadManifest(manifestSpec(values.manifest), { offline: true });
   if (action === "add") {
@@ -1189,6 +1200,7 @@ async function fleetCommand(action: "sync" | "status" | "upgrade" | "init" | "ad
     return 0;
   }
   if (action === "init") return fleetInit(loaded);
+  if (action === "run") return fleetRunCommand(loaded);
   const entries = rest.length > 1 ? rest.slice(1) : loaded.root.fleet;
   if (entries.length === 0)
     usage(`the manifest has no fleet; add hosts with \`${cliName()} fleet add\``);
@@ -1209,6 +1221,36 @@ async function fleetCommand(action: "sync" | "status" | "upgrade" | "init" | "ad
     result.error !== undefined ||
     (action !== "status" && result.lastRun?.ok === false);
   return results.some(failed) ? 1 : 0;
+}
+
+/**
+ * `fleet run [host|tag:...] -- <command>`: the command on this machine and on every host. Exits 1
+ * when a host is unreachable, or a command timed out or exited nonzero, as fleet status does.
+ */
+async function fleetRunCommand(loaded: Awaited<ReturnType<typeof loadManifest>>) {
+  const words = commandAfterDashes() as [string, ...string[]];
+  // Every positional after -- is a word of the command; the ones before it are hosts.
+  const named = rest.slice(1, rest.length - words.length);
+  const entries = named.length > 0 ? named : loaded.root.fleet;
+  if (entries.length === 0)
+    usage(`the manifest has no fleet; add hosts with \`${cliName()} fleet add\``);
+  const bad = entries.filter(isTag).flatMap((entry) => tagProblem(entry) ?? []);
+  if (bad.length > 0) usage(bad.join("; "));
+  const timeout = fleetTimeout(30_000);
+  const { targets } = await fleetTargets(entries, timeout, "status");
+  // Hosts named on the command line narrow the run to them, as for fleet sync.
+  const results = await fleetRun(targets, words, timeout, { here: named.length === 0 });
+  const lines = (host: string, text: string) =>
+    text === "" ? "" : `${text.replace(/\r?\n$/, "").replace(/^/gm, `${host}: `)}\n`;
+  for (const { host, stderr } of results) process.stderr.write(lines(host, stderr));
+  if (json) emit(results.map(({ stderr: _, ...result }) => result));
+  else
+    for (const { host, stdout, exitCode, error } of results) {
+      process.stdout.write(lines(host, stdout));
+      if (error !== undefined) say(`${host}: ${error}`);
+      else if (exitCode !== 0) say(`${host}: exited ${exitCode}`);
+    }
+  return results.every((result) => result.exitCode === 0) ? 0 : 1;
 }
 
 /** --timeout in milliseconds, else `fallback`. */
@@ -1423,13 +1465,15 @@ async function merge() {
 /**
  * Whether `command` moves the old name's install to fleetrc's names first (migrate.ts): every one
  * that changes things, so none writes a new install beside the old one, and every fleet action but
- * status, so `fleet upgrade` can start the rollout from a machine that has only the old install.
+ * status and run, so `fleet upgrade` can start the rollout from a machine that has only the old
+ * install.
  * `timer status` only reads, and a session hook moves it itself (hook.ts).
  */
 const migrating = (command: string, action: string | undefined) =>
   !READ_ONLY.has(command) &&
   !(command === "hook" && action !== "install" && action !== "remove") &&
-  !((command === "fleet" || command === "timer") && action === "status");
+  !((command === "fleet" || command === "timer") && action === "status") &&
+  !(command === "fleet" && action === "run");
 
 async function main(): Promise<number> {
   if (values.version) {

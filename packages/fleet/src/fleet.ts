@@ -1,6 +1,7 @@
 import { isIP } from "node:net";
+import { homedir, hostname } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
-import { exec } from "./exec.ts";
+import { exec, type ExecResult } from "./exec.ts";
 import { dict, isRecord, readJsonOrNothing, writeJson } from "./fs.ts";
 import { paths } from "./paths.ts";
 import { notInstalled, program } from "./program.ts";
@@ -358,15 +359,17 @@ const sshRemoteCommand = (
   setup?: InitSetup,
 ) => `sh -c ${quote(remoteScript(action, version, { dryRun, setup }))}`;
 
-async function runOnHost(
+/**
+ * Runs `remoteCommand` on `host` over ssh, or says why ssh could not try: the name is not one ssh
+ * takes, or ssh is not installed.
+ */
+async function ssh(
   host: string,
-  action: FleetAction,
   remoteCommand: string,
   timeoutMs: number,
-  requireTimer = false,
-) {
+): Promise<{ run: ExecResult } | { error: string }> {
   const problem = hostProblem(host);
-  if (problem) return { error: problem, reached: false, checked: false };
+  if (problem) return { error: problem };
   const { command, prefix } = program("FLEETRC_SSH", "ssh");
   const args = [
     ...prefix,
@@ -375,19 +378,27 @@ async function runOnHost(
     ...sshDestination(host),
     remoteCommand,
   ];
-  // The report is parsed whole, so it is not cut to the default tail. stdin stays open for `watched`.
+  // Output is read whole, so it is not cut to the default tail. stdin stays open for `watched`.
   const run = await exec(command, args, {
     timeoutMs,
     maxOutput: 64 * 1024 * 1024,
     input: "fleet\n",
     holdStdin: true,
   });
-  if (run.spawnError === "ENOENT")
-    return {
-      error: notInstalled(command, "ssh", "FLEETRC_SSH"),
-      reached: false,
-      checked: false,
-    };
+  if (run.spawnError === "ENOENT") return { error: notInstalled(command, "ssh", "FLEETRC_SSH") };
+  return { run };
+}
+
+async function runOnHost(
+  host: string,
+  action: FleetAction,
+  remoteCommand: string,
+  timeoutMs: number,
+  requireTimer = false,
+) {
+  const tried = await ssh(host, remoteCommand, timeoutMs);
+  if ("error" in tried) return { error: tried.error, reached: false, checked: false };
+  const { run } = tried;
   const answered = new RegExp(`^${NOTE} answered\r?$`, "m").test(run.stderr);
   const told = (what: "was" | "now") =>
     run.stderr.match(new RegExp(`^${NOTE} ${what} (\\d+\\.\\d+\\.\\d+[\\w.+-]*)\r?$`, "m"))?.[1];
@@ -677,6 +688,102 @@ export async function fleet(
     );
   markBehind(results);
   return results;
+}
+
+/** What `fleet run` got from one machine. */
+export interface RunResult {
+  host: string;
+  /** The host answered over ssh, or it is this machine. */
+  reachable: boolean;
+  /** How the command exited; absent when the host was not reached or the command did not finish. */
+  exitCode?: number;
+  stdout: string;
+  /** Not in `fleet run --json`, which leaves stderr on stderr. */
+  stderr: string;
+  /** Why there is no exit code. */
+  error?: string;
+}
+
+/** Whether a fleet entry names this machine, by its hostname or the first label of it. */
+function isThisMachine(host: string): boolean {
+  const own = hostname().toLowerCase();
+  const name = hostKey(sshTarget(host).machine);
+  return name === own || name === own.split(".")[0] || name.split(".")[0] === own;
+}
+
+/**
+ * Runs `argv` over ssh on every target and, unless `here` is false, directly on this machine, from
+ * the home folder where ssh starts a command; all at once. This machine comes first, and a target
+ * that names it runs there directly instead. A host that is offline, does not answer or cannot be tried is unreachable, with no exit
+ * code; a command still running after `timeoutMs` is stopped and has none either.
+ */
+export async function fleetRun(
+  targets: readonly FleetTarget[],
+  argv: readonly [string, ...string[]],
+  timeoutMs = 30_000,
+  { here = true }: { here?: boolean } = {},
+): Promise<RunResult[]> {
+  const after = `${Math.round(timeoutMs / 1000)} s`;
+  const stopped = `timed out after ${after}, so the command was stopped`;
+  const finished = (host: string, run: ExecResult): RunResult => ({
+    host,
+    reachable: true,
+    ...(run.timedOut
+      ? { error: stopped }
+      : run.code === null
+        ? { error: "the command ended on a signal" }
+        : { exitCode: run.code }),
+    stdout: run.stdout,
+    stderr: run.stderr,
+  });
+  const local = async (): Promise<RunResult> => {
+    const [command, ...args] = argv;
+    const run = await exec(command, args, {
+      cwd: homedir(),
+      timeoutMs,
+      maxOutput: 64 * 1024 * 1024,
+    });
+    // As sh says it, for a command it can't find or start.
+    if (run.spawnError !== undefined)
+      return {
+        host: hostname(),
+        reachable: true,
+        exitCode: run.spawnError === "ENOENT" ? 127 : 126,
+        stdout: "",
+        stderr: `${command}: ${run.spawnError === "ENOENT" ? "command not found" : run.spawnError}\n`,
+      };
+    return finished(hostname(), run);
+  };
+  const words = argv.map(quote).join(" ");
+  const remoteCommand = `sh -c ${quote(`${ANSWERED}; ${watched(words)}`)}`;
+  const remote = async ({ host, offline, error }: FleetTarget): Promise<RunResult> => {
+    const unreachable = (why: string): RunResult => ({
+      host,
+      reachable: false,
+      stdout: "",
+      stderr: "",
+      error: why,
+    });
+    if (error !== undefined) return unreachable(error);
+    if (offline) return unreachable("offline in Tailscale");
+    const tried = await ssh(host, remoteCommand, timeoutMs);
+    if ("error" in tried) return unreachable(tried.error);
+    const { run } = tried;
+    const answered = new RegExp(`^${NOTE} answered\r?$`, "m").test(run.stderr);
+    const stderr = run.stderr.replace(new RegExp(`^${NOTE} .*\r?\n?`, "gm"), "");
+    if (!answered)
+      return unreachable(
+        run.timedOut
+          ? `no answer within ${after}`
+          : stderr.trim().split("\n").slice(-3).join(" ") || `ssh exited ${run.code}`,
+      );
+    return finished(host, { ...run, stderr });
+  };
+  const remotes = targets.filter(({ host }) => !isThisMachine(host));
+  return Promise.all([
+    ...(here || remotes.length < targets.length ? [local()] : []),
+    ...remotes.map(remote),
+  ]);
 }
 
 function heldSource(run: NonNullable<HostResult["lastRun"]>, source: string): boolean {
