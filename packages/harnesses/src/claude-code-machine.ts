@@ -12,6 +12,7 @@ import {
 } from "./claude-code-listing.ts";
 import { readManagers, skillsLockPath, type Manager } from "./managed.ts";
 import { packInventory } from "./pack.ts";
+import { normalPath } from "./path.ts";
 import { readSkillMd, SKILL_NAME } from "./skill-md.ts";
 
 const HARNESS = "claude-code";
@@ -25,8 +26,8 @@ export const claudeConfigDir = (place: Place): string => {
   const configured = place.env.CLAUDE_CONFIG_DIR?.trim();
   if (!configured) return `${home}/.claude`;
   if (configured === "~" || configured.startsWith("~/"))
-    return trimSlash(home + configured.slice(1));
-  return trimSlash(isAbsolute(configured) ? configured : `${home}/${configured}`);
+    return normalPath(home + configured.slice(1));
+  return normalPath(isAbsolute(configured) ? configured : `${home}/${configured}`);
 };
 
 /** The file that holds user MCP servers: `~/.claude.json`, or inside `CLAUDE_CONFIG_DIR` when set. */

@@ -4,6 +4,7 @@
 import { sha256, type Files, type Place } from "@loadsheet/kit";
 import type { Grade, Item, Scope, Signal } from "@loadsheet/schema";
 import { mcpToolName } from "./claude-code-machine.ts";
+import { normalPath } from "./path.ts";
 import { readManagers, type Manager } from "./managed.ts";
 import { readSkillMd, SKILL_NAME, type SkillMd } from "./skill-md.ts";
 
@@ -30,14 +31,15 @@ export const placeOr = (place: Place | undefined): Place => place ?? { home: "~"
 
 /** An absolute path as kit keys it: `~/...` under home, absolute elsewhere. */
 export const keyOf = (path: string, place: Place) => {
-  const home = trimSlash(place.home);
-  if (path === home) return "~";
-  return path.startsWith(`${home}/`) ? `~/${path.slice(home.length + 1)}` : path;
+  const home = normalPath(place.home);
+  const at = normalPath(path);
+  if (at === home) return "~";
+  return at.startsWith(`${home}/`) ? `~/${at.slice(home.length + 1)}` : at;
 };
 
 /** A Files key as the absolute path the harness itself sees; the key itself when home is `~`. */
 export const absoluteOf = (key: string, place: Place) =>
-  key === "~" || key.startsWith("~/") ? `${trimSlash(place.home)}${key.slice(1)}` : key;
+  key === "~" || key.startsWith("~/") ? `${normalPath(place.home)}${key.slice(1)}` : key;
 
 /**
  * A directory an environment variable names: `~` expanded, and a relative one taken under home,
@@ -47,8 +49,8 @@ export const envDir = (place: Place, name: string): string | undefined => {
   const value = place.env[name]?.trim();
   if (!value) return undefined;
   const home = trimSlash(place.home);
-  if (value === "~" || value.startsWith("~/")) return trimSlash(home + value.slice(1));
-  return trimSlash(value.startsWith("/") ? value : `${home}/${value}`);
+  if (value === "~" || value.startsWith("~/")) return normalPath(home + value.slice(1));
+  return normalPath(value.startsWith("/") ? value : `${home}/${value}`);
 };
 
 /** A boolean environment variable: true for `true` or `1`, false for `false` or `0`, else unset. */
