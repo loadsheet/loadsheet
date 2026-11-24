@@ -578,9 +578,12 @@ describe("dead-pack", () => {
   const NAMES = ["a", "b", "c", "d", "e"];
   const packed = (name: string, extra: Partial<Item> = {}) =>
     skill(name, { pack: "acme/kit", managedBy: "skills", ...extra });
-  const kit = (names = NAMES, extra: Partial<Item> = {}, used: string[] = []) =>
+  const kit = (names = NAMES, extra: Partial<Item> = {}, used: string[] = [], unlisted = 0) =>
     scan("laptop", {
-      items: names.map((name) => packed(name, extra)),
+      items: [
+        ...names.map((name) => packed(name, extra)),
+        ...Array.from({ length: unlisted }, (_, index) => packed(`quiet-${index}`, extra)),
+      ],
       cells: names.map((name) => cell(name, 30, used.includes(name) ? { byModel: 1 } : {})),
     });
   /** Every finding, with dead-skill and expensive-description running beside dead-pack. */
@@ -596,7 +599,9 @@ describe("dead-pack", () => {
   it.each([
     ["fires for a pack of minSkills skills none of which is invoked", kit(), ["acme/kit"]],
     ["holds when one of its skills is invoked", kit(NAMES, {}, ["c"]), []],
+    ["fires with a skill never listed beside them", kit(NAMES, {}, [], 1), ["acme/kit"]],
     ["holds below minSkills", kit(NAMES.slice(0, 4)), []],
+    ["holds below minSkills listed", kit(NAMES.slice(0, 4), {}, [], 3), []],
   ])("%s", (_, built, expected) => {
     const result = findingsOf([built], "dead-pack");
     expect(result.findings.map((f) => f.pack)).toEqual(expected);

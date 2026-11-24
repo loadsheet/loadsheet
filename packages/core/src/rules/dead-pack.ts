@@ -8,9 +8,9 @@ interface Hit {
 }
 
 /**
- * A pack with at least minSkills skills on a harness's sheet, each a dead skill: listed in at
- * least dead-skill's minSessions sessions over its minDays days and never invoked. One finding per
- * pack; the engine drops its skills' own findings. Each skill is removed through the dead skill's
+ * A pack none of whose skills on a harness's sheet is invoked, with at least minSkills of them dead
+ * skills: listed in at least dead-skill's minSessions sessions over its minDays days. One finding
+ * per pack, for all its skills; the engine drops their own findings. Each skill is removed through the dead skill's
  * guard, which offers nothing for a plugin's: turning a plugin off also turns off its hooks and
  * commands, which loadsheet does not read, so that is left to the user.
  */
@@ -28,11 +28,9 @@ export const deadPack = defineRule({
         byPack.set(line.pack, [...(byPack.get(line.pack) ?? []), line]);
       }
       for (const [pack, lines] of byPack) {
-        const dead = lines.every(
-          (line) =>
-            line.exposure.sessions >= minSessions && line.use.byModel + line.use.byUser === 0,
-        );
-        if (lines.length < options.minSkills || !dead) continue;
+        if (lines.some((line) => line.use.byModel + line.use.byUser > 0)) continue;
+        const listed = lines.filter((line) => line.exposure.sessions >= minSessions);
+        if (listed.length < options.minSkills) continue;
         hits.set(pack, [...(hits.get(pack) ?? []), { sheet, lines }]);
       }
     }
