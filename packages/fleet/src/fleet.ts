@@ -716,6 +716,8 @@ export interface RunResult {
   stderr: string;
   /** Why there is no exit code. */
   error?: string;
+  /** The output went past what is kept, so `stdout` and `stderr` hold only its end. */
+  truncated?: true;
 }
 
 /**
@@ -737,6 +739,7 @@ export async function fleetRun(
   { here = true }: { here?: boolean | "leave out" } = {},
 ): Promise<RunResult[]> {
   const after = `${Math.round(timeoutMs / 1000)} s`;
+  const cut = (run: ExecResult) => (run.truncated ? { truncated: true as const } : {});
   const finished = (host: string, run: ExecResult): RunResult => ({
     host,
     reachable: true,
@@ -748,6 +751,7 @@ export async function fleetRun(
         : { error: "the command ended on a signal" }),
     stdout: run.stdout,
     stderr: run.stderr,
+    ...cut(run),
   });
   const local = async (): Promise<RunResult> => {
     const [command, ...args] = argv;
@@ -816,7 +820,14 @@ export async function fleetRun(
       );
     // An exit line that got here is the command's, whatever kept the connection open after it.
     if (exit !== undefined)
-      return { host, reachable: true, exitCode: Number(exit), stdout: run.stdout, stderr };
+      return {
+        host,
+        reachable: true,
+        exitCode: Number(exit),
+        stdout: run.stdout,
+        stderr,
+        ...cut(run),
+      };
     return {
       host,
       reachable: true,
@@ -825,6 +836,7 @@ export async function fleetRun(
         : "the connection dropped before the command finished",
       stdout: run.stdout,
       stderr,
+      ...cut(run),
     };
   };
   try {
