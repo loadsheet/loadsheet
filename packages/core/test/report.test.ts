@@ -182,8 +182,8 @@ describe("invisible-skill", () => {
           ],
           cells: [cell("hidden", 10, { bare: 8, byUser: 1 }), cell("quiet", 10), ...seen],
         }),
-        // hidden is installed nowhere and always listed bare, so its full entry, and the budget the
-        // listing needs, are unknown: no budget, which could be lower than the one it has.
+        // hidden is installed nowhere and always listed bare, so its description is unknown and
+        // counts at the longest Claude Code lists: 9 + 2 + 1536, and 120 for the others, plus a tenth.
         scan("server", {
           cells: [cell("hidden", 10, { bare: 10, chars: 90 }), ...seen],
         }),
@@ -211,7 +211,7 @@ describe("invisible-skill", () => {
           { machine: "server", harness: "claude-code" },
         ],
         evidence: { sessions: 30, bare: 18, bareShare: 0.6, byModel: 0, byUser: 1 },
-        fixes: [budget("laptop", "792")],
+        fixes: [budget("laptop", "792"), budget("server", "1834")],
       },
     ]);
   });

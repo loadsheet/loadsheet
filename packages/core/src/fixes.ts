@@ -266,13 +266,20 @@ export const bareByChoice = (sheet: RuleSheet, line: Line) => {
 export const bareEntry = (name: string) => `- ${name}\n`.length;
 
 /**
+ * The longest description Claude Code puts in a listing entry: the default of its
+ * `skillListingMaxDescChars` setting (2.1.330), which cuts a longer one.
+ */
+const LISTED_DESCRIPTION_MAX = 1536;
+
+/**
  * The characters one machine's Claude Code listing needs for every description: the full entry of
  * every skill its sessions listed in the window, ignored ones included since they still take room,
  * plus a tenth. A skill installed there counts its Item's entry; one installed nowhere loadsheet
- * reads, what the sessions that listed it in full held. Undefined when no session listed a skill
- * bare, so the budget already fits, and when a skill installed nowhere loadsheet reads was listed
- * bare in every session, so its full entry is unknown and a budget could be lower than the one the
- * machine has.
+ * reads, what the sessions that listed it in full held. One installed nowhere loadsheet reads and
+ * listed bare in every session has an unknown description, so it counts at the longest Claude
+ * Code lists: too low a budget could be under the one the machine has, while one above what the
+ * listing needs costs nothing, since a session pays for the listing and not for the budget.
+ * Undefined when no session listed a skill bare, so the budget already fits.
  */
 const listingBudget = (sheet: RuleSheet, machine: string, unfiltered: Unfiltered) => {
   const listed = new Map<string, { sessions: number; bare: number; chars: number }>();
@@ -297,7 +304,10 @@ const listingBudget = (sheet: RuleSheet, machine: string, unfiltered: Unfiltered
       total += Math.round(
         (chars - bare * bareEntry(id.slice("skill:".length))) / (sessions - bare),
       );
-    } else return undefined;
+    } else {
+      // `- name: description` against `- name`.
+      total += bareEntry(id.slice("skill:".length)) + ": ".length + LISTED_DESCRIPTION_MAX;
+    }
   }
   return Math.ceil((total * 11) / 10);
 };
