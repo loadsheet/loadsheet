@@ -167,9 +167,18 @@ catalogs:
     '@types/node':
       specifier: ^26.6.6
       version: 26.6.6
+    '@ui-sdk/core':
+      specifier: 0.1.0-beta.17
+      version: 0.1.0-beta.17
+    '@ui-sdk/vue':
+      specifier: 0.1.0-beta.17
+      version: 0.1.0-beta.17
     '@valibot/to-json-schema':
       specifier: ^1.8.0
       version: 1.8.0
+    '@vite-hub/kit':
+      specifier: 0.5.0
+      version: 0.5.0
     ajv:
       specifier: ^8.20.0
       version: 8.20.0
@@ -220,6 +229,15 @@ importers:
 
   apps/web:
     dependencies:
+      '@ui-sdk/core':
+        specifier: 'catalog:'
+        version: 0.1.0-beta.17
+      '@ui-sdk/vue':
+        specifier: 'catalog:'
+        version: 0.1.0-beta.17(@ui-sdk/core@0.1.0-beta.17)(vue@3.5.46(typescript@7.0.2))
+      '@vite-hub/kit':
+        specifier: 'catalog:'
+        version: 0.5.0(vue@3.5.46(typescript@7.0.2))
       valibot:
         specifier: 'catalog:'
         version: 1.5.0(typescript@7.0.2)
@@ -1087,10 +1105,64 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@ui-sdk/core@0.1.0-beta.17':
+    resolution: {integrity: sha512-wBWNqT0Qf1sE6fqD1XuBnSGBFcY6+cek1z7rKl/r4j2bsv2or9i7z44PLy0J9hmflm3IJ5MLW0P4ur2H9BCIvg==}
+
+  '@ui-sdk/core@0.1.0-beta.5':
+    resolution: {integrity: sha512-dmunrxWrZ+vwldKJ6THQNYyyfbLFY6K82hBvIZSnuGwpEQmXKmM0iuANgGXtaqw8unSB2p9E5s3y7zfE9rgP6Q==}
+
+  '@ui-sdk/vue@0.1.0-beta.17':
+    resolution: {integrity: sha512-4wx8xdVwXLp++/XEnf0MEMeshHb0UDdotTatfIObbQ2D+QQUG3OMLD0thjQWayMFY5phdYBM9t+YlIJdzYAq5Q==}
+    peerDependencies:
+      '@nuxt/kit': ^4.0.0 || ^5.0.0-0
+      '@nuxt/schema': ^4.0.0 || ^5.0.0-0
+      '@ui-sdk/core': ^0.1.0-beta.17
+      nuxt: ^4.0.0 || ^5.0.0-0
+      vue: '>=3.5'
+    peerDependenciesMeta:
+      '@nuxt/kit':
+        optional: true
+      '@nuxt/schema':
+        optional: true
+      nuxt:
+        optional: true
+
+  '@ui-sdk/vue@0.1.0-beta.5':
+    resolution: {integrity: sha512-nt7DzUYByRAKABHEWWFzRQbkTDofE7yndq2QaSiMC1itTmmoucpVYZrDZqCpqRCHy4L6TTG+S83XUEk7nA463Q==}
+    peerDependencies:
+      '@nuxt/kit': ^4.0.0 || ^5.0.0-0
+      '@nuxt/schema': ^4.0.0 || ^5.0.0-0
+      '@ui-sdk/core': ^0.1.0-beta.5
+      nuxt: ^4.0.0 || ^5.0.0-0
+      vue: '>=3.5'
+    peerDependenciesMeta:
+      '@nuxt/kit':
+        optional: true
+      '@nuxt/schema':
+        optional: true
+      nuxt:
+        optional: true
+
   '@valibot/to-json-schema@1.8.0':
     resolution: {integrity: sha512-a0M+uwCuQZEPAo65NYkFSJ14O5c213KoSZmPdoCfuFvUhfULi4T2Z6Tpjv6lTVMW9RoLm74RpRAjNEa43KcN+g==}
     peerDependencies:
       valibot: ^1.5.0
+
+  '@vite-hub/kit@0.5.0':
+    resolution: {integrity: sha512-5Nj/DbxKpk8HSln/AoOpWJZC2wg+HWFylrgrjqV+R5fkVVmdzfGXCzz4F8QBSp9qY8OA483KCPm610hFxYYIlw==}
+    engines: {node: '>=24.15.0'}
+    peerDependencies:
+      '@nuxt/kit': ^4.0.0 || ^5.0.0-0
+      '@nuxt/schema': ^4.0.0 || ^5.0.0-0
+      nuxt: '>=5.0.0-0'
+      vue: ^3.5.0
+    peerDependenciesMeta:
+      '@nuxt/kit':
+        optional: true
+      '@nuxt/schema':
+        optional: true
+      nuxt:
+        optional: true
 
   '@vitejs/plugin-vue@6.0.11':
     resolution: {integrity: sha512-m48lskIUJGlB6qUiYhDMI8nd2ngeidz2U4nKTjqI13cFMu5rH8JeEILPkDtK9Fk/TjBA2pkj8AlbenqDaKu+ww==}
@@ -2588,9 +2660,29 @@ snapshots:
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
 
+  '@ui-sdk/core@0.1.0-beta.17': {}
+
+  '@ui-sdk/core@0.1.0-beta.5': {}
+
+  '@ui-sdk/vue@0.1.0-beta.17(@ui-sdk/core@0.1.0-beta.17)(vue@3.5.46(typescript@7.0.2))':
+    dependencies:
+      '@ui-sdk/core': 0.1.0-beta.17
+      vue: 3.5.46(typescript@7.0.2)
+
+  '@ui-sdk/vue@0.1.0-beta.5(@ui-sdk/core@0.1.0-beta.5)(vue@3.5.46(typescript@7.0.2))':
+    dependencies:
+      '@ui-sdk/core': 0.1.0-beta.5
+      vue: 3.5.46(typescript@7.0.2)
+
   '@valibot/to-json-schema@1.8.0(valibot@1.5.0(typescript@7.0.2))':
     dependencies:
       valibot: 1.5.0(typescript@7.0.2)
+
+  '@vite-hub/kit@0.5.0(vue@3.5.46(typescript@7.0.2))':
+    dependencies:
+      '@ui-sdk/core': 0.1.0-beta.5
+      '@ui-sdk/vue': 0.1.0-beta.5(@ui-sdk/core@0.1.0-beta.5)(vue@3.5.46(typescript@7.0.2))
+      vue: 3.5.46(typescript@7.0.2)
 
   '@vitejs/plugin-vue@6.0.11(vite@8.3.8(@types/node@26.6.6))(vue@3.5.46(typescript@7.0.2))':
     dependencies:
@@ -2621,6 +2713,7 @@ snapshots:
       - msw
       - utf-8-validate
       - vite
+    optional: true
 
   '@vitest/browser@5.1.0(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(publint@0.3.25)(typescript@7.0.2))(vitest@5.1.0)':
     dependencies:
@@ -2657,6 +2750,7 @@ snapshots:
       - msw
       - utf-8-validate
       - vite
+    optional: true
 
   '@vitest/mocker@5.1.0(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(publint@0.3.25)(typescript@7.0.2))':
     dependencies:
@@ -2697,7 +2791,7 @@ snapshots:
       pathe: 2.0.3
       sirv: 3.0.2
       tinyrainbow: 3.2.0
-      vitest: 5.1.0(@types/node@26.6.6)(@vitest/browser-preview@5.1.0)(@vitest/ui@5.1.0)(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(publint@0.3.25)(typescript@7.0.2))
+      vitest: 5.1.0(@types/node@26.6.6)(@vitest/browser-preview@5.1.0)(@vitest/ui@5.1.0)(vite@8.3.8(@types/node@26.6.6))
 
   '@vitest/utils@5.1.0':
     dependencies:

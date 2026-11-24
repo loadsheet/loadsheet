@@ -31,7 +31,7 @@ function go() {
     <div class="right">
       <form class="url" @submit.prevent="go">
         <input v-model="url" aria-label="Pack URL" spellcheck="false" autocomplete="off" />
-        <button class="btn secondary sm">Inspect</button>
+        <button data-slot="button" data-size="sm">Inspect</button>
       </form>
       <ThemeToggle />
     </div>
@@ -56,32 +56,31 @@ function go() {
     </template>
   </SkillGrid>
   <main v-else class="page">
-    <div class="card empty">
-      <div class="eyebrow">{{ slug }}</div>
-      <h3>No skills found in {{ slug }}</h3>
-      <p>loadsheet looks for <code>SKILL.md</code> files and agent definitions in the repository's default branch. Check the URL, or open one of these.</p>
-      <div class="alts">
-        <RouterLink v-for="(p, s) in packs" :key="s" class="btn secondary sm" :to="`/pack/${s}`">{{ s }}</RouterLink>
+    <div data-slot="vh-empty" data-variant="outline">
+      <h3 data-slot="vh-empty-title">No skills found in {{ slug }}</h3>
+      <p data-slot="vh-empty-description">loadsheet looks for <code>SKILL.md</code> files and agent definitions in the repository's default branch. Check the URL, or open one of these.</p>
+      <div data-slot="vh-empty-actions">
+        <RouterLink v-for="(p, s) in packs" :key="s" data-slot="button" data-size="sm" :to="`/pack/${s}`">{{ s }}</RouterLink>
       </div>
     </div>
   </main>
 </template>
 
 <style scoped>
-.big { margin-top: 4px; font: 500 1.625rem/1.1 var(--mono); }
+.big { margin-top: 4px; font: 500 1.625rem/1.1 var(--font-mono); }
 .small { margin-top: 4px; }
 .src { display: grid; gap: 3px; }
-.src a { color: var(--ink); font: 0.75rem var(--mono); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; transition: text-decoration-color 0.15s var(--ease); }
+.src a { color: var(--foreground); font: 0.75rem var(--font-mono); text-decoration: underline; text-decoration-color: var(--input); text-underline-offset: 3px; transition: text-decoration-color 0.15s var(--ease); }
 @media (hover: hover) and (pointer: fine) { .src a:hover { text-decoration-color: currentColor; } }
-.hint { padding: 12px 14px; color: var(--muted); font-size: 0.8125rem; }
+.hint { padding: 12px 14px; color: var(--muted-foreground); font-size: 0.8125rem; }
 .crumb { min-width: 0; overflow: hidden; font-size: 0.8125rem; text-overflow: ellipsis; white-space: nowrap; }
 .crumb b { font-weight: 500; }
-.url { display: inline-flex; align-items: center; height: 32px; padding: 0 3px 0 10px; border: 1px solid var(--line-strong); border-radius: var(--r-md); background: var(--surface); transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease); }
-@media (hover: hover) and (pointer: fine) { .url:hover { border-color: color-mix(in oklch, var(--muted) 50%, var(--line-strong)); } }
+.url { display: inline-flex; align-items: center; height: 32px; padding: 0 3px 0 10px; border: 1px solid var(--input); border-radius: var(--r-md); background: var(--card); transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease); }
+@media (hover: hover) and (pointer: fine) { .url:hover { border-color: color-mix(in oklch, var(--muted-foreground) 50%, var(--input)); } }
 .url:focus-within { border-color: var(--ice); box-shadow: 0 0 0 3px var(--ice-tint); }
-.url input { width: 260px; border: 0; background: none; outline: none; font: 0.75rem var(--mono); }
-.url .btn { min-height: 24px; }
-.alts { display: flex; flex-wrap: wrap; gap: 6px; }
+.url input { width: 260px; border: 0; background: none; outline: none; font: 0.75rem var(--font-mono); }
+.url [data-slot="button"] { min-height: 24px; }
+
 @media (max-width: 720px) { .url input { width: 130px; font-size: 1rem; } }
 @media (max-width: 560px) { .crumb { display: none; } }
 </style>

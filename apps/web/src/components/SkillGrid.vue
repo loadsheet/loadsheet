@@ -84,7 +84,7 @@ const longChars = (l: Line) => findingsFor(props.r, l).find((f) => f.rule === "e
       <div v-if="dead.length" class="banner">
         <div class="v">{{ fmt(dead.reduce((n, l) => n + perSession(l), 0)) }}</div>
         <p>tokens every session go to {{ plural(dead.length, "skill") }} here that no session used.</p>
-        <button v-if="deadFixes.length" class="btn sm" @click="copy(agentPrompt(deadFixes), 'Prompt copied, paste it into your agent', 'dead')"><CopyIcon :done="copied.key === 'dead'" />Copy fixes for your agent</button>
+        <button v-if="deadFixes.length" data-slot="button" data-variant="solid" data-size="sm" @click="copy(agentPrompt(deadFixes), 'Prompt copied, paste it into your agent', 'dead')"><CopyIcon :done="copied.key === 'dead'" />Copy fixes for your agent</button>
       </div>
       <section v-for="g in groups" :key="g.name" class="group">
         <h3>{{ g.name }} <span>{{ kinds(g.lines) }} · {{ fmt(g.tokens) }} tokens a session</span></h3>
@@ -93,12 +93,12 @@ const longChars = (l: Line) => findingsFor(props.r, l).find((f) => f.rule === "e
             <span class="nm" :title="l.ref.name">{{ shortName(l) }}</span>
             <span v-if="packMode && l.description" class="desc">{{ l.description }}</span>
             <span class="chips">
-              <span v-if="packMode && !l.chars.listed" class="chip" title="Hidden from the model until you call it by name">on demand</span>
-              <span v-else class="chip"><b>{{ fmt(l.tokens.value) }}</b> listed</span>
-              <span class="chip">{{ K(bodyTokens(l)) }} body</span>
-              <template v-if="packMode"><span v-if="longChars(l)" class="chip warm">{{ fmt(longChars(l)!) }}-char description</span></template>
-              <span v-else-if="isUsed(l)" class="chip"><b>{{ uses(l) }}×</b> used</span>
-              <span v-else class="chip warm"><b>never</b> used</span>
+              <span v-if="packMode && !l.chars.listed" data-slot="vh-badge" data-size="sm" title="Hidden from the model until you call it by name">on demand</span>
+              <span v-else data-slot="vh-badge" data-size="sm"><b>{{ fmt(l.tokens.value) }}</b> listed</span>
+              <span data-slot="vh-badge" data-size="sm">{{ K(bodyTokens(l)) }} body</span>
+              <template v-if="packMode"><span v-if="longChars(l)" data-slot="vh-badge" data-size="sm" data-tone="warning">{{ fmt(longChars(l)!) }}-char description</span></template>
+              <span v-else-if="isUsed(l)" data-slot="vh-badge" data-size="sm"><b>{{ uses(l) }}×</b> used</span>
+              <span v-else data-slot="vh-badge" data-size="sm" data-tone="warning"><b>never</b> used</span>
             </span>
           </button>
         </div>
@@ -108,7 +108,7 @@ const longChars = (l: Line) => findingsFor(props.r, l).find((f) => f.rule === "e
 
     <Transition name="drawer">
       <aside v-if="line" class="drawer" :aria-label="line.ref.name">
-        <button class="btn quiet icon x" aria-label="Close" @click="open = undefined">
+        <button data-slot="button" data-variant="ghost" class="icon x" aria-label="Close" @click="open = undefined">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m4 4 8 8M12 4l-8 8" /></svg>
         </button>
         <div>
@@ -136,11 +136,11 @@ const longChars = (l: Line) => findingsFor(props.r, l).find((f) => f.rule === "e
           <template v-if="line.path"><dt>File</dt><dd class="mono">{{ line.path }}</dd></template>
         </dl>
         <div v-for="f in fs" :key="f.id" class="fnd">
-          <span><span class="tag" :class="f.level === 'cut' ? 'warm' : 'ice'">{{ ruleName(f.rule) }}</span></span>
+          <span><span data-slot="vh-badge" data-size="sm" :data-tone="f.level === 'cut' ? 'warning' : 'info'">{{ ruleName(f.rule) }}</span></span>
           <p>{{ evidence(f) }}<template v-if="f.savesTokens"> Saves {{ fmt(f.savesTokens.value) }} tokens a session.</template></p>
           <FixCmd :finding="f" />
         </div>
-        <button v-if="fs.length" class="btn end" @click="copy(agentPrompt(fs), 'Prompt copied, paste it into your agent', 'drawer')"><CopyIcon :done="copied.key === 'drawer'" />Copy for your agent</button>
+        <button v-if="fs.length" data-slot="button" data-variant="solid" class="end" @click="copy(agentPrompt(fs), 'Prompt copied, paste it into your agent', 'drawer')"><CopyIcon :done="copied.key === 'drawer'" />Copy for your agent</button>
         <p v-else class="muted small end">Nothing to fix here.</p>
       </aside>
     </Transition>
@@ -153,38 +153,38 @@ const longChars = (l: Line) => findingsFor(props.r, l).find((f) => f.rule === "e
 .gridmain.narrow { padding-right: 380px; }
 @media (max-width: 900px) { .gridmain.narrow { padding-right: 12px; } }
 /* The morning banner: a red-tinted strip with the number large. */
-.banner { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-bottom: 20px; padding: 10px 10px 10px 14px; border: 1px solid color-mix(in oklch, var(--warm) 25%, var(--line)); border-radius: var(--r-lg); background: var(--warm-tint); }
-.banner .v { font: 500 1.5rem/1 var(--mono); color: var(--warm-ink); font-variant-numeric: tabular-nums; }
-.banner p { flex: 1 1 220px; color: var(--ink); font-size: 0.8125rem; }
-.banner .btn { margin-left: auto; }
+.banner { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-bottom: 20px; padding: 10px 10px 10px 14px; border: 1px solid color-mix(in oklch, var(--warm) 25%, var(--border)); border-radius: var(--r-lg); background: var(--warm-tint); }
+.banner .v { font: 500 1.5rem/1 var(--font-mono); color: var(--warm-ink); font-variant-numeric: tabular-nums; }
+.banner p { flex: 1 1 220px; color: var(--foreground); font-size: 0.8125rem; }
+.banner [data-slot="button"] { margin-left: auto; }
 .group + .group { margin-top: 24px; }
-.group h3 { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin-bottom: 8px; font: 500 0.75rem/1.3 var(--mono); }
-.group h3 span { color: var(--muted); font: 400 0.75rem var(--sans); font-variant-numeric: tabular-nums; }
+.group h3 { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin-bottom: 8px; font: 500 0.75rem/1.3 var(--font-mono); }
+.group h3 span { color: var(--muted-foreground); font: 400 0.75rem var(--font-sans); font-variant-numeric: tabular-nums; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
-.sk { display: grid; align-content: start; gap: 7px; padding: 9px 10px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); text-align: start; cursor: pointer; }
+.sk { display: grid; align-content: start; gap: 7px; padding: 9px 10px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--card); text-align: start; cursor: pointer; }
 .sk { transition: box-shadow 0.15s var(--ease), border-color 0.15s var(--ease), transform 0.12s var(--ease); }
 .sk:active { transform: scale(0.98); }
-@media (hover: hover) and (pointer: fine) { .sk:hover { border-color: var(--line-strong); box-shadow: 0 1px 2px oklch(0 0 0 / 0.05); } .sk.dead:hover { border-color: var(--warm); } }
+@media (hover: hover) and (pointer: fine) { .sk:hover { border-color: var(--input); box-shadow: 0 1px 2px oklch(0 0 0 / 0.05); } .sk.dead:hover { border-color: var(--warm); } }
 .sk[data-on], .sk[data-on]:hover { border-color: var(--ice); box-shadow: 0 0 0 3px var(--ice-tint); }
 /* Never used: the first inspector's dashed outline, in the cut colour. */
-.sk.dead { border-style: dashed; border-color: color-mix(in oklch, var(--warm) 50%, var(--line)); }
+.sk.dead { border-style: dashed; border-color: color-mix(in oklch, var(--warm) 50%, var(--border)); }
 .sk.dead[data-on], .sk.dead[data-on]:hover { border-style: solid; border-color: var(--warm); box-shadow: 0 0 0 3px var(--warm-tint); }
-.sk .nm { overflow: hidden; font: 500 0.78125rem/1.3 var(--mono); text-overflow: ellipsis; white-space: nowrap; }
-.sk .desc { display: -webkit-box; overflow: hidden; color: var(--muted); font-size: 0.8125rem; line-height: 1.45; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.sk .nm { overflow: hidden; font: 500 0.78125rem/1.3 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+.sk .desc { display: -webkit-box; overflow: hidden; color: var(--muted-foreground); font-size: 0.8125rem; line-height: 1.45; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
 /* The morning detail panel: pinned to the right edge under the bar, bordered off, a soft shadow to the left. */
-.drawer { position: fixed; top: var(--bar); right: 0; bottom: 0; z-index: 6; display: flex; flex-direction: column; gap: 16px; width: min(360px, 100vw); padding: 16px; border-left: 1px solid var(--line); background: var(--surface); box-shadow: var(--side-shadow); overflow: auto; }
+.drawer { position: fixed; top: var(--bar); right: 0; bottom: 0; z-index: 6; display: flex; flex-direction: column; gap: 16px; width: min(360px, 100vw); padding: 16px; border-left: 1px solid var(--border); background: var(--card); box-shadow: var(--shadow-dialog); overflow: auto; }
 .drawer-enter-active { transition: translate 0.24s var(--ease), opacity 0.24s var(--ease); }
 .drawer-leave-active { transition: translate 0.16s ease-in, opacity 0.16s ease-in; }
 .drawer-enter-from, .drawer-leave-to { translate: 16px 0; opacity: 0; }
 .x { position: absolute; top: 10px; right: 10px; }
-.drawer h2 { margin-top: 2px; padding-right: 36px; font: 500 1rem/1.3 var(--mono); overflow-wrap: anywhere; }
-.descfull { color: var(--muted); font-size: 0.875rem; }
+.drawer h2 { margin-top: 2px; padding-right: 36px; font: 500 1rem/1.3 var(--font-mono); overflow-wrap: anywhere; }
+.descfull { color: var(--muted-foreground); font-size: 0.875rem; }
 .costbar { display: flex; gap: 2px; height: 10px; overflow: hidden; border-radius: 4px; }
 .costbar i { display: block; flex-basis: 0; height: 100%; }
-.verdict { margin-top: 8px; color: var(--muted); font-size: 0.875rem; }
+.verdict { margin-top: 8px; color: var(--muted-foreground); font-size: 0.875rem; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; font-size: 0.875rem; }
-.kv dt { color: var(--muted); }
+.kv dt { color: var(--muted-foreground); }
 .kv dd { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .kv dd.mono { font-size: 0.8125rem; }
 .fnd { display: grid; gap: 8px; }

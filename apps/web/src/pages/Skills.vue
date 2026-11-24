@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SegmentedControl, SegmentedControlIndicator, SegmentedControlItem } from "@ui-sdk/vue/segmented-control";
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import CostVsUse from "../components/CostVsUse.vue";
@@ -19,34 +20,36 @@ const skills = computed(() => lines.value.filter((l) => l.ref.kind === "skill"))
   <template v-if="lines.length">
     <SkillGrid v-if="view === 'grid'" :r="report" :lines="lines">
       <template #side>
-        <div class="seg" role="group" aria-label="View">
-          <button aria-pressed="true">Grid</button>
-          <button aria-pressed="false" @click="setView('cost')">Cost vs use</button>
-        </div>
+        <SegmentedControl aria-label="View" :value="view" @update:value="(v) => v && setView(v)">
+          <SegmentedControlIndicator />
+          <SegmentedControlItem value="grid">Grid</SegmentedControlItem>
+          <SegmentedControlItem value="cost">Cost vs use</SegmentedControlItem>
+        </SegmentedControl>
       </template>
     </SkillGrid>
     <CostVsUse v-else :lines="skills">
       <template #top>
         <div class="row">
-          <div class="seg" role="group" aria-label="View">
-            <button aria-pressed="false" @click="setView('grid')">Grid</button>
-            <button aria-pressed="true">Cost vs use</button>
-          </div>
+          <SegmentedControl aria-label="View" :value="view" @update:value="(v) => v && setView(v)">
+            <SegmentedControlIndicator />
+            <SegmentedControlItem value="grid">Grid</SegmentedControlItem>
+            <SegmentedControlItem value="cost">Cost vs use</SegmentedControlItem>
+          </SegmentedControl>
           <p class="muted small">One dot per {{ harnessName(h.current.value) }} skill: what it costs every session against how often it ran.</p>
         </div>
       </template>
     </CostVsUse>
   </template>
   <main v-else class="page">
-    <div class="card empty">
-      <h3>No skills read for {{ harnessName(h.current.value) }}</h3>
-      <p>loadsheet has no sessions from it in this window, so it can't tell what it lists.</p>
-      <button class="btn secondary sm" @click="h.set(h.all.value[0]!.id)">Show {{ harnessName(h.all.value[0]!.id) }}</button>
+    <div data-slot="vh-empty" data-variant="outline">
+      <h3 data-slot="vh-empty-title">No skills read for {{ harnessName(h.current.value) }}</h3>
+      <p data-slot="vh-empty-description">loadsheet has no sessions from it in this window, so it can't tell what it lists.</p>
+      <div data-slot="vh-empty-actions"><button data-slot="button" data-size="sm" @click="h.set(h.all.value[0]!.id)">Show {{ harnessName(h.all.value[0]!.id) }}</button></div>
     </div>
   </main>
 </template>
 
 <style scoped>
-.side .seg { align-self: start; }
+.side [data-slot="segmented-control"] { align-self: start; }
 .row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 </style>

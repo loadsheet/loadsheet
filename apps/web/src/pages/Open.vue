@@ -27,7 +27,7 @@ async function take(file?: File) {
 <template>
   <header class="top">
     <RouterLink class="brand" to="/"><Logo />loadsheet</RouterLink>
-    <div class="right"><RouterLink class="btn quiet sm" to="/report">Back to the example</RouterLink><ThemeToggle /></div>
+    <div class="right"><RouterLink data-slot="button" data-variant="ghost" data-size="sm" to="/report">Back to the example</RouterLink><ThemeToggle /></div>
   </header>
   <main class="page narrow">
     <label class="drop card" :data-over="over || undefined" @dragover.prevent="over = true" @dragleave="over = false" @drop.prevent="take($event.dataTransfer?.files[0])">
@@ -49,13 +49,13 @@ async function take(file?: File) {
 <style scoped>
 .narrow { max-width: 680px; padding-top: 48px; }
 .drop { display: grid; justify-items: center; gap: 10px; padding: 48px 32px; text-align: center; cursor: pointer; transition: box-shadow 0.15s var(--ease); }
-.drop { border-style: dashed; border-color: var(--line-strong); }
-@media (hover: hover) and (pointer: fine) { .drop:hover { border-color: var(--muted); } }
+.drop { border-style: dashed; border-color: var(--input); }
+@media (hover: hover) and (pointer: fine) { .drop:hover { border-color: var(--muted-foreground); } }
 .drop[data-over], .drop:focus-within { border-style: solid; border-color: var(--ice); box-shadow: 0 0 0 3px var(--ice-tint); }
-.drop svg { width: 32px; height: 32px; color: var(--muted); }
+.drop svg { width: 32px; height: 32px; color: var(--muted-foreground); }
 .drop h1 { font-size: 1.375rem; }
-.drop p { max-width: 44ch; color: var(--muted); }
-.err { display: grid; gap: 10px; border-color: color-mix(in oklch, var(--warm) 40%, var(--line)); box-shadow: inset 3px 0 var(--warm); }
+.drop p { max-width: 44ch; color: var(--muted-foreground); }
+.err { display: grid; gap: 10px; border-color: color-mix(in oklch, var(--warm) 40%, var(--border)); box-shadow: inset 3px 0 var(--warm); }
 .err h2 { font-size: 1.125rem; }
 .err ul { display: grid; gap: 4px; font-size: 0.875rem; }
 .err code { color: var(--warm-ink); }

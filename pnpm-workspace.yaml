@@ -6,7 +6,10 @@ catalogMode: prefer
 
 catalog:
   "@types/node": ^26.6.6
+  '@ui-sdk/core': 0.1.0-beta.17
+  '@ui-sdk/vue': 0.1.0-beta.17
   "@valibot/to-json-schema": ^1.8.0
+  '@vite-hub/kit': 0.5.0
   ajv: ^8.20.0
   ajv-formats: ^3.0.1
   publint: ^0.3.25
@@ -18,3 +21,8 @@ catalog:
 
 allowBuilds:
   esbuild: false
+
+minimumReleaseAgeExclude:
+  - "@ui-sdk/core@0.1.0-beta.17"
+  - "@ui-sdk/vue@0.1.0-beta.17"
+  - "@vite-hub/kit@0.5.0"

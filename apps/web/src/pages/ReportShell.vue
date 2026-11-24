@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SegmentedControl, SegmentedControlIndicator, SegmentedControlItem } from "@ui-sdk/vue/segmented-control";
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import Logo from "../components/Logo.vue";
@@ -34,15 +35,16 @@ async function share() {
     </nav>
     <div v-if="isExample" class="notice">
       <span>Example report</span>
-      <RouterLink class="btn secondary sm" to="/open">Open yours</RouterLink>
+      <RouterLink data-slot="button" data-size="sm" to="/open">Open yours</RouterLink>
     </div>
-    <div v-else-if="shared" class="notice"><span class="tag">Shared report</span></div>
+    <div v-else-if="shared" class="notice"><span data-slot="vh-badge" data-size="sm">Shared report</span></div>
     <div class="right">
-      <div v-if="$route.path !== '/report/fixes' && h.all.value.length > 1" class="seg" role="group" aria-label="Harness">
-        <button v-for="x in h.all.value" :key="x.id" :aria-pressed="x.id === h.current.value" @click="h.set(x.id)">{{ harnessName(x.id) }}</button>
-      </div>
+      <SegmentedControl v-if="$route.path !== '/report/fixes' && h.all.value.length > 1" aria-label="Harness" :value="h.current.value" @update:value="(v) => v && h.set(v)">
+        <SegmentedControlIndicator />
+        <SegmentedControlItem v-for="x in h.all.value" :key="x.id" :value="x.id">{{ harnessName(x.id) }}</SegmentedControlItem>
+      </SegmentedControl>
       <span v-for="m in report.machines" :key="m.name" class="host" :data-down="!m.reachable || undefined" :title="m.error ?? `Scanned ${m.scannedAt?.slice(0, 16).replace('T', ' ')}`">{{ m.name }}</span>
-      <button class="btn secondary sm share" :title="'Copy a link that carries this report in the URL'" @click="share">
+      <button data-slot="button" data-size="sm" class="share" :title="'Copy a link that carries this report in the URL'" @click="share">
         <span class="ci" :class="{ done: copied.key === 'share' }" aria-hidden="true">
           <svg class="a" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M6.75 9.25a3 3 0 0 0 4.24 0l2-2a3 3 0 0 0-4.24-4.24l-.75.75" /><path d="M9.25 6.75a3 3 0 0 0-4.24 0l-2 2a3 3 0 0 0 4.24 4.24l.75-.75" /></svg>
           <svg class="b" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5 6.5 12 13 4.5" /></svg>
@@ -57,6 +59,6 @@ async function share() {
 </template>
 
 <style scoped>
-.linkerr { padding: 8px 16px; border-bottom: 1px solid color-mix(in oklch, var(--warm) 30%, var(--line)); background: var(--warm-tint); color: var(--warm-ink); font-size: 0.75rem; }
+.linkerr { padding: 8px 16px; border-bottom: 1px solid color-mix(in oklch, var(--warm) 30%, var(--border)); background: var(--warm-tint); color: var(--warm-ink); font-size: 0.75rem; }
 @media (max-width: 560px) { .share { display: none; } }
 </style>

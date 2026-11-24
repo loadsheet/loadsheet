@@ -11,6 +11,8 @@ import Open from "./pages/Open.vue";
 import Pack from "./pages/Pack.vue";
 import NotFound from "./pages/NotFound.vue";
 import { home, ready } from "./lib/report";
+import "@vite-hub/kit/styles/tokens.css";
+import "@vite-hub/kit/styles/default.css";
 import "./styles/tokens.css";
 import "./styles/app.css";
 

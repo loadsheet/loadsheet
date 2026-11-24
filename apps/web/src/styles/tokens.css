@@ -22,34 +22,64 @@
   Structure follows @antfu/design: borders are ink at low alpha, wells sink with ink at 4%, hover lifts with 5%.
   The paper carries a faint grain; panels above it stay clean.
 */
+/*
+  loadsheet's theme for the ViteHub style family (@vite-hub/kit). The kit's parts read the shadcn/ui names, so this
+  file only sets those names to the lessons.onmax.me palette: warm paper (hue 85) under cool ink (hue 255), an ice
+  accent (hue 228) for links and focus, and warm orange (hue 45) for waste. The names after the shadcn set are
+  loadsheet's own.
+*/
 :root {
-  --paper: oklch(0.972 0.008 85);
-  --paper-2: oklch(0.24 0.02 255 / 0.045);
-  --surface: oklch(0.993 0.004 85);
-  --ink: oklch(0.24 0.02 255);
-  --ink-hover: oklch(0.33 0.02 255);
-  --muted: oklch(0.48 0.02 255);
-  --faint: oklch(0.6 0.015 255);
-  --line: oklch(0.24 0.02 255 / 0.11);
-  --line-strong: oklch(0.24 0.02 255 / 0.2);
-  --hover: oklch(0.24 0.02 255 / 0.05);
+  color-scheme: light;
+  /* The base step: 6px controls, 8px cards, 12px menus and drawers. */
+  --radius: 0.25rem;
+
+  --background: oklch(0.972 0.008 85);
+  --foreground: oklch(0.24 0.02 255);
+  --card: oklch(0.993 0.004 85);
+  --card-foreground: var(--foreground);
+  --popover: oklch(0.993 0.004 85 / 0.94);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(0.24 0.02 255);
+  --primary-foreground: oklch(0.99 0.004 85);
+  /* Wells and hovers are ink at low alpha, so they sit on paper and on cards alike. */
+  --secondary: oklch(0.24 0.02 255 / 0.045);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(0.24 0.02 255 / 0.045);
+  --muted-foreground: oklch(0.48 0.02 255);
+  --accent: oklch(0.24 0.02 255 / 0.05);
+  --accent-foreground: var(--foreground);
+  --destructive: oklch(0.55 0.19 28);
+  --border: oklch(0.24 0.02 255 / 0.11);
+  --input: oklch(0.24 0.02 255 / 0.2);
+  --ring: oklch(0.5 0.1 228);
+  --font-sans: "DM Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* The steps and tones shadcn has no name for, as @vite-hub/kit names them. */
+  --ui-text: oklch(0.33 0.02 255);
+  --ui-text-dimmed: oklch(0.6 0.015 255);
+  --ui-border-accented: var(--input);
+  --ui-font-size: 0.8125rem;
+  --ui-warning: oklch(0.63 0.16 45);
+  --vh-text-warning: oklch(0.5 0.14 42);
+  --ui-info: oklch(0.5 0.1 228);
+  --vh-text-info: oklch(0.45 0.1 228);
+  --ui-success: oklch(0.56 0.12 155);
+  --vh-text-success: oklch(0.45 0.1 155);
+  --shadow-popover: 0 0 0 1px var(--border), 0 4px 8px -4px oklch(0.24 0.02 255 / 0.06), 0 16px 24px -8px oklch(0.24 0.02 255 / 0.12);
+  --shadow-dialog: 0 0 0 1px var(--border), 0 8px 16px -4px oklch(0.24 0.02 255 / 0.06), 0 24px 32px -8px oklch(0.24 0.02 255 / 0.14);
+  --overlay: oklch(0.24 0.02 255 / 0.2);
+
+  /* loadsheet's own. */
+  --faint: var(--ui-text-dimmed);
   --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .12  0 0 0 0 .14  0 0 0 0 .2  .2 0 0 0 -.06'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-
-  /* The accent: links, focus, the selected skill. */
-  --ice: oklch(0.5 0.1 228);
+  --ice: var(--ring);
   --ice-tint: oklch(0.55 0.1 228 / 0.11);
-  --on-ice: oklch(0.99 0.004 85);
-  /* Never used, and fixes that cut. */
-  --warm: oklch(0.63 0.16 45);
-  --warm-ink: oklch(0.5 0.14 42);
+  --warm: var(--ui-warning);
+  --warm-ink: var(--vh-text-warning);
   --warm-tint: oklch(0.66 0.15 50 / 0.1);
-  --good: oklch(0.56 0.12 155);
-
-  /* Borders carry the structure; shadows only lift what floats over the page. */
-  --pop: 0 1px 2px oklch(0.24 0.02 255 / 0.06), 0 12px 32px -12px oklch(0.24 0.02 255 / 0.24);
-  --side-shadow: -12px 0 30px -18px oklch(0.24 0.02 255 / 0.28);
-
-  /* One colour per kind of context, held near one lightness so no kind shouts over another. */
+  --good: var(--ui-success);
+  --pop: var(--shadow-popover);
   --k-harness: oklch(0.84 0.012 255);
   --k-instr: oklch(0.57 0.1 155);
   --k-mcp: oklch(0.7 0.13 78);
@@ -57,39 +87,45 @@
   --k-used: oklch(0.54 0.11 240);
   --k-dead: oklch(0.63 0.16 45);
   --on-k: oklch(0.99 0.004 85);
-
-  --sans: "DM Sans Variable", ui-sans-serif, system-ui, sans-serif;
-  --mono: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --ease: cubic-bezier(0.23, 1, 0.32, 1);
   --bar: 48px;
-  --r-lg: 8px;
-  --r-md: 6px;
-  --r-sm: 4px;
-  color-scheme: light;
+  --r-sm: var(--radius);
+  --r-md: calc(var(--radius) * 1.5);
+  --r-lg: calc(var(--radius) * 2);
 }
 
-/* Dark is lessons' ink band: the page darkest, panels one step up, paper-coloured text. */
+/* Dark is lessons' ink band: the page darkest, cards one step up, paper-coloured text. */
 :root[data-theme="dark"] {
-  --paper: oklch(0.2 0.018 255);
-  --paper-2: oklch(0.97 0.008 85 / 0.05);
-  --surface: oklch(0.228 0.02 255);
-  --ink: oklch(0.95 0.008 85);
-  --ink-hover: oklch(0.86 0.008 85);
-  --muted: oklch(0.75 0.015 255);
-  --faint: oklch(0.6 0.015 255);
-  --line: oklch(0.3 0.02 255);
-  --line-strong: oklch(0.37 0.02 255);
-  --hover: oklch(0.97 0.008 85 / 0.06);
+  color-scheme: dark;
+  --background: oklch(0.2 0.018 255);
+  --foreground: oklch(0.95 0.008 85);
+  --card: oklch(0.228 0.02 255);
+  --popover: oklch(0.24 0.02 255 / 0.94);
+  --primary: oklch(0.95 0.008 85);
+  --primary-foreground: oklch(0.2 0.018 255);
+  --secondary: oklch(0.97 0.008 85 / 0.05);
+  --muted: oklch(0.97 0.008 85 / 0.05);
+  --muted-foreground: oklch(0.75 0.015 255);
+  --accent: oklch(0.97 0.008 85 / 0.06);
+  --destructive: oklch(0.7 0.17 25);
+  /* Solid lines in the dark: alpha ones glow. */
+  --border: oklch(0.3 0.02 255);
+  --input: oklch(0.37 0.02 255);
+  --ring: oklch(0.8 0.08 228);
+  --ui-text: oklch(0.87 0.008 85);
+  --ui-text-dimmed: oklch(0.6 0.015 255);
+  --ui-warning: oklch(0.74 0.13 50);
+  --vh-text-warning: oklch(0.8 0.11 52);
+  --ui-info: oklch(0.8 0.08 228);
+  --vh-text-info: oklch(0.8 0.08 228);
+  --ui-success: oklch(0.76 0.12 155);
+  --vh-text-success: oklch(0.76 0.12 155);
+  --shadow-popover: 0 0 0 1px var(--input), 0 16px 40px -12px oklch(0.1 0.02 255 / 0.7);
+  --shadow-dialog: 0 0 0 1px var(--input), 0 24px 48px -12px oklch(0.1 0.02 255 / 0.8);
+  --overlay: oklch(0.1 0.02 255 / 0.5);
   --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 .96  .11 0 0 0 -.04'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  --ice: oklch(0.8 0.08 228);
   --ice-tint: oklch(0.8 0.08 228 / 0.14);
-  --on-ice: oklch(0.2 0.018 255);
-  --warm: oklch(0.74 0.13 50);
-  --warm-ink: oklch(0.8 0.11 52);
   --warm-tint: oklch(0.74 0.13 50 / 0.12);
-  --good: oklch(0.76 0.12 155);
-  --pop: 0 0 0 1px var(--line-strong), 0 16px 40px -12px oklch(0.1 0.02 255 / 0.7);
-  --side-shadow: -12px 0 30px -18px oklch(0.1 0.02 255 / 0.8);
   --k-harness: oklch(0.42 0.015 255);
   --k-instr: oklch(0.72 0.11 155);
   --k-mcp: oklch(0.8 0.12 80);
@@ -97,5 +133,4 @@
   --k-used: oklch(0.72 0.1 240);
   --k-dead: oklch(0.74 0.13 50);
   --on-k: oklch(0.2 0.018 255);
-  color-scheme: dark;
 }

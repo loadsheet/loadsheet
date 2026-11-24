@@ -77,20 +77,19 @@ const minSessions = computed(() => report.value.config.rules["dead-skill"].minSe
           </ul>
           <div v-if="segFixes.length" class="fixbox">
             <p>{{ plural(segFixes.length, "fix", "fixes") }} here save {{ fmt(saves(segFixes)) }} tokens a session.</p>
-            <button class="btn sm" @click="copy(agentPrompt(segFixes), 'Prompt copied, paste it into your agent', 'seg')"><CopyIcon :done="copied.key === 'seg'" />Copy for your agent</button>
+            <button data-slot="button" data-variant="solid" data-size="sm" @click="copy(agentPrompt(segFixes), 'Prompt copied, paste it into your agent', 'seg')"><CopyIcon :done="copied.key === 'seg'" />Copy for your agent</button>
           </div>
         </div>
       </div>
     </template>
 
-    <div v-else class="card empty">
-      <div class="eyebrow">{{ name }}</div>
-      <h3>{{ h.sessions.value ? `Only ${plural(h.sessions.value, "session")} so far` : `No ${name} sessions in the last ${report.config.window} days` }}</h3>
-      <p>
+    <div v-else data-slot="vh-empty" data-variant="outline">
+      <h3 data-slot="vh-empty-title">{{ h.sessions.value ? `Only ${plural(h.sessions.value, "session")} so far` : `No ${name} sessions in the last ${report.config.window} days` }}</h3>
+      <p data-slot="vh-empty-description">
         loadsheet found {{ name }} installed, but {{ h.sessions.value ? `it needs ${minSessions} sessions to judge what ${name} loads` : "there is nothing to price until you use it" }}.
         <template v-if="skipped.length"> {{ plural(skipped.length, "rule") }} didn't run here; Fixes says why.</template>
       </p>
-      <button class="btn secondary sm" @click="h.set(h.all.value[0]!.id)">Show {{ harnessName(h.all.value[0]!.id) }}</button>
+      <div data-slot="vh-empty-actions"><button data-slot="button" data-size="sm" @click="h.set(h.all.value[0]!.id)">Show {{ harnessName(h.all.value[0]!.id) }}</button></div>
     </div>
   </main>
 </template>
@@ -98,34 +97,34 @@ const minSessions = computed(() => report.value.config.rules["dead-skill"].minSe
 <style scoped>
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .stat { padding: 12px 14px; }
-.stat .k { color: var(--muted); font: 500 0.75rem var(--sans); }
-.stat .v { margin-top: 4px; font: 500 1.375rem/1.1 var(--mono); font-variant-numeric: tabular-nums; }
-.stat .s { margin-top: 4px; color: var(--muted); font-size: 0.75rem; }
+.stat .k { color: var(--muted-foreground); font: 500 0.75rem var(--font-sans); }
+.stat .v { margin-top: 4px; font: 500 1.375rem/1.1 var(--font-mono); font-variant-numeric: tabular-nums; }
+.stat .s { margin-top: 4px; color: var(--muted-foreground); font-size: 0.75rem; }
 .stat.warm .v { color: var(--warm-ink); }
 .card-h .legend { font-size: 0.75rem; gap: 4px 12px; justify-content: end; }
 .split { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .rows { width: 100%; border-collapse: collapse; font-size: 0.875rem; font-variant-numeric: tabular-nums; }
-.rows th { padding: 0 10px 8px 0; color: var(--muted); font: 500 0.75rem var(--sans); text-align: start; white-space: nowrap; }
-.rows td { padding: 9px 10px 9px 0; border-top: 1px solid var(--line); vertical-align: middle; }
+.rows th { padding: 0 10px 8px 0; color: var(--muted-foreground); font: 500 0.75rem var(--font-sans); text-align: start; white-space: nowrap; }
+.rows td { padding: 9px 10px 9px 0; border-top: 1px solid var(--border); vertical-align: middle; }
 .rows td:first-child { padding-left: 10px; }
 .rows .r { text-align: end; }
-.rows td.r { font-family: var(--mono); font-size: 0.8125rem; }
+.rows td.r { font-family: var(--font-mono); font-size: 0.8125rem; }
 .rows tbody tr { cursor: pointer; }
-@media (hover: hover) and (pointer: fine) { .rows tbody tr:hover td { background: var(--hover); } }
-.rows tr[data-on] td { background: var(--paper-2); }
+@media (hover: hover) and (pointer: fine) { .rows tbody tr:hover td { background: var(--accent); } }
+.rows tr[data-on] td { background: var(--muted); }
 .rows tr[data-on] td:first-child { box-shadow: inset 2px 0 var(--ice); }
 .kind { display: inline-flex; align-items: center; gap: 9px; }
-.share { height: 6px; border-radius: 3px; background: var(--paper-2); overflow: hidden; }
+.share { height: 6px; border-radius: 3px; background: var(--muted); overflow: hidden; }
 .share i { display: block; height: 100%; border-radius: 3px; }
 .peek { display: grid; gap: 14px; }
 .peek h3 { margin-top: 2px; font-size: 1rem; line-height: 1.3; }
-.peek .what { color: var(--muted); font-size: 0.875rem; }
+.peek .what { color: var(--muted-foreground); font-size: 0.875rem; }
 .items { display: grid; max-height: 300px; overflow: auto; }
-.items li { display: grid; grid-template-columns: 1fr auto 3.5em; gap: 12px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); font-size: 0.875rem; }
+.items li { display: grid; grid-template-columns: 1fr auto 3.5em; gap: 12px; align-items: center; padding: 7px 0; border-top: 1px solid var(--border); font-size: 0.875rem; }
 .items li:first-child { border-top: 0; }
-.items .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 0.8125rem var(--mono); }
-.items .n { color: var(--muted); font: 0.75rem var(--mono); font-variant-numeric: tabular-nums; text-align: end; }
-.fixbox { display: grid; justify-items: start; gap: 10px; padding: 12px; border: 1px solid color-mix(in oklch, var(--warm) 25%, var(--line)); border-radius: var(--r-md); background: var(--warm-tint); }
+.items .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 0.8125rem var(--font-mono); }
+.items .n { color: var(--muted-foreground); font: 0.75rem var(--font-mono); font-variant-numeric: tabular-nums; text-align: end; }
+.fixbox { display: grid; justify-items: start; gap: 10px; padding: 12px; border: 1px solid color-mix(in oklch, var(--warm) 25%, var(--border)); border-radius: var(--r-md); background: var(--warm-tint); }
 .fixbox p { color: var(--warm-ink); font-size: 0.8125rem; font-weight: 500; }
 @media (max-width: 960px) {
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }

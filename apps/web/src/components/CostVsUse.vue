@@ -65,8 +65,8 @@ function tipFor(e: MouseEvent, l: Line) {
       <slot name="top" />
       <svg :viewBox="`0 0 ${W} ${H}`" role="img" aria-label="Each skill's cost per session against the times it was used" @mouseleave="hideTip">
         <rect :x="xMid" :y="yMid" :width="W - m.r - xMid" :height="H - m.b - yMid + 10" rx="10" fill="var(--warm-tint)" />
-        <line :x1="xMid" :x2="xMid" :y1="m.t" :y2="H - m.b" stroke="var(--line-strong)" stroke-dasharray="3 4" />
-        <line :x1="m.l" :x2="W - m.r" :y1="yMid" :y2="yMid" stroke="var(--line-strong)" stroke-dasharray="3 4" />
+        <line :x1="xMid" :x2="xMid" :y1="m.t" :y2="H - m.b" stroke="var(--input)" stroke-dasharray="3 4" />
+        <line :x1="m.l" :x2="W - m.r" :y1="yMid" :y2="yMid" stroke="var(--input)" stroke-dasharray="3 4" />
         <text class="quad" :x="m.l + 12" :y="m.t + 14">Cheap · used</text>
         <text class="quad" :x="W - m.r - 12" :y="m.t + 14" text-anchor="end">Expensive · used · shorten it</text>
         <text class="quad warm" :x="W - m.r - 12" :y="H - m.b - 12" text-anchor="end">Never used · remove</text>
@@ -106,7 +106,7 @@ function tipFor(e: MouseEvent, l: Line) {
           <label><input type="checkbox" :checked="picked.has(l.item)" @change="pick(l.item, ($event.target as HTMLInputElement).checked)" />{{ l.ref.name }}<span class="n">{{ fmt(l.tokens.value) }}</span></label>
         </li>
       </ol>
-      <button class="btn" :disabled="!chosen.length" @click="copy(prompt, 'Prompt copied, paste it into your agent', 'chosen')">
+      <button data-slot="button" data-variant="solid" :disabled="!chosen.length" :data-disabled="!chosen.length || undefined" @click="copy(prompt, 'Prompt copied, paste it into your agent', 'chosen')">
         <CopyIcon :done="copied.key === 'chosen'" />Copy {{ chosen.length }} for your agent · saves {{ fmt(chosen.reduce((n, l) => n + perSession(l), 0)) }}
       </button>
     </aside>
@@ -115,24 +115,24 @@ function tipFor(e: MouseEvent, l: Line) {
 
 <style scoped>
 .body3 { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; padding: 16px 20px 28px; }
-.plot { display: grid; align-content: start; gap: 8px; padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+.plot { display: grid; align-content: start; gap: 8px; padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--card); }
 .plot svg { width: 100%; height: auto; max-height: calc(100dvh - 200px); }
 .pt { cursor: pointer; transition: r 0.12s var(--ease); }
-.quad { font: 500 11px var(--mono); fill: var(--faint); }
+.quad { font: 500 11px var(--font-mono); fill: var(--faint); }
 .quad.warm { fill: var(--warm-ink); }
-.ax { font: 12px var(--sans); fill: var(--faint); font-variant-numeric: tabular-nums; }
-.axl { font: 500 13px var(--sans); fill: var(--muted); }
-.lbl { font: 500 11.5px var(--sans); fill: var(--muted); }
+.ax { font: 12px var(--font-sans); fill: var(--faint); font-variant-numeric: tabular-nums; }
+.axl { font: 500 13px var(--font-sans); fill: var(--muted-foreground); }
+.lbl { font: 500 11.5px var(--font-sans); fill: var(--muted-foreground); }
 .legend { padding-left: 64px; }
 .dot.round { border-radius: 50%; }
-.qlist { position: sticky; top: calc(var(--bar) + 16px); display: flex; flex-direction: column; gap: 14px; max-height: calc(100dvh - var(--bar) - 32px); padding: 16px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
-.qlist .v { margin-top: 4px; font: 500 1.625rem/1.1 var(--mono); color: var(--warm-ink); font-variant-numeric: tabular-nums; }
+.qlist { position: sticky; top: calc(var(--bar) + 16px); display: flex; flex-direction: column; gap: 14px; max-height: calc(100dvh - var(--bar) - 32px); padding: 16px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--card); }
+.qlist .v { margin-top: 4px; font: 500 1.625rem/1.1 var(--font-mono); color: var(--warm-ink); font-variant-numeric: tabular-nums; }
 .qlist ol { flex: 0 1 auto; min-height: 0; margin-inline: -8px; overflow: auto; }
 .qlist li label { display: flex; align-items: center; gap: 10px; min-height: 32px; padding: 0 8px; border-radius: var(--r-sm); font-size: 0.875rem; cursor: pointer; }
-.qlist li[data-on] label { background: var(--paper-2); }
+.qlist li[data-on] label { background: var(--muted); }
 .qlist li input { margin: 0; accent-color: var(--ice); }
-.qlist li .n { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
-.qlist .btn:disabled { opacity: 0.5; cursor: default; }
+.qlist li .n { margin-left: auto; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.qlist [data-slot="button"][data-disabled] { pointer-events: none; }
 @media (max-width: 960px) {
   .body3 { grid-template-columns: 1fr; }
   .body3 { padding: 14px 12px 24px; }

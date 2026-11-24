@@ -1,14 +1,8 @@
+import { toast } from "@ui-sdk/vue/toast";
 import { reactive } from "vue";
 
-/** One toast and one tooltip for the whole app. */
-export const toast = reactive({ text: "", on: false });
-let timer: ReturnType<typeof setTimeout> | undefined;
-export function say(text: string) {
-  toast.text = text;
-  toast.on = true;
-  clearTimeout(timer);
-  timer = setTimeout(() => (toast.on = false), 1600);
-}
+/** Copy confirmations are short, so their toast is too. */
+export const say = (text: string) => toast(text, { duration: 1800 });
 /** The key of whatever was copied last, for 1.5s, so its button can show a check. */
 export const copied = reactive({ key: "" });
 let copiedTimer: ReturnType<typeof setTimeout> | undefined;

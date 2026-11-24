@@ -120,19 +120,19 @@ const open = (n: Node) => n.kids && path.value.push(n.name);
 </template>
 
 <style scoped>
-.mapcol { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
-.crumbs { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 16px; border-bottom: 1px solid var(--line); color: var(--muted); font: 0.75rem var(--mono); }
+.mapcol { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--card); }
+.crumbs { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 16px; border-bottom: 1px solid var(--border); color: var(--muted-foreground); font: 0.75rem var(--font-mono); }
 .crumbs button { padding: 2px 4px; border: 0; border-radius: 4px; background: none; color: var(--ice); font: inherit; cursor: pointer; }
-.crumbs button:last-of-type { color: var(--ink); }
+.crumbs button:last-of-type { color: var(--foreground); }
 .crumbs .total { margin-left: auto; }
 .tm { position: relative; height: max(420px, calc(100dvh - var(--bar) - 100px)); margin: 10px; }
 .n { position: absolute; display: flex; flex-direction: column; align-items: start; overflow: hidden; padding: 6px 7px; border: 0; border-radius: 3px; color: var(--on-k); font-size: 0.75rem; line-height: 1.25; text-align: start; box-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.12); transition: filter 0.12s var(--ease); }
 button.n { cursor: pointer; }
-.n.lt { color: var(--ink); }
-.n:hover { filter: brightness(1.08); box-shadow: inset 0 0 0 2px var(--ink); }
-.t { max-width: 100%; overflow: hidden; font-family: var(--mono); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-.kk { opacity: 0.85; font-family: var(--mono); font-size: 0.6875rem; font-variant-numeric: tabular-nums; }
-.selbox { padding: 10px 12px; border-radius: var(--r-md); background: var(--paper-2); }
-.selbox .nm { margin-top: 2px; font: 500 0.9375rem/1.3 var(--mono); overflow-wrap: anywhere; }
-.selbox .k { margin-top: 2px; color: var(--muted); font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+.n.lt { color: var(--foreground); }
+.n:hover { filter: brightness(1.08); box-shadow: inset 0 0 0 2px var(--foreground); }
+.t { max-width: 100%; overflow: hidden; font-family: var(--font-mono); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.kk { opacity: 0.85; font-family: var(--font-mono); font-size: 0.6875rem; font-variant-numeric: tabular-nums; }
+.selbox { padding: 10px 12px; border-radius: var(--r-md); background: var(--muted); }
+.selbox .nm { margin-top: 2px; font: 500 0.9375rem/1.3 var(--font-mono); overflow-wrap: anywhere; }
+.selbox .k { margin-top: 2px; color: var(--muted-foreground); font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
 </style>
