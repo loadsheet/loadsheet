@@ -63,7 +63,7 @@ export const runRules = ({ mode, sheets, config, unfiltered = NOTHING_UNFILTERED
       const missing = needs.filter((signal) => sheet.signals[signal] === "none");
       if (missing.length) {
         skipped.push({ rule: id, harness: sheet.harness, reason: "missing-signal", missing });
-      } else if (rule?.enough && !rule.enough(sheet, options)) {
+      } else if (rule?.enough && !rule.enough(sheet, options, config)) {
         skipped.push({ rule: id, harness: sheet.harness, reason: "not-enough-data" });
       } else ready.push(sheet);
     }

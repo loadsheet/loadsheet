@@ -1,6 +1,7 @@
 import {
   parseReport,
   resolveConfig,
+  RULES,
   type Cell,
   type Config,
   type Coverage,
@@ -128,11 +129,7 @@ const report = (scans: Scan[], config: Config = {}) => {
 
 /** Only the rule under test runs, so its findings and skips are all that is left. */
 const only = (rule: string): Config => ({
-  rules: Object.fromEntries(
-    ["invisible-skill", "dead-skill", "manual-only", "expensive-description"]
-      .filter((id) => id !== rule)
-      .map((id) => [id, false]),
-  ),
+  rules: Object.fromEntries(RULES.filter((id) => id !== rule).map((id) => [id, false])),
 });
 
 const findingsOf = (scans: Scan[], rule: string, config: Config = {}) => {
@@ -551,6 +548,314 @@ describe("expensive-description", () => {
     expect(findings[0]!.fixes).toEqual([
       { machine: "laptop", action: "shorten", path: "~/.claude/skills/never/SKILL.md" },
     ]);
+  });
+});
+
+/** An instruction file of `chars` characters. */
+const instructions = (name: string, chars: number, extra: Partial<Item> = {}): Item => ({
+  ...skill(name, { path: `~/.claude/${name}` }),
+  id: `instructions:${name}`,
+  ref: { kind: "instructions", name },
+  chars: { listed: chars, body: 0 },
+  ...extra,
+});
+
+/** An MCP server; its listing is measured from the sessions that listed it. */
+const server = (name: string, extra: Partial<Item> = {}): Item => ({
+  ...skill(name, { path: "~/.claude.json" }),
+  id: `mcp:${name}`,
+  ref: { kind: "mcp", name },
+  chars: { listed: 0, body: 0 },
+  ...extra,
+});
+
+const serverCell = (name: string, listed: number, extra: Partial<Omit<Cell, "item">> = {}) => ({
+  ...cell(name, listed, { chars: listed * 200, ...extra }),
+  item: `mcp:${name}`,
+});
+
+describe("heavy-instructions", () => {
+  it.each([
+    ["fires past maxChars", 12001, ["instructions:CLAUDE.md"]],
+    ["holds at maxChars", 12000, []],
+  ])("%s", (_, chars, expected) => {
+    const result = findingsOf(
+      [
+        scan("laptop", {
+          items: [instructions("CLAUDE.md", chars)],
+          cells: [{ ...cell("x", 30, { chars: 30 * chars }), item: "instructions:CLAUDE.md" }],
+        }),
+      ],
+      "heavy-instructions",
+    );
+    expect(result.items).toEqual(expected);
+    expect(result.skipped).toEqual([]);
+  });
+
+  it("names the size, the limit and the sessions that loaded it, with no fix", () => {
+    const { findings } = findingsOf(
+      [
+        scan("laptop", {
+          items: [instructions("CLAUDE.md", 20000), instructions("rules/short.md", 400)],
+          cells: [{ ...cell("x", 30, { chars: 600000 }), item: "instructions:CLAUDE.md" }],
+        }),
+        scan("server", { items: [instructions("CLAUDE.md", 900)] }),
+      ],
+      "heavy-instructions",
+    );
+    expect(findings).toEqual([
+      {
+        id: "heavy-instructions:instructions:CLAUDE.md",
+        rule: "heavy-instructions",
+        level: "info",
+        item: "instructions:CLAUDE.md",
+        where: [{ machine: "laptop", harness: "claude-code" }],
+        evidence: { chars: 20000, maxChars: 12000, sessions: 30 },
+        fixes: [],
+      },
+    ]);
+  });
+});
+
+describe("idle-mcp", () => {
+  it.each([
+    ["fires for a server listed and never called", [serverCell("docs", 25)], ["mcp:docs"]],
+    ["holds for a server called once", [serverCell("docs", 25, { byModel: 1 })], []],
+    ["holds below minSessions", [serverCell("docs", 19)], []],
+  ])("%s", (_, cells, expected) => {
+    const result = findingsOf([scan("laptop", { items: [server("docs")], cells })], "idle-mcp");
+    expect(result.items).toEqual(expected);
+    expect(result.skipped).toEqual([]);
+  });
+
+  it("evidences its sessions and what its listing costs, with no fix", () => {
+    const { findings } = findingsOf(
+      [scan("laptop", { items: [server("docs")], cells: [serverCell("docs", 25)] })],
+      "idle-mcp",
+    );
+    expect(findings).toEqual([
+      {
+        id: "idle-mcp:mcp:docs",
+        rule: "idle-mcp",
+        level: "info",
+        item: "mcp:docs",
+        where: [{ machine: "laptop", harness: "claude-code" }],
+        evidence: { sessions: 25, calls: 0 },
+        savesTokens: { value: 50, basis: "estimated" },
+        fixes: [],
+      },
+    ]);
+  });
+
+  it("skips a harness that cannot tell MCP use and one with fewer sessions than minSessions", () => {
+    const blind = scan("laptop", {
+      coverage: [coverage("laptop", "claude-code", { signals: { ...EXACT, mcp: "none" } })],
+      items: [server("docs")],
+      cells: [serverCell("docs", 25)],
+    });
+    expect(findingsOf([blind], "idle-mcp")).toMatchObject({
+      items: [],
+      skipped: [
+        { rule: "idle-mcp", harness: "claude-code", reason: "missing-signal", missing: ["mcp"] },
+      ],
+    });
+    const few = scan("laptop", { sessions: sessions(10), items: [server("docs")] });
+    expect(findingsOf([few], "idle-mcp").skipped).toEqual([
+      { rule: "idle-mcp", harness: "claude-code", reason: "not-enough-data" },
+    ]);
+  });
+});
+
+describe("harness-mismatch", () => {
+  const both = (codex: number, extra: Partial<Scan> = {}) =>
+    scan("laptop", {
+      coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
+      sessions: [...sessions(30), ...(codex ? sessions(codex, {}, "codex") : [])],
+      ...extra,
+    });
+  const agents = (name: string, extra: Partial<Item> = {}) =>
+    skill(name, { harnesses: ["codex"], path: `~/.agents/skills/${name}`, ...extra });
+
+  it.each([
+    ["fires for a skill only an unused harness loads", 0, [agents("pdf")], ["skill:pdf"]],
+    ["holds when that harness had a session", 1, [agents("pdf")], []],
+    [
+      "holds for a folder a used harness also loads",
+      0,
+      [agents("pdf", { harnesses: ["claude-code", "codex"] })],
+      [],
+    ],
+  ])("%s", (_, codex, items, expected) => {
+    const result = findingsOf([both(codex, { items })], "harness-mismatch");
+    expect(result.items).toEqual(expected);
+    expect(result.skipped).toEqual([]);
+  });
+
+  it("removes it through the dead skill's guard, on the machines where it is unused", () => {
+    const { findings } = findingsOf(
+      [both(0, { items: [agents("pdf")] }), scan("server", { items: [] })],
+      "harness-mismatch",
+    );
+    expect(findings).toEqual([
+      {
+        id: "harness-mismatch:skill:pdf",
+        rule: "harness-mismatch",
+        level: "fix",
+        item: "skill:pdf",
+        where: [{ machine: "laptop", harness: "codex" }],
+        evidence: { sessions: 0, minSessions: 1 },
+        savesTokens: { value: 30, basis: "estimated" },
+        fixes: [
+          {
+            machine: "laptop",
+            action: "remove",
+            path: "~/.agents/skills/pdf",
+            run: "rm -r ~/.agents/skills/pdf",
+          },
+        ],
+      },
+    ]);
+    // Claude Code uses a link to the same folder under its own path: hide it from Codex instead.
+    const linked = findingsOf(
+      [
+        both(0, {
+          items: [agents("pdf"), skill("pdf", { digest: agents("pdf").digest })],
+          cells: [cell("pdf", 30, { byModel: 2 })],
+        }),
+      ],
+      "harness-mismatch",
+    ).findings;
+    expect(linked.map((f) => f.fixes.map((fix) => fix.action))).toEqual([["hide-from-model"]]);
+  });
+
+  it("never judges a harness that cannot tell its sessions, on that machine or as a whole", () => {
+    const none = Object.fromEntries(Object.keys(EXACT).map((s) => [s, "none"])) as Record<
+      Signal,
+      Grade
+    >;
+    // Codex reads nothing here, so the sheet is skipped and the folder is not judged.
+    const blind = both(0, {
+      coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex", { signals: none })],
+      items: [agents("pdf")],
+    });
+    expect(findingsOf([blind], "harness-mismatch")).toMatchObject({
+      items: [],
+      skipped: [
+        {
+          rule: "harness-mismatch",
+          harness: "codex",
+          reason: "missing-signal",
+          missing: ["listing"],
+        },
+      ],
+    });
+    // Codex is not covered on the server, so its folder there is not judged either.
+    const server = scan("server", { items: [agents("pdf")] });
+    expect(
+      findingsOf([both(0, { items: [agents("pdf")] }), server], "harness-mismatch").findings,
+    ).toMatchObject([{ where: [{ machine: "laptop", harness: "codex" }] }]);
+  });
+});
+
+describe("drift", () => {
+  const copy = (digest: string) => skill("deploy", { digest: digest.repeat(64) });
+
+  it.each([
+    ["fires for one skill with two digests on two machines", "a", "b", ["skill:deploy"]],
+    ["holds when both machines hold the same copy", "a", "a", []],
+  ])("%s", (_, left, right, expected) => {
+    const result = findingsOf(
+      [scan("laptop", { items: [copy(left)] }), scan("server", { items: [copy(right)] })],
+      "drift",
+    );
+    expect(result.items).toEqual(expected);
+    expect(result.skipped).toEqual([]);
+  });
+
+  it("counts versions and machines, and has no fix", () => {
+    const { findings } = findingsOf(
+      [
+        scan("laptop", { items: [copy("a")] }),
+        scan("server", { items: [copy("b")] }),
+        scan("mini", { items: [copy("a")] }),
+      ],
+      "drift",
+    );
+    expect(findings).toEqual([
+      {
+        id: "drift:skill:deploy",
+        rule: "drift",
+        level: "fix",
+        item: "skill:deploy",
+        where: [
+          { machine: "laptop", harness: "claude-code" },
+          { machine: "mini", harness: "claude-code" },
+          { machine: "server", harness: "claude-code" },
+        ],
+        evidence: { variants: 2, machines: 3 },
+        fixes: [],
+      },
+    ]);
+  });
+
+  it("skips one machine, where two copies are a duplicate and not drift", () => {
+    const one = scan("laptop", {
+      items: [copy("a"), { ...copy("b"), path: "~/.claude/commands/deploy.md" }],
+    });
+    expect(findingsOf([one], "drift")).toMatchObject({
+      items: [],
+      skipped: [{ rule: "drift", harness: "claude-code", reason: "not-enough-data" }],
+    });
+  });
+});
+
+describe("short-history", () => {
+  const young = (extra: Partial<Scan> = {}) =>
+    scan("laptop", { sessions: sessions(30, { day: "2026-11-20" }), ...extra });
+
+  it.each([
+    ["fires for a harness with days of history", young(), ["claude-code"]],
+    ["holds with the whole window", scan("laptop"), []],
+    ["holds for a harness without sessions", scan("laptop", { sessions: [] }), []],
+  ])("%s", (_, built, expected) => {
+    const result = findingsOf([built], "short-history");
+    expect(result.findings.map((f) => f.where[0]?.harness)).toEqual(expected);
+    expect(result.skipped).toEqual([]);
+  });
+
+  it("is about the harness, has no fix, and judges a shorter window by its own length", () => {
+    const { findings } = findingsOf([young()], "short-history");
+    expect(findings).toEqual([
+      {
+        id: "short-history:claude-code",
+        rule: "short-history",
+        level: "info",
+        where: [{ machine: "laptop", harness: "claude-code" }],
+        evidence: { days: 5, sessions: 30, minDays: 30 },
+        fixes: [],
+      },
+    ]);
+    const week = scan("laptop", {
+      sessions: [...sessions(5, { day: "2026-11-18" }), ...sessions(5, { day: LAST })],
+    });
+    expect(findingsOf([week], "short-history", { window: 7 }).findings).toEqual([]);
+  });
+
+  it("skips a harness without listing", () => {
+    const blind = young({
+      coverage: [coverage("laptop", "claude-code", { signals: { ...EXACT, listing: "none" } })],
+    });
+    expect(findingsOf([blind], "short-history")).toMatchObject({
+      items: [],
+      skipped: [
+        {
+          rule: "short-history",
+          harness: "claude-code",
+          reason: "missing-signal",
+          missing: ["listing"],
+        },
+      ],
+    });
   });
 });
 

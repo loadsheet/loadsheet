@@ -120,7 +120,7 @@ describe("renderText on the fleet example", () => {
       "on laptop, server: remove ~/.claude/skills/sql-tuner  $ npx skills remove sql-tuner",
     );
     expect(text).toContain(
-      'on server: set ~/.config/fleetrc/manifest.toml  skills.deploy-preview.source = "laptop"',
+      "on laptop: hide-from-model ~/.claude/skills/release-checklist/SKILL.md\n      disable-model-invocation = true",
     );
   });
 
@@ -151,8 +151,12 @@ describe("renderText on the fleet example", () => {
     expect(text.slice(summary).split("\n").length).toBeLessThan(20);
   });
 
-  it("says why a finding has no fix", () => {
-    expect(text).toContain("No fix: this is for you to know; there is nothing to change.");
+  it("says why a finding has no fix, in the rule's own words", () => {
+    expect(text).toContain("No fix: its copies on laptop, server differ;");
+    expect(text).toContain("No fix: every session lists the server;");
+    expect(text).toContain(
+      "No fix: the harness kept too little history for the usage rules to judge.",
+    );
   });
 
   it("fits 100 columns", () => {
@@ -176,7 +180,9 @@ describe("renderText on the pack example", () => {
 
   it("prints its fix with no machine, and the rules a pack cannot run", () => {
     expect(text).toMatch(/\n {4}shorten skills\/dependency-audit\/SKILL\.md\n/u);
-    expect(text).toContain("Not run on a pack, which has no usage: invisible-skill, dead-skill,");
+    expect(text).toContain(
+      "Not run on a pack, which has no usage and no other machine: invisible-skill,",
+    );
   });
 });
 

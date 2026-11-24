@@ -251,23 +251,28 @@ const evidenceOf = (finding: Finding): string => {
       if (has("copies")) return `${num(e.copies!)} copies`;
       break;
     case "heavy-instructions":
-      if (has("chars", "sessions"))
-        return `${num(e.chars!)} characters, loaded in ${plural(e.sessions!, "session")}`;
+      if (has("chars", "maxChars")) {
+        const head = `${num(e.chars!)} characters, over ${num(e.maxChars!)}`;
+        return has("sessions") ? `${head}; loaded in ${plural(e.sessions!, "session")}` : head;
+      }
       break;
     case "idle-mcp":
       if (has("sessions"))
         return `in ${plural(e.sessions!, "session")}, ${e.calls ? `called ${times(e.calls)}` : "never called"}`;
       break;
     case "harness-mismatch":
-      if (has("sessions")) return `${plural(e.sessions!, "session")} in its harness`;
+      if (has("sessions"))
+        return `${plural(e.sessions!, "session")} in its harness on that machine`;
       break;
     case "drift":
       if (has("machines", "variants"))
         return `${num(e.variants!)} versions on ${num(e.machines!)} machines`;
       break;
     case "short-history":
-      if (has("days", "sessions"))
-        return `${plural(e.days!, "day")} of history, ${plural(e.sessions!, "session")}`;
+      if (has("days", "sessions")) {
+        const head = `${plural(e.days!, "day")} of history, ${plural(e.sessions!, "session")}`;
+        return has("minDays") ? `${head}; the usage rules want ${num(e.minDays!)}` : head;
+      }
       break;
   }
   return Object.entries(e)
@@ -317,9 +322,23 @@ const INSTALLER: Record<string, string> = { skills: "the skills CLI", fleetrc: "
 
 /** Why a finding has no fix, from what the Report holds about its line. */
 const noFixReason = (report: Report, finding: Finding): string => {
+  const harnesses = new Set(finding.where.map((where) => where.harness));
+  switch (finding.rule) {
+    case "drift": {
+      const machines = [...new Set(finding.where.map((where) => where.machine))].sort(compare);
+      return `its copies on ${machines.join(", ")} differ; bring them to one version with the tool that installed them.`;
+    }
+    case "short-history":
+      return harnesses.has("claude-code")
+        ? "Claude Code deletes transcripts older than its `cleanupPeriodDays` setting (default 30); to judge more history, raise it in settings.json, never lower it."
+        : "the harness kept too little history for the usage rules to judge.";
+    case "heavy-instructions":
+      return "every session that loads the file pays for all of it; trim what the agent does not need.";
+    case "idle-mcp":
+      return "every session lists the server; turn it off where you do not need it.";
+  }
   if (finding.level === "info") return "this is for you to know; there is nothing to change.";
   if (finding.item === undefined) return "loadsheet has no safe change to offer.";
-  const harnesses = new Set(finding.where.map((where) => where.harness));
   // Its line on a harness it was found on, else on any.
   const line = [...report.sheet]
     .sort((a, b) => Number(harnesses.has(b.harness)) - Number(harnesses.has(a.harness)))
@@ -480,9 +499,9 @@ const skippedBlock = (report: Report): string[] => {
     skip.reason === "not-enough-data"
       ? `${skip.harness}: too little data`
       : `${skip.harness}: no ${(skip.missing ?? []).join(", ") || "signal it needs"}`;
-  if (report.mode === "pack" && report.skipped.every((skip) => skip.reason === "missing-signal")) {
+  if (report.mode === "pack") {
     return wrapList(
-      "Not run on a pack, which has no usage:",
+      "Not run on a pack, which has no usage and no other machine:",
       [...new Set(report.skipped.map((skip) => skip.rule))],
       "  ",
     );

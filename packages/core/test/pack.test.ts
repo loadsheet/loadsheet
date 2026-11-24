@@ -121,6 +121,7 @@ describe("packReport", () => {
         reason: "missing-signal",
         missing: ["listing"],
       },
+      { rule: "drift", harness: "claude-code", reason: "not-enough-data" },
       {
         rule: "short-history",
         harness: "claude-code",
