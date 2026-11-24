@@ -354,8 +354,8 @@ describe("claudeTranscripts", () => {
       "project/CLAUDE.local.md",
     );
     expect(instructionName("/home/jo/work/app/pkg/CLAUDE.md", "Project")).toBe("project/CLAUDE.md");
-    expect(instructionName("/home/jo/work/app/.claude/rules/team/a.md", "Project")).toBe(
-      "project/rules/team/a.md",
+    expect(instructionName("/home/jo/work/app/.claude/rules/private-area/a.md", "Project")).toBe(
+      "project/rules/a.md",
     );
     expect(instructionName("/home/jo/CLAUDE.md", "Project")).toBe("project/CLAUDE.md");
     expect(instructionName("C:\\Users\\jo\\app\\CLAUDE.md", "Project")).toBe("project/CLAUDE.md");

@@ -66,9 +66,9 @@ const PROJECT = "project/";
 /**
  * An instruction file's name: `CLAUDE.md` and `rules/...` for the user's own, as the machine
  * inventory names them; `memory/MEMORY.md` for every project's auto memory; and for any project's
- * file, the home directory's included, `project/` and its file name, or `project/rules/...` for a
- * rule under `.claude/rules`. No folder gets in: every worktree would be an id of its own, and its
- * name is the user's.
+ * file, the home directory's included, `project/` and its file name, or `project/rules/` and its
+ * file name for a rule under `.claude/rules`. No folder gets in: every worktree would be an id of
+ * its own, and its name is the user's.
  */
 export const instructionName = (path: string, type: string): string | undefined => {
   const parts = path.replaceAll("\\", "/").split("/").filter(Boolean);
@@ -81,7 +81,7 @@ export const instructionName = (path: string, type: string): string | undefined 
   }
   const dot = parts.lastIndexOf(".claude");
   if (dot !== -1 && parts[dot + 1] === "rules" && dot + 2 < parts.length) {
-    return PROJECT + parts.slice(dot + 1).join("/");
+    return `${PROJECT}rules/${file}`;
   }
   return PROJECT + file;
 };
