@@ -1,4 +1,29 @@
+import type { RunResult } from "./fleet.ts";
 import { setCliName } from "./name.ts";
+
+export type { RunResult };
+
+/**
+ * Runs `argv` on every host of this machine's fleet, as `fleet run` does, and never on this machine:
+ * a host that turns out to be this machine is left out. The fleet is the one in the manifest
+ * fleetrc's config.json names, read as it was last fetched. Undefined when there is no config.json
+ * or its manifest names no host. Throws when config.json or the manifest does not read.
+ */
+export async function runOnFleet(
+  argv: readonly [string, ...string[]],
+  { timeoutMs }: { timeoutMs: number },
+): Promise<RunResult[] | undefined> {
+  const { loadManifest, readConfig } = await import("./manifest.ts");
+  const config = readConfig();
+  if (!config) return undefined;
+  const { root } = await loadManifest(config.manifest, { offline: true, readOnly: true });
+  // An empty entry names no host: ssh could not try it, and a Report has no name to list it under.
+  const fleet = root.fleet.filter((entry) => entry.trim() !== "");
+  if (fleet.length === 0) return undefined;
+  const { fleetRun, resolveFleet } = await import("./fleet.ts");
+  const { targets } = await resolveFleet(fleet, undefined, timeoutMs);
+  return fleetRun(targets, argv, timeoutMs, { here: "leave out" });
+}
 
 /**
  * Runs the fleetrc CLI on `argv`, the arguments after the program name, as `name`: the command the

@@ -122,6 +122,8 @@ const readTranscripts = async (
   options: { tool: string; cacheDir: string | false; concurrency: number },
 ): Promise<Tally[]> => {
   const format = machine.transcripts;
+  // An inventory-only harness: no transcripts to read, and no cache to open for it.
+  if (!format || !machine.roots) return [];
   const cache =
     options.cacheDir === false
       ? undefined
@@ -187,10 +189,12 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
     const machine = harness.machine;
     if (!machine) continue;
     const installed = await exists(machine.home(place));
-    const items = await machine.inventory(
-      await sourceFiles(machine.sources(place), place.home),
-      place,
-    );
+    // An inventory-only harness that is not installed claims nothing, though it would find
+    // skills in a folder it shares with others, such as `~/.agents/skills`.
+    const items =
+      installed || machine.transcripts
+        ? await machine.inventory(await sourceFiles(machine.sources(place), place.home), place)
+        : [];
     const tallies = await readTranscripts(machine, harness.id, place, sinceMs, {
       tool: options.tool,
       cacheDir,

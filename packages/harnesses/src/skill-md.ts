@@ -46,8 +46,10 @@ const list = (value: unknown) => {
   return items.length > 0 ? items : undefined;
 };
 
-/** Reads a SKILL.md-style file. Frontmatter that is missing or not valid YAML counts as empty. */
-export const readSkillMd = (source: string): SkillMd => {
+/** A Markdown file's frontmatter fields and the text after it. Frontmatter that is missing or not valid YAML counts as empty. */
+export const splitFrontmatter = (
+  source: string,
+): { data: Record<string, unknown>; body: string } => {
   const normalized = source.replace(/^﻿/u, "").replace(/\r\n?/gu, "\n");
   const match = FRONTMATTER.exec(normalized);
   const body = match ? normalized.slice(match[0].length) : normalized;
@@ -62,6 +64,12 @@ export const readSkillMd = (source: string): SkillMd => {
       // Unreadable frontmatter: the harness would not see its fields either.
     }
   }
+  return { data, body };
+};
+
+/** Reads a SKILL.md-style file. Frontmatter that is missing or not valid YAML counts as empty. */
+export const readSkillMd = (source: string): SkillMd => {
+  const { data, body } = splitFrontmatter(source);
   const skill: SkillMd = {
     disableModelInvocation: /^(?:true|yes|on|1)$/iu.test(
       text(data["disable-model-invocation"]) ?? "",

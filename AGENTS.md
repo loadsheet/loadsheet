@@ -6,22 +6,17 @@ loadsheet is a CLI (`npx loadsheet`) that reads coding agents' session transcrip
 
 Each package's dependencies in `package.json` are the layering. Keep imports inside its row.
 
-| Package                            | May import                   | Must not know                                                                |
-| ---------------------------------- | ---------------------------- | ---------------------------------------------------------------------------- |
-| `@loadsheet/schema`                | nothing at runtime           | anything else in the repo, Node                                              |
-| `@loadsheet/kit` (`.`)             | schema                       | rules or findings; `node:*`, `@loadsheet/kit/node`; it runs in the browser   |
-| `@loadsheet/kit/node` (`src/node`) | schema, kit's `.`, Node      | rules or findings                                                            |
-| `@loadsheet/harnesses`             | schema, kit's `.`, tinyaml   | rules; `node:*`, `@loadsheet/kit/node`: an adapter receives `Files` from kit |
-| `@loadsheet/core`                  | schema                       | kit, harnesses, `node:*`; it is isomorphic and runs in the browser           |
-| `loadsheet` (`packages/loadsheet`) | schema, kit, harnesses, core | nothing; it is the only place that parses argv                               |
-| `@loadsheet/fixtures` (private)    | Node                         | every other package; only tests and scripts import it, and it is not built   |
-
-Fleet is a separate CLI layer; it parses its own arguments independently of `loadsheet`.
-
-| Package                        | May import                            | Must not know                                                                              |
-| ------------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `@loadsheet/fleet`             | Node, and the dependencies it bundles | schema, kit, harnesses, core, `loadsheet`; the command name is passed to `run(argv, name)` |
-| `fleetrc` (`packages/fleetrc`) | `@loadsheet/fleet`                    | anything but `run`; it is the npm bin and must keep behaving as before                     |
+| Package                            | May import                            | Must not know                                                                                    |
+| ---------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `@loadsheet/schema`                | nothing at runtime                    | anything else in the repo, Node                                                                  |
+| `@loadsheet/kit` (`.`)             | schema                                | rules or findings; `node:*`, `@loadsheet/kit/node`; it runs in the browser                       |
+| `@loadsheet/kit/node` (`src/node`) | schema, kit's `.`, Node               | rules or findings                                                                                |
+| `@loadsheet/harnesses`             | schema, kit's `.`, tinyaml            | rules; `node:*`, `@loadsheet/kit/node`: an adapter receives `Files` from kit                     |
+| `@loadsheet/core`                  | schema                                | kit, harnesses, `node:*`; it is isomorphic and runs in the browser                               |
+| `loadsheet` (`packages/loadsheet`) | schema, kit, harnesses, core, fleet   | nothing; with fleet's own commands, the only place that parses argv                              |
+| `@loadsheet/fixtures` (private)    | Node                                  | every other package; only tests and scripts import it, and it is not built                       |
+| `@loadsheet/fleet`                 | Node, and the dependencies it bundles | schema, kit, harnesses, core, `loadsheet`; the name it runs under, which `run(argv, name)` takes |
+| `fleetrc` (`packages/fleetrc`)     | `@loadsheet/fleet`                    | anything but `run`; it is the bin npm `fleetrc` users run, and must keep behaving as before      |
 
 `vp lint` fails when `packages/core/src` or `packages/schema/src` imports a Node builtin, kit, harnesses or `loadsheet`, and when `packages/harnesses/src` or `packages/kit/src` outside `node/` imports a Node builtin or `@loadsheet/kit/node`.
 

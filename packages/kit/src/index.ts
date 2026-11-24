@@ -111,10 +111,13 @@ export interface MachineReader<State> {
    * which key an absolute path in a config file names; nothing of it goes into an Item.
    */
   inventory(files: Files, place?: Place): Promise<Item[]>;
-  /** The directories its session transcripts are under. */
-  roots(place: Place): string[];
-  /** How its transcript lines become Facts. */
-  readonly transcripts: TranscriptFormat<State>;
+  /**
+   * The directories its session transcripts are under; absent, with `transcripts`, for a harness
+   * loadsheet reads the inventory of only. Such a harness has no sessions in a Scan.
+   */
+  roots?(place: Place): string[];
+  /** How its transcript lines become Facts; absent, with `roots`, for an inventory-only harness. */
+  readonly transcripts?: TranscriptFormat<State>;
 }
 
 /** One coding agent loadsheet can read. */

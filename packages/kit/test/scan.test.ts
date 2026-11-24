@@ -375,6 +375,99 @@ describe("scanMachine", () => {
     expect(result.items).toEqual([]);
   });
 
+  it("reads no transcripts and writes no cache for a harness without them", async () => {
+    const home = await makeHome("inventory-only", SESSIONS);
+    const full = fake.machine!;
+    const inventoryOnly = defineHarness({
+      id: "fake",
+      signals: { ...fake.signals, listing: "none", modelUse: "none", userUse: "none" },
+      inventory: async () => [],
+      machine: {
+        home: (place) => full.home(place),
+        sources: (place) => full.sources(place),
+        inventory: (files, place) => full.inventory(files, place),
+      },
+    });
+    const result = await scanMachine({
+      harnesses: [inventoryOnly as Harness],
+      days: DAYS,
+      tool: "loadsheet@0.0.0-test",
+      machine: "test-machine",
+      now: NOW,
+      place: { home, env: {} },
+      cacheDir: NodePath.join(tmp, "cache"),
+    });
+    expect(parsed).toBe(0);
+    expect(parseScan(result).coverage).toEqual([
+      expect.objectContaining({ harness: "fake", installed: true, sessions: 0, versions: [] }),
+    ]);
+    expect([result.sessions, result.cells]).toEqual([[], []]);
+    expect(result.items.map((item) => item.id)).toEqual(["instructions:AGENTS.md", "skill:alpha"]);
+    await expect(NodeFSP.readdir(NodePath.join(tmp, "cache"))).rejects.toThrow();
+  });
+
+  it("reads no inventory for a harness without transcripts whose home is missing", async () => {
+    const home = await makeHome("not-installed", []);
+    const full = fake.machine!;
+    const absent = defineHarness({
+      id: "absent",
+      signals: fake.signals,
+      inventory: async () => [],
+      machine: {
+        home: (place) => `${place.home}/.absent`,
+        sources: (place) => full.sources(place),
+        inventory: (files, place) => full.inventory(files, place),
+      },
+    });
+    const result = await scanMachine({
+      harnesses: [absent as Harness],
+      days: DAYS,
+      tool: "loadsheet@0.0.0-test",
+      machine: "test-machine",
+      now: NOW,
+      place: { home, env: {} },
+      cacheDir: false,
+    });
+    expect(result.coverage).toEqual([
+      expect.objectContaining({ harness: "absent", installed: false, sessions: 0 }),
+    ]);
+    expect(result.items).toEqual([]);
+  });
+
+  it("keeps the fields of the harness listed first when a later one reports the same item", async () => {
+    const home = await makeHome("two-harnesses", []);
+    const full = fake.machine!;
+    const later = defineHarness({
+      id: "later",
+      signals: fake.signals,
+      inventory: async () => [],
+      machine: {
+        home: (place) => full.home(place),
+        sources: (place) => full.sources(place),
+        inventory: async (files, place) =>
+          (await full.inventory(files, place)).map((item) => ({
+            ...item,
+            harnesses: ["later"],
+            chars: { listed: 1, body: 1 },
+            modelInvocable: false,
+          })),
+      },
+    });
+    const result = await scanMachine({
+      harnesses: [fake as Harness, later as Harness],
+      days: DAYS,
+      tool: "loadsheet@0.0.0-test",
+      machine: "test-machine",
+      now: NOW,
+      place: { home, env: {} },
+      cacheDir: false,
+    });
+    const alone = await cold(home);
+    expect(result.items).toEqual(
+      alone.items.map((item) => ({ ...item, harnesses: ["fake", "later"] })),
+    );
+  });
+
   it("merging the Scans of two sets of sessions equals the Scan of both", async () => {
     const first = SESSIONS.slice(0, 2);
     // The second half shares a day and entrypoint with the first, so the merge sums cells with
