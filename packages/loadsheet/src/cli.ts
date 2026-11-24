@@ -5,7 +5,7 @@ import { basename, isAbsolute, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { buildReport, packReport, renderText } from "@loadsheet/core";
 import { claudeCode, findHarness, harnesses } from "@loadsheet/harnesses";
-import type { Files, Harness } from "@loadsheet/kit";
+import type { Files } from "@loadsheet/kit";
 import { dirFiles, githubFiles, githubUrl, scanMachine } from "@loadsheet/kit/node";
 import { parseConfig, resolveConfig, RULES, type Config } from "@loadsheet/schema";
 import pkg from "../package.json" with { type: "json" };
@@ -167,16 +167,15 @@ const print = (report: Parameters<typeof renderText>[0]) =>
   process.stdout.write(values.json ? `${JSON.stringify(report, null, 2)}\n` : renderText(report));
 
 if (positionals.length === 0) {
-  const selected: Harness[] = [];
-  for (const id of config.harnesses ?? harnesses.map((h) => h.id)) {
-    const harness = findHarness(id);
-    if (!harness) fail(`Unknown harness ${id}`);
-    selected.push(harness as Harness);
+  for (const id of config.harnesses ?? []) {
+    if (!findHarness(id)) fail(`Unknown harness ${id}`);
   }
   let scan;
   try {
+    // Every harness is read, whatever --harness says: whether a path is safe to remove depends on
+    // every harness that loads it. The Report keeps only the wanted harnesses' sheets.
     scan = await scanMachine({
-      harnesses: selected,
+      harnesses,
       days: config.window,
       tool,
       ...(values["no-cache"] ? { cacheDir: false as const } : {}),

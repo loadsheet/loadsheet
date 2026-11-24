@@ -167,6 +167,51 @@ describe("loadsheet (this machine)", () => {
     }
   });
 
+  it("--harness still reads every harness, so a path a left-out harness uses gets no remove", () => {
+    // Claude Code's config directory is ~/.agents, so it and Codex both load ~/.agents/skills.
+    const shared = join(root, "shared");
+    mkdirSync(join(shared, ".agents", "projects", "p"), { recursive: true });
+    cpSync(
+      join(transcripts, "claude-code", "session.jsonl"),
+      join(shared, ".agents", "projects", "p", "session.jsonl"),
+    );
+    mkdirSync(join(shared, ".codex", "sessions", "2026", "11", "09"), { recursive: true });
+    cpSync(
+      join(transcripts, "codex", "session.jsonl"),
+      join(shared, ".codex", "sessions", "2026", "11", "09", "rollout-2026-11-09T10-00-00-s.jsonl"),
+    );
+    // Claude Code's model invokes skill-34 in its fixture; Codex lists it and never does.
+    mkdirSync(join(shared, ".agents", "skills", "skill-34"), { recursive: true });
+    writeFileSync(
+      join(shared, ".agents", "skills", "skill-34", "SKILL.md"),
+      `---\nname: skill-34\ndescription: Use when it comes up.\n---\n\n${CANARY} body.\n`,
+    );
+    const result = spawnSync(
+      process.execPath,
+      [
+        cli,
+        "--json",
+        "--no-cache",
+        "--harness",
+        "codex",
+        "--rule",
+        "dead-skill.minSessions=1",
+        "--rule",
+        "dead-skill.minDays=1",
+      ],
+      {
+        encoding: "utf8",
+        cwd: shared,
+        env: { ...env, HOME: shared, CLAUDE_CONFIG_DIR: join(shared, ".agents") },
+      },
+    );
+    expect(result.stderr).toBe("");
+    const report = parseReport(JSON.parse(result.stdout));
+    expect(report.coverage.map((row) => row.harness)).toEqual(["codex"]);
+    const finding = report.findings.find((f) => f.id === "dead-skill:skill:skill-34");
+    expect(finding?.fixes.map((fix) => fix.action)).toEqual(["hide-from-model"]);
+  });
+
   it("--rule turns a rule off and sets a threshold", () => {
     const report = parseReport(
       JSON.parse(
