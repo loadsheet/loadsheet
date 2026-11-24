@@ -6,6 +6,7 @@ import type {
   RuleId,
   Signal,
   Skipped,
+  Where,
 } from "@loadsheet/schema";
 import { RULES } from "@loadsheet/schema";
 import { pendingRules, rules } from "./rules/index.ts";
@@ -32,8 +33,8 @@ export interface RuleInput {
 /**
  * Runs every enabled rule once over the sheets that can answer it. A sheet whose harness grades a
  * needed signal none is skipped as missing-signal, one with too little history as not-enough-data;
- * a disabled rule, or one not written yet whose signals are all there, is left out. An item with a
- * cut finding keeps no fix-level finding.
+ * a disabled rule, or one not written yet whose signals are all there, is left out. A fix-level
+ * finding whose every machine and harness a cut finding for the same item holds for is dropped.
  */
 export const runRules = ({ mode, sheets, config }: RuleInput) => {
   const findings: Finding[] = [];
@@ -69,13 +70,19 @@ export const runRules = ({ mode, sheets, config }: RuleInput) => {
     if (!rule || !ready.length) continue;
     findings.push(...rule.run({ mode, sheets: ready, options, config, usedBy }));
   }
+  const place = (item: Id, { machine, harness }: Where) => JSON.stringify([item, machine, harness]);
   const cut = new Set(
-    findings.filter((finding) => finding.level === "cut").map((finding) => finding.item),
+    findings
+      .filter((finding) => finding.level === "cut" && finding.item !== undefined)
+      .flatMap((finding) => finding.where.map((where) => place(finding.item!, where))),
   );
+  // A fix-level finding goes only when a cut covers every place it holds for.
+  const covered = (finding: Finding) =>
+    finding.item !== undefined &&
+    finding.where.length > 0 &&
+    finding.where.every((where) => cut.has(place(finding.item!, where)));
   return {
-    findings: findings.filter(
-      (finding) => finding.level !== "fix" || finding.item === undefined || !cut.has(finding.item),
-    ),
+    findings: findings.filter((finding) => finding.level !== "fix" || !covered(finding)),
     skipped,
   };
 };

@@ -486,6 +486,30 @@ describe("fixes", () => {
     expect(findings.map((f) => f.id)).toEqual(["dead-skill:skill:idle"]);
   });
 
+  it("a cut finding keeps a fix-level finding where the cut does not reach", () => {
+    // Dead in Claude Code, used by hand only in Codex: the manual-only finding is Codex's alone.
+    const findings = report([
+      scan("laptop", {
+        coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
+        items: [
+          skill("idle", {
+            managedBy: "plugin",
+            scope: "plugin",
+            pack: "kit",
+            path: "~/.claude/plugins/cache/m/kit/1.0.0/skills/idle",
+          }),
+          skill("idle", { harnesses: ["codex"], path: "~/.agents/skills/idle" }),
+        ],
+        sessions: [sessions(30), sessions(30, {}, "codex")],
+        cells: [cell("idle", 25), cell("idle", 25, { harness: "codex", byUser: 3 })],
+      }),
+    ]).findings;
+    expect(findings.map((f) => [f.rule, f.where.map((w) => w.harness)])).toEqual([
+      ["dead-skill", ["claude-code"]],
+      ["manual-only", ["codex"]],
+    ]);
+  });
+
   it("an item installed nowhere gets a finding with no fixes", () => {
     const [finding] = dead([]);
     expect(finding).toMatchObject({ id: "dead-skill:skill:idle", fixes: [] });
