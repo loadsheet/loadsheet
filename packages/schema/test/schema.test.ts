@@ -107,6 +107,9 @@ describe("parsing", () => {
     "/home/ada/.claude/skills/x",
     "/Users/ada/.claude/skills/x",
     "/var/home/ada/.claude/skills/x",
+    "//home/ada/.claude/skills/x",
+    "/./home/ada/.claude/skills/x",
+    "/var//home/ada/.claude/skills/x",
     "/root/.codex/skills/x",
     "/root",
     "C:\\Users\\ada\\x",
@@ -203,10 +206,24 @@ describe("parsing", () => {
 
     report.findings[0] = { ...report.findings[0]!, id: "/root/private:x", rule: "/root/private" };
     expect(issuesOf(() => parseReport(report)).map((issue) => issue.path)).toEqual([
+      "$.findings[0].id",
       "$.findings[0].rule",
     ]);
     expect(validators.get("report.v1.json")!(report)).toBe(false);
   });
+
+  it.each(["dead-pack:/Users/ada/skills", "dead-skill:skill:C:\\Users\\ada\\x"])(
+    "rejects a home path in the finding id %s",
+    (id) => {
+      const report = fleet();
+      const rule = id.split(":")[0]!;
+      report.findings[0] = { ...report.findings[0]!, id, rule };
+      expect(validators.get("report.v1.json")!(report)).toBe(false);
+      expect(issuesOf(() => parseReport(report)).map((issue) => issue.path)).toEqual([
+        "$.findings[0].id",
+      ]);
+    },
+  );
 
   it.each(["2026-13-01", "2026-02-30", "26-11-01", "2026-11-01T00:00:00Z"])(
     "rejects the day %s",
@@ -241,6 +258,42 @@ describe("parsing", () => {
     expect(issuesOf(() => parseConfig({ rules: { "dead-skils": false } }))).toEqual([
       { path: '$.rules["dead-skils"]', message: 'unknown key "dead-skils"' },
     ]);
+  });
+
+  it("rejects a filter that is not an entrypoint or a harness id", () => {
+    expect(
+      issuesOf(() =>
+        parseConfig({
+          via: { include: ["/home/someone/private"], exclude: ["claude-vscode", "a/b"] },
+          harnesses: ["claude-code", "Claude Code"],
+          ignore: [
+            "mcp:@scope/server",
+            "skill:/home/someone/private",
+            "skill: /home/someone/private",
+            "skill:\t/Users/someone/private",
+          ],
+        }),
+      ).map((issue) => issue.path),
+    ).toEqual([
+      "$.harnesses[1]",
+      "$.via.include[0]",
+      "$.via.exclude[1]",
+      "$.ignore[1]",
+      "$.ignore[2]",
+      "$.ignore[3]",
+    ]);
+    expect(() =>
+      parseConfig({
+        via: { include: ["sdk-ts", "codex_vscode", "Codex Desktop"] },
+        ignore: [
+          "skill:my skill",
+          "skill:team/deploy",
+          "instructions:~/.codex/AGENTS.md",
+          "instructions:CLAUDE.md",
+          "instructions:home/notes.md",
+        ],
+      }),
+    ).not.toThrow();
   });
 
   it("rejects an unknown threshold and an unknown top-level key in a config", () => {
@@ -365,6 +418,26 @@ describe("examples/report.pack.example.json reads no machine", () => {
       expect(finding.where).toEqual([]);
       for (const fix of finding.fixes) expect(fix).not.toHaveProperty("machine");
     }
+  });
+
+  const fleetReport = fleet();
+  it.each([
+    ["machines", (pack: Report) => pack.machines.push(fleetReport.machines[0]!)],
+    ["coverage", (pack: Report) => pack.coverage.push(fleetReport.coverage[0]!)],
+    ["line machines", (pack: Report) => pack.sheet[0]!.lines[0]!.machines.push("desktop")],
+    [
+      "where",
+      (pack: Report) => pack.findings[0]!.where.push({ machine: "desktop", harness: "codex" }),
+    ],
+    [
+      "fix machine",
+      (pack: Report) => Object.assign(pack.findings[0]!.fixes[0]!, { machine: "desktop" }),
+    ],
+  ] as const)("rejects machine data in %s", (_, addMachine) => {
+    const pack = clone(report);
+    addMachine(pack);
+    expect(validators.get("report.v1.json")!(pack)).toBe(false);
+    expect(() => parseReport(pack)).toThrow(SchemaError);
   });
 });
 

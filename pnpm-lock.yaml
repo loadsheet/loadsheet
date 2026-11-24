@@ -200,6 +200,9 @@ catalogs:
     tar:
       specifier: ^7.5.22
       version: 7.5.23
+    tinyaml:
+      specifier: ^0.1.2
+      version: 0.1.2
     tsdown:
       specifier: ^0.23.7
       version: 0.23.7
@@ -245,6 +248,8 @@ importers:
         specifier: workspace:*
         version: link:../schema
 
+  packages/fixtures: {}
+
   packages/fleet:
     devDependencies:
       '@vite-hub/schedule':
@@ -283,12 +288,23 @@ importers:
       '@loadsheet/schema':
         specifier: workspace:*
         version: link:../schema
+      tinyaml:
+        specifier: 'catalog:'
+        version: 0.1.2
+    devDependencies:
+      '@loadsheet/fixtures':
+        specifier: workspace:*
+        version: link:../fixtures
 
   packages/kit:
     dependencies:
       '@loadsheet/schema':
         specifier: workspace:*
         version: link:../schema
+    devDependencies:
+      '@loadsheet/fixtures':
+        specifier: workspace:*
+        version: link:../fixtures
 
   packages/loadsheet:
     dependencies:
@@ -1821,6 +1837,22 @@ packages:
     resolution: {integrity: sha512-lkukzdoGngZHJZXxW4S/E4Fp9ghTDlyZXrQGRNoJ/LXvDKcXUTq2sg5yQe74po7Voea6n/IN09+wE/QvJMiifA==}
     engines: {node: '>=18'}
 
+  tinyaml@0.1.2:
+    resolution: {integrity: sha512-l+JA0Eey+lm+qMOcatBnfnUYnI6UtkiL+4HV0Ixk4jPiUu50q9I1/JAP7N6lUTCwNX9bq5bzoOQLqYHGKvtg8Q==}
+    engines: {node: '>=22.12.0'}
+    hasBin: true
+    peerDependencies:
+      eslint: '>=9.15.0'
+      vite-doctor: '>=0.1.1'
+      yaml-eslint-parser: '>=2.0.0'
+    peerDependenciesMeta:
+      eslint:
+        optional: true
+      vite-doctor:
+        optional: true
+      yaml-eslint-parser:
+        optional: true
+
   tinybench@6.2.4:
     resolution: {integrity: sha512-SQ52jEncXxbMCzJuY2A/jGIbbAu6NYsBWW7grz2pNE+EnzQdoGaoBfpk4qC/opE7qiUcGmGgaGIz5EoHdS1O9w==}
     engines: {node: '>=20.0.0'}
@@ -3020,6 +3052,8 @@ snapshots:
       minipass: 7.1.3
       minizlib: 3.1.0
       yallist: 5.0.0
+
+  tinyaml@0.1.2: {}
 
   tinybench@6.2.4: {}
 

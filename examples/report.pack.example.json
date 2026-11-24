@@ -68,6 +68,36 @@
       "sessions": 0,
       "lines": [
         {
+          "item": "skill:dependency-audit",
+          "ref": {
+            "kind": "skill",
+            "name": "dependency-audit"
+          },
+          "scope": "user",
+          "pack": "northwind-ai/agent-skills",
+          "managedBy": "skills",
+          "machines": [],
+          "path": "skills/dependency-audit",
+          "chars": {
+            "listed": 399,
+            "body": 5480
+          },
+          "tokens": {
+            "value": 100,
+            "basis": "estimated"
+          },
+          "exposure": {
+            "sessions": 0,
+            "share": 0,
+            "bare": 0
+          },
+          "use": {
+            "byModel": 0,
+            "byUser": 0
+          },
+          "description": "Lists outdated and vulnerable dependencies with the smallest safe upgrade for each, grouped by risk. Use when asked to audit, update or check dependencies; covers npm, pnpm, yarn, pip, poetry, cargo and go modules; explains breaking changes from changelogs; proposes a staged upgrade plan; and writes the commands to apply it, one package manager at a time, with rollback notes."
+        },
+        {
           "item": "skill:pr-description",
           "ref": {
             "kind": "skill",
@@ -79,7 +109,7 @@
           "machines": [],
           "path": "skills/pr-description",
           "chars": {
-            "listed": 143,
+            "listed": 144,
             "body": 1840
           },
           "tokens": {
@@ -109,11 +139,11 @@
           "machines": [],
           "path": "skills/flaky-test-hunter",
           "chars": {
-            "listed": 137,
+            "listed": 138,
             "body": 3120
           },
           "tokens": {
-            "value": 34,
+            "value": 35,
             "basis": "estimated"
           },
           "exposure": {
@@ -128,36 +158,6 @@
           "description": "Reruns a failing test in isolation, bisects recent commits and reports whether the failure is flaky or a regression."
         },
         {
-          "item": "skill:dependency-audit",
-          "ref": {
-            "kind": "skill",
-            "name": "dependency-audit"
-          },
-          "scope": "user",
-          "pack": "northwind-ai/agent-skills",
-          "managedBy": "skills",
-          "machines": [],
-          "path": "skills/dependency-audit",
-          "chars": {
-            "listed": 398,
-            "body": 5480
-          },
-          "tokens": {
-            "value": 100,
-            "basis": "estimated"
-          },
-          "exposure": {
-            "sessions": 0,
-            "share": 0,
-            "bare": 0
-          },
-          "use": {
-            "byModel": 0,
-            "byUser": 0
-          },
-          "description": "Lists outdated and vulnerable dependencies with the smallest safe upgrade for each, grouped by risk. Use when asked to audit, update or check dependencies; covers npm, pnpm, yarn, pip, poetry, cargo and go modules; explains breaking changes from changelogs; proposes a staged upgrade plan; and writes the commands to apply it, one package manager at a time, with rollback notes."
-        },
-        {
           "item": "skill:migration-writer",
           "ref": {
             "kind": "skill",
@@ -169,7 +169,7 @@
           "machines": [],
           "path": "skills/migration-writer",
           "chars": {
-            "listed": 120,
+            "listed": 121,
             "body": 2690
           },
           "tokens": {
@@ -199,7 +199,7 @@
           "machines": [],
           "path": "skills/perf-profile",
           "chars": {
-            "listed": 111,
+            "listed": 112,
             "body": 2210
           },
           "tokens": {
@@ -218,22 +218,22 @@
           "description": "Profiles a slow command or endpoint and explains where the time goes, with the top three fixes."
         },
         {
-          "item": "skill:readme-refresh",
+          "item": "skill:i18n-extract",
           "ref": {
             "kind": "skill",
-            "name": "readme-refresh"
+            "name": "i18n-extract"
           },
           "scope": "user",
           "pack": "northwind-ai/agent-skills",
           "managedBy": "skills",
           "machines": [],
-          "path": "skills/readme-refresh",
+          "path": "skills/i18n-extract",
           "chars": {
-            "listed": 99,
-            "body": 1530
+            "listed": 106,
+            "body": 2840
           },
           "tokens": {
-            "value": 25,
+            "value": 27,
             "basis": "estimated"
           },
           "exposure": {
@@ -245,7 +245,7 @@
             "byModel": 0,
             "byUser": 0
           },
-          "description": "Updates a README's install, usage and example sections to match the current code."
+          "description": "Finds hard-coded user-facing strings and moves them into the project's translation files."
         },
         {
           "item": "skill:error-explainer",
@@ -259,7 +259,7 @@
           "machines": [],
           "path": "skills/error-explainer",
           "chars": {
-            "listed": 103,
+            "listed": 104,
             "body": 1270
           },
           "tokens": {
@@ -278,22 +278,22 @@
           "description": "Explains a stack trace or error message and points to the line most likely at fault."
         },
         {
-          "item": "skill:i18n-extract",
+          "item": "skill:readme-refresh",
           "ref": {
             "kind": "skill",
-            "name": "i18n-extract"
+            "name": "readme-refresh"
           },
           "scope": "user",
           "pack": "northwind-ai/agent-skills",
           "managedBy": "skills",
           "machines": [],
-          "path": "skills/i18n-extract",
+          "path": "skills/readme-refresh",
           "chars": {
-            "listed": 105,
-            "body": 2840
+            "listed": 100,
+            "body": 1530
           },
           "tokens": {
-            "value": 26,
+            "value": 25,
             "basis": "estimated"
           },
           "exposure": {
@@ -305,37 +305,7 @@
             "byModel": 0,
             "byUser": 0
           },
-          "description": "Finds hard-coded user-facing strings and moves them into the project's translation files."
-        },
-        {
-          "item": "instructions:AGENTS.md",
-          "ref": {
-            "kind": "instructions",
-            "name": "AGENTS.md"
-          },
-          "scope": "user",
-          "pack": "northwind-ai/agent-skills",
-          "managedBy": "skills",
-          "machines": [],
-          "path": "AGENTS.md",
-          "chars": {
-            "listed": 2360,
-            "body": 0
-          },
-          "tokens": {
-            "value": 590,
-            "basis": "estimated"
-          },
-          "exposure": {
-            "sessions": 0,
-            "share": 0,
-            "bare": 0
-          },
-          "use": {
-            "byModel": 0,
-            "byUser": 0
-          },
-          "description": "Conventions every skill in the pack follows."
+          "description": "Updates a README's install, usage and example sections to match the current code."
         }
       ]
     }
@@ -348,10 +318,11 @@
       "item": "skill:dependency-audit",
       "where": [],
       "evidence": {
-        "listedChars": 398
+        "listedChars": 399,
+        "maxChars": 300
       },
       "savesTokens": {
-        "value": 24,
+        "value": 25,
         "basis": "estimated"
       },
       "fixes": [
@@ -379,13 +350,25 @@
       "rule": "manual-only",
       "harness": "claude-code",
       "reason": "missing-signal",
-      "missing": ["userUse"]
+      "missing": ["modelUse", "userUse"]
+    },
+    {
+      "rule": "dead-pack",
+      "harness": "claude-code",
+      "reason": "missing-signal",
+      "missing": ["listing", "modelUse", "userUse"]
     },
     {
       "rule": "idle-mcp",
       "harness": "claude-code",
       "reason": "missing-signal",
       "missing": ["mcp"]
+    },
+    {
+      "rule": "harness-mismatch",
+      "harness": "claude-code",
+      "reason": "missing-signal",
+      "missing": ["listing"]
     },
     {
       "rule": "short-history",

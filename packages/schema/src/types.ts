@@ -54,6 +54,8 @@ export interface Item {
   managedBy: ManagedBy;
   /** Its file or folder, relative to the home directory (`~/...`) or to the project. */
   path: string;
+  /** The paths of the other Items of this machine that removing this one would take or break, worked out on the machine's disk; absent when that is not known. */
+  reaches?: string[];
   /** The sha256 of its file content, as lowercase hex. */
   digest: string;
   /** Its size in characters: listed is paid by every session that lists or loads it, body only by a session that invokes it. */
@@ -283,7 +285,7 @@ export interface Line {
   pack?: string;
   /** What installed it; absent when it is no longer installed on any machine read. */
   managedBy?: ManagedBy;
-  /** Machines where it is installed or was seen. */
+  /** Machines where it is installed or was seen; empty in pack mode. */
   machines: string[];
   /** Its file or folder, relative to the home directory or the project; absent when it is no longer installed on any machine read. */
   path?: string;

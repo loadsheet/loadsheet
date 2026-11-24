@@ -19,6 +19,7 @@ catalog:
   smol-toml: 1.9.1
   tar: ^7.5.22
   tsdown: ^0.23.7
+  tinyaml: ^0.1.2
   tsrs: 0.20.1-ts7.1.0-beta
   typescript: ^7.0.2
   valibot: ^1.5.0

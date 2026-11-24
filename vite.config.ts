@@ -15,6 +15,18 @@ const isomorphicImports = {
   ],
 };
 
+// harnesses and kit's main entry run in the browser too; kit's Node readers live in `@loadsheet/kit/node`.
+const nodeMessage =
+  "harnesses and kit's main entry are isomorphic: no Node builtins or @loadsheet/kit/node.";
+const nodeFreeImports = {
+  paths: [...builtinModules, "@loadsheet/kit/node"].map((name) => ({ name, message: nodeMessage })),
+  patterns: [
+    { group: ["node:*"], message: nodeMessage },
+    // A relative path into kit's node folder gets past the names above.
+    { regex: "^\\.\\.?/(.*/)?node(/|$)", message: nodeMessage },
+  ],
+};
+
 export default defineConfig({
   run: {
     tasks: {
@@ -66,6 +78,14 @@ export default defineConfig({
       {
         files: ["packages/core/src/**", "packages/schema/src/**"],
         rules: { "no-restricted-imports": ["error", isomorphicImports] },
+      },
+      {
+        files: ["packages/harnesses/src/**", "packages/kit/src/**"],
+        rules: { "no-restricted-imports": ["error", nodeFreeImports] },
+      },
+      {
+        files: ["packages/kit/src/node/**"],
+        rules: { "no-restricted-imports": "off" },
       },
     ],
   },
