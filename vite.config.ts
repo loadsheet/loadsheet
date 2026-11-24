@@ -2,16 +2,16 @@ import { builtinModules } from "node:module";
 import { defineConfig } from "vite-plus";
 
 // schema and core run in the browser too, so they import no Node builtin and none of the Node-side packages.
+const message = "schema and core are isomorphic: no Node builtins, kit, harnesses or loadsheet.";
 const isomorphicImports = {
   paths: [...builtinModules, "@loadsheet/kit", "@loadsheet/harnesses", "loadsheet"].map((name) => ({
     name,
-    message: "schema and core are isomorphic: no Node builtins, kit, harnesses or loadsheet.",
+    message,
   })),
   patterns: [
-    {
-      group: ["node:*", "@loadsheet/kit/*", "@loadsheet/harnesses/*", "loadsheet/*"],
-      message: "schema and core are isomorphic: no Node builtins, kit, harnesses or loadsheet.",
-    },
+    { group: ["node:*", "@loadsheet/kit/*", "@loadsheet/harnesses/*", "loadsheet/*"], message },
+    // A relative path into a sibling package gets past the names above.
+    { regex: "\\.\\./(.*/)?(kit|harnesses|loadsheet)/src/", message },
   ],
 };
 
