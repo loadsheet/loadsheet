@@ -96,6 +96,25 @@ const unfilteredOf = (
   };
 };
 
+/** A coverage row whose sessions and days count only the sessions the report kept. */
+const keptCoverage = (
+  row: Coverage,
+  scan: Scan,
+  keep: (cell: { day: Day; via: string }) => boolean,
+): Coverage => {
+  const kept: Coverage = { ...row, sessions: 0 };
+  delete kept.firstDay;
+  delete kept.lastDay;
+  for (const cell of scan.sessions) {
+    if (cell.harness !== row.harness || !keep(cell)) continue;
+    kept.sessions += cell.sessions;
+    if (cell.sessions === 0) continue;
+    if (!kept.firstDay || cell.day < kept.firstDay) kept.firstDay = cell.day;
+    if (!kept.lastDay || cell.day > kept.lastDay) kept.lastDay = cell.day;
+  }
+  return kept;
+};
+
 /** One harness's sheet and what its rules see behind it. */
 const buildSheet = (
   harness: string,
@@ -288,7 +307,11 @@ export const buildReport = ({
     window: scans.length ? [first, last] : [today, today],
     config,
     coverage: scans
-      .flatMap((scan) => scan.coverage)
+      .flatMap((scan) =>
+        scan.coverage
+          .filter((row) => !wanted || wanted.has(row.harness))
+          .map((row) => keptCoverage(row, scan, keep)),
+      )
       .sort((a, b) => compare(a.machine, b.machine) || compare(a.harness, b.harness)),
     sheet: built.map(({ sheet }) => sheet),
     findings,

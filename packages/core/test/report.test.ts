@@ -1128,6 +1128,34 @@ describe("buildReport", () => {
     ]);
   });
 
+  it("counts coverage from the sessions the report kept, for the harnesses it is about", () => {
+    const both = scan("laptop", {
+      coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
+      sessions: [
+        ...sessions(10, { day: "2026-10-01" }),
+        ...sessions(20, { day: "2026-11-20" }),
+        ...sessions(5, { day: "2026-11-22", via: "app" }),
+        ...sessions(5, {}, "codex"),
+      ],
+    });
+    const rows = (config: Config) =>
+      report([both], config).coverage.map(({ harness, sessions, firstDay, lastDay }) => ({
+        harness,
+        sessions,
+        firstDay,
+        lastDay,
+      }));
+    expect(rows({ window: 30, via: { include: ["cli"] }, harnesses: ["claude-code"] })).toEqual([
+      { harness: "claude-code", sessions: 20, firstDay: "2026-11-20", lastDay: "2026-11-20" },
+    ]);
+    // A harness with no session kept has no first or last day.
+    expect(rows({ window: 1 })).toEqual([
+      { harness: "claude-code", sessions: 0, firstDay: undefined, lastDay: undefined },
+      { harness: "codex", sessions: 0, firstDay: undefined, lastDay: undefined },
+    ]);
+    expect(report([both], { window: 1 }).coverage[0]).not.toHaveProperty("firstDay");
+  });
+
   it("an ignored item keeps its line and gets no finding", () => {
     const built = report([scan("laptop", { items: [skill("idle")], cells: [cell("idle", 25)] })], {
       ignore: ["skill:idle"],
