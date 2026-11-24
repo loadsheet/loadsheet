@@ -49,6 +49,19 @@ const keyParts = (key: string): string[] => {
  * is skipped without being kept.
  */
 /**
+ * Where the multi-line string `triple` opened before `from` closes on `line`, or -1 when it runs on
+ * past the line. In a `"""` string a backslash escapes the next character; in a `'''` one nothing does.
+ */
+const closeOf = (line: string, triple: string, from = 0): number => {
+  if (triple === "'''") return line.indexOf(triple, from);
+  for (let at = from; at < line.length; at++) {
+    if (line[at] === "\\") at++;
+    else if (line.startsWith(triple, at)) return at;
+  }
+  return -1;
+};
+
+/**
  * The triple quote a line opens and does not close. Strings on the line are read past and a comment
  * ends it, so a quote inside either opens nothing.
  */
@@ -59,7 +72,7 @@ const leftOpen = (line: string): string | undefined => {
     if (quote !== '"' && quote !== "'") continue;
     const triple = quote.repeat(3);
     if (line.startsWith(triple, at)) {
-      const end = line.indexOf(triple, at + 3);
+      const end = closeOf(line, triple, at + 3);
       if (end === -1) return triple;
       at = end + 2;
       continue;
@@ -116,7 +129,7 @@ export const readTomlFlags = (source: string): Map<string, boolean | string[]> =
       continue;
     }
     if (multiline !== undefined) {
-      if (line.split(multiline).length % 2 === 0) multiline = undefined;
+      if (closeOf(line, multiline) !== -1) multiline = undefined;
       continue;
     }
     if (/^\s*#/u.test(line)) continue;
@@ -158,10 +171,13 @@ export const readCodexConfig = (source: string): CodexConfig => {
 
   for (const line of source.replace(/\r\n?/gu, "\n").split("\n")) {
     if (multiline !== undefined) {
-      if (line.split(multiline).length % 2 === 0) multiline = undefined;
+      if (closeOf(line, multiline) !== -1) multiline = undefined;
       continue;
     }
     if (/^\s*#/u.test(line)) continue;
+    // A string's text is never a header, a selector or a switch, so open strings are tracked first.
+    multiline = leftOpen(line);
+    if (multiline !== undefined) continue;
     const array = ARRAY_HEADER.exec(line);
     if (array) {
       const [root, key, ...rest] = keyParts(array[1]!);
@@ -181,8 +197,6 @@ export const readCodexConfig = (source: string): CodexConfig => {
         continue;
       }
     }
-    multiline = leftOpen(line);
-    if (multiline !== undefined) continue;
     const header = HEADER.exec(line);
     if (header) {
       table = keyParts(header[1]!);

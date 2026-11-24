@@ -12,6 +12,7 @@ import {
   readCodexConfig,
   type CodexState,
 } from "../src/index.ts";
+import { readTomlFlags } from "../src/codex-toml.ts";
 
 const FIXTURE = NodePath.join(import.meta.dirname, "fixtures/codex/session.jsonl");
 const machine = codex.machine;
@@ -821,6 +822,63 @@ describe("codex machine", () => {
       ["fourth", true],
       ["after", true],
     ]);
+  });
+
+  it("reads no header, selector or flag inside a multi-line string, escaped quotes included", () => {
+    const servers = (lines: string[]) => [...readCodexConfig(lines.join("\n")).mcpServers.keys()];
+    expect(
+      servers([
+        "[mcp_servers.harbor]",
+        "[mcp_servers.harbor.env]",
+        String.raw`TOKEN = """start \"""`,
+        "[mcp_servers.PRIVATE-ENV]",
+        '"""',
+      ]),
+    ).toEqual(["harbor"]);
+    expect(
+      servers([
+        "[mcp_servers.harbor]",
+        "[mcp_servers.harbor.env]",
+        'TOKEN = """',
+        String.raw`start \"""`,
+        "[mcp_servers.PRIVATE-ENV]",
+        '"""',
+      ]),
+    ).toEqual(["harbor"]);
+    // A backslash escapes nothing in a literal string, so `\'''` closes it.
+    expect(
+      servers(["[mcp_servers.harbor]", String.raw`note = '''start \'''`, "[mcp_servers.after]"]),
+    ).toEqual(["harbor", "after"]);
+    const config = readCodexConfig(
+      [
+        "[[skills.config]]",
+        'path = "/home/u/.agents/skills/kept/SKILL.md"',
+        'note = """',
+        "[mcp_servers.PRIVATE-NOTE]",
+        'name = "PRIVATE"',
+        "enabled = true",
+        '"""',
+        "enabled = false",
+      ].join("\n"),
+    );
+    expect([...config.mcpServers]).toEqual([]);
+    expect(config.skills).toEqual([
+      { path: "/home/u/.agents/skills/kept/SKILL.md", enabled: false },
+    ]);
+    const flags = readTomlFlags(
+      [
+        "[compat]",
+        String.raw`note = """start \"""`,
+        "PRIVATE = true",
+        '"""',
+        'other = """',
+        String.raw`still \"""`,
+        "SECRET = false",
+        '"""',
+        "kept = true",
+      ].join("\n"),
+    );
+    expect([...flags]).toEqual([["compat.kept", true]]);
   });
 
   it("reads a pack's skills with their descriptions, named after its Codex plugin", async () => {
