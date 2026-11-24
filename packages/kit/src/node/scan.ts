@@ -121,6 +121,8 @@ const readTranscripts = async (
   options: { tool: string; cacheDir: string | false; concurrency: number },
 ): Promise<Tally[]> => {
   const format = machine.transcripts;
+  // An inventory-only harness: no transcripts to read, and no cache to open for it.
+  if (!format || !machine.roots) return [];
   const cache =
     options.cacheDir === false
       ? undefined

@@ -361,6 +361,37 @@ describe("scanMachine", () => {
     expect(result.items).toEqual([]);
   });
 
+  it("reads no transcripts and writes no cache for a harness without them", async () => {
+    const home = await makeHome("inventory-only", SESSIONS);
+    const full = fake.machine!;
+    const inventoryOnly = defineHarness({
+      id: "fake",
+      signals: { ...fake.signals, listing: "none", modelUse: "none", userUse: "none" },
+      inventory: async () => [],
+      machine: {
+        home: (place) => full.home(place),
+        sources: (place) => full.sources(place),
+        inventory: (files, place) => full.inventory(files, place),
+      },
+    });
+    const result = await scanMachine({
+      harnesses: [inventoryOnly as Harness],
+      days: DAYS,
+      tool: "loadsheet@0.0.0-test",
+      machine: "test-machine",
+      now: NOW,
+      place: { home, env: {} },
+      cacheDir: NodePath.join(tmp, "cache"),
+    });
+    expect(parsed).toBe(0);
+    expect(parseScan(result).coverage).toEqual([
+      expect.objectContaining({ harness: "fake", installed: true, sessions: 0, versions: [] }),
+    ]);
+    expect([result.sessions, result.cells]).toEqual([[], []]);
+    expect(result.items.map((item) => item.id)).toEqual(["instructions:AGENTS.md", "skill:alpha"]);
+    await expect(NodeFSP.readdir(NodePath.join(tmp, "cache"))).rejects.toThrow();
+  });
+
   it("merging the Scans of two sets of sessions equals the Scan of both", async () => {
     const first = SESSIONS.slice(0, 2);
     // The second half shares a day and entrypoint with the first, so the merge sums cells with
