@@ -12,7 +12,7 @@ import {
   type Signal,
 } from "@loadsheet/schema";
 import { describe, expect, it } from "vite-plus/test";
-import { buildReport, type BuildReportInput } from "../src/index.ts";
+import { buildReport, renderText, type BuildReportInput } from "../src/index.ts";
 
 const EXACT: Record<Signal, Grade> = {
   listing: "exact",
@@ -674,6 +674,27 @@ describe("dead-pack", () => {
     expect(built.findings.map((f) => f.id)).toEqual(
       NAMES.map((name) => `dead-skill:skill:${name}`),
     );
+  });
+
+  it("needs a listing of the pack's own, whose line names the plugin, even with minSkills 0", () => {
+    const plugin = (name: string) =>
+      packed(name, { managedBy: "plugin", scope: "plugin", path: `~/.claude/plugins/${name}` });
+    // The server's unpacked copies sort first, so no line says the skills come with a plugin.
+    const laptop = scan("laptop", { items: NAMES.map(plugin) });
+    const server = scan("a-server", {
+      items: NAMES.map((name) => skill(name)),
+      cells: NAMES.map((name) => cell(name, 30)),
+    });
+    const config = { rules: { ...only("dead-pack").rules, "dead-pack": { minSkills: 0 } } };
+    expect(report([laptop, server], config).findings).toEqual([]);
+    // With one skill listed on the laptop alone, its line carries the plugin.
+    const own = scan("laptop", {
+      items: [...NAMES.map(plugin), plugin("f")],
+      cells: [cell("f", 30)],
+    });
+    const built = report([own, server], config);
+    expect(built.findings.map((f) => f.id)).toEqual(["dead-pack:acme/kit"]);
+    expect(renderText(built)).toContain("No fix: its skills come with a plugin.");
   });
 
   it("offers no fix for a plugin, whose hooks and commands loadsheet does not read", () => {

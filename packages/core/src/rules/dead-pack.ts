@@ -20,8 +20,10 @@ interface Hit {
  * skills: listed in at least dead-skill's minSessions sessions over its minDays days. A line's
  * listings are summed over its machines, so a skill counts as listed, and toward the sessions, only
  * when they are all the pack's. One finding per pack, for all its skills; the engine drops their
- * own findings. Each skill is removed through the dead skill's guard, which offers nothing for a plugin's: turning a plugin off also turns off its hooks and
- * commands, which loadsheet does not read, so that is left to the user.
+ * own findings. Each skill is removed through the dead skill's guard, which offers nothing for a
+ * plugin's: turning a plugin off also turns off its hooks and commands, which loadsheet does not
+ * read, so that is left to the user. At least one skill must be listed as the pack's, whatever
+ * minSkills: its line, whose install is the pack's, is what the Report says the pack is from.
  */
 export const deadPack = defineRule({
   id: "dead-pack",
@@ -54,7 +56,7 @@ export const deadPack = defineRule({
         const listed = members.filter(
           ({ line, own }) => own && line.exposure.sessions >= minSessions,
         );
-        if (listed.length < options.minSkills) continue;
+        if (listed.length < Math.max(1, options.minSkills)) continue;
         hits.set(pack, [...(hits.get(pack) ?? []), { sheet, members }]);
       }
     }
