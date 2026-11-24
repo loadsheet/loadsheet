@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@loadsheet/core": "workspace:*",
+    "@loadsheet/fleet": "workspace:*",
     "@loadsheet/harnesses": "workspace:*",
     "@loadsheet/kit": "workspace:*",
     "@loadsheet/schema": "workspace:*"

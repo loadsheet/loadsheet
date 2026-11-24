@@ -1,26 +1,33 @@
-#!/usr/bin/env node
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { buildReport, packReport, PROMPT_DOC, renderText } from "@loadsheet/core";
+import { runOnFleet, type RunResult } from "@loadsheet/fleet";
 import { claudeCode, findHarness, harnesses } from "@loadsheet/harnesses";
 import type { Files } from "@loadsheet/kit";
 import { dirFiles, githubFiles, githubUrl, scanMachine } from "@loadsheet/kit/node";
 import { parseConfig, resolveConfig, RULES, type Config } from "@loadsheet/schema";
 import pkg from "../package.json" with { type: "json" };
+import { fleetScans } from "./fleet.ts";
 
 const ids = harnesses.map((h) => h.id).join(", ");
 
 const usage = `loadsheet ${pkg.version}
 Reports which skills, instruction files and MCP servers cost your coding agents context without being used.
 
-Usage: loadsheet [options]                     Scan this machine's sessions and report
+Usage: loadsheet [options]                     Scan this machine's sessions, and its fleet's, and report
        loadsheet <dir | GitHub URL> [options]  Weigh a skill pack, with no usage data
+       loadsheet fleet [command] [options]     Run fleetrc, which keeps a fleet's skills in sync;
+                                               \`loadsheet fleet --help\` lists its commands
 
   <dir | GitHub URL>  A URL is https://github.com/<owner>/<repo>[/tree/<ref>[/<folder>]].
+                      A pack in a folder named fleet is ./fleet.
 
 Options:
+  --local               Report this machine alone, even when it has a fleet
+  --scan                Print this machine's Scan as JSON: what each machine of a fleet sends
+  --timeout <seconds>   How long to wait for each machine of the fleet (default 300)
   --config <path>       Config file (default $XDG_CONFIG_HOME/loadsheet/config.json,
                         else ~/.config/loadsheet/config.json)
   --days <n>            Days of history to read (default 30)
@@ -39,6 +46,12 @@ Options:
 
 Flags override the config file; --ignore adds to its list, the others replace it.
 Rules: ${RULES.join(", ")}.
+
+A fleet: when fleetrc's config.json ($XDG_CONFIG_HOME/fleetrc, else ~/.config/fleetrc) names a
+manifest whose fleet lists other machines, loadsheet asks each over ssh for its Scan, counters
+and names with no text, by running \`npx -y loadsheet@${pkg.version} --scan --days <n>\` there, and
+reports every machine in one Report. LOADSHEET_FLEET_COMMAND, split on spaces, replaces
+\`npx -y loadsheet@${pkg.version}\`, to run another build there, such as one not yet on npm.
 
 loadsheet changes none of your files. To have your agent apply the fixes you accept,
 paste it the prompt in ${PROMPT_DOC}
@@ -70,6 +83,9 @@ try {
       rule: { type: "string", multiple: true },
       "no-cache": { type: "boolean" },
       json: { type: "boolean" },
+      local: { type: "boolean" },
+      scan: { type: "boolean" },
+      timeout: { type: "string" },
       version: { type: "boolean", short: "v" },
       help: { type: "boolean", short: "h" },
     },
@@ -88,6 +104,12 @@ if (values.help) {
   process.exit(0);
 }
 if (positionals.length > 1) fail(`Expected at most one pack, got ${positionals.length}`);
+for (const flag of ["local", "scan", "timeout"] as const)
+  if (positionals.length > 0 && values[flag] !== undefined)
+    fail(`--${flag} is for this machine and its fleet, not a pack`);
+const timeoutMs = values.timeout === undefined ? 300_000 : Number(values.timeout) * 1000;
+if (!/^\d+$/u.test(values.timeout ?? "300") || timeoutMs < 1000 || timeoutMs > 86_400_000)
+  fail(`--timeout takes a whole number of seconds from 1 to 86400, got ${values.timeout}`);
 
 const defaultConfigPath = () => {
   const xdg = process.env.XDG_CONFIG_HOME?.trim();
@@ -169,10 +191,38 @@ const tool = `loadsheet@${pkg.version}`;
 const print = (report: Parameters<typeof renderText>[0]) =>
   process.stdout.write(values.json ? `${JSON.stringify(report, null, 2)}\n` : renderText(report));
 
+/**
+ * The Scan of each other machine in this machine's fleet, or undefined when it has none. A fleet
+ * config that does not read is said on stderr, and this machine is reported alone.
+ */
+const askFleet = async (): Promise<RunResult[] | undefined> => {
+  const custom = process.env.LOADSHEET_FLEET_COMMAND?.trim().split(/\s+/u).filter(Boolean);
+  const [program, ...args] = custom?.length ? custom : ["npx", "-y", tool];
+  const argv: [string, ...string[]] = [
+    program!,
+    ...args,
+    "--scan",
+    "--days",
+    String(config.window),
+    ...(values["no-cache"] ? ["--no-cache"] : []),
+  ];
+  try {
+    const results = await runOnFleet(argv, { timeoutMs });
+    // A fleet whose every host is this machine is no fleet.
+    return results?.length ? results : undefined;
+  } catch (error) {
+    process.stderr.write(
+      `Cannot read the fleet's config, so only this machine is read: ${(error as Error).message}\n`,
+    );
+    return undefined;
+  }
+};
+
 if (positionals.length === 0) {
   for (const id of config.harnesses ?? []) {
     if (!findHarness(id)) fail(`Unknown harness ${id}`);
   }
+  const fleet = values.local || values.scan ? undefined : askFleet();
   let scan;
   try {
     // Every harness is read, whatever --harness says: whether a path is safe to remove depends on
@@ -187,8 +237,22 @@ if (positionals.length === 0) {
     process.stderr.write(`Cannot scan this machine: ${(error as Error).message}\n`);
     process.exit(1);
   }
-  // Findings never change the exit code.
-  print(buildReport({ scans: [scan], config, now: new Date(), tool }));
+  if (values.scan) {
+    process.stdout.write(`${JSON.stringify(scan)}\n`);
+  } else {
+    const results = await fleet;
+    const { scans, machines } = results
+      ? fleetScans(scan, results)
+      : { scans: [scan], machines: [] };
+    if (results) {
+      const total = scans.length + machines.length;
+      process.stderr.write(
+        `Read ${scans.length} of ${total} machines${scans.length === 1 ? "; no other machine could be read" : ""}\n`,
+      );
+    }
+    // Findings never change the exit code, and neither does a machine that could not be read.
+    print(buildReport({ scans, machines, config, now: new Date(), tool }));
+  }
 } else {
   const target = positionals[0]!;
   if ((values.harness?.length ?? 0) > 1) fail("A pack is weighed for one harness");
