@@ -139,8 +139,8 @@ function go() {
   }
 }
 .url:focus-within {
-  border-color: var(--ice);
-  box-shadow: 0 0 0 3px var(--ice-tint);
+  border-color: var(--acc);
+  box-shadow: 0 0 0 3px var(--acc-tint);
 }
 .url input {
   width: 260px;

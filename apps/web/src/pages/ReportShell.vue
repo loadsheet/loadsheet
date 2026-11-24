@@ -118,9 +118,9 @@ async function share() {
 <style scoped>
 .linkerr {
   padding: 8px 16px;
-  border-bottom: 1px solid color-mix(in oklch, var(--warm) 30%, var(--border));
-  background: var(--warm-tint);
-  color: var(--warm-ink);
+  border-bottom: 1px solid color-mix(in oklch, var(--bad) 30%, var(--border));
+  background: var(--bad-tint);
+  color: var(--bad);
   font-size: 0.75rem;
 }
 @media (max-width: 560px) {

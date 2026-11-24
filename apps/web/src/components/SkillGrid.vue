@@ -128,7 +128,7 @@ const longChars = (l: Line) =>
           session</span
         >
         <span
-          ><i class="dot" style="background: var(--k-harness)" />body: the SKILL.md, only when
+          ><i class="dot" style="background: var(--k-lazy)" />body: the SKILL.md, only when
           used</span
         >
       </div>
@@ -187,7 +187,7 @@ const longChars = (l: Line) =>
               <span v-else-if="isUsed(l)" data-slot="vh-badge" data-size="sm"
                 ><b>{{ uses(l) }}×</b> used</span
               >
-              <span v-else data-slot="vh-badge" data-size="sm" data-tone="warning"
+              <span v-else data-slot="vh-badge" data-size="sm" data-tone="error"
                 ><b>never</b> used</span
               >
             </span>
@@ -220,7 +220,7 @@ const longChars = (l: Line) =>
         <div>
           <div class="costbar">
             <i :style="{ flexGrow: line.tokens.value, background: 'var(--k-used)' }" /><i
-              :style="{ flexGrow: bodyTokens(line), background: 'var(--k-harness)' }"
+              :style="{ flexGrow: bodyTokens(line), background: 'var(--k-lazy)' }"
             />
           </div>
           <p class="verdict">
@@ -279,7 +279,7 @@ const longChars = (l: Line) =>
             ><span
               data-slot="vh-badge"
               data-size="sm"
-              :data-tone="f.level === 'cut' ? 'warning' : 'info'"
+              :data-tone="f.level === 'cut' ? 'error' : 'info'"
               >{{ ruleName(f.rule) }}</span
             ></span
           >
@@ -327,13 +327,13 @@ const longChars = (l: Line) =>
   gap: 14px;
   margin-bottom: 20px;
   padding: 10px 10px 10px 14px;
-  border: 1px solid color-mix(in oklch, var(--warm) 25%, var(--border));
+  border: 1px solid color-mix(in oklch, var(--bad) 25%, var(--border));
   border-radius: var(--r-lg);
-  background: var(--warm-tint);
+  background: var(--bad-tint);
 }
 .banner .v {
   font: 500 1.5rem/1 var(--font-mono);
-  color: var(--warm-ink);
+  color: var(--bad);
   font-variant-numeric: tabular-nums;
 }
 .banner p {
@@ -391,28 +391,28 @@ const longChars = (l: Line) =>
     box-shadow: 0 1px 2px oklch(0 0 0 / 0.05);
   }
   .sk.dead:hover {
-    border-color: var(--warm);
+    border-color: var(--bad);
   }
 }
 .sk[data-on],
 .sk[data-on]:hover {
-  border-color: var(--ice);
-  box-shadow: 0 0 0 3px var(--ice-tint);
+  border-color: var(--acc);
+  box-shadow: 0 0 0 3px var(--acc-tint);
 }
-/* Never used: the first inspector's dashed outline, in the cut colour. */
+/* Never used: the first inspector's dashed outline; the red chip says why. */
 .sk.dead {
   border-style: dashed;
-  border-color: color-mix(in oklch, var(--warm) 50%, var(--border));
+  border-color: var(--input);
 }
 .sk.dead[data-on],
 .sk.dead[data-on]:hover {
   border-style: solid;
-  border-color: var(--warm);
-  box-shadow: 0 0 0 3px var(--warm-tint);
+  border-color: var(--bad);
+  box-shadow: 0 0 0 3px var(--bad-tint);
 }
 .sk .nm {
   overflow: hidden;
-  font: 500 0.78125rem/1.3 var(--font-mono);
+  font: 600 0.78125rem/1.3 var(--font-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

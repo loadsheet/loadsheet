@@ -118,9 +118,7 @@ const down = computed(() => report.value.machines.filter((m) => !m.reachable));
                 ><span
                   data-slot="vh-badge"
                   data-size="sm"
-                  :data-tone="
-                    f.level === 'cut' ? 'warning' : f.level === 'fix' ? 'info' : undefined
-                  "
+                  :data-tone="f.level === 'cut' ? 'error' : f.level === 'fix' ? 'info' : undefined"
                   >{{ ruleName(f.rule) }}</span
                 ></span
               >
@@ -277,7 +275,7 @@ const down = computed(() => report.value.machines.filter((m) => !m.reachable));
   border: 0;
   border-top: 1px solid var(--border);
   background: none;
-  color: var(--ice);
+  color: var(--acc);
   font-size: 0.8125rem;
   font-weight: 500;
   text-align: start;
@@ -329,7 +327,7 @@ const down = computed(() => report.value.machines.filter((m) => !m.reachable));
   background: var(--good);
 }
 .g[data-g="inferred"]::before {
-  box-shadow: inset 0 0 0 2px var(--ice);
+  box-shadow: inset 0 0 0 2px var(--acc);
 }
 .g[data-g="none"]::before {
   box-shadow: inset 0 0 0 1.5px var(--faint);

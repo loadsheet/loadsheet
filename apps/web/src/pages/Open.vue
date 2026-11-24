@@ -109,8 +109,8 @@ async function take(file?: File) {
 .drop[data-over],
 .drop:focus-within {
   border-style: solid;
-  border-color: var(--ice);
-  box-shadow: 0 0 0 3px var(--ice-tint);
+  border-color: var(--acc);
+  box-shadow: 0 0 0 3px var(--acc-tint);
 }
 .drop svg {
   width: 32px;
@@ -127,8 +127,8 @@ async function take(file?: File) {
 .err {
   display: grid;
   gap: 10px;
-  border-color: color-mix(in oklch, var(--warm) 40%, var(--border));
-  box-shadow: inset 3px 0 var(--warm);
+  border-color: color-mix(in oklch, var(--bad) 40%, var(--border));
+  box-shadow: inset 3px 0 var(--bad);
 }
 .err h2 {
   font-size: 1.125rem;
@@ -139,6 +139,6 @@ async function take(file?: File) {
   font-size: 0.875rem;
 }
 .err code {
-  color: var(--warm-ink);
+  color: var(--bad);
 }
 </style>

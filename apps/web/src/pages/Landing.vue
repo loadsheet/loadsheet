@@ -208,8 +208,8 @@ const examples = [
   }
 }
 .url:focus-within {
-  border-color: var(--ice);
-  box-shadow: 0 0 0 3px var(--ice-tint);
+  border-color: var(--acc);
+  box-shadow: 0 0 0 3px var(--acc-tint);
 }
 .url input {
   flex: 1;
@@ -239,13 +239,13 @@ const examples = [
   position: relative;
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  min-height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--input);
+  border-radius: var(--r-md);
   background: var(--card);
-  color: var(--muted-foreground);
-  font: 0.6875rem var(--font-mono);
+  color: var(--foreground);
+  font: 0.75rem var(--font-mono);
   text-decoration: none;
   white-space: nowrap;
   transition:
@@ -264,8 +264,7 @@ const examples = [
 }
 @media (hover: hover) and (pointer: fine) {
   .pill:hover {
-    border-color: var(--input);
-    color: var(--foreground);
+    background: var(--accent);
   }
 }
 @media (pointer: coarse) {

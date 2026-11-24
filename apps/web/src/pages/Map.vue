@@ -189,7 +189,7 @@ const open = (n: Node) => n.kids && path.value.push(n.name);
   border: 0;
   border-radius: 4px;
   background: none;
-  color: var(--ice);
+  color: var(--acc);
   font: inherit;
   cursor: pointer;
 }

@@ -110,7 +110,7 @@ function tipFor(e: MouseEvent, l: Line) {
           :width="W - m.r - xMid"
           :height="H - m.b - yMid + 10"
           rx="10"
-          fill="var(--warm-tint)"
+          fill="var(--bad-tint)"
         />
         <line
           :x1="xMid"
@@ -263,7 +263,7 @@ function tipFor(e: MouseEvent, l: Line) {
   fill: var(--faint);
 }
 .quad.warm {
-  fill: var(--warm-ink);
+  fill: var(--bad);
 }
 .ax {
   font: 12px var(--font-sans);
@@ -299,7 +299,7 @@ function tipFor(e: MouseEvent, l: Line) {
 .qlist .v {
   margin-top: 4px;
   font: 500 1.625rem/1.1 var(--font-mono);
-  color: var(--warm-ink);
+  color: var(--bad);
   font-variant-numeric: tabular-nums;
 }
 .qlist ol {
@@ -323,7 +323,7 @@ function tipFor(e: MouseEvent, l: Line) {
 }
 .qlist li input {
   margin: 0;
-  accent-color: var(--ice);
+  accent-color: var(--acc);
 }
 .qlist li .n {
   margin-left: auto;

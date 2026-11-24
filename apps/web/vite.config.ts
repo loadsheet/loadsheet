@@ -46,6 +46,6 @@ export default defineConfig({
       ),
     },
   },
-  // Fonts inline as data URIs and the CSS stays one sheet, so singleFile leaves nothing behind in assets/.
+  // Assets inline as data URIs and the CSS stays one sheet, so singleFile leaves nothing behind in assets/.
   build: { assetsInlineLimit: 1_000_000, cssCodeSplit: false },
 });

@@ -228,7 +228,7 @@ const minSessions = computed(() => report.value.config.rules["dead-skill"].minSe
 }
 .stat .v {
   margin-top: 4px;
-  font: 500 1.375rem/1.1 var(--font-mono);
+  font: 600 1.375rem/1.2 var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 .stat .s {
@@ -237,7 +237,7 @@ const minSessions = computed(() => report.value.config.rules["dead-skill"].minSe
   font-size: 0.75rem;
 }
 .stat.warm .v {
-  color: var(--warm-ink);
+  color: var(--bad);
 }
 .card-h .legend {
   font-size: 0.75rem;
@@ -290,7 +290,7 @@ const minSessions = computed(() => report.value.config.rules["dead-skill"].minSe
   background: var(--muted);
 }
 .rows tr[data-on] td:first-child {
-  box-shadow: inset 2px 0 var(--ice);
+  box-shadow: inset 2px 0 var(--acc);
 }
 .kind {
   display: inline-flex;
@@ -355,12 +355,12 @@ const minSessions = computed(() => report.value.config.rules["dead-skill"].minSe
   justify-items: start;
   gap: 10px;
   padding: 12px;
-  border: 1px solid color-mix(in oklch, var(--warm) 25%, var(--border));
+  border: 1px solid color-mix(in oklch, var(--bad) 25%, var(--border));
   border-radius: var(--r-md);
-  background: var(--warm-tint);
+  background: var(--bad-tint);
 }
 .fixbox p {
-  color: var(--warm-ink);
+  color: var(--bad);
   font-size: 0.8125rem;
   font-weight: 500;
 }
