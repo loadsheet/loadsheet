@@ -50,19 +50,27 @@ const skill = (name: string, extra: Partial<Item> = {}): Item => ({
   ...extra,
 });
 
+/**
+ * A harness's session totals: one session on the window's first day, so the sheet holds 30 days of
+ * history, and the rest on one day; all of them on `extra.day` when it is given.
+ */
 const sessions = (
   count: number,
   extra: Partial<SessionCell> = {},
   harness = "claude-code",
-): SessionCell => ({
-  day: "2026-11-20",
-  harness,
-  via: "cli",
-  sessions: count,
-  fixedTokens: 0,
-  measured: 0,
-  ...extra,
-});
+): SessionCell[] => {
+  const totals = (day: string, sessions: number, more: Partial<SessionCell> = {}): SessionCell => ({
+    day,
+    harness,
+    via: "cli",
+    sessions,
+    fixedTokens: 0,
+    measured: 0,
+    ...more,
+  });
+  if (extra.day !== undefined || count < 2) return [totals("2026-11-20", count, extra)];
+  return [totals(FIRST, 1, { via: extra.via ?? "cli" }), totals("2026-11-20", count - 1, extra)];
+};
 
 /** A skill's counters: listed in `listed` sessions, `bare` of them without a description. */
 const cell = (
@@ -90,7 +98,7 @@ const scan = (machine: string, parts: Partial<Scan> = {}): Scan => ({
   window: [FIRST, LAST],
   coverage: [coverage(machine, "claude-code")],
   items: [],
-  sessions: [sessions(30)],
+  sessions: [...sessions(30)],
   cells: [],
   ...parts,
 });
@@ -155,7 +163,7 @@ describe("invisible-skill", () => {
     ],
   ])("%s", (_, items, cells, count, expected) => {
     const result = findingsOf(
-      [scan("laptop", { items, cells: [...cells, ...seen], sessions: [sessions(count)] })],
+      [scan("laptop", { items, cells: [...cells, ...seen], sessions: sessions(count) })],
       "invisible-skill",
     );
     expect(result.items).toEqual(expected);
@@ -245,7 +253,7 @@ describe("invisible-skill", () => {
       ],
     });
     const short = scan("laptop", {
-      sessions: [sessions(4)],
+      sessions: [...sessions(4)],
       cells: [cell("hidden", 4, { bare: 4 })],
     });
     expect(findingsOf([short], "invisible-skill").skipped).toEqual([
@@ -277,7 +285,7 @@ describe("dead-skill", () => {
         level: "cut",
         item: "skill:idle",
         where: [{ machine: "laptop", harness: "claude-code" }],
-        evidence: { sessions: 25, days: 30, byModel: 0, byUser: 0 },
+        evidence: { sessions: 25, days: 26, byModel: 0, byUser: 0 },
         savesTokens: { value: 30, basis: "estimated" },
         fixes: [
           {
@@ -309,6 +317,7 @@ describe("dead-skill", () => {
     });
     const young = scan("laptop", {
       coverage: [coverage("laptop", "claude-code", { firstDay: "2026-11-20" })],
+      sessions: sessions(30, { day: "2026-11-20" }),
       cells: [cell("idle", 25)],
     });
     expect(findingsOf([young], "dead-skill")).toMatchObject({
@@ -356,7 +365,7 @@ describe("manual-only", () => {
             skill("locked", { managedBy: "skills", pack: "acme/skills" }),
             skill("manual", { harnesses: ["codex"], path: "~/.agents/skills/manual" }),
           ],
-          sessions: [sessions(30), sessions(30, {}, "codex")],
+          sessions: [...sessions(30), ...sessions(30, {}, "codex")],
           cells: [
             cell("manual", 30, { byUser: 3 }),
             cell("locked", 30, { byUser: 3 }),
@@ -500,7 +509,7 @@ describe("fixes", () => {
           }),
           skill("idle", { harnesses: ["codex"], path: "~/.agents/skills/idle" }),
         ],
-        sessions: [sessions(30), sessions(30, {}, "codex")],
+        sessions: [...sessions(30), ...sessions(30, {}, "codex")],
         cells: [cell("idle", 25), cell("idle", 25, { harness: "codex", byUser: 3 })],
       }),
     ]).findings;
@@ -535,7 +544,7 @@ describe("fixes", () => {
     });
     const extra = {
       coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
-      sessions: [sessions(30), sessions(30, {}, "codex")],
+      sessions: [...sessions(30), ...sessions(30, {}, "codex")],
     };
     const used = dead([shared], {
       ...extra,
@@ -578,9 +587,9 @@ describe("fixes", () => {
             items: [shared],
             coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
             sessions: [
-              sessions(30),
-              sessions(30, {}, "codex"),
-              sessions(5, { via: "app" }, "codex"),
+              ...sessions(30),
+              ...sessions(30, {}, "codex"),
+              ...sessions(5, { via: "app" }, "codex"),
             ],
             cells: [cell("idle", 25), cell("idle", 25, { harness: "codex" })],
             ...extra,
@@ -620,7 +629,7 @@ describe("fixes", () => {
     const fixes = (items: Item[]) =>
       dead(items, {
         coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
-        sessions: [sessions(30), sessions(30, {}, "codex")],
+        sessions: [...sessions(30), ...sessions(30, {}, "codex")],
         cells: [cell("idle", 25, { byModel: 2 }), cell("idle", 25, { harness: "codex" })],
       }).find((f) => f.rule === "dead-skill")!.fixes;
     expect(fixes([shared])).toEqual([
@@ -700,7 +709,7 @@ describe("fixes", () => {
       ],
       {
         coverage: [coverage("laptop", "codex")],
-        sessions: [sessions(30, {}, "codex")],
+        sessions: [...sessions(30, {}, "codex")],
         cells: [cell("idle", 25, { harness: "codex" })],
       },
     );
@@ -730,7 +739,7 @@ describe("fixes", () => {
           plugin("claude-code", "~/.claude/plugins/cache/m/kit/1.0.0/skills/manual"),
           plugin("codex", "~/.codex/plugins/cache/m/kit/1.0.0/skills/manual"),
         ],
-        sessions: [sessions(30), sessions(30, {}, "codex")],
+        sessions: [...sessions(30), ...sessions(30, {}, "codex")],
         cells: [
           cell("manual", 30, { byUser: 3 }),
           cell("manual", 30, { byUser: 3, harness: "codex" }),
@@ -753,7 +762,7 @@ describe("fixes", () => {
             path: "~/.claude/plugins/cache/m/kit/1.0.0/skills/idle",
           }),
         ],
-        sessions: [sessions(30), sessions(30, {}, "codex")],
+        sessions: [...sessions(30), ...sessions(30, {}, "codex")],
         cells: [cell("idle", 25), cell("idle", 25, { harness: "codex", byModel: 2 })],
       }),
     ]).findings;
@@ -772,7 +781,7 @@ describe("fixes", () => {
             installed("claude-code", "~/.claude/skills/manual"),
             installed("codex", "~/.agents/skills/manual"),
           ],
-          sessions: [sessions(30), sessions(30, {}, "codex")],
+          sessions: [...sessions(30), ...sessions(30, {}, "codex")],
           cells: [
             cell("manual", 30, { byUser: 3 }),
             cell("manual", 30, { byUser: 3, harness: "codex" }),
@@ -805,7 +814,7 @@ describe("fixes", () => {
           linked("claude-code", "~/.claude/skills/idle"),
           linked("codex", "~/.agents/skills/idle"),
         ],
-        sessions: [sessions(30), sessions(30, {}, "codex")],
+        sessions: [...sessions(30), ...sessions(30, {}, "codex")],
         cells: [cell("idle", 25), cell("idle", 25, { harness: "codex" })],
       }),
       scan("server"),
@@ -866,7 +875,7 @@ describe("fixes", () => {
     // Codex on the server used it, which the sheet of the harnesses read does not show.
     const server = scan("server", {
       coverage: [coverage("server", "codex")],
-      sessions: [sessions(30, {}, "codex")],
+      sessions: [...sessions(30, {}, "codex")],
       cells: [cell("idle", 5, { harness: "codex", byUser: 1 })],
     });
     expect(
@@ -886,7 +895,7 @@ describe("fixes", () => {
         scan("laptop", {
           coverage: [coverage("laptop", "cursor")],
           items: [item],
-          sessions: [sessions(30, {}, "cursor")],
+          sessions: [...sessions(30, {}, "cursor")],
           cells,
         }),
       ]).findings;
@@ -917,14 +926,14 @@ describe("buildReport", () => {
     const built = report([
       scan("laptop", {
         items: [skill("tool")],
-        sessions: [sessions(10, { fixedTokens: 10000, measured: 5 })],
+        sessions: [...sessions(10, { fixedTokens: 10000, measured: 5 })],
         cells: [cell("tool", 10, { byModel: 2, day: "2026-11-18" })],
       }),
       scan("server", {
         window: ["2026-11-01", "2026-11-23"],
         coverage: [coverage("server", "claude-code", { lastDay: "2026-11-23" })],
         items: [skill("tool", { chars: { listed: 140, body: 900 } })],
-        sessions: [sessions(30, { fixedTokens: 30000, measured: 5 })],
+        sessions: [...sessions(30, { fixedTokens: 30000, measured: 5 })],
         cells: [
           cell("tool", 20, { bare: 3, byUser: 1, day: "2026-11-22" }),
           cell("gone", 4, { chars: 200 }),
@@ -988,7 +997,7 @@ describe("buildReport", () => {
     const scans = [
       scan("laptop", {
         items: [skill("tool")],
-        sessions: [sessions(10), sessions(30, { via: "app" })],
+        sessions: [...sessions(10), ...sessions(30, { via: "app" })],
         cells: [cell("tool", 10, { byModel: 1 }), cell("tool", 30, { via: "app", byModel: 4 })],
       }),
     ];
@@ -999,6 +1008,36 @@ describe("buildReport", () => {
     expect(line({})).toEqual([40, 40, 5]);
     expect(line({ via: { include: ["cli"] } })).toEqual([10, 10, 1]);
     expect(line({ via: { exclude: ["cli"] } })).toEqual([30, 30, 4]);
+  });
+
+  it("keeps only the last `window` days of a Scan that covers more, and counts days after every filter", () => {
+    const long = scan("laptop", {
+      window: ["2026-09-26", LAST],
+      items: [skill("tool")],
+      sessions: [
+        ...sessions(10, { day: "2026-10-01" }),
+        ...sessions(20, { day: "2026-11-20" }),
+        ...sessions(5, { day: FIRST, via: "app" }),
+      ],
+      cells: [
+        cell("tool", 10, { day: "2026-10-01", byModel: 4 }),
+        cell("tool", 20, { day: "2026-11-20", byModel: 1 }),
+      ],
+    });
+    const built = report([long], { window: 30 });
+    expect(built.window).toEqual([FIRST, LAST]);
+    const [sheet] = built.sheet;
+    expect([sheet!.sessions, sheet!.lines[0]!.exposure.sessions, sheet!.lines[0]!.use]).toEqual([
+      25,
+      20,
+      { byModel: 1, byUser: 0, lastUsed: "2026-11-20" },
+    ]);
+    // Without the app's sessions, the history left is one day.
+    const idle = { ...long, cells: [cell("tool", 20, { day: "2026-11-20" })] };
+    expect(findingsOf([idle], "dead-skill").items).toEqual(["skill:tool"]);
+    expect(findingsOf([idle], "dead-skill", { via: { include: ["cli"] } }).skipped).toEqual([
+      { rule: "dead-skill", harness: "claude-code", reason: "not-enough-data" },
+    ]);
   });
 
   it("an ignored item keeps its line and gets no finding", () => {
@@ -1012,7 +1051,7 @@ describe("buildReport", () => {
   it("keeps only the configured harnesses' sheets", () => {
     const both = scan("laptop", {
       coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
-      sessions: [sessions(30), sessions(5, {}, "codex")],
+      sessions: [...sessions(30), ...sessions(5, {}, "codex")],
     });
     expect(report([both]).sheet.map((s) => s.harness)).toEqual(["claude-code", "codex"]);
     expect(report([both], { harnesses: ["codex"] }).sheet.map((s) => s.harness)).toEqual(["codex"]);

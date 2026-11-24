@@ -99,7 +99,7 @@ const unfilteredOf = (
 const buildSheet = (
   harness: string,
   scans: Scan[],
-  keep: (cell: { via: string }) => boolean,
+  keep: (cell: { day: Day; via: string }) => boolean,
 ): { sheet: Sheet; rules: RuleSheet } => {
   const installs = new Map<Id, Install[]>();
   const itemsOn = new Map<string, Item[]>();
@@ -120,10 +120,16 @@ const buildSheet = (
   let sessions = 0;
   let fixedTokens = 0;
   let measured = 0;
+  let firstDay: Day | undefined;
+  let lastDay: Day | undefined;
   const usage = new Map<Id, Usage>();
   for (const scan of scans) {
     for (const cell of scan.sessions) {
       if (cell.harness !== harness || !keep(cell)) continue;
+      if (cell.sessions > 0) {
+        if (!firstDay || cell.day < firstDay) firstDay = cell.day;
+        if (!lastDay || cell.day > lastDay) lastDay = cell.day;
+      }
       sessions += cell.sessions;
       fixedTokens += cell.fixedTokens;
       measured += cell.measured;
@@ -190,8 +196,6 @@ const buildSheet = (
 
   const coverage = scans.flatMap((scan) => scan.coverage.filter((c) => c.harness === harness));
   const active = coverage.filter((c) => c.installed || c.sessions > 0);
-  const firstDays = coverage.flatMap((c) => (c.firstDay ? [c.firstDay] : [])).sort(compare);
-  const lastDays = coverage.flatMap((c) => (c.lastDay ? [c.lastDay] : [])).sort(compare);
 
   const sheet: Sheet = { harness, sessions, lines };
   if (measured > 0) {
@@ -202,7 +206,7 @@ const buildSheet = (
     rules: {
       harness,
       sessions,
-      days: firstDays.length ? daysBetween(firstDays[0]!, lastDays.at(-1)!) : 0,
+      days: firstDay && lastDay ? daysBetween(firstDay, lastDay) : 0,
       signals: worstSignals(active.length ? active : coverage),
       lines,
       installs: (item) => installs.get(item) ?? [],
@@ -231,10 +235,20 @@ export const buildReport = ({
     );
   }
 
+  // The window is the last `config.window` days up to the Scans' last day, as a Scan's own is.
+  const today = now.toISOString().slice(0, 10);
+  const firsts = scans.map((scan) => scan.window[0]).sort(compare);
+  const lasts = scans.map((scan) => scan.window[1]).sort(compare);
+  const last = lasts.at(-1) ?? today;
+  const since = new Date(Date.parse(`${last}T00:00:00Z`) - (config.window - 1) * DAY_MS)
+    .toISOString()
+    .slice(0, 10);
+  const first = firsts[0] !== undefined && firsts[0] > since ? firsts[0] : since;
+  const inWindow = (day: Day) => day >= first && day <= last;
   const include = new Set(config.via.include);
   const exclude = new Set(config.via.exclude);
-  const keep = ({ via }: { via: string }) =>
-    (include.size === 0 || include.has(via)) && !exclude.has(via);
+  const keep = ({ day, via }: { day: Day; via: string }) =>
+    inWindow(day) && (include.size === 0 || include.has(via)) && !exclude.has(via);
 
   // A harness gets a sheet when some machine has it installed, or has its items or sessions.
   const harnesses = new Set<string>();
@@ -257,12 +271,9 @@ export const buildReport = ({
     mode: reportMode,
     sheets: built.map(({ rules }) => rules),
     config,
-    unfiltered: unfilteredOf(scans, wholeFleet, () => true),
+    unfiltered: unfilteredOf(scans, wholeFleet, inWindow),
   });
 
-  const today = now.toISOString().slice(0, 10);
-  const firsts = scans.map((scan) => scan.window[0]).sort(compare);
-  const lasts = scans.map((scan) => scan.window[1]).sort(compare);
   return {
     schema: 1,
     tool,
@@ -272,7 +283,7 @@ export const buildReport = ({
       ...scans.map((scan) => ({ name: scan.machine, reachable: true, scannedAt: scan.scannedAt })),
       ...machines,
     ],
-    window: [firsts[0] ?? today, lasts.at(-1) ?? today],
+    window: scans.length ? [first, last] : [today, today],
     config,
     coverage: scans
       .flatMap((scan) => scan.coverage)
