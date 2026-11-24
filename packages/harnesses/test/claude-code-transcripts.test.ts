@@ -391,6 +391,23 @@ describe("claudeTranscripts", () => {
     expect(JSON.stringify(state)).not.toContain(folder);
   });
 
+  it("keeps a malformed MCP server name out of State", () => {
+    const { state } = parseAll([
+      line({ type: "user", message: { content: "hi" } }),
+      attachment({
+        type: "deferred_tools_delta",
+        addedNames: ["mcp__home/jo/srv__tool", "mcp__ok__tool"],
+        addedLines: ["a", "b"],
+      }),
+      attachment({
+        type: "mcp_instructions_delta",
+        addedNames: ["x".repeat(129)],
+        addedBlocks: ["c"],
+      }),
+    ]);
+    expect(state.mcp).toEqual({ ok: 2 });
+  });
+
   describe("a project's instruction files", () => {
     const files = (...list: [string, string, string?][]) =>
       attachment({

@@ -210,6 +210,7 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
           const blocks = Array.isArray(attachment.addedBlocks) ? attachment.addedBlocks : [];
           strings(attachment.addedNames).forEach((name, index) => {
             const server = mcpToolName(name);
+            if (!NAME.test(server)) return;
             const block = blocks[index];
             state.mcp[server] =
               (state.mcp[server] ?? 0) + (typeof block === "string" ? block.length : 0);
@@ -220,7 +221,7 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
           const lines = Array.isArray(attachment.addedLines) ? attachment.addedLines : [];
           strings(attachment.addedNames).forEach((tool, index) => {
             const server = mcpServer(tool);
-            if (server === undefined) return;
+            if (server === undefined || !NAME.test(server)) return;
             const text = lines[index];
             state.mcp[server] =
               (state.mcp[server] ?? 0) + (typeof text === "string" ? text.length + 1 : 0);
@@ -248,9 +249,7 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
 
     // A turn's attachments arrive one line each; its MCP servers and project instruction files are
     // counted once they are all in.
-    for (const [server, chars] of Object.entries(state.mcp)) {
-      if (NAME.test(server)) listed(`mcp:${server}`, chars, false);
-    }
+    for (const [server, chars] of Object.entries(state.mcp)) listed(`mcp:${server}`, chars, false);
     state.mcp = {};
     for (const [item, chars] of Object.entries(state.project)) listed(item, chars, false);
     state.project = {};
