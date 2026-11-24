@@ -726,7 +726,8 @@ function isThisMachine(entry: string, magicDNS = ""): boolean {
  * the home folder where ssh starts a command; all at once. This machine comes first, and a target
  * that is it for certain (`isThisMachine`, given `magicDNS` when Tailscale was asked) runs there
  * directly instead. A host that is offline, does not answer or cannot be tried is unreachable, with
- * no exit code; a command still running after `timeoutMs` is stopped and has none either.
+ * no exit code; a command still running after `timeoutMs` is stopped and has none either. Here that
+ * stops what the command started as well; over ssh only the command itself.
  */
 export async function fleetRun(
   targets: readonly FleetTarget[],
@@ -753,6 +754,8 @@ export async function fleetRun(
       cwd: homedir(),
       timeoutMs,
       maxOutput: 64 * 1024 * 1024,
+      // A signal gives the command a process group of its own, so the deadline stops what it started too.
+      signal: new AbortController().signal,
     });
     // As sh says it, for a command it can't find or start.
     if (run.spawnError !== undefined)

@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -125,6 +125,26 @@ describe.skipIf(isWindows)("fleet run", () => {
       { host: hostname(), ...stopped },
       { host: "box", ...stopped },
     ]);
+  });
+
+  it("stops what the command started on this machine at the deadline", async () => {
+    const m = machine();
+    const manifest = m.manifest({ agents: ["claude-code"], sources: [], fleet: [] });
+    const marker = join(m.home, "written-after-the-deadline");
+    await m.run(
+      "fleet",
+      "run",
+      "--manifest",
+      manifest,
+      "--timeout",
+      "1",
+      "--",
+      "sh",
+      "-c",
+      `(sleep 2; touch ${marker}) & sleep 20`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+    expect(existsSync(marker)).toBe(false);
   });
 
   it("still sees that a host answered after its command wrote more stderr than is kept", async () => {
