@@ -46,7 +46,7 @@
       "type": "array",
       "items": {
         "type": "string",
-        "pattern": "^(skill|instructions|mcp|subagent):.+$",
+        "pattern": "^(skill|instructions|mcp|subagent):(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
         "description": "A piece of context's id, `${kind}:${name}`."
       },
       "description": "Item ids never reported."

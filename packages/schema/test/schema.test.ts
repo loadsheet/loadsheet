@@ -13,6 +13,7 @@ import {
   RULES,
   SchemaError,
   type Report,
+  type Scan,
 } from "../src/index.ts";
 import { jsonSchemas } from "../scripts/json-schema.ts";
 
@@ -101,23 +102,99 @@ describe("parsing", () => {
     expect(() => parseScan({ schema: 3 })).toThrow(/newer loadsheet/);
   });
 
-  it.each(["/home/ada/.claude/skills/x", "/Users/ada/.claude/skills/x", "C:\\Users\\ada\\x"])(
-    "rejects the absolute home path %s in Item.path and Fix.path",
-    (path) => {
-      const scan = clone(example("scan.example.json")) as { items: { path: string }[] };
-      scan.items[0]!.path = path;
-      expect(issuesOf(() => parseScan(scan))).toContainEqual({
-        path: "$.items[0].path",
-        message: expect.stringMatching(/not an absolute home path/),
-      });
+  it.each([
+    "/home/ada/.claude/skills/x",
+    "/Users/ada/.claude/skills/x",
+    "/var/home/ada/.claude/skills/x",
+    "/root/.codex/skills/x",
+    "/root",
+    "C:\\Users\\ada\\x",
+  ])("rejects the absolute home path %s in Item.path and Fix.path", (path) => {
+    const scan = clone(example("scan.example.json")) as { items: { path: string }[] };
+    scan.items[0]!.path = path;
+    expect(issuesOf(() => parseScan(scan))).toContainEqual({
+      path: "$.items[0].path",
+      message: expect.stringMatching(/not an absolute home path/),
+    });
 
-      const report = fleet();
-      report.findings[0]!.fixes[0]!.path = path;
-      expect(issuesOf(() => parseReport(report)).map((issue) => issue.path)).toEqual([
-        "$.findings[0].fixes[0].path",
-      ]);
-    },
-  );
+    const report = fleet();
+    report.findings[0]!.fixes[0]!.path = path;
+    expect(issuesOf(() => parseReport(report)).map((issue) => issue.path)).toEqual([
+      "$.findings[0].fixes[0].path",
+    ]);
+  });
+
+  it("accepts a path outside any home, such as a project under /srv", () => {
+    const scan = clone(example("scan.example.json")) as { items: { path: string }[] };
+    scan.items[0]!.path = "/srv/app/.claude/skills/x";
+    expect(() => parseScan(scan)).not.toThrow();
+  });
+
+  it("rejects an absolute home path in a name, an id and a pack", () => {
+    const scan = clone(example("scan.example.json")) as Scan;
+    const item = scan.items.find((entry) => entry.ref.kind === "instructions")!;
+    const index = scan.items.indexOf(item);
+    item.ref.name = "/home/ada/work/infra/CLAUDE.md";
+    item.id = `instructions:${item.ref.name}`;
+    item.pack = "/Users/ada/skills";
+    scan.cells[0]!.item = "instructions:/root/CLAUDE.md";
+    expect(issuesOf(() => parseScan(scan)).map((issue) => issue.path)).toEqual([
+      `$.items[${index}].id`,
+      `$.items[${index}].ref.name`,
+      `$.items[${index}].pack`,
+      "$.cells[0].item",
+    ]);
+  });
+
+  it("keeps a one-letter plugin prefix and a name that only mentions home", () => {
+    for (const name of ["x:deploy", "home/notes", "rooted"]) {
+      expect(() => parseConfig({ ignore: [`skill:${name}`] })).not.toThrow();
+    }
+  });
+
+  it("rejects a description in a Scan and on a line outside pack mode", () => {
+    const scan = clone(example("scan.example.json")) as Scan;
+    scan.items[0]!.description = "Use when the deploy fails.";
+    expect(issuesOf(() => parseScan(scan))).toEqual([
+      { path: "$.items[0]", message: "a Scan must not carry a description" },
+    ]);
+
+    const report = fleet();
+    report.sheet[0]!.lines[0]!.description = "Use when the deploy fails.";
+    expect(issuesOf(() => parseReport(report))).toEqual([
+      { path: "$.sheet", message: "a line carries a description only in pack mode" },
+    ]);
+  });
+
+  it("rejects a set fix with nothing to set and a fix without a machine outside pack mode", () => {
+    const report = fleet();
+    const fix = report.findings.flatMap((finding) => finding.fixes).find((entry) => entry.set)!;
+    delete fix.set;
+    expect(issuesOf(() => parseReport(report)).map((issue) => issue.message)).toEqual([
+      "set and hide-from-model need set or run",
+    ]);
+
+    const other = fleet();
+    delete other.findings[0]!.fixes[0]!.machine;
+    expect(issuesOf(() => parseReport(other))).toEqual([
+      { path: "$.findings", message: "outside pack mode every fix names its machine" },
+    ]);
+  });
+
+  it("rejects a timestamp on a day that does not exist", () => {
+    const report = fleet();
+    report.generatedAt = "2026-02-30T00:00:00Z";
+    expect(issuesOf(() => parseReport(report))).toEqual([
+      { path: "$.generatedAt", message: "must be a real calendar day" },
+    ]);
+  });
+
+  it("reads a finding and a skipped rule from a rule it does not know", () => {
+    const report = fleet();
+    report.findings[0] = { ...report.findings[0]!, id: "stale-hook:skill:x", rule: "stale-hook" };
+    report.skipped.push({ rule: "stale-hook", harness: "codex", reason: "not-enough-data" });
+    expect(() => parseReport(report)).not.toThrow();
+  });
 
   it.each(["2026-13-01", "2026-02-30", "26-11-01", "2026-11-01T00:00:00Z"])(
     "rejects the day %s",
@@ -184,6 +261,11 @@ describe("resolveConfig", () => {
     expect(resolved.rules["dead-skill"]).toEqual({ enabled: true, minSessions: 40, minDays: 14 });
     expect(resolved.rules["short-history"].enabled).toBe(false);
     expect(resolved.rules["idle-mcp"]).toEqual(defaultConfig.rules["idle-mcp"]);
+  });
+
+  it("keeps the default of an option set to undefined", () => {
+    const resolved = resolveConfig({ rules: { "dead-skill": { minDays: undefined } } });
+    expect(resolved.rules["dead-skill"]).toEqual(defaultConfig.rules["dead-skill"]);
   });
 
   it("returns objects the caller may change without touching the defaults", () => {

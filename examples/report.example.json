@@ -1404,19 +1404,19 @@
         {
           "machine": "laptop",
           "action": "hide-from-model",
-          "path": "~/work/infra/.agents/skills/terraform-plan/SKILL.md",
+          "path": "~/work/infra/.agents/skills/terraform-plan/agents/openai.yaml",
           "set": {
-            "key": "disable-model-invocation",
-            "value": true
+            "key": "policy.allow_implicit_invocation",
+            "value": false
           }
         },
         {
           "machine": "server",
           "action": "hide-from-model",
-          "path": "~/work/infra/.agents/skills/terraform-plan/SKILL.md",
+          "path": "~/work/infra/.agents/skills/terraform-plan/agents/openai.yaml",
           "set": {
-            "key": "disable-model-invocation",
-            "value": true
+            "key": "policy.allow_implicit_invocation",
+            "value": false
           }
         }
       ]

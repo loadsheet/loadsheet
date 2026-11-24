@@ -65,7 +65,12 @@ const DaySchema = v.pipe(
 const day = (text: string) => describe(DaySchema, text);
 
 const timestamp = (text: string) =>
-  v.pipe(v.string(), v.isoTimestamp("must be an ISO 8601 timestamp"), v.description(text));
+  v.pipe(
+    v.string(),
+    v.isoTimestamp("must be an ISO 8601 timestamp"),
+    v.check((value) => isCalendarDay(value.slice(0, 10)), "must be a real calendar day"),
+    v.description(text),
+  );
 
 const windowOf = (text: string) =>
   v.pipe(
@@ -74,13 +79,23 @@ const windowOf = (text: string) =>
     v.description(text),
   );
 
-// A home directory written out in full: /home/<user>, /Users/<user>, or a Windows drive.
-const HOME_PATH = /^(?!\/home\/|\/Users\/|[A-Za-z]:)/;
+// A home directory written out in full: /home/<user>, /Users/<user>, /var/home/<user>, /root, or a
+// Windows drive. The schema cannot know a machine's home, so this catches the usual places; the
+// writer replaces the real one with ~.
+const HOME = String.raw`(?:/home/|/Users/|/var/home/|/root(?:/|$)|[A-Za-z]:[\\/])`;
+const NOT_HOME = new RegExp(`^(?!${HOME})`);
 const relativePath = (text: string) =>
   v.pipe(
     v.string(),
     v.minLength(1),
-    v.regex(HOME_PATH, "must be relative to the home directory (~/...), not an absolute home path"),
+    v.regex(NOT_HOME, "must be relative to the home directory (~/...), not an absolute home path"),
+    v.description(text),
+  );
+const name = (text: string) =>
+  v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.regex(NOT_HOME, "must not be an absolute home path"),
     v.description(text),
   );
 
@@ -114,7 +129,6 @@ const ManagedBySchema = describe(
   v.picklist(["fleetrc", "skills", "plugin", "hand"]),
   "What installed it and should change it: fleetrc, the skills CLI, a plugin, or the user by hand.",
 );
-const RuleIdSchema = describe(v.picklist(RULES), "A rule's id.");
 const LevelSchema = describe(
   v.picklist(["cut", "fix", "info"]),
   "How strongly a finding asks for action: cut it, fix it, or know it.",
@@ -123,8 +137,8 @@ const LevelSchema = describe(
 const IdSchema = v.pipe(
   v.string(),
   v.regex(
-    new RegExp(`^(${KINDS.join("|")}):.+$`),
-    "must be kind:name, where kind is skill, instructions, mcp or subagent",
+    new RegExp(`^(${KINDS.join("|")}):(?!${HOME}).+$`),
+    "must be kind:name, where kind is skill, instructions, mcp or subagent and name is not an absolute home path",
   ),
   v.description("A piece of context's id, `${kind}:${name}`."),
 );
@@ -133,7 +147,7 @@ const id = (text: string) => describe(IdSchema, text);
 const RefSchema = v.pipe(
   v.looseObject({
     kind: describe(KindSchema, "What the piece of context is."),
-    name: nonEmpty("Its name, unique within its kind."),
+    name: name("Its name, unique within its kind."),
   }),
   v.description("Names one piece of context."),
 );
@@ -171,12 +185,7 @@ const ItemSchema = v.pipe(
     ref: describe(RefSchema, "Its kind and name."),
     harnesses: strings("Ids of the harnesses that load it from this path."),
     scope: describe(ScopeSchema, "Where it is installed."),
-    pack: v.optional(
-      v.pipe(
-        v.string(),
-        v.description("Where it came from: a plugin name, `owner/repo`, or a fleetrc source."),
-      ),
-    ),
+    pack: v.optional(name("Where it came from: a plugin name, `owner/repo`, or a fleetrc source.")),
     managedBy: describe(ManagedBySchema, "What installed it."),
     path: relativePath(
       "Its file or folder, relative to the home directory (`~/...`) or to the project.",
@@ -191,7 +200,9 @@ const ItemSchema = v.pipe(
       "Its size in characters: listed is paid by every session that lists or loads it, body only by a session that invokes it.",
     ),
     modelInvocable: describe(v.boolean(), "Whether the model may invoke it on its own."),
-    description: v.optional(describe(v.string(), "Its description, in pack mode only.")),
+    description: v.optional(
+      describe(v.string(), "Its description, in pack mode only; a Scan never carries it."),
+    ),
   }),
   v.check(
     (item) => item.id === `${item.ref.kind}:${item.ref.name}`,
@@ -269,12 +280,20 @@ const scanSchema = v.pipe(
     scannedAt: timestamp("When it was scanned, as an ISO 8601 timestamp."),
     window: windowOf("The first and last day it covers, inclusive."),
     coverage: describe(v.array(CoverageSchema), "What each harness on this machine could tell."),
-    items: describe(v.array(ItemSchema), "Installed pieces of context."),
+    items: describe(
+      v.array(
+        v.pipe(
+          ItemSchema,
+          v.check((item) => item.description === undefined, "a Scan must not carry a description"),
+        ),
+      ),
+      "Installed pieces of context.",
+    ),
     sessions: describe(v.array(SessionCellSchema), "Session totals."),
     cells: describe(v.array(CellSchema), "Usage counters."),
   }),
   v.description(
-    "One machine's counters for a window: what is installed and how it was used, with no text.",
+    "One machine's counters for a window: what is installed and how it was used, with no text. Scans of the same machine merge by summing their counters; Scans of different machines stay separate, and a Report is built from the list.",
   ),
 );
 
@@ -448,7 +467,7 @@ const LineSchema = v.pipe(
         "Where it is installed; absent when it is no longer installed on any machine read.",
       ),
     ),
-    pack: v.optional(describe(v.string(), "Where it came from.")),
+    pack: v.optional(name("Where it came from.")),
     managedBy: v.optional(
       describe(
         ManagedBySchema,
@@ -484,7 +503,7 @@ const LineSchema = v.pipe(
       v.looseObject({
         byModel: count("Times the model invoked it."),
         byUser: count("Times the user invoked it."),
-        lastUsed: v.optional(day("The last day it was invoked.")),
+        lastUsed: v.optional(day("The start day of the last session that invoked it.")),
       }),
       v.description("How often it was invoked."),
     ),
@@ -540,20 +559,29 @@ const FixSchema = v.pipe(
       ),
     ),
   }),
+  v.check(
+    (fix) =>
+      (fix.action !== "set" && fix.action !== "hide-from-model") ||
+      fix.set !== undefined ||
+      fix.run !== undefined,
+    "set and hide-from-model need set or run",
+  ),
   v.description("One change the user's agent should make."),
 );
 
 const FindingSchema = v.pipe(
   v.looseObject({
     id: nonEmpty("A stable id, `${rule}:${item ?? pack ?? harness}`."),
-    rule: describe(RuleIdSchema, "The rule that found it."),
+    rule: nonEmpty(
+      "The rule that found it: a RuleId, or the id of a rule a newer loadsheet added.",
+    ),
     level: describe(LevelSchema, "How strongly it asks for action."),
     item: v.optional(
       id(
         "The item it is about; absent for pack-level and harness-level findings such as dead-pack and short-history.",
       ),
     ),
-    pack: v.optional(nonEmpty("The pack it is about, for dead-pack.")),
+    pack: v.optional(name("The pack it is about, for dead-pack.")),
     where: describe(
       v.array(
         v.pipe(
@@ -576,7 +604,7 @@ const FindingSchema = v.pipe(
 
 const SkippedSchema = v.pipe(
   v.looseObject({
-    rule: describe(RuleIdSchema, "The rule."),
+    rule: nonEmpty("The rule: a RuleId, or the id of a rule a newer loadsheet added."),
     harness: nonEmpty("The harness id."),
     reason: describe(
       v.picklist(["missing-signal", "not-enough-data"]),
@@ -623,6 +651,24 @@ const reportSchema = v.pipe(
     findings: describe(v.array(FindingSchema), "What the rules found."),
     skipped: describe(v.array(SkippedSchema), "Rules that did not run, per harness."),
   }),
+  v.forward(
+    v.check(
+      (report) =>
+        report.mode === "pack" ||
+        report.sheet.every((sheet) => sheet.lines.every((line) => line.description === undefined)),
+      "a line carries a description only in pack mode",
+    ),
+    ["sheet"],
+  ),
+  v.forward(
+    v.check(
+      (report) =>
+        report.mode === "pack" ||
+        report.findings.every((finding) => finding.fixes.every((fix) => fix.machine !== undefined)),
+      "outside pack mode every fix names its machine",
+    ),
+    ["findings"],
+  ),
   v.description("What loadsheet found: one sheet per harness and the findings, with no text."),
 );
 

@@ -132,7 +132,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^(skill|instructions|mcp|subagent):.+$",
+            "pattern": "^(skill|instructions|mcp|subagent):(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
             "description": "Its id, `${kind}:${name}`."
           },
           "ref": {
@@ -146,6 +146,7 @@
               "name": {
                 "type": "string",
                 "minLength": 1,
+                "pattern": "^(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
                 "description": "Its name, unique within its kind."
               }
             },
@@ -166,6 +167,8 @@
           },
           "pack": {
             "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
             "description": "Where it came from: a plugin name, `owner/repo`, or a fleetrc source."
           },
           "managedBy": {
@@ -176,7 +179,7 @@
           "path": {
             "type": "string",
             "minLength": 1,
-            "pattern": "^(?!\\/home\\/|\\/Users\\/|[A-Za-z]:)",
+            "pattern": "^(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
             "description": "Its file or folder, relative to the home directory (`~/...`) or to the project."
           },
           "digest": {
@@ -207,7 +210,7 @@
           },
           "description": {
             "type": "string",
-            "description": "Its description, in pack mode only."
+            "description": "Its description, in pack mode only; a Scan never carries it."
           }
         },
         "required": [
@@ -288,7 +291,7 @@
           },
           "item": {
             "type": "string",
-            "pattern": "^(skill|instructions|mcp|subagent):.+$",
+            "pattern": "^(skill|instructions|mcp|subagent):(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
             "description": "The item's id."
           },
           "sessions": {
@@ -344,5 +347,5 @@
     "sessions",
     "cells"
   ],
-  "description": "One machine's counters for a window: what is installed and how it was used, with no text."
+  "description": "One machine's counters for a window: what is installed and how it was used, with no text. Scans of the same machine merge by summing their counters; Scans of different machines stay separate, and a Report is built from the list."
 }

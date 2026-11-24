@@ -60,7 +60,7 @@ export interface Item {
   chars: Chars;
   /** Whether the model may invoke it on its own. */
   modelInvocable: boolean;
-  /** Its description, in pack mode only. */
+  /** Its description, in pack mode only; a Scan never carries it. */
   description?: string;
 }
 
@@ -130,7 +130,7 @@ export interface Coverage {
   signals: Record<Signal, Grade>;
 }
 
-/** One machine's counters for a window: what is installed and how it was used, with no text. */
+/** One machine's counters for a window: what is installed and how it was used, with no text. Scans of the same machine merge by summing their counters; Scans of different machines stay separate, and a Report is built from the list. */
 export interface Scan {
   /** The schema version, 1. */
   schema: 1;
@@ -315,7 +315,7 @@ export interface Use {
   byModel: number;
   /** Times the user invoked it. */
   byUser: number;
-  /** The last day it was invoked. */
+  /** The start day of the last session that invoked it. */
   lastUsed?: Day;
 }
 
@@ -354,8 +354,8 @@ export interface Fix {
 export interface Finding {
   /** A stable id, `${rule}:${item ?? pack ?? harness}`. */
   id: string;
-  /** The rule that found it. */
-  rule: RuleId;
+  /** The rule that found it: a RuleId, or the id of a rule a newer loadsheet added. */
+  rule: string;
   /** How strongly it asks for action. */
   level: Level;
   /** The item it is about; absent for pack-level and harness-level findings such as dead-pack and short-history. */
@@ -382,8 +382,8 @@ export interface Where {
 
 /** A rule that did not run on a harness, and why. */
 export interface Skipped {
-  /** The rule. */
-  rule: RuleId;
+  /** The rule: a RuleId, or the id of a rule a newer loadsheet added. */
+  rule: string;
   /** The harness id. */
   harness: string;
   /** missing-signal: the harness does not provide a signal the rule needs; not-enough-data: too few sessions. */

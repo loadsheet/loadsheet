@@ -113,7 +113,11 @@ export const resolveConfig = (config: Config = {}): ResolvedConfig => {
   for (const rule of RULES) {
     const override = config.rules?.[rule];
     if (override === false) rules[rule].enabled = false;
-    else if (override) Object.assign(rules[rule], override);
+    else if (override) {
+      // An option set to undefined keeps its default.
+      const set = Object.entries(override).filter(([, value]) => value !== undefined);
+      Object.assign(rules[rule], Object.fromEntries(set));
+    }
   }
   const resolved: ResolvedConfig = {
     window: config.window ?? 30,

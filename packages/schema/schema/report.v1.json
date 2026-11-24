@@ -26,7 +26,7 @@
     "source": {
       "type": "string",
       "minLength": 1,
-      "pattern": "^(?!\\/home\\/|\\/Users\\/|[A-Za-z]:)",
+      "pattern": "^(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
       "description": "In pack mode, the directory name or GitHub URL read."
     },
     "machines": {
@@ -116,7 +116,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(skill|instructions|mcp|subagent):.+$",
+            "pattern": "^(skill|instructions|mcp|subagent):(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
             "description": "A piece of context's id, `${kind}:${name}`."
           },
           "description": "Item ids never reported."
@@ -444,7 +444,7 @@
               "properties": {
                 "item": {
                   "type": "string",
-                  "pattern": "^(skill|instructions|mcp|subagent):.+$",
+                  "pattern": "^(skill|instructions|mcp|subagent):(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
                   "description": "Its id."
                 },
                 "ref": {
@@ -458,6 +458,7 @@
                     "name": {
                       "type": "string",
                       "minLength": 1,
+                      "pattern": "^(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
                       "description": "Its name, unique within its kind."
                     }
                   },
@@ -471,6 +472,8 @@
                 },
                 "pack": {
                   "type": "string",
+                  "minLength": 1,
+                  "pattern": "^(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
                   "description": "Where it came from."
                 },
                 "managedBy": {
@@ -488,7 +491,7 @@
                 "path": {
                   "type": "string",
                   "minLength": 1,
-                  "pattern": "^(?!\\/home\\/|\\/Users\\/|[A-Za-z]:)",
+                  "pattern": "^(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
                   "description": "Its file or folder, relative to the home directory or the project; absent when it is no longer installed on any machine read."
                 },
                 "chars": {
@@ -564,7 +567,7 @@
                     "lastUsed": {
                       "type": "string",
                       "format": "date",
-                      "description": "The last day it was invoked."
+                      "description": "The start day of the last session that invoked it."
                     }
                   },
                   "required": ["byModel", "byUser"],
@@ -597,21 +600,9 @@
             "description": "A stable id, `${rule}:${item ?? pack ?? harness}`."
           },
           "rule": {
-            "enum": [
-              "invisible-skill",
-              "dead-skill",
-              "manual-only",
-              "expensive-description",
-              "dead-pack",
-              "duplicate",
-              "heavy-instructions",
-              "idle-mcp",
-              "harness-mismatch",
-              "drift",
-              "short-history"
-            ],
             "type": "string",
-            "description": "The rule that found it."
+            "minLength": 1,
+            "description": "The rule that found it: a RuleId, or the id of a rule a newer loadsheet added."
           },
           "level": {
             "enum": ["cut", "fix", "info"],
@@ -620,12 +611,13 @@
           },
           "item": {
             "type": "string",
-            "pattern": "^(skill|instructions|mcp|subagent):.+$",
+            "pattern": "^(skill|instructions|mcp|subagent):(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/])).+$",
             "description": "The item it is about; absent for pack-level and harness-level findings such as dead-pack and short-history."
           },
           "pack": {
             "type": "string",
             "minLength": 1,
+            "pattern": "^(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
             "description": "The pack it is about, for dead-pack."
           },
           "where": {
@@ -694,7 +686,7 @@
                 "path": {
                   "type": "string",
                   "minLength": 1,
-                  "pattern": "^(?!\\/home\\/|\\/Users\\/|[A-Za-z]:)",
+                  "pattern": "^(?!(?:\\/home\\/|\\/Users\\/|\\/var\\/home\\/|\\/root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
                   "description": "The file or folder to change, relative to the home directory or the project."
                 },
                 "run": {
@@ -746,21 +738,9 @@
         "type": "object",
         "properties": {
           "rule": {
-            "enum": [
-              "invisible-skill",
-              "dead-skill",
-              "manual-only",
-              "expensive-description",
-              "dead-pack",
-              "duplicate",
-              "heavy-instructions",
-              "idle-mcp",
-              "harness-mismatch",
-              "drift",
-              "short-history"
-            ],
             "type": "string",
-            "description": "The rule."
+            "minLength": 1,
+            "description": "The rule: a RuleId, or the id of a rule a newer loadsheet added."
           },
           "harness": {
             "type": "string",
