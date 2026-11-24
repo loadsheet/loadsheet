@@ -1231,9 +1231,8 @@ async function fleetRunCommand(loaded: Awaited<ReturnType<typeof loadManifest>>)
   const words = commandAfterDashes() as [string, ...string[]];
   // Every positional after -- is a word of the command; the ones before it are hosts.
   const named = rest.slice(1, rest.length - words.length);
+  // With an empty fleet and no hosts named, the command runs on this machine alone.
   const entries = named.length > 0 ? named : loaded.root.fleet;
-  if (entries.length === 0)
-    usage(`the manifest has no fleet; add hosts with \`${cliName()} fleet add\``);
   const bad = entries.filter(isTag).flatMap((entry) => tagProblem(entry) ?? []);
   if (bad.length > 0) usage(bad.join("; "));
   const timeout = fleetTimeout(30_000);

@@ -212,6 +212,27 @@ describe.skipIf(isWindows)("fleet run", () => {
     ]);
   });
 
+  it("runs on this machine alone when the fleet is empty", async () => {
+    const m = machine();
+    const manifest = m.manifest({ agents: ["claude-code"], sources: [], fleet: [] });
+    const run = await m.runWith(
+      { env: fakeSsh(m) },
+      "fleet",
+      "run",
+      "--manifest",
+      manifest,
+      "--json",
+      "--",
+      "sh",
+      "-c",
+      "echo here",
+    );
+    expect(run.code, run.stderr).toBe(0);
+    expect(JSON.parse(run.stdout)).toEqual([
+      { host: hostname(), reachable: true, exitCode: 0, stdout: "here\n" },
+    ]);
+  });
+
   it("needs a command after --", async () => {
     const m = machine();
     const manifest = m.manifest({ agents: ["claude-code"], sources: [], fleet: ["box"] });
