@@ -37,18 +37,28 @@ const coverage = (machine: string, harness: string, extra: Partial<Coverage> = {
   ...extra,
 });
 
-const skill = (name: string, extra: Partial<Item> = {}): Item => ({
-  id: `skill:${name}`,
-  ref: { kind: "skill", name },
-  harnesses: ["claude-code"],
-  scope: "user",
-  managedBy: "hand",
-  path: `~/.claude/skills/${name}`,
-  digest: "0".repeat(64),
-  chars: { listed: 120, body: 900 },
-  modelInvocable: true,
-  ...extra,
-});
+/** A digest of its own for each path, as each file has. */
+const digestOf = (path: string) => {
+  let hash = 0x811c9dc5;
+  for (const char of path) hash = Math.imul(hash ^ char.codePointAt(0)!, 0x01000193) >>> 0;
+  return hash.toString(16).padStart(8, "0").repeat(8);
+};
+
+const skill = (name: string, extra: Partial<Item> = {}): Item => {
+  const path = extra.path ?? `~/.claude/skills/${name}`;
+  return {
+    id: `skill:${name}`,
+    ref: { kind: "skill", name },
+    harnesses: ["claude-code"],
+    scope: "user",
+    managedBy: "hand",
+    path,
+    digest: digestOf(path),
+    chars: { listed: 120, body: 900 },
+    modelInvocable: true,
+    ...extra,
+  };
+};
 
 /**
  * A harness's session totals: one session on the window's first day, so the sheet holds 30 days of
@@ -652,6 +662,23 @@ describe("fixes", () => {
     ]);
   });
 
+  it("keeps a folder another harness reaches through a link", () => {
+    const mine = skill("weekly");
+    // `~/.agents/skills/weekly` links to it: the same file, so the same digest. Codex reads its
+    // name its own way, and uses it.
+    const link = skill("weekly report", {
+      harnesses: ["codex"],
+      path: "~/.agents/skills/weekly",
+      digest: mine.digest,
+    });
+    const fixes = dead([mine, link], {
+      coverage: [coverage("laptop", "claude-code"), coverage("laptop", "codex")],
+      sessions: [...sessions(30), ...sessions(30, {}, "codex")],
+      cells: [cell("weekly", 25), cell("weekly report", 25, { harness: "codex", byUser: 2 })],
+    }).find((f) => f.rule === "dead-skill")!.fixes;
+    expect(fixes.map((fix) => [fix.action, fix.run])).toEqual([["hide-from-model", undefined]]);
+  });
+
   it("reads another harness's use before any filter, and keeps a path whose other harness cannot tell use", () => {
     const shared = skill("idle", {
       harnesses: ["claude-code", "codex"],
@@ -974,6 +1001,14 @@ describe("fixes", () => {
       cells: [cell("idle-report", 25, { byModel: 3 })],
     });
     expect(fixesOf([laptop, renamed])).toEqual(hidden);
+    // Codex on the server uses a skill inside the linked folder, which the unlink would take too.
+    const nested = scan("server", {
+      coverage: [coverage("server", "claude-code"), coverage("server", "codex")],
+      items: [linked, skill("child", { harnesses: ["codex"], path: `${linked.path}/child` })],
+      sessions: [...sessions(30), ...sessions(30, {}, "codex")],
+      cells: [cell("child", 25, { harness: "codex", byModel: 3 })],
+    });
+    expect(fixesOf([laptop, nested])).toEqual([...hidden, { ...hidden[0]!, machine: "server" }]);
     // Codex on the server used it, which the sheet of the harnesses read does not show.
     const server = scan("server", {
       coverage: [coverage("server", "codex")],

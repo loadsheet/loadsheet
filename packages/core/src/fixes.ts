@@ -167,6 +167,32 @@ const fleetrcKey = (name: string) =>
     .toLowerCase()
     .replace(/[. ]+$/u, "");
 
+/** Whether a path is inside a folder. */
+const inside = (folder: string, path: string) => path.startsWith(`${folder.replace(/\/+$/u, "")}/`);
+
+/**
+ * The Items among `items` that are `item`'s folder under another view: at its path, with its id,
+ * or with its content, since one of the two can be a link to the other and two harnesses can read
+ * one name differently. With `linked`, fleetrc's key of the folder's name, also every folder of
+ * that name fleetrc links.
+ */
+const copiesOf = (items: Item[], item: Item, linked?: string) =>
+  items.filter(
+    (other) =>
+      other.path === item.path ||
+      other.id === item.id ||
+      other.digest === item.digest ||
+      (linked !== undefined &&
+        other.managedBy === "fleetrc" &&
+        fleetrcKey(baseName(other.path)) === linked),
+  );
+
+/** The copies, and the skills inside their folders (Codex reads `parent/child/SKILL.md` as one). */
+const reachOf = (items: Item[], copies: Item[]) => [
+  ...copies,
+  ...items.filter((other) => copies.some((copy) => inside(copy.path, other.path))),
+];
+
 const removeOne = (
   sheet: RuleSheet,
   { machine, item }: Install,
@@ -175,23 +201,23 @@ const removeOne = (
   const table = HARNESSES[sheet.harness];
   const hide = () =>
     table ? withMachine(machine, table.hide(item) ?? table.off?.(item, sheet, machine)) : undefined;
-  // Two harnesses can read one folder's name differently and so give it two ids. A remove takes
-  // the folder, so use and loaders are those of every Item of this machine at this path.
-  const here = [
-    item,
-    ...unfiltered.items(machine).filter((o) => o.path === item.path && o.id !== item.id),
-  ];
-  const usedBy = [...new Set(here.flatMap((copy) => unfiltered.usedBy(copy.id)))];
+  // A remove is offered only when nothing it reaches is in use or out of sight; everything else
+  // is hidden or turned off. What it reaches is read from every Item of the machine.
+  const items = unfiltered.items(machine);
+  const copies = [item, ...copiesOf(items, item)];
+  const usedBy = [...new Set(copies.flatMap((copy) => unfiltered.usedBy(copy.id)))];
   // This harness used it in sessions the filters left out, so nothing about it is dead there.
   if (usedBy.includes(sheet.harness)) return undefined;
-  // Another harness that loads this path uses it, or cannot tell whether it does on this machine:
-  // hide it from this one, or turn it off here.
-  const others = here
-    .flatMap((copy) => copy.harnesses)
-    .filter((harness) => harness !== sheet.harness);
-  if (others.some((other) => usedBy.includes(other) || !unfiltered.tellsUse(machine, other))) {
-    return hide();
-  }
+  // Another harness loads a copy, or a skill inside one, and uses it or cannot tell whether it
+  // does on this machine: hide it from this one, or turn it off here.
+  const kept = reachOf(items, copies).some((other) =>
+    other.harnesses.some(
+      (harness) =>
+        harness !== sheet.harness &&
+        (unfiltered.usedBy(other.id).includes(harness) || !unfiltered.tellsUse(machine, harness)),
+    ),
+  );
+  if (kept) return hide();
   const remove: Fix = { machine, action: "remove", path: item.path };
   // A harness loadsheet has no table for gets the path and no command.
   if (!table) return remove;
@@ -208,28 +234,21 @@ const removeOne = (
     // `fleetrc remove` adds the skill to its source's `exclude` in the manifest and syncs, which
     // unlinks it from every agent; other machines follow at their next sync, after a commit and
     // push when the manifest lives in a repository. So only a fleet Report that read every machine
-    // and found no use of the skill anywhere, where every harness that loads a copy of it can tell
-    // use, gives it; otherwise it is hidden or turned off here. A copy is an Item with this id, or
-    // a folder of this name that fleetrc links, since a machine or a harness can read the folder's
-    // name differently. The command takes a name that matches a source id as that whole source, so
-    // a skill named like a source any machine links from gets no command.
+    // gives it, and only when no copy on any machine, and no skill inside one, is used by a
+    // harness or loaded by one that cannot tell use; otherwise it is hidden or turned off here.
+    // The command takes a name that matches a source id as that whole source, so a skill named
+    // like a source any machine links from gets no command.
     case "fleetrc": {
       const key = fleetrcKey(baseName(item.path));
-      const kept = unfiltered.machines.some((other) =>
-        unfiltered
-          .items(other)
-          .filter(
-            (copy) =>
-              copy.id === item.id ||
-              (copy.managedBy === "fleetrc" && fleetrcKey(baseName(copy.path)) === key),
-          )
-          .some(
-            (copy) =>
-              unfiltered.usedBy(copy.id).length > 0 ||
-              copy.harnesses.some((harness) => !unfiltered.tellsUse(other, harness)),
-          ),
-      );
-      if (!unfiltered.wholeFleet || usedBy.length || kept) return hide();
+      const inUse = unfiltered.machines.some((other) => {
+        const all = unfiltered.items(other);
+        return reachOf(all, copiesOf(all, item, key)).some(
+          (copy) =>
+            unfiltered.usedBy(copy.id).length > 0 ||
+            copy.harnesses.some((harness) => !unfiltered.tellsUse(other, harness)),
+        );
+      });
+      if (!unfiltered.wholeFleet || usedBy.length || inUse) return hide();
       const source = unfiltered
         .items()
         .some((other) => other.managedBy === "fleetrc" && fleetrcKey(other.pack ?? "") === key);
@@ -238,13 +257,9 @@ const removeOne = (
     // A plugin's skills come and go with the plugin, and an update replaces its files.
     case "plugin":
       return undefined;
-    // A folder can hold skills of their own (Codex reads `parent/child/SKILL.md` as one), which
-    // `rm -r` would take too, so such a folder is hidden instead.
+    // `rm -r` would take the skills inside the folder too, so such a folder is hidden instead.
     case "hand": {
-      const folder = `${item.path.replace(/\/+$/u, "")}/`;
-      const nested = unfiltered
-        .items(machine)
-        .some((other) => other !== item && other.path.startsWith(folder));
+      const nested = items.some((other) => inside(item.path, other.path));
       return nested ? hide() : { ...remove, run: `rm -r ${shellPath(item.path)}` };
     }
   }
