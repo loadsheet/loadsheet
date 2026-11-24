@@ -210,19 +210,80 @@ describe("codex sessions", () => {
     expect(via({ source: { subagent: { thread_spawn: {} } } })).toMatchObject({ via: "subagent" });
   });
 
-  it("loads the user's AGENTS.md: all of a bare fragment, the part before the project docs under `for`", () => {
+  describe("AGENTS.md", () => {
+    const folder = "/work/zebra-orchard-42";
     const fragment = (header: string, text: string) =>
       user(`# AGENTS.md instructions${header}\n\n<INSTRUCTIONS>\n${text}\n</INSTRUCTIONS>`);
-    const chars = (line: object) =>
-      parseAll([meta(), line]).facts.find((fact) => fact.type === "listed");
-    expect(chars(fragment("", "Mine."))).toMatchObject({
-      item: "instructions:~/.codex/AGENTS.md",
-      chars: 5,
+    const world = (text: string, directory?: string) => ({
+      type: "world_state",
+      payload: { full: true, state: { agents_md: { text, ...(directory ? { directory } : {}) } } },
     });
-    expect(chars(fragment(" for /p", "Mine.\n\n--- project-doc ---\n\nTheirs."))).toMatchObject({
-      chars: 5,
+    const instructions = (lines: object[]) =>
+      parseAll([meta(), ...lines]).facts.flatMap((fact) =>
+        fact.type === "listed" ? [[fact.item, fact.chars, fact.bare]] : [],
+      );
+    const both = "Mine.\n\n--- project-doc ---\n\nRoot doc.\n\nNested doc.";
+    const mine = ["instructions:~/.codex/AGENTS.md", 5, false];
+    const project = ["instructions:project/AGENTS.md", "Root doc.\n\nNested doc.".length, false];
+
+    it("counts the user's part and the project's part of a `for <dir>` fragment", () => {
+      expect(instructions([fragment(` for ${folder}`, both)])).toEqual([mine, project]);
+      expect(instructions([world(both, folder)])).toEqual([mine, project]);
     });
-    expect(chars(fragment(" for /p", "Only the project's."))).toBeUndefined();
+
+    it("counts only the project's part when a `for <dir>` fragment has no separator", () => {
+      const only = ["instructions:project/AGENTS.md", "Only the project's.".length, false];
+      expect(instructions([fragment(` for ${folder}`, "Only the project's.")])).toEqual([only]);
+      expect(instructions([world("Only the project's.", folder)])).toEqual([only]);
+    });
+
+    it("counts all of a bare fragment as the user's", () => {
+      expect(instructions([fragment("", "Mine.")])).toEqual([mine]);
+      expect(instructions([world("Mine.")])).toEqual([mine]);
+    });
+
+    it("emits nothing for an empty part", () => {
+      expect(
+        instructions([fragment(` for ${folder}`, "\n\n--- project-doc ---\n\nRoot doc.")]),
+      ).toEqual([["instructions:project/AGENTS.md", 9, false]]);
+      expect(
+        instructions([fragment(` for ${folder}`, "Mine.\n\n--- project-doc ---\n\n")]),
+      ).toEqual([mine]);
+    });
+
+    it("reads the first fragment of a session only", () => {
+      expect(
+        instructions([
+          world(both, folder),
+          fragment(` for ${folder}`, both),
+          turn,
+          fragment(" for /other", "Other doc."),
+        ]),
+      ).toEqual([mine, project]);
+    });
+
+    it("keeps a fork's copied fragment, once", () => {
+      const facts = parseAll([
+        meta({ forked_from_id: "parent" }),
+        fragment(` for ${folder}`, both),
+        taskStarted,
+        turn,
+        fragment(` for ${folder}`, both),
+      ]).facts;
+      expect(count(facts)).toEqual({ session: 1, listed: 2 });
+    });
+
+    it("keeps the header's folder out of every Fact", () => {
+      const facts = [
+        world(both, folder),
+        world("Only the project's.", folder),
+        fragment(` for ${folder}`, both),
+        fragment(` for ${folder}`, "Only the project's."),
+      ].flatMap((line) => parseAll([meta(), line]).facts);
+      expect(facts.filter((fact) => fact.type === "listed")).toHaveLength(6);
+      expect(JSON.stringify(facts)).not.toContain("zebra-orchard");
+      expect(JSON.stringify(facts)).not.toContain("/work");
+    });
   });
 
   it("lists MCP servers from the deferred namespaces and finds their uses in tool calls", () => {
@@ -287,13 +348,16 @@ describe("codex sessions", () => {
 describe("codex fixture", () => {
   // Counted by hand from fixtures/codex/session.jsonl: a T3 Code session of Codex 0.167.0 that
   // lists 134 skills (19,526 chars, 56 of them a plugin's), loads 6,586 chars of the user's AGENTS.md
-  // before the project docs, lists two MCP namespaces (28 and 15 chars), starts with 20,326 input
+  // and 3,627 of project docs after it, lists two MCP namespaces (28 and 15 chars), starts with 20,326 input
   // tokens, and reads four listed SKILL.md files in three exec calls. No `<skill>` message.
   const hand = {
     session: { type: "session", day: "2026-11-09", via: "T3 Code", version: "0.167.0" },
     skills: 134,
     skillChars: 19_526,
-    instructions: 6586,
+    instructions: {
+      "instructions:~/.codex/AGENTS.md": 6586,
+      "instructions:project/AGENTS.md": 3627,
+    },
     mcp: { "mcp:executor": 28, "mcp:t3_code": 15 },
     tokens: 20_326,
     used: [
@@ -316,13 +380,17 @@ describe("codex fixture", () => {
     const skills = listed.filter((fact) => fact.item.startsWith("skill:"));
     expect(skippedLines).toBe(0);
     expect(records[0]).toEqual(hand.session);
-    expect(count(records)).toEqual({ session: 1, listed: 137, tokens: 1, "used:model": 4 });
+    expect(count(records)).toEqual({ session: 1, listed: 138, tokens: 1, "used:model": 4 });
     expect(skills).toHaveLength(hand.skills);
     expect(skills.reduce((sum, fact) => sum + fact.chars, 0)).toBe(hand.skillChars);
     expect(skills.every((fact) => !fact.bare)).toBe(true);
-    expect(listed.find((fact) => fact.item.startsWith("instructions:"))?.chars).toBe(
-      hand.instructions,
-    );
+    expect(
+      Object.fromEntries(
+        listed
+          .filter((fact) => fact.item.startsWith("instructions:"))
+          .map((fact) => [fact.item, fact.chars]),
+      ),
+    ).toEqual(hand.instructions);
     expect(
       Object.fromEntries(
         listed

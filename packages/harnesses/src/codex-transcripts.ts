@@ -76,23 +76,36 @@ const texts = (payload: Record<string, unknown>): string[] =>
     : [];
 
 /**
- * The user's own part of an AGENTS.md fragment: all of it under a bare header, the text before
- * the project-doc separator under a `for <dir>` header, and nothing when a `for` header has no
- * separator (only project docs loaded).
+ * The item name of every project `AGENTS.md` a session loads, root and nested together. No folder
+ * or project name goes in it.
  */
-const userInstructions = (text: string, forDirectory: boolean): string => {
-  if (!forDirectory) return text;
+const PROJECT_INSTRUCTIONS = "project/AGENTS.md";
+
+interface Instructions {
+  user: string;
+  project: string;
+}
+
+/**
+ * An AGENTS.md fragment's two parts. A bare header holds only the user's file. Under a
+ * `for <dir>` header the user's file comes before the project-doc separator and the project's
+ * files after it; with no separator, only project docs loaded.
+ */
+const splitInstructions = (text: string, forDirectory: boolean): Instructions => {
+  if (!forDirectory) return { user: text, project: "" };
   const separator = text.indexOf(PROJECT_DOC);
-  return separator === -1 ? "" : text.slice(0, separator);
+  return separator === -1
+    ? { user: "", project: text }
+    : { user: text.slice(0, separator), project: text.slice(separator + PROJECT_DOC.length) };
 };
 
-const instructionsFromFragment = (fragment: string): string | undefined => {
+const instructionsFromFragment = (fragment: string): Instructions | undefined => {
   const header = /^# AGENTS\.md instructions( for [^\n]*)?\n\n/u.exec(fragment);
   if (!header) return undefined;
   const open = fragment.indexOf(INSTRUCTIONS_OPEN, header[0].length);
   const close = fragment.lastIndexOf(INSTRUCTIONS_CLOSE);
   if (open === -1 || close < open) return undefined;
-  return userInstructions(fragment.slice(open + INSTRUCTIONS_OPEN.length, close), !!header[1]);
+  return splitInstructions(fragment.slice(open + INSTRUCTIONS_OPEN.length, close), !!header[1]);
 };
 
 /** Reads the skills section's lines into State and returns one `listed` per skill. */
@@ -256,11 +269,22 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
       state.skills = true;
       readSkillListing(body, state, listed);
     };
-    const readInstructions = (text: string | undefined) => {
-      if (state.instructions || text === undefined) return;
+    const readInstructions = (parts: Instructions | undefined) => {
+      if (state.instructions || parts === undefined) return;
       state.instructions = true;
-      if (text.length > 0) {
-        listed({ item: `instructions:${CODEX_INSTRUCTIONS}`, chars: text.length, bare: false });
+      if (parts.user.length > 0) {
+        listed({
+          item: `instructions:${CODEX_INSTRUCTIONS}`,
+          chars: parts.user.length,
+          bare: false,
+        });
+      }
+      if (parts.project.length > 0) {
+        listed({
+          item: `instructions:${PROJECT_INSTRUCTIONS}`,
+          chars: parts.project.length,
+          bare: false,
+        });
       }
     };
     const readServers = (servers: [name: string, chars: number][]) => {
@@ -279,7 +303,7 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
       if (typeof body === "string") readSkills(body);
       const agents = record(world?.agents_md);
       if (typeof agents?.text === "string") {
-        readInstructions(userInstructions(agents.text, !!agents.directory));
+        readInstructions(splitInstructions(agents.text, !!agents.directory));
       }
       const tools = record(world?.tools);
       if (tools) {
