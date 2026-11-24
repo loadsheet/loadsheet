@@ -1,7 +1,7 @@
 {
   "name": "loadsheet",
   "version": "0.0.0",
-  "description": "The CLI.",
+  "description": "Inspect, weigh and diagnose your coding agents' context: which skills, instruction files and MCP servers cost context without being used.",
   "homepage": "https://loadsheet.dev",
   "license": "MIT",
   "author": "onmax",
