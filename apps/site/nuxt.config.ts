@@ -32,7 +32,8 @@ export default defineNuxtConfig({
   $development: {
     vitehub: { console: { auth: false } },
   },
-  // Add `build: { transpile: ["@loadsheet/ui"] }` here once packages/ui exists: it ships Vue source, not a build.
+  // @loadsheet/ui ships Vue source, not a build.
+  build: { transpile: ["@loadsheet/ui"] },
   routeRules: {
     // A shared Report lives in the URL fragment, so these pages render only in the browser.
     "/report/**": { ssr: false },
