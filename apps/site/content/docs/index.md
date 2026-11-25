@@ -3,18 +3,30 @@ title: What loadsheet measures
 description: loadsheet reports which skills, instruction files and MCP servers cost your coding agents context without being used.
 ---
 
-loadsheet inspects, weighs and diagnoses your coding agents' context: skills, `AGENTS.md` and `CLAUDE.md` files, MCP servers and subagents, across every harness and every machine you use.
+Every session of a coding agent starts with text you never typed. The harness lists each installed skill with its description, loads `AGENTS.md` and `CLAUDE.md`, and describes the tools of each MCP server. All of it counts against the model's context window before your first message.
 
-## How it works
+loadsheet reads your agents' session transcripts on your own machine and answers two questions for each piece of that context:
 
-loadsheet reads your agents' session transcripts on your own machine. For each piece of context it tells you how many tokens it costs before you type anything and whether your agent used it in the sessions it read. It never edits your files: it hands your agent the exact commands to fix what you accept.
+- How many tokens does it add to every session?
+- Did the agent use it in the sessions it read?
 
-## First run
+It then lists what to cut or fix, with the exact change for each. It never edits your files. Your agent applies the fixes you accept.
+
+## What it reads
+
+| Item              | What loadsheet reports                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------------------ |
+| Skills            | Tokens of the listing entry, sessions that listed it, times the model or you invoked it          |
+| Instruction files | Tokens of each `AGENTS.md`, `CLAUDE.md` or memory file, and the share of sessions that loaded it |
+| MCP servers       | Tokens of their tool list, and how often a session called them                                   |
+| Subagents         | Tokens of their listing entry, and how often they ran                                            |
+
+It reads Claude Code, Codex, Grok, Pi, OpenCode, Cursor, Gemini and Kiro. Each harness writes different transcripts, so each report says what it could see for each harness. See [Read the report](/docs/guide/reading).
+
+## Start
 
 ```sh
-npx loadsheet          # report for this machine
-npx loadsheet --ui     # the same report as a web page on 127.0.0.1
-npx loadsheet --json   # the Report as JSON
+npx loadsheet
 ```
 
-The Report the CLI writes follows the JSON Schema at [loadsheet.dev/schema/v1.json](https://loadsheet.dev/schema/v1.json). Transcript text, tool input and output and skill bodies stay on your machine; a Report you share through loadsheet.dev drops each skill's description too.
+[Install and first run](/docs/guide) has the rest. To weigh a skill pack before you install it, see [Weigh a skill pack](/docs/guide/packs).

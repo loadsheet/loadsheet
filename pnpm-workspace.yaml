@@ -49,6 +49,8 @@ minimumReleaseAgeExclude:
   - "@vite-hub/auth@0.5.1"
   - "@vite-hub/blob@0.5.1"
   - "@vite-hub/bundle@0.5.1"
+  - "@vite-hub/cms@0.5.1"
+  - "drizzle-kit@1.0.0-rc.6"
   - "@vite-hub/cli@0.5.1"
   - "@vite-hub/comments@0.5.1"
   - "@vite-hub/content@0.5.1"
