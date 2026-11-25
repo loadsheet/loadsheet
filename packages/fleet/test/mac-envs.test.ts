@@ -4,6 +4,7 @@
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -128,7 +129,17 @@ describe("mac environments", () => {
     async () => {
       const m = machine();
       const manifest = m.manifest({ agents: ["claude-code"], sources: [] });
-      const init = await m.runWith({ env: { SHELL: "/bin/zsh" } }, "init", manifest, "--no-hooks");
+      // A `fleetrc` installed on the machine running the tests is on PATH, and init gives no advice then.
+      const path = (m.env.PATH ?? "")
+        .split(delimiter)
+        .filter((dir) => !existsSync(join(dir, "fleetrc")))
+        .join(delimiter);
+      const init = await m.runWith(
+        { env: { SHELL: "/bin/zsh", PATH: path } },
+        "init",
+        manifest,
+        "--no-hooks",
+      );
       expect(init.code, init.stderr).toBe(0);
       expect(init.stdout).toContain(
         process.platform === "darwin" ? "in ~/.zprofile:" : "in ~/.zshrc:",
