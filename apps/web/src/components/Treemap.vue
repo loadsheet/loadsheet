@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { esc, hideTip, showTip } from "../lib/ui";
 import { fmt, type Kind } from "../lib/report";
-import { squarify } from "../lib/squarify";
+import { squarify, type Rect } from "../lib/squarify";
 
 export interface Block {
   id: string;
@@ -44,6 +44,18 @@ const GAP = 3;
 const GROUP = 4;
 const ORDER = ["harness", "mcp", "instr", "skill", "agent"] as const;
 
+function inset<T>(rect: Rect<T>, padding: number): Rect<T> {
+  const horizontal = Math.min(padding, rect.w / 4);
+  const vertical = Math.min(padding, rect.h / 4);
+  return {
+    item: rect.item,
+    x: rect.x + horizontal,
+    y: rect.y + vertical,
+    w: rect.w - horizontal * 2,
+    h: rect.h - vertical * 2,
+  };
+}
+
 /** A narrow kind stacks its blocks as full-width rows, so each name gets the whole width. */
 function strips<T extends { value: number }>(
   items: T[],
@@ -80,22 +92,22 @@ const rects = computed(() => {
     return { items: mine, value: mine.reduce((n, x) => n + x.value, 0) };
   });
   const out: { b: Block; x: number; y: number; w: number; h: number; mode: "" | "s" | "t" }[] = [];
-  const pad = GAP / 2 + GROUP / 2;
-  for (const g of squarify(groups, -pad, -pad, W + pad * 2, H + pad * 2)) {
-    const gi = GROUP / 2;
-    const [x, y, w, h] = [g.x + gi, g.y + gi, g.w - gi * 2, g.h - gi * 2];
-    for (const r of w < 200 && h > w * 1.5
-      ? strips(g.item.items, x, y, w, h)
-      : squarify(g.item.items, x, y, w, h, true)) {
-      const w = r.w - GAP;
-      const h = r.h - GAP;
+  for (const group of squarify(groups, 0, 0, W, H)) {
+    const { item, x, y, w, h } = inset(group, GROUP / 2);
+    const canStack =
+      w < 200 && h > w * 1.5 && item.items.every((leaf) => (leaf.value / item.value) * h >= 8);
+    const leaves = canStack
+      ? strips(item.items, x, y, w, h)
+      : squarify(item.items, x, y, w, h, true);
+    for (const leaf of leaves) {
+      const rect = inset(leaf, GAP / 2);
       out.push({
-        b: r.item.b,
-        x: r.x + GAP / 2,
-        y: r.y + GAP / 2,
-        w,
-        h,
-        mode: w >= 56 && h >= 50 ? "" : h >= 16 && w >= 64 ? "s" : "t",
+        b: rect.item.b,
+        x: rect.x,
+        y: rect.y,
+        w: rect.w,
+        h: rect.h,
+        mode: rect.w >= 56 && rect.h >= 50 ? "" : rect.h >= 16 && rect.w >= 64 ? "s" : "t",
       });
     }
   }
