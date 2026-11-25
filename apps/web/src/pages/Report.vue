@@ -70,7 +70,7 @@ const select = (id: string) =>
         data-slot="button"
         data-variant="solid"
         data-size="lg"
-        :to="{ path: '/report/fixes', query: { h: $route.query.h } }"
+        :to="{ path: '/report/fixes', query: { h: $route.query.h, r: $route.query.r } }"
         >Review {{ plural(h.fixes.value.length, "fix", "fixes")
         }}<span v-if="h.saving.value" class="num">−{{ fmt(h.saving.value) }}</span></RouterLink
       >

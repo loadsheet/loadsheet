@@ -55,7 +55,7 @@ async function share() {
       <RouterLink
         v-for="t in tabs"
         :key="t.to"
-        :to="{ path: t.to, query: { h: $route.query.h } }"
+        :to="{ path: t.to, query: { h: $route.query.h, r: $route.query.r } }"
         :class="{ on: $route.path === t.to }"
         :aria-current="$route.path === t.to ? 'page' : undefined"
       >

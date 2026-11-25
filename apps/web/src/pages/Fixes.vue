@@ -85,7 +85,9 @@ const notes = computed(() => coverage(report.value));
     <StateBox v-else title="Nothing to fix">
       Everything your setup loads was used, and nothing is heavier than it needs to be.
       <template #actions>
-        <RouterLink data-slot="button" :to="{ path: '/report', query: { h: $route.query.h } }"
+        <RouterLink
+          data-slot="button"
+          :to="{ path: '/report', query: { h: $route.query.h, r: $route.query.r } }"
           >Back to the map</RouterLink
         >
       </template>
