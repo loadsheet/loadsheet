@@ -252,7 +252,10 @@ const ItemSchema = v.pipe(
     ),
     modelInvocable: describe(v.boolean(), "Whether the model may invoke it on its own."),
     description: v.optional(
-      describe(v.string(), "Its description, in pack mode only; a Scan never carries it."),
+      describe(
+        v.string(),
+        "A skill's or subagent's description, the text the harness lists for it; absent for other kinds.",
+      ),
     ),
   }),
   v.check(
@@ -319,6 +322,16 @@ const CoverageSchema = v.pipe(
       }),
       v.description("How well each signal is provided."),
     ),
+    contextWindow: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.description(
+          "The model's context window in tokens, as the harness reports it in its latest session or, failing that, its settings; absent when unknown.",
+        ),
+      ),
+    ),
   }),
   v.description("What one harness on one machine could tell."),
 );
@@ -335,7 +348,13 @@ const scanSchema = v.pipe(
       v.array(
         v.pipe(
           ItemSchema,
-          v.check((item) => item.description === undefined, "a Scan must not carry a description"),
+          v.check(
+            (item) =>
+              item.description === undefined ||
+              item.ref.kind === "skill" ||
+              item.ref.kind === "subagent",
+            "only a skill or subagent carries a description",
+          ),
         ),
       ),
       "Installed pieces of context.",
@@ -559,11 +578,21 @@ const LineSchema = v.pipe(
       }),
       v.description("How often it was invoked."),
     ),
-    description: v.optional(describe(v.string(), "Its description, in pack mode only.")),
+    description: v.optional(
+      describe(
+        v.string(),
+        "A skill's or subagent's description, the text the harness lists for it; absent for other kinds. A Report shared through loadsheet.dev carries none.",
+      ),
+    ),
   }),
   v.check(
     (line) => line.item === `${line.ref.kind}:${line.ref.name}`,
     "item must be ref.kind:ref.name",
+  ),
+  v.check(
+    (line) =>
+      line.description === undefined || line.ref.kind === "skill" || line.ref.kind === "subagent",
+    "only a skill or subagent line carries a description",
   ),
   v.description("One piece of context on a harness's sheet, aggregated over machines."),
 );
@@ -575,7 +604,17 @@ const SheetSchema = v.pipe(
     fixedTokens: v.optional(
       describe(
         TokensSchema,
-        "Tokens every session starts with, averaged over the sessions that reported them; absent when none did.",
+        "Tokens a session starts with now: averaged over the sessions of the last 7 days of the window that reported them, or of the whole window when none in those days did; absent when none did.",
+      ),
+    ),
+    contextWindow: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.description(
+          "The model's context window in tokens: the largest any machine's coverage for this harness reports; absent when none does.",
+        ),
       ),
     ),
     lines: describe(v.array(LineSchema), "One line per piece of context."),
@@ -708,15 +747,6 @@ const reportSchema = v.pipe(
     findings: describe(v.array(FindingSchema), "What the rules found."),
     skipped: describe(v.array(SkippedSchema), "Rules that did not run, per harness."),
   }),
-  v.forward(
-    v.check(
-      (report) =>
-        report.mode === "pack" ||
-        report.sheet.every((sheet) => sheet.lines.every((line) => line.description === undefined)),
-      "a line carries a description only in pack mode",
-    ),
-    ["sheet"],
-  ),
   v.forward(
     v.check(
       (report) => report.mode !== "pack" || report.machines.length === 0,

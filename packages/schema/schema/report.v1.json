@@ -401,6 +401,11 @@
             },
             "required": ["listing", "modelUse", "userUse", "instructions", "mcp", "tokens"],
             "description": "How well each signal is provided."
+          },
+          "contextWindow": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "The model's context window in tokens, as the harness reports it in its latest session or, failing that, its settings; absent when unknown."
           }
         },
         "required": ["machine", "harness", "installed", "sessions", "versions", "signals"],
@@ -438,7 +443,12 @@
               }
             },
             "required": ["value", "basis"],
-            "description": "Tokens every session starts with, averaged over the sessions that reported them; absent when none did."
+            "description": "Tokens a session starts with now: averaged over the sessions of the last 7 days of the window that reported them, or of the whole window when none in those days did; absent when none did."
+          },
+          "contextWindow": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "The model's context window in tokens: the largest any machine's coverage for this harness reports; absent when none does."
           },
           "lines": {
             "type": "array",
@@ -578,7 +588,7 @@
                 },
                 "description": {
                   "type": "string",
-                  "description": "Its description, in pack mode only."
+                  "description": "A skill's or subagent's description, the text the harness lists for it; absent for other kinds. A Report shared through loadsheet.dev carries none."
                 }
               },
               "required": ["item", "ref", "machines", "chars", "tokens", "exposure", "use"],
@@ -865,23 +875,6 @@
   },
   "else": {
     "properties": {
-      "sheet": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "properties": {
-            "lines": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "description": false
-                }
-              }
-            }
-          }
-        }
-      },
       "findings": {
         "type": "array",
         "items": {

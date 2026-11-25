@@ -24,15 +24,11 @@ const each = (properties: Node): Node => ({
 });
 const emptyArray = { type: "array", maxItems: 0 };
 
-// A Scan never carries a description.
-const scan = (): Node => {
-  const schema = build(ScanSchema, "https://loadsheet.dev/schema/scan.v1.json", "loadsheet Scan");
-  at(schema, "properties", "items", "items", "properties").description = false;
-  return schema;
-};
+const scan = (): Node =>
+  build(ScanSchema, "https://loadsheet.dev/schema/scan.v1.json", "loadsheet Scan");
 
-// A set or hide-from-model fix says what to set or run. Outside pack mode no line carries a
-// description and every fix names its machine.
+// A set or hide-from-model fix says what to set or run. Outside pack mode every fix names its
+// machine.
 const report = (): Node => {
   const schema = build(ReportSchema, "https://loadsheet.dev/schema/v1.json", "loadsheet Report");
   const fix = at(schema, "properties", "findings", "items", "properties", "fixes", "items");
@@ -52,7 +48,6 @@ const report = (): Node => {
   };
   schema.else = {
     properties: {
-      sheet: each({ lines: each({ description: false }) }),
       findings: each({
         fixes: { type: "array", items: { type: "object", required: ["machine"] } },
       }),

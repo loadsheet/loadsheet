@@ -92,7 +92,8 @@
         "instructions": "exact",
         "mcp": "exact",
         "tokens": "exact"
-      }
+      },
+      "contextWindow": 200000
     },
     {
       "machine": "laptop",
@@ -109,7 +110,8 @@
         "instructions": "exact",
         "mcp": "exact",
         "tokens": "exact"
-      }
+      },
+      "contextWindow": 258400
     },
     {
       "machine": "laptop",
@@ -141,7 +143,8 @@
         "instructions": "exact",
         "mcp": "exact",
         "tokens": "exact"
-      }
+      },
+      "contextWindow": 200000
     },
     {
       "machine": "server",
@@ -158,7 +161,8 @@
         "instructions": "exact",
         "mcp": "exact",
         "tokens": "exact"
-      }
+      },
+      "contextWindow": 258400
     },
     {
       "machine": "server",
@@ -184,6 +188,7 @@
         "value": 17317,
         "basis": "measured"
       },
+      "contextWindow": 200000,
       "lines": [
         {
           "item": "instructions:CLAUDE.md",
@@ -297,7 +302,8 @@
             "byModel": 259,
             "byUser": 14,
             "lastUsed": "2026-11-23"
-          }
+          },
+          "description": "Use when writing a commit message: subject under 72 characters, imperative mood, body says why."
         },
         {
           "item": "skill:changelog-writer",
@@ -385,7 +391,8 @@
             "byModel": 0,
             "byUser": 1,
             "lastUsed": "2026-11-16"
-          }
+          },
+          "description": "Use when a Kubernetes pod is crash-looping, pending or failing its probes."
         },
         {
           "item": "skill:release-checklist",
@@ -414,7 +421,8 @@
             "byModel": 0,
             "byUser": 9,
             "lastUsed": "2026-11-23"
-          }
+          },
+          "description": "Use before cutting a release: version bump, changelog, tag and announcement."
         },
         {
           "item": "skill:api-designer",
@@ -817,7 +825,8 @@
             "byModel": 48,
             "byUser": 0,
             "lastUsed": "2026-11-23"
-          }
+          },
+          "description": "Reviews a diff for bugs and missing tests."
         },
         {
           "item": "subagent:db-migrator",
@@ -857,6 +866,7 @@
         "value": 11677,
         "basis": "measured"
       },
+      "contextWindow": 258400,
       "lines": [
         {
           "item": "skill:commit-style",
@@ -886,7 +896,8 @@
             "byModel": 65,
             "byUser": 0,
             "lastUsed": "2026-11-23"
-          }
+          },
+          "description": "Use when writing a commit message: subject under 72 characters, imperative mood, body says why."
         },
         {
           "item": "skill:changelog-writer",
@@ -1060,7 +1071,8 @@
             "byModel": 1,
             "byUser": 0,
             "lastUsed": "2026-11-23"
-          }
+          },
+          "description": "Use when reviewing a terraform plan for destroys and drift."
         },
         {
           "item": "skill:docx-builder",
@@ -1292,7 +1304,8 @@
             "byModel": 29,
             "byUser": 0,
             "lastUsed": "2026-11-23"
-          }
+          },
+          "description": "Finds where something is defined in a large codebase."
         },
         {
           "item": "subagent:test-runner",

@@ -118,6 +118,11 @@
             },
             "required": ["listing", "modelUse", "userUse", "instructions", "mcp", "tokens"],
             "description": "How well each signal is provided."
+          },
+          "contextWindow": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "The model's context window in tokens, as the harness reports it in its latest session or, failing that, its settings; absent when unknown."
           }
         },
         "required": ["machine", "harness", "installed", "sessions", "versions", "signals"],
@@ -218,7 +223,10 @@
             "type": "boolean",
             "description": "Whether the model may invoke it on its own."
           },
-          "description": false
+          "description": {
+            "type": "string",
+            "description": "A skill's or subagent's description, the text the harness lists for it; absent for other kinds."
+          }
         },
         "required": [
           "id",

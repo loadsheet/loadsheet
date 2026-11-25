@@ -62,7 +62,7 @@ export interface Item {
   chars: Chars;
   /** Whether the model may invoke it on its own. */
   modelInvocable: boolean;
-  /** Its description, in pack mode only; a Scan never carries it. */
+  /** A skill's or subagent's description, the text the harness lists for it; absent for other kinds. */
   description?: string;
 }
 
@@ -130,6 +130,8 @@ export interface Coverage {
   lastDay?: Day;
   /** How well each signal is provided. */
   signals: Record<Signal, Grade>;
+  /** The model's context window in tokens, as the harness reports it in its latest session or, failing that, its settings; absent when unknown. */
+  contextWindow?: number;
 }
 
 /** One machine's counters for a window: what is installed and how it was used, with no text. Scans of the same machine merge by summing their counters; Scans of different machines stay separate, and a Report is built from the list. */
@@ -297,7 +299,7 @@ export interface Line {
   exposure: Exposure;
   /** How often it was invoked. */
   use: Use;
-  /** Its description, in pack mode only. */
+  /** A skill's or subagent's description, the text the harness lists for it; absent for other kinds. A Report shared through loadsheet.dev carries none. */
   description?: string;
 }
 
@@ -327,8 +329,10 @@ export interface Sheet {
   harness: string;
   /** Its sessions in the window, over all machines. */
   sessions: number;
-  /** Tokens every session starts with, averaged over the sessions that reported them; absent when none did. */
+  /** Tokens a session starts with now: averaged over the sessions of the last 7 days of the window that reported them, or of the whole window when none in those days did; absent when none did. */
   fixedTokens?: Tokens;
+  /** The model's context window in tokens: the largest any machine's coverage for this harness reports; absent when none does. */
+  contextWindow?: number;
   /** One line per piece of context. */
   lines: Line[];
 }

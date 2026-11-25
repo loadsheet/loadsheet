@@ -131,3 +131,15 @@ export const resolveConfig = (config: Config = {}): ResolvedConfig => {
 
 /** Every default: what an empty config resolves to. */
 export const defaultConfig: ResolvedConfig = resolveConfig();
+
+/**
+ * The Report as it may leave the user's machines in a link through loadsheet.dev: a copy without
+ * any line's description, which is the user's own text. Everything else is counters and names.
+ */
+export const shareableReport = (report: Report): Report => ({
+  ...report,
+  sheet: report.sheet.map((sheet) => ({
+    ...sheet,
+    lines: sheet.lines.map(({ description: _description, ...line }) => line),
+  })),
+});

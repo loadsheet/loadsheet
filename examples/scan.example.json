@@ -21,7 +21,8 @@
         "instructions": "exact",
         "mcp": "exact",
         "tokens": "exact"
-      }
+      },
+      "contextWindow": 200000
     },
     {
       "machine": "laptop",
@@ -38,7 +39,8 @@
         "instructions": "exact",
         "mcp": "exact",
         "tokens": "exact"
-      }
+      },
+      "contextWindow": 258400
     }
   ],
   "items": [
@@ -92,7 +94,8 @@
         "listed": 142,
         "body": 1880
       },
-      "modelInvocable": true
+      "modelInvocable": true,
+      "description": "Use when writing a commit message: subject under 72 characters, imperative mood, body says why."
     },
     {
       "id": "skill:k8s-debug",
@@ -109,7 +112,8 @@
         "listed": 236,
         "body": 3900
       },
-      "modelInvocable": true
+      "modelInvocable": true,
+      "description": "Use when a Kubernetes pod is crash-looping, pending or failing its probes."
     },
     {
       "id": "skill:release-checklist",
@@ -126,7 +130,8 @@
         "listed": 189,
         "body": 2240
       },
-      "modelInvocable": true
+      "modelInvocable": true,
+      "description": "Use before cutting a release: version bump, changelog, tag and announcement."
     },
     {
       "id": "mcp:github",
@@ -177,7 +182,8 @@
         "listed": 214,
         "body": 3080
       },
-      "modelInvocable": true
+      "modelInvocable": true,
+      "description": "Reviews a diff for bugs and missing tests."
     },
     {
       "id": "instructions:AGENTS.md",
@@ -212,7 +218,8 @@
         "listed": 142,
         "body": 1880
       },
-      "modelInvocable": true
+      "modelInvocable": true,
+      "description": "Use when writing a commit message: subject under 72 characters, imperative mood, body says why."
     },
     {
       "id": "skill:terraform-plan",
@@ -229,7 +236,8 @@
         "listed": 226,
         "body": 4410
       },
-      "modelInvocable": true
+      "modelInvocable": true,
+      "description": "Use when reviewing a terraform plan for destroys and drift."
     },
     {
       "id": "mcp:sentry",
@@ -263,7 +271,8 @@
         "listed": 164,
         "body": 980
       },
-      "modelInvocable": true
+      "modelInvocable": true,
+      "description": "Finds where something is defined in a large codebase."
     }
   ],
   "sessions": [

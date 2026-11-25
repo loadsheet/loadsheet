@@ -12,6 +12,7 @@ import {
   resolveConfig,
   RULES,
   SchemaError,
+  shareableReport,
   type Report,
   type Scan,
 } from "../src/index.ts";
@@ -156,20 +157,35 @@ describe("parsing", () => {
     }
   });
 
-  it("rejects a description in a Scan and on a line outside pack mode", () => {
+  it("takes a description on a skill or subagent only, in a Scan and on a line", () => {
     const scan = clone(example("scan.example.json")) as Scan;
+    expect(scan.items.some((item) => item.description !== undefined)).toBe(true);
+    expect(validators.get("scan.v1.json")!(scan)).toBe(true);
     scan.items[0]!.description = "Use when the deploy fails.";
     expect(issuesOf(() => parseScan(scan))).toEqual([
-      { path: "$.items[0]", message: "a Scan must not carry a description" },
+      { path: "$.items[0]", message: "only a skill or subagent carries a description" },
     ]);
-    expect(validators.get("scan.v1.json")!(scan)).toBe(false);
 
     const report = fleet();
+    expect(report.sheet[0]!.lines.some((line) => line.description !== undefined)).toBe(true);
     report.sheet[0]!.lines[0]!.description = "Use when the deploy fails.";
     expect(issuesOf(() => parseReport(report))).toEqual([
-      { path: "$.sheet", message: "a line carries a description only in pack mode" },
+      {
+        path: "$.sheet[0].lines[0]",
+        message: "only a skill or subagent line carries a description",
+      },
     ]);
-    expect(validators.get("report.v1.json")!(report)).toBe(false);
+  });
+
+  it("shares a Report without any description and leaves the original as it was", () => {
+    const report = fleet();
+    const shared = shareableReport(report);
+    expect(shared.sheet.flatMap((sheet) => sheet.lines).some((line) => "description" in line)).toBe(
+      false,
+    );
+    expect(report.sheet[0]!.lines.some((line) => line.description !== undefined)).toBe(true);
+    expect(parseReport(shared)).toEqual(shared);
+    expect(validators.get("report.v1.json")!(shared)).toBe(true);
   });
 
   it("rejects a set fix with nothing to set and a fix without a machine outside pack mode", () => {
