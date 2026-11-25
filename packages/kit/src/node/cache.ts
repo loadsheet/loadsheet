@@ -8,7 +8,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Cell, SessionCell } from "@loadsheet/schema";
-import type { Tally, TranscriptFormat, VersionSeen } from "../index.ts";
+import type { Tally, TranscriptFormat, VersionSeen, WindowSeen } from "../index.ts";
 import type { ReadPosition } from "./reader.ts";
 
 /** The layout of a cache file; a change here starts every cache cold. */
@@ -200,6 +200,7 @@ const retable = (raw: unknown, from: readonly string[], to: StringTable): unknow
 //   sessions: day, harness, via, sessions, fixedTokens, measured, ...
 //   cells:    day, harness, via, [item, sessions, bare, chars, byModel, byUser, ...], ...
 //   versions: harness, day, version, ...
+//   windows:  harness, day, tokens, ... (absent in a cache written before windows were read)
 
 const encodeTally = (tally: Tally, table: StringTable): unknown => {
   const sessions: number[] = [];
@@ -229,13 +230,16 @@ const encodeTally = (tally: Tally, table: StringTable): unknown => {
   for (const seen of tally.versions) {
     versions.push(table.ref(seen.harness), table.ref(seen.day), table.ref(seen.version));
   }
-  return [sessions, cells, versions];
+  const windows: number[] = [];
+  for (const seen of tally.windows ?? []) {
+    windows.push(table.ref(seen.harness), table.ref(seen.day), seen.tokens);
+  }
+  return [sessions, cells, versions, windows];
 };
 
 const decodeTally = (raw: unknown, decoder: Decoder): Tally => {
-  const parts = decoder.tuples(raw, 3);
-  if (parts.length !== 3) throw new Malformed();
-  const [rawSessions, rawCells, rawVersions] = parts;
+  if (!Array.isArray(raw) || (raw.length !== 3 && raw.length !== 4)) throw new Malformed();
+  const [rawSessions, rawCells, rawVersions, rawWindows = []] = raw as unknown[];
 
   const sessions: SessionCell[] = [];
   const flatSessions = decoder.tuples(rawSessions, 6);
@@ -281,7 +285,16 @@ const decodeTally = (raw: unknown, decoder: Decoder): Tally => {
       version: decoder.text(flatVersions[index + 2]),
     });
   }
-  return { sessions, cells, versions };
+  const windows: WindowSeen[] = [];
+  const flatWindows = decoder.tuples(rawWindows, 3);
+  for (let index = 0; index < flatWindows.length; index += 3) {
+    windows.push({
+      harness: decoder.text(flatWindows[index]),
+      day: decoder.day(flatWindows[index + 1]),
+      tokens: decoder.count(flatWindows[index + 2]),
+    });
+  }
+  return windows.length ? { sessions, cells, versions, windows } : { sessions, cells, versions };
 };
 
 // A CachedFile encodes as

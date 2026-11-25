@@ -160,6 +160,7 @@ const fileItem = async (
         : override === "name-only"
           ? claudeCodeBareChars(name)
           : claudeCodeListedChars(name, md);
+  const description = kind === "subagent" ? md.description : claudeCodeDescription(md);
   return {
     id: `${kind}:${name}`,
     ref: { kind, name },
@@ -171,6 +172,7 @@ const fileItem = async (
     digest: await sha256(source),
     chars: { listed, body: md.bodyChars },
     modelInvocable: kind === "subagent" || (!hidden && !md.disableModelInvocation),
+    ...(description ? { description } : {}),
   };
 };
 
@@ -229,7 +231,7 @@ const pluginItems = async (files: Files, key: string, root: string): Promise<Ite
       { harness: HARNESS, description: claudeCodeDescription, listedChars: claudeCodeEntryChars },
       name,
     )
-  ).map(({ description: _description, ...item }): Item => ({
+  ).map((item): Item => ({
     ...item,
     scope: "plugin",
     managedBy: "plugin",
@@ -333,4 +335,15 @@ export const claudeInventory = async (files: Files): Promise<Item[]> => {
     items.push(...(await mcpItems(mcp.mcpServers, mcpPath, "user", { managedBy: "hand" })));
   }
   return items;
+};
+
+/**
+ * Claude Code's context window: 1M tokens when settings.json's `model` asks for it with a `[1m]`
+ * suffix, as in `opus[1m]`, and 200k otherwise. Undefined when there is no config directory.
+ */
+export const claudeContextWindow = async (files: Files): Promise<number | undefined> => {
+  const config = findConfigDir(files.paths);
+  if (config === undefined) return undefined;
+  const { model } = await readJson(files, `${config}/settings.json`);
+  return typeof model === "string" && /\[1m\]$/iu.test(model.trim()) ? 1_000_000 : 200_000;
 };

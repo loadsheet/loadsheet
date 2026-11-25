@@ -2,6 +2,7 @@ import { defineHarness } from "@loadsheet/kit";
 import { claudeCodeDescription, claudeCodeEntryChars } from "./claude-code-listing.ts";
 import {
   claudeConfigDir,
+  claudeContextWindow,
   claudeInventory,
   claudeRoots,
   claudeSources,
@@ -42,6 +43,7 @@ export const claudeCode = defineHarness({
     home: claudeConfigDir,
     sources: claudeSources,
     inventory: claudeInventory,
+    contextWindow: claudeContextWindow,
     roots: claudeRoots,
     transcripts: claudeTranscripts,
   },

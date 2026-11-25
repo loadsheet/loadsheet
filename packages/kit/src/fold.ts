@@ -19,6 +19,13 @@ export interface VersionSeen {
   readonly version: string;
 }
 
+/** The context window of the model a session that started on `day` ran. */
+export interface WindowSeen {
+  readonly harness: string;
+  readonly day: Day;
+  readonly tokens: number;
+}
+
 /**
  * Counters folded from Facts, keyed by day so a window can be cut from them later. Plain JSON,
  * sorted, with one entry per key: the cache keeps one per transcript file.
@@ -27,6 +34,8 @@ export interface Tally {
   readonly sessions: SessionCell[];
   readonly cells: Cell[];
   readonly versions: VersionSeen[];
+  /** Absent in a Tally cached before context windows were read. */
+  readonly windows?: WindowSeen[];
 }
 
 const SEP = "\u0000";
@@ -35,6 +44,8 @@ const sessionKey = (cell: { day: Day; harness: string; via: string }) =>
 const cellKey = (cell: { day: Day; harness: string; via: string; item: string }) =>
   [cell.day, cell.harness, cell.via, cell.item].join(SEP);
 const versionKey = (seen: VersionSeen) => [seen.harness, seen.day, seen.version].join(SEP);
+const windowKey = (seen: WindowSeen) =>
+  [seen.harness, seen.day, String(seen.tokens).padStart(12, "0")].join(SEP);
 const byKey = <T>(key: (value: T) => string) => {
   return (a: T, b: T) => {
     const left = key(a);
@@ -48,6 +59,7 @@ class Accumulator {
   readonly #sessions = new Map<string, SessionCell>();
   readonly #cells = new Map<string, Cell>();
   readonly #versions = new Map<string, VersionSeen>();
+  readonly #windows = new Map<string, WindowSeen>();
 
   session(day: Day, harness: string, via: string): SessionCell {
     const key = sessionKey({ day, harness, via });
@@ -74,6 +86,11 @@ class Accumulator {
     this.#versions.set(versionKey(seen), { harness, day, version });
   }
 
+  window(seen: WindowSeen): void {
+    const { harness, day, tokens } = seen;
+    this.#windows.set(windowKey(seen), { harness, day, tokens });
+  }
+
   fact(harness: string, fact: Fact): void {
     switch (fact.type) {
       case "session":
@@ -88,6 +105,9 @@ class Accumulator {
         cell.measured += 1;
         return;
       }
+      case "window":
+        this.window({ harness, day: fact.day, tokens: fact.tokens });
+        return;
       case "listed": {
         const cell = this.cell(fact.day, harness, fact.via, fact.item);
         cell.sessions += 1;
@@ -121,14 +141,17 @@ class Accumulator {
       cell.byUser += from.byUser;
     }
     for (const seen of tally.versions) if (keep(seen.day)) this.version(seen);
+    for (const seen of tally.windows ?? []) if (keep(seen.day)) this.window(seen);
   }
 
   result(): Tally {
-    return {
+    const tally: Tally = {
       sessions: [...this.#sessions.values()].sort(byKey(sessionKey)),
       cells: [...this.#cells.values()].sort(byKey(cellKey)),
       versions: [...this.#versions.values()].sort(byKey(versionKey)),
     };
+    if (this.#windows.size === 0) return tally;
+    return { ...tally, windows: [...this.#windows.values()].sort(byKey(windowKey)) };
   }
 }
 
@@ -155,6 +178,8 @@ export const coverageOf = (
     harness: string;
     installed: boolean;
     signals: Record<Signal, Grade>;
+    /** The window the harness's settings give, used when no session reported one. */
+    contextWindow?: number;
   },
 ): Coverage => {
   const sessions = tally.sessions.filter(
@@ -164,6 +189,16 @@ export const coverageOf = (
   const versions = new Set(
     tally.versions.filter((seen) => seen.harness === base.harness).map((seen) => seen.version),
   );
+  // The latest day's largest: the model the user runs now.
+  const windows = (tally.windows ?? []).filter((seen) => seen.harness === base.harness);
+  const latest = windows.reduce<WindowSeen | undefined>(
+    (best, seen) =>
+      !best || seen.day > best.day || (seen.day === best.day && seen.tokens > best.tokens)
+        ? seen
+        : best,
+    undefined,
+  );
+  const contextWindow = latest?.tokens ?? base.contextWindow;
   return {
     machine: base.machine,
     harness: base.harness,
@@ -172,6 +207,7 @@ export const coverageOf = (
     versions: [...versions].sort(),
     ...(days.length ? { firstDay: days[0]!, lastDay: days.at(-1)! } : {}),
     signals: { ...base.signals },
+    ...(contextWindow === undefined ? {} : { contextWindow }),
   };
 };
 
@@ -203,6 +239,8 @@ export interface HarnessScan {
   readonly signals: Record<Signal, Grade>;
   readonly items: readonly Item[];
   readonly tally: Tally;
+  /** The context window the harness's settings give, for when no session reported one. */
+  readonly contextWindow?: number;
 }
 
 /** A machine's Scan from each harness's part, keeping only the counters inside `window`. */
@@ -305,6 +343,10 @@ export const mergeScans = (first: Scan, ...rest: Scan[]): Scan => {
         versions: [...new Set([...known.versions, ...next.versions])].sort(),
         ...(days.length ? { firstDay: days[0]!, lastDay: days.at(-1)! } : {}),
         signals: { ...next.signals },
+        // The later Scan's, as it saw the model the user runs now.
+        ...((next.contextWindow ?? known.contextWindow) === undefined
+          ? {}
+          : { contextWindow: (next.contextWindow ?? known.contextWindow)! }),
       });
     }
   }

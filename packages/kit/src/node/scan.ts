@@ -40,6 +40,17 @@ export interface ScanMachineOptions {
   readonly cacheDir?: string | false;
   /** Transcript files read at once; default 16. */
   readonly concurrency?: number;
+  /** Called as each harness's transcript files are read: how many of how many are done. */
+  readonly onProgress?: (progress: ScanProgress) => void;
+}
+
+/** How far a scan has got through one harness's transcript files. */
+export interface ScanProgress {
+  readonly harness: string;
+  /** Files read, from the cache or in full. */
+  readonly done: number;
+  /** Files to read for this harness. */
+  readonly total: number;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -124,7 +135,12 @@ const readTranscripts = async (
   harness: string,
   place: Place,
   sinceMs: number,
-  options: { tool: string; cacheDir: string | false; concurrency: number },
+  options: {
+    tool: string;
+    cacheDir: string | false;
+    concurrency: number;
+    onProgress?: (progress: ScanProgress) => void;
+  },
 ): Promise<Tally[]> => {
   const format = machine.transcripts;
   // An inventory-only harness: no transcripts to read, and no cache to open for it.
@@ -136,8 +152,7 @@ const readTranscripts = async (
   const files = await transcriptFiles(machine.roots(place), sinceMs);
   const kept = new Map<string, CachedFile>();
   const tallies: Tally[] = [];
-
-  await eachLimited(files, options.concurrency, async (file) => {
+  const readOne = async (file: TranscriptFile) => {
     const key = cache?.key(file.path);
     const cached = key === undefined ? undefined : cache?.get(key);
     const unchanged =
@@ -170,6 +185,18 @@ const readTranscripts = async (
         tally: committed,
       });
     }
+  };
+
+  let done = 0;
+  options.onProgress?.({ harness, done, total: files.length });
+
+  await eachLimited(files, options.concurrency, async (file) => {
+    try {
+      await readOne(file);
+    } finally {
+      done += 1;
+      options.onProgress?.({ harness, done, total: files.length });
+    }
   });
 
   // Files no longer listed, deleted or older than the window, leave the cache with their counters.
@@ -200,14 +227,17 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
     const installed = await exists(machine.home(place));
     // An inventory-only harness that is not installed claims nothing, though it would find
     // skills in a folder it shares with others, such as `~/.agents/skills`.
-    const items =
+    const files =
       installed || machine.transcripts
-        ? await machine.inventory(await sourceFiles(machine.sources(place), place.home), place)
-        : [];
+        ? await sourceFiles(machine.sources(place), place.home)
+        : undefined;
+    const items = files ? await machine.inventory(files, place) : [];
+    const contextWindow = files ? await machine.contextWindow?.(files) : undefined;
     const tallies = await readTranscripts(machine, harness.id, place, sinceMs, {
       tool: options.tool,
       cacheDir,
       concurrency,
+      ...(options.onProgress ? { onProgress: options.onProgress } : {}),
     });
     parts.push({
       harness: harness.id,
@@ -215,6 +245,7 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
       signals: harness.signals,
       items,
       tally: sumTallies(tallies, window),
+      ...(contextWindow === undefined ? {} : { contextWindow }),
     });
   }
 

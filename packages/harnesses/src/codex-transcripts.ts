@@ -370,11 +370,15 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
         state.copying = false;
       }
       if (payload.type !== "token_count" || state.tokens || state.copying) return [];
-      const usage = record(record(payload.info)?.last_token_usage);
-      const tokens = usage?.input_tokens;
+      const info = record(payload.info);
+      const tokens = record(info?.last_token_usage)?.input_tokens;
       if (typeof tokens === "number" && tokens > 0) {
         state.tokens = true;
         facts.push({ type: "tokens", day, via, tokens });
+        // The model's context window rides on the same event.
+        const window = info?.model_context_window;
+        if (typeof window === "number" && Number.isSafeInteger(window) && window > 0)
+          facts.push({ type: "window", day, via, tokens: window });
       }
       return facts;
     }

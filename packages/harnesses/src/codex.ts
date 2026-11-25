@@ -131,12 +131,9 @@ const skillItem = async (
     },
     modelInvocable: !hidden,
   };
-  if (pack) {
-    item.pack = pack;
-    item.description = description;
-  } else if (manager.pack) {
-    item.pack = manager.pack;
-  }
+  item.description = description;
+  if (pack) item.pack = pack;
+  else if (manager.pack) item.pack = manager.pack;
   return item;
 };
 

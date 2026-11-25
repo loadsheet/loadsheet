@@ -209,7 +209,13 @@ describe("Claude Code machine inventory", () => {
   it("puts no secret, account or absolute home path in an Item", async () => {
     const items = await machine.inventory(memoryFiles(home));
     expect(findCanary(items, SECRETS)).toEqual([]);
-    expect(items.every((item) => item.description === undefined)).toBe(true);
+  });
+
+  it("gives skills and subagents the description the harness lists, and nothing else one", async () => {
+    const items = await machine.inventory(memoryFiles(home));
+    const described = items.filter((item) => item.description !== undefined);
+    expect(described.length).toBeGreaterThan(0);
+    expect(described.every((item) => /^(skill|subagent):/u.test(item.id))).toBe(true);
   });
 
   it("digests an MCP server's config without its secrets", async () => {
@@ -423,5 +429,24 @@ describe("Claude Code machine places", () => {
       "skill:x ~/work-claude/skills/x",
       "mcp:a ~/work-claude/.claude.json",
     ]);
+  });
+});
+
+describe("Claude Code context window", () => {
+  const window = machine.contextWindow!;
+
+  it("is 1M when the settings' model ends in [1m], and 200k otherwise", async () => {
+    const files = (model?: string) =>
+      memoryFiles({
+        "~/.claude/settings.json": JSON.stringify(model === undefined ? {} : { model }),
+      });
+    expect(await window(files("opus[1m]"))).toBe(1_000_000);
+    expect(await window(files("claude-sonnet-4-5[1M]"))).toBe(1_000_000);
+    expect(await window(files("opus"))).toBe(200_000);
+    expect(await window(files())).toBe(200_000);
+  });
+
+  it("says nothing when there is no Claude Code config", async () => {
+    expect(await window(memoryFiles({}))).toBeUndefined();
   });
 });

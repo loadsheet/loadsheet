@@ -61,9 +61,12 @@ const taskStarted = {
 /** The fragment Codex injects for a `$name` mention. */
 const skillMention = (name: string, path = `/home/u/.agents/skills/${name}/SKILL.md`) =>
   user(`<skill>\n<name>${name}</name>\n<path>${path}</path>\nBody\n</skill>`);
-const tokenCount = (input_tokens: number) => ({
+const tokenCount = (input_tokens: number, model_context_window?: number) => ({
   type: "event_msg",
-  payload: { type: "token_count", info: { last_token_usage: { input_tokens } } },
+  payload: {
+    type: "token_count",
+    info: { last_token_usage: { input_tokens }, model_context_window },
+  },
 });
 
 const skillsSection = (lines: string[], roots: string[]) =>
@@ -478,6 +481,21 @@ describe("codex sessions", () => {
     expect(count(facts)).toEqual({ session: 1, listed: 1, "used:model": 1, tokens: 1 });
     expect(facts.find((fact) => fact.type === "tokens")).toMatchObject({ tokens: 1000 });
   });
+  it("reads the model's context window from the first token count", () => {
+    const { facts } = parseAll([
+      meta(),
+      taskStarted,
+      turn,
+      tokenCount(900, 258_400),
+      tokenCount(1000, 400_000),
+    ]);
+    expect(facts.filter((fact) => fact.type === "window")).toEqual([
+      { type: "window", day: "2026-11-09", via: "codex_cli_rs", tokens: 258_400 },
+    ]);
+    expect(
+      parseAll([meta(), taskStarted, turn, tokenCount(900)]).facts.map((f) => f.type),
+    ).not.toContain("window");
+  });
 });
 
 describe("codex fixture", () => {
@@ -721,7 +739,17 @@ describe("codex machine", () => {
       ["mcp:docs", "user", "hand", "~/.codex/config.toml", "- mcp__docs\n".length, true],
       ["mcp:inline", "user", "hand", "~/.codex/config.toml", "- mcp__inline\n".length, true],
     ]);
-    expect(items.every((item) => item.description === undefined)).toBe(true);
+    const described = Object.fromEntries(
+      items
+        .filter((item) => item.description !== undefined)
+        .map((item) => [item.id, item.description]),
+    );
+    expect(described).toMatchObject({
+      "skill:mine": "Mine.",
+      "skill:imagegen": "Makes images.",
+      "skill:kit:lint": "Lints.",
+    });
+    expect(Object.keys(described).every((id) => id.startsWith("skill:"))).toBe(true);
   });
 
   it("says what installed a skill, from fleetrc's manifest and the skills CLI's lock", async () => {

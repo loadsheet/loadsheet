@@ -48,6 +48,12 @@ export interface TokensFact extends FactOfSession {
   readonly tokens: number;
 }
 
+/** The context window, in tokens, of the model the session ran. At most once per session. */
+export interface WindowFact extends FactOfSession {
+  readonly type: "window";
+  readonly tokens: number;
+}
+
 /** The session listed an item (skill, mcp, subagent) or loaded it (instructions). At most once per session and item. */
 export interface ListedFact extends FactOfSession {
   readonly type: "listed";
@@ -68,9 +74,9 @@ export interface UsedFact extends FactOfSession {
 /**
  * What one transcript line says, in names, days and counters only: no text, no session id, no
  * path. A Scan is a sum over Facts: `session` and `tokens` fill a SessionCell and the Coverage,
- * `listed` and `used` fill the Cell of their item.
+ * `window` the Coverage's context window, `listed` and `used` fill the Cell of their item.
  */
-export type Fact = SessionFact | TokensFact | ListedFact | UsedFact;
+export type Fact = SessionFact | TokensFact | WindowFact | ListedFact | UsedFact;
 
 /**
  * How a harness's transcript lines become Facts. `readTranscript` in `@loadsheet/kit/node` takes
@@ -113,6 +119,11 @@ export interface MachineReader<State> {
    * which key an absolute path in a config file names; nothing of it goes into an Item.
    */
   inventory(files: Files, place?: Place): Promise<Item[]>;
+  /**
+   * The model's context window in tokens as the harness's settings in those files give it, for
+   * when no session in the window reported one; undefined when they do not say.
+   */
+  contextWindow?(files: Files): Promise<number | undefined>;
   /**
    * The directories its session transcripts are under; absent, with `transcripts`, for a harness
    * loadsheet reads the inventory of only. Such a harness has no sessions in a Scan.
