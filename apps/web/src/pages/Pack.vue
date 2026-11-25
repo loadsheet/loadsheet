@@ -103,8 +103,9 @@ function go() {
           </div>
         </div>
       </template>
-      <StateBox v-else :title="`No skills found in ${slug}`">
-        This page can show the packs below. Check the address, or open one of them.
+      <StateBox v-else :title="`This page can’t read ${slug}`">
+        It shows the packs below. To weigh any pack on GitHub, run
+        <code>npx loadsheet &lt;GitHub URL&gt;</code> in a terminal.
         <template #actions>
           <RouterLink v-for="(p, s) in packs" :key="s" data-slot="button" :to="`/pack/${s}`">{{
             s

@@ -35,9 +35,14 @@ export const packs: Record<string, { report: Report; title: string; by?: string 
 export const home = (() => {
   if (!fromPage) return undefined;
   if (fromPage.mode !== "pack") return "/report";
+  // A folder's name goes into the route, where `#`, `?` or `%` would change what it reads.
   const slug =
     packSlug(fromPage.source ?? "") ??
-    fromPage.source?.split(/[\\/]/).filter(Boolean).at(-1) ??
+    fromPage.source
+      ?.split(/[\\/]/)
+      .filter(Boolean)
+      .at(-1)
+      ?.replace(/[^\w.-]+/g, "-") ??
     "pack";
   packs[slug] = { report: fromPage, title: slug.split("/").at(-1)! };
   return `/pack/${slug}`;
@@ -73,7 +78,9 @@ export async function shareLink(r: Report, path = "/report", h?: string) {
   let bin = "";
   for (const b of z) bin += String.fromCharCode(b);
   const code = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  return `${location.origin}${location.pathname}#${path}?${h ? `h=${encodeURIComponent(h)}&` : ""}r=${code}`;
+  // A page the CLI served or wrote is on 127.0.0.1 or on disk, where no one else can open it.
+  const base = fromPage ? "https://loadsheet.dev/" : `${location.origin}${location.pathname}`;
+  return `${base}#${path}?${h ? `h=${encodeURIComponent(h)}&` : ""}r=${code}`;
 }
 async function fromLink(code: string) {
   const bin = atob(code.replace(/-/g, "+").replace(/_/g, "/"));
