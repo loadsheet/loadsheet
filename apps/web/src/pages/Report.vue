@@ -12,7 +12,7 @@ import ContextTable from "../components/ContextTable.vue";
 import NoSessions from "../components/NoSessions.vue";
 import { VIEW, contextOf, freshView, short } from "../lib/context";
 import { useHarness } from "../lib/harness";
-import { fmt } from "../lib/report";
+import { fmt, plural } from "../lib/report";
 import { hideTip, showTip } from "../lib/ui";
 
 /** What a session started now loads before you type, against the model's window: a map, or the same as a table. */
@@ -68,6 +68,12 @@ const exact = (e: MouseEvent) =>
     </h1>
     <ContextBar />
     <div class="views">
+      <RouterLink
+        v-if="h.fixes.value.length"
+        class="fixl"
+        :to="{ path: '/report/fixes', query: { h: route.query.h, r: route.query.r } }"
+        >{{ plural(h.fixes.value.length, "fix", "fixes") }}</RouterLink
+      >
       <div v-if="table" class="ctools">
         <input
           v-model="st.q"

@@ -956,15 +956,27 @@ button.b {
 .views {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 12px;
   margin-bottom: -6px;
+}
+.views .vsw {
+  margin-left: auto;
+}
+.fixl {
+  color: var(--acc);
+  font-size: 13px;
+  font-weight: 500;
+  text-underline-offset: 3px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .fixl:hover {
+    text-decoration: underline;
+  }
 }
 .ctools {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-right: auto;
 }
 .ctools .inp {
   width: 260px;
