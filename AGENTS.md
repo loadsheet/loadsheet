@@ -32,6 +32,10 @@ loadsheet reads the user's files and edits none of them. It writes only to its o
 
 `loadsheet build` is the one command that writes where the user says, and it never overwrites anything it did not write: it writes into a folder that is missing or empty, or one holding the `.loadsheet-build` marker it wrote before, and replaces only the files that marker lists; otherwise it stops with exit code 2. `loadsheet --ui` serves the same page from memory and writes nothing.
 
+## Git
+
+Commit to `main` and push it directly; open no branch or pull request. Before each push, rebase on `origin/main`, run `pnpm build`, `pnpm check` and `vp test packages/<name>` for each package you changed, and push only when they pass. Never force-push `main`.
+
 ## Commands
 
 - `pnpm build`: builds every package (cached by `vp run`); tests run the built CLI, so build first.
