@@ -2,6 +2,7 @@ import { parseReport, type Finding, type Line, type Report, type Sheet } from "@
 import { shallowRef } from "vue";
 import example from "../../../../examples/report.example.json";
 import packExample from "../../../../examples/report.pack.example.json";
+import { fromShareCode, shareCode } from "./share";
 import mattpocock from "../data/pack.mattpocock-skills.json";
 import pstack from "../data/pack.pstack.json";
 
@@ -59,35 +60,11 @@ export function packSlug(input: string): string | undefined {
 /** Tokens a pack adds to every session once installed: what the model is shown before it uses anything. */
 export const packTokens = (r: Report) => r.sheet[0]!.lines.reduce((n, l) => n + l.tokens.value, 0);
 
-/*
-  A shared report rides in the URL: `#/report?r=<deflate-raw, base64url>`.
-  It is the same Report the page already shows, counters and names only, and the fragment never reaches a server.
-*/
-async function pipe(bytes: Uint8Array, stream: CompressionStream | DecompressionStream) {
-  return new Uint8Array(
-    await new Response(
-      new Blob([bytes as Uint8Array<ArrayBuffer>]).stream().pipeThrough(stream),
-    ).arrayBuffer(),
-  );
-}
 export async function shareLink(r: Report, path = "/report", h?: string) {
-  const z = await pipe(
-    new TextEncoder().encode(JSON.stringify(r)),
-    new CompressionStream("deflate-raw"),
-  );
-  let bin = "";
-  for (const b of z) bin += String.fromCharCode(b);
-  const code = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const code = await shareCode(r);
   // A page the CLI served or wrote is on 127.0.0.1 or on disk, where no one else can open it.
   const base = fromPage ? "https://loadsheet.dev/" : `${location.origin}${location.pathname}`;
   return `${base}#${path}?${h ? `h=${encodeURIComponent(h)}&` : ""}r=${code}`;
-}
-async function fromLink(code: string) {
-  const bin = atob(code.replace(/-/g, "+").replace(/_/g, "/"));
-  const z = Uint8Array.from(bin, (c) => c.charCodeAt(0));
-  return parseReport(
-    JSON.parse(new TextDecoder().decode(await pipe(z, new DecompressionStream("deflate-raw")))),
-  );
 }
 /** Set when the URL carried a report this page couldn't read, so the page can say so instead of showing the example. */
 export const linkError = shallowRef<string>();
@@ -98,7 +75,7 @@ export const ready = (async () => {
   const code = new URLSearchParams(location.hash.split("?")[1] ?? "").get("r");
   if (!code || fromPage) return;
   try {
-    report.value = await fromLink(code);
+    report.value = await fromShareCode(code);
     isExample.value = false;
     shared.value = true;
   } catch (e) {

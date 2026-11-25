@@ -92,6 +92,9 @@ export default defineConfig({
       "@loadsheet/schema": fileURLToPath(
         new URL("../../packages/schema/src/index.ts", import.meta.url),
       ),
+      "@loadsheet/core": fileURLToPath(
+        new URL("../../packages/core/src/index.ts", import.meta.url),
+      ),
     },
   },
   // Assets inline as data URIs and the CSS stays one sheet, so singleFile leaves nothing behind in assets/.

@@ -56,7 +56,7 @@ const rows = computed<Row[]>(() => {
     if (flashed && !shown.includes(flashed)) shown.push(flashed);
     for (const i of shown) {
       const k = `${s.id}:${i.id}`;
-      const desc = i.tokens > 0 ? i.description : undefined;
+      const desc = i.description;
       out.push({ t: "it", key: `it:${k}`, s, i, lvl, desc, open: !!desc && st.desc.has(k) });
     }
     if (!full) {

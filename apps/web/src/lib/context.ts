@@ -1,3 +1,4 @@
+import { harnessTokens, setupTokens } from "@loadsheet/core";
 import type { Line, Sheet } from "@loadsheet/schema";
 import type { InjectionKey } from "vue";
 import { harnessName } from "./report";
@@ -31,11 +32,12 @@ export interface Context {
   total: number;
   /** What your own files add; the harness is the rest. */
   setup: number;
+  /** The model's context window: the Report's, or 200k for a Report that predates it. */
   window: number;
   segments: Segment[];
 }
 
-/** Until the Report carries each model's window, every harness is drawn against 200k. */
+/** The window a Report without `contextWindow` is drawn against. */
 export const DEFAULT_WINDOW = 200_000;
 
 const KINDS: { id: SegId; label: string; short?: string; sub: string }[] = [
@@ -80,7 +82,7 @@ function segOf(l: Line): SegId {
   return l.ref.kind;
 }
 
-export function contextOf(sheet: Sheet, window = DEFAULT_WINDOW): Context {
+export function contextOf(sheet: Sheet): Context {
   // A line with no scope is no longer installed anywhere: it would not load now.
   const lines = sheet.lines.filter((l) => l.scope);
   const segments: Segment[] = [];
@@ -105,16 +107,18 @@ export function contextOf(sheet: Sheet, window = DEFAULT_WINDOW): Context {
     const skills = segments.find((s) => s.id === "skill");
     if (skills) skills.label = "Global skills";
   }
-  const setup = segments.reduce((n, s) => n + s.tokens, 0);
-  const total = Math.max(setup, sheet.fixedTokens?.value ?? setup);
-  if (total > setup) {
+  const setup = setupTokens(sheet);
+  const harness = harnessTokens(sheet) ?? 0;
+  if (harness > 0) {
     segments.unshift({
       ...KINDS[0]!,
       label: harnessName(sheet.harness),
-      tokens: total - setup,
+      tokens: harness,
       items: [],
     });
   }
+  const total = setup + harness;
+  const window = sheet.contextWindow ?? DEFAULT_WINDOW;
   return { total, setup, window: Math.max(window, total), segments };
 }
 

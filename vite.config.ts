@@ -90,6 +90,8 @@ export default defineConfig({
         },
       },
       "packages/fleet",
+      // The web app's own tests, with its aliases to the workspace sources.
+      "apps/web",
     ],
   },
   staged: {
