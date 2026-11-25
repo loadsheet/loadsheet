@@ -1,6 +1,6 @@
 {
   "name": "@loadsheet/harnesses",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Built-in adapters (Claude Code, Codex, …).",
   "homepage": "https://loadsheet.dev",
   "license": "MIT",
