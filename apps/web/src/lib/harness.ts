@@ -1,6 +1,6 @@
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { context, report } from "./report";
+import { costOn, fixesOn, report, saves, totals } from "./report";
 
 /** Every harness the report knows, busiest first; the one in `?h=` is current. */
 export function useHarness() {
@@ -20,9 +20,16 @@ export function useHarness() {
       ? q
       : (all.value[0]?.id ?? "");
   });
-  const sheet = computed(() => report.value.sheet.find((s) => s.harness === current.value));
-  const ctx = computed(() => context(sheet.value));
-  const sessions = computed(() => all.value.find((h) => h.id === current.value)?.sessions ?? 0);
+  /** The current harness's sheet, when it has anything on it. */
+  const sheet = computed(() =>
+    report.value.sheet.find((s) => s.harness === current.value && s.lines.length),
+  );
+  const cost = computed(() => (sheet.value ? costOn(sheet.value) : () => 0));
+  const sum = computed(() => (sheet.value ? totals(sheet.value) : undefined));
+  const fixes = computed(() => fixesOn(report.value, current.value));
+  const saving = computed(() => saves(fixes.value));
+  /** No sheet anywhere has a line: loadsheet found nothing to read. */
+  const empty = computed(() => !report.value.sheet.some((s) => s.lines.length));
   const set = (h: string) => router.replace({ query: { ...route.query, h } });
-  return { all, current, sheet, ctx, sessions, set };
+  return { all, current, sheet, cost, sum, fixes, saving, empty, set };
 }
