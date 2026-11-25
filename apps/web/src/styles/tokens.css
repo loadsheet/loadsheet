@@ -1,12 +1,31 @@
 /*
   loadsheet's theme for @vite-hub/kit. The kit's parts read the shadcn/ui names, so this file sets those names to the
-  palette of the first inspector prototype (Drop ap5rp8ygjj3g): a neutral near-white page, white panels, one teal
-  accent, red for waste, and vivid kind colours. System fonts, no texture. The names after the shadcn set are
-  loadsheet's own.
+  map identity: a near-white page, white panels, one teal accent, and a colour per kind of loaded thing. The names
+  after the shadcn set are loadsheet's own. The fonts are Geist (SIL OFL 1.1, see ../assets/fonts/OFL.txt), inlined
+  into the built page.
 */
+@font-face {
+  font-family: "Geist";
+  src: url("../assets/fonts/geist.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("../assets/fonts/geist-mono.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Pixel Square";
+  src: url("../assets/fonts/geist-pixel-square.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   color-scheme: light;
-  /* The base step: 4px badges, 6px controls, 8px cards. */
+  /* The base step: 6px controls (the kit's --ui-radius is 1.5×). */
   --radius: 0.25rem;
 
   --background: #fbfbfa;
@@ -17,7 +36,7 @@
   --popover-foreground: var(--foreground);
   --primary: #1c1c1a;
   --primary-foreground: #fbfbfa;
-  /* One sunk grey serves wells, hovers and the chosen tab. */
+  /* One sunk grey serves wells, chips and the chosen segment's track. */
   --secondary: #f3f3f1;
   --secondary-foreground: var(--foreground);
   --muted: #f3f3f1;
@@ -28,54 +47,49 @@
   --border: #e4e4e0;
   --input: #d4d4cf;
   --ring: #0f766e;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
-  /* The steps and tones shadcn has no name for, as @vite-hub/kit names them. */
   --ui-text: var(--foreground);
   --ui-text-dimmed: #9a9a94;
   --ui-border-accented: var(--input);
-  --ui-font-size: 0.8125rem;
-  --ui-warning: #b45309;
-  --vh-text-warning: #b45309;
+  --ui-font-size: 0.875rem;
   --ui-error: #b91c1c;
   --vh-text-error: #b91c1c;
   --ui-info: #0f766e;
   --vh-text-info: #0f766e;
   --ui-success: #15803d;
   --vh-text-success: #15803d;
-  --shadow-popover:
-    0 0 0 1px var(--border), 0 4px 8px -4px rgb(0 0 0 / 0.06), 0 16px 24px -8px rgb(0 0 0 / 0.12);
-  --shadow-dialog:
-    0 0 0 1px var(--border), 0 8px 16px -4px rgb(0 0 0 / 0.06), 0 24px 32px -8px rgb(0 0 0 / 0.14);
-  --overlay: rgb(0 0 0 / 0.2);
+  --shadow-popover: 0 0 0 1px var(--border), 0 16px 40px rgb(28 28 26 / 0.14);
 
   /* loadsheet's own. */
-  --faint: var(--ui-text-dimmed);
+  /* Pixel type: the wordmark, page titles and state headings only. */
+  --font-pixel: "Geist Pixel Square", var(--font-mono);
+  /* The teal for prompts, savings, links in rows and the focus ring. */
   --acc: var(--ring);
-  --acc-tint: color-mix(in oklab, var(--acc) 12%, transparent);
-  /* Waste: tokens spent every session on something nobody uses. */
-  --bad: var(--destructive);
-  --bad-tint: color-mix(in oklab, var(--bad) 7%, var(--card));
-  --bad-line: color-mix(in oklab, var(--bad) 35%, var(--border));
-  --good: var(--ui-success);
-  --pop: var(--shadow-popover);
-  --k-harness: #64748b;
+  --acc-tint: color-mix(in srgb, var(--acc) 22%, transparent);
+  /* A block's corner. */
+  --r-b: 3px;
+  --r-lg: 8px;
+  /* One colour per kind of loaded thing; red is never used, grey is the harness. */
+  --k-mcp: #c2410c;
   --k-instr: #15803d;
-  --k-mcp: #ea580c;
-  --k-agents: #0d9488;
-  --k-used: #2563eb;
-  --k-lazy: #7c3aed;
+  --k-skill: #2563eb;
+  --k-agent: #0e7490;
   --k-dead: #b91c1c;
+  --k-h: #c4c4be;
+  /* Text on a solid kind colour. */
   --on-k: #ffffff;
+  --hatch-dead: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--k-dead) 42%, transparent) 0 1.5px,
+    transparent 1.5px 5px
+  );
+  --hatch-h: repeating-linear-gradient(135deg, var(--k-h) 0 1.5px, transparent 1.5px 6px);
   --ease: cubic-bezier(0.23, 1, 0.32, 1);
-  --bar: 44px;
-  --r-sm: var(--radius);
-  --r-md: calc(var(--radius) * 1.5);
-  --r-lg: calc(var(--radius) * 2);
+  --bar: 52px;
 }
 
-/* Dark keeps the same steps: the page darkest, panels one up, sunk one more; lines solid, since alpha ones glow. */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --background: #121211;
@@ -93,23 +107,18 @@
   --input: #3a3a37;
   --ring: #2dd4bf;
   --ui-text-dimmed: #76766f;
-  --ui-warning: #f59e0b;
-  --vh-text-warning: #f59e0b;
   --ui-error: #f87171;
   --vh-text-error: #f87171;
   --ui-info: #2dd4bf;
   --vh-text-info: #2dd4bf;
-  --ui-success: #4ade80;
-  --vh-text-success: #4ade80;
-  --shadow-popover: 0 0 0 1px var(--input), 0 16px 40px -12px rgb(0 0 0 / 0.7);
-  --shadow-dialog: 0 0 0 1px var(--input), 0 24px 48px -12px rgb(0 0 0 / 0.8);
-  --overlay: rgb(0 0 0 / 0.5);
-  --k-harness: #94a3b8;
-  --k-instr: #4ade80;
-  --k-mcp: #fb923c;
-  --k-agents: #2dd4bf;
-  --k-used: #60a5fa;
-  --k-lazy: #a78bfa;
+  --ui-success: #3fbf78;
+  --vh-text-success: #3fbf78;
+  --shadow-popover: 0 0 0 1px var(--input), 0 16px 40px rgb(0 0 0 / 0.5);
+  --k-mcp: #e8823f;
+  --k-instr: #3fbf78;
+  --k-skill: #6ba6f7;
+  --k-agent: #2fc1dd;
   --k-dead: #f87171;
-  --on-k: #121211;
+  --k-h: #4a4a46;
+  --on-k: #10100f;
 }
