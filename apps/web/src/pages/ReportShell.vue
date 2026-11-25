@@ -5,22 +5,34 @@ import {
   SegmentedControlItem,
 } from "@ui-sdk/vue/segmented-control";
 import { computed } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
+import CopyIcon from "../components/CopyIcon.vue";
+import ItemPanel from "../components/ItemPanel.vue";
 import Logo from "../components/Logo.vue";
+import StateBox from "../components/StateBox.vue";
 import ThemeToggle from "../components/ThemeToggle.vue";
+import CopyButton from "../components/CopyButton.vue";
 import { useHarness } from "../lib/harness";
-import { harnessName, isExample, linkError, report, shareLink, shared } from "../lib/report";
+import { pickReport } from "../lib/open";
+import { harnessName, linkError, report, shareLink } from "../lib/report";
 import { copied, copy } from "../lib/ui";
 
 const h = useHarness();
 const route = useRoute();
-const tabs = [
-  { to: "/report/overview", name: "Overview" },
-  { to: "/report/map", name: "Map" },
-  { to: "/report/skills", name: "Skills" },
-  { to: "/report/fixes", name: "Fixes" },
-];
-const fixes = computed(() => report.value.findings.filter((f) => f.level !== "info").length);
+const router = useRouter();
+const tabs = computed(() => [
+  { to: "/report", name: "Map" },
+  { to: "/report/list", name: "List", n: h.sheet.value?.lines.length, quiet: true },
+  { to: "/report/fixes", name: "Fixes", n: h.fixes.value.length },
+]);
+/** The item in `?item=`, on the Map and the List. */
+const line = computed(() => {
+  const id = route.query.item;
+  return route.path === "/report/fixes" || typeof id !== "string"
+    ? undefined
+    : h.sheet.value?.lines.find((l) => l.item === id);
+});
+const close = () => router.replace({ query: { ...route.query, item: undefined } });
 async function share() {
   copy(
     await shareLink(
@@ -35,97 +47,81 @@ async function share() {
 </script>
 
 <template>
-  <header class="top">
-    <nav aria-label="Report">
-      <RouterLink class="brand" to="/"><Logo /><span>loadsheet</span></RouterLink>
-    </nav>
-    <i class="vr" />
+  <header class="bar">
+    <RouterLink to="/" class="home-link" aria-label="loadsheet home"
+      ><Logo :size="19" word
+    /></RouterLink>
     <nav class="tabs" aria-label="Views">
-      <RouterLink v-for="t in tabs" :key="t.to" :to="{ path: t.to, query: $route.query }">
-        {{ t.name }}<b v-if="t.name === 'Fixes' && fixes" class="n">{{ fixes }}</b>
+      <RouterLink
+        v-for="t in tabs"
+        :key="t.to"
+        :to="{ path: t.to, query: { h: $route.query.h } }"
+        :class="{ on: $route.path === t.to }"
+        :aria-current="$route.path === t.to ? 'page' : undefined"
+      >
+        {{ t.name }}<i v-if="t.n" class="num" :data-quiet="t.quiet || undefined">{{ t.n }}</i>
       </RouterLink>
     </nav>
-    <div v-if="isExample" class="notice">
-      <span>Example report</span>
-      <RouterLink data-slot="button" data-size="sm" to="/open">Open yours</RouterLink>
-    </div>
-    <div v-else-if="shared" class="notice">
-      <span data-slot="vh-badge" data-size="sm">Shared report</span>
-    </div>
-    <div class="right">
-      <SegmentedControl
-        v-if="$route.path !== '/report/fixes' && h.all.value.length > 1"
-        aria-label="Harness"
-        :value="h.current.value"
-        @update:value="(v) => v && h.set(v)"
+    <span class="grow" />
+    <SegmentedControl
+      v-if="h.all.value.length > 1"
+      class="harness"
+      aria-label="Harness"
+      :value="h.current.value"
+      @update:value="(v) => v && h.set(v)"
+    >
+      <SegmentedControlIndicator />
+      <SegmentedControlItem
+        v-for="x in h.all.value"
+        :key="x.id"
+        :value="x.id"
+        :data-off="!x.sessions || undefined"
+        >{{ harnessName(x.id) }}</SegmentedControlItem
       >
-        <SegmentedControlIndicator />
-        <SegmentedControlItem v-for="x in h.all.value" :key="x.id" :value="x.id">{{
-          harnessName(x.id)
-        }}</SegmentedControlItem>
-      </SegmentedControl>
-      <span
-        v-for="m in report.machines"
-        :key="m.name"
-        class="host"
-        :data-down="!m.reachable || undefined"
-        :title="m.error ?? `Scanned ${m.scannedAt?.slice(0, 16).replace('T', ' ')}`"
-        >{{ m.name }}</span
-      >
-      <button
-        data-slot="button"
-        data-size="sm"
-        class="share"
-        :title="'Copy a link that carries this report in the URL'"
-        @click="share"
-      >
-        <span class="ci" :class="{ done: copied.key === 'share' }" aria-hidden="true">
-          <svg
-            class="a"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-          >
-            <path d="M6.75 9.25a3 3 0 0 0 4.24 0l2-2a3 3 0 0 0-4.24-4.24l-.75.75" />
-            <path d="M9.25 6.75a3 3 0 0 0-4.24 0l-2 2a3 3 0 0 0 4.24 4.24l.75-.75" />
-          </svg>
-          <svg
-            class="b"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.75"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M3 8.5 6.5 12 13 4.5" />
-          </svg>
-        </span>
-        Share
-      </button>
-      <ThemeToggle />
-    </div>
+    </SegmentedControl>
+    <button
+      type="button"
+      data-slot="button"
+      data-size="sm"
+      class="share"
+      title="Copy a link that carries this report in the URL"
+      @click="share"
+    >
+      <CopyIcon v-if="copied.key === 'share'" done />Share
+    </button>
+    <ThemeToggle />
   </header>
-  <p v-if="linkError" class="linkerr" role="alert">
-    This link's report couldn't be read, maybe it was cut off when it was pasted. You're looking at
-    the example.
-  </p>
-  <RouterView />
+  <main v-if="linkError" class="pg-body">
+    <StateBox title="This link doesn’t hold a report">
+      The address is cut short or was made by a newer loadsheet. Ask for the link again, or open the
+      JSON file.
+      <template #actions>
+        <button type="button" data-slot="button" data-variant="solid" @click="pickReport(router)">
+          Open a report file
+        </button>
+        <RouterLink data-slot="button" to="/">Go home</RouterLink>
+      </template>
+    </StateBox>
+  </main>
+  <main v-else-if="h.empty.value" class="pg-body">
+    <StateBox title="No sessions found">
+      loadsheet found no agent sessions to read. Run your agent once, then run this again.
+      <template #actions>
+        <div class="cmd">
+          <code><span class="pr" aria-hidden="true">$</span>npx loadsheet --ui</code>
+          <CopyButton text="npx loadsheet --ui" label="Copy command" />
+        </div>
+      </template>
+    </StateBox>
+  </main>
+  <div v-else class="shell" :data-panel="line ? '' : undefined">
+    <ItemPanel
+      v-if="line && h.sheet.value"
+      :key="line.item"
+      :line
+      :sheet="h.sheet.value"
+      @close="close"
+    />
+    <RouterView />
+  </div>
 </template>
-
-<style scoped>
-.linkerr {
-  padding: 8px 16px;
-  border-bottom: 1px solid color-mix(in oklch, var(--bad) 30%, var(--border));
-  background: var(--bad-tint);
-  color: var(--bad);
-  font-size: 0.75rem;
-}
-@media (max-width: 560px) {
-  .share {
-    display: none;
-  }
-}
-</style>
