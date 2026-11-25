@@ -22,6 +22,8 @@ export default defineNuxtConfig({
     console: true,
     health: true,
     comments: false,
+    // `vitehub deploy` requests these after an upload, with the health route.
+    deploy: { check: ["/", "/docs", "/schema/v1.json"] },
   },
   docs: {
     site: { name: "loadsheet", url: "https://loadsheet.dev" },
