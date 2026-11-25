@@ -1,4 +1,9 @@
-# loadsheet
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/banner-dark.svg">
+    <img src=".github/banner-light.svg" alt="loadsheet" width="100%">
+  </picture>
+</p>
 
 Inspect, weigh and diagnose your coding agents' context: skills, `AGENTS.md`/`CLAUDE.md`, MCP servers and subagents, across every harness and every machine.
 
