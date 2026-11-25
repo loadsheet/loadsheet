@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import { Landing } from "@loadsheet/ui";
+
 definePageMeta({ name: "home" });
 </script>
 
 <template>
-  <main>
-    <h1>loadsheet</h1>
-  </main>
+  <Landing />
 </template>

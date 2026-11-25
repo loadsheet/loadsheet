@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import { Report } from "@loadsheet/ui";
+
 definePageMeta({ name: "report" });
 </script>
 
 <template>
-  <main>
-    <h1>Report</h1>
-  </main>
+  <Report />
 </template>
