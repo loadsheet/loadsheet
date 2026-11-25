@@ -1,11 +1,13 @@
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { costOn, fixesOn, report, saves, totals } from "./report";
+import { costOn, fixesOn, saves, totals } from "./report";
+import { useLoadsheet } from "./state";
 
 /** Every harness the report knows, busiest first; the one in `?h=` is current. */
 export function useHarness() {
   const route = useRoute();
   const router = useRouter();
+  const { report } = useLoadsheet();
   const all = computed(() => {
     const sessions = new Map<string, number>();
     for (const c of report.value.coverage)

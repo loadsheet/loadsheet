@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { onMounted, ref } from "vue";
 
-const dark = ref(document.documentElement.dataset.theme === "dark");
+/** The theme is `data-theme` on <html>, which the host sets before mounting; a server render draws the light icon. */
+const dark = ref(false);
+onMounted(() => (dark.value = document.documentElement.dataset.theme === "dark"));
 function flip() {
   dark.value = !dark.value;
   const root = document.documentElement;

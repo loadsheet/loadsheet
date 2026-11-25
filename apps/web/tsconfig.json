@@ -12,9 +12,10 @@
     "types": ["vite-plus/client"],
     "paths": {
       "@loadsheet/schema": ["../../packages/schema/src/index.ts"],
-      "@loadsheet/core": ["../../packages/core/src/index.ts"]
+      "@loadsheet/core": ["../../packages/core/src/index.ts"],
+      "@loadsheet/ui": ["../../packages/ui/src/index.ts"]
     },
     "allowImportingTsExtensions": true
   },
-  "include": ["src/**/*.ts", "src/**/*.vue", "test/**/*.ts"]
+  "include": ["src/**/*.ts", "test/**/*.ts"]
 }

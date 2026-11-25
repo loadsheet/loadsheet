@@ -1,0 +1,10 @@
+/*
+  loadsheet's styles, in cascade order. The layer order comes first so that beside Tailwind the kit's `ui-sdk` layer
+  sits after Preflight's `base`. The kit's family is its scoped one: it styles only inside `.ui-sdk`, and the host puts
+  `class="ui-sdk loadsheet"` on the element that holds the views.
+*/
+@layer theme, base, ui-sdk, components, utilities;
+@import "@vite-hub/kit/styles/tokens.css";
+@import "@vite-hub/kit/styles/default.scoped.css";
+@import "./tokens.css";
+@import "./app.css";

@@ -13,9 +13,10 @@ import {
   harnessName,
   isDead,
   kindOf,
+  bundledPacks,
+  packRoute,
   packSlug,
   packTokens,
-  packs,
   shortName,
   totals,
 } from "../lib/report";
@@ -27,7 +28,7 @@ const at = ref("humans");
 const router = useRouter();
 const url = ref("");
 function go() {
-  router.push(`/pack/${packSlug(url.value) ?? "mattpocock/skills"}`);
+  router.push(packRoute(packSlug(url.value) ?? "mattpocock/skills"));
 }
 
 // The map of the example report's busiest harness, with the harness itself in it.
@@ -54,11 +55,15 @@ const blocks = computed<Block[]>(() => [
 ]);
 
 const examples = [
-  { to: "/report", label: `${harness} report`, title: `A month of ${harness}, an example report` },
+  {
+    to: { name: "report" },
+    label: `${harness} report`,
+    title: `A month of ${harness}, an example report`,
+  },
   ...["mattpocock/skills", "cursor/plugins/pstack"].map((slug) => {
-    const p = packs[slug]!;
+    const p = bundledPacks[slug]!;
     return {
-      to: `/pack/${slug}`,
+      to: packRoute(slug),
       label: slug,
       title: `${p.title}${p.by ? ` by ${p.by}` : ""}, ${fmt(packTokens(p.report))} tokens a session`,
     };
@@ -112,7 +117,7 @@ const examples = [
         </form>
         <nav class="ex" aria-label="Examples">
           <span>Examples</span>
-          <RouterLink v-for="e in examples" :key="e.to" :to="e.to" :title="e.title">{{
+          <RouterLink v-for="e in examples" :key="e.label" :to="e.to" :title="e.title">{{
             e.label
           }}</RouterLink>
         </nav>
@@ -121,7 +126,7 @@ const examples = [
         <Treemap
           class="tm-land"
           :blocks="blocks"
-          @select="(id) => router.push({ path: '/report', query: { item: id } })"
+          @select="(id) => router.push({ name: 'report', query: { item: id } })"
         />
         <Legend
           :kinds="sum.kinds"

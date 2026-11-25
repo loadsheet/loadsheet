@@ -9,17 +9,20 @@ import {
   findingName,
   fmt,
   kindOf,
+  packRoute,
   packSlug,
   packTokens,
-  packs,
   saved,
   shortName,
   totals,
 } from "../lib/report";
+import { useLoadsheet } from "../lib/state";
 
 const route = useRoute();
 const router = useRouter();
-const slug = computed(() => String(route.params.slug ?? "").replace(/\/+$/, ""));
+const { packs } = useLoadsheet();
+/** `owner/repo[/dir]`: the route's `slug` segments, one per folder. */
+const slug = computed(() => [route.params.slug ?? []].flat().filter(Boolean).join("/"));
 /** Without a server the page knows the packs bundled with it; any other URL shows the state for a pack it couldn't read. */
 const pack = computed(() => packs[slug.value]);
 const sheet = computed(() => pack.value?.report.sheet[0]);
@@ -40,7 +43,7 @@ const url = ref("");
 watch(slug, (s) => (url.value = `github.com/${s}`), { immediate: true });
 function go() {
   const s = packSlug(url.value);
-  if (s) router.push(`/pack/${s}`);
+  if (s) router.push(packRoute(s));
 }
 </script>
 
@@ -107,7 +110,7 @@ function go() {
         It shows the packs below. To weigh any pack on GitHub, run
         <code>npx loadsheet &lt;GitHub URL&gt;</code> in a terminal.
         <template #actions>
-          <RouterLink v-for="(p, s) in packs" :key="s" data-slot="button" :to="`/pack/${s}`">{{
+          <RouterLink v-for="(p, s) in packs" :key="s" data-slot="button" :to="packRoute(s)">{{
             s
           }}</RouterLink>
         </template>

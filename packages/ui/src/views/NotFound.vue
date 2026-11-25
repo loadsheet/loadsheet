@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { useRouter } from "vue-router";
 import SiteTop from "../components/SiteTop.vue";
 import StateBox from "../components/StateBox.vue";
-import { pickReport } from "../lib/open";
+import { usePickReport } from "../lib/open";
 
-const router = useRouter();
+const pickReport = usePickReport();
 </script>
 
 <template>
@@ -15,10 +14,10 @@ const router = useRouter();
         The address is cut short or was made by a newer loadsheet. Ask for the link again, or open
         the JSON file.
         <template #actions>
-          <button type="button" data-slot="button" data-variant="solid" @click="pickReport(router)">
+          <button type="button" data-slot="button" data-variant="solid" @click="pickReport">
             Open a report file
           </button>
-          <RouterLink data-slot="button" to="/">Go home</RouterLink>
+          <RouterLink data-slot="button" :to="{ name: 'home' }">Go home</RouterLink>
         </template>
       </StateBox>
     </main>

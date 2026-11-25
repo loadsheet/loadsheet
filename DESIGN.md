@@ -1,12 +1,14 @@
 # loadsheet web design
 
-The web UI (`apps/web`) shows what an agent loads before you type, against its context window. Every block is sized by its tokens and coloured by its kind. Everything else (type, chrome, copy) stays quiet so the map carries the page.
+The web UI shows what an agent loads before you type, against its context window. Every block is sized by its tokens and coloured by its kind. Everything else (type, chrome, copy) stays quiet so the map carries the page.
+
+Its views, components and styles live in `@loadsheet/ui` (`packages/ui`); the paths below are under `packages/ui/src`. `apps/web` is the shell that loadsheet.dev serves and the CLI writes: `src/main.ts` reads an inlined report, installs `createLoadsheet()` (`lib/state.ts`, where the report on screen lives, given to views through provide/inject) and mounts the hash router in `src/routes.ts`. Views link by route name (`home`, `report`, `fixes`, `pack`), so a Nuxt app can mount them under its own routes.
 
 ## Tokens
 
-The CSS loads in this order (`src/main.ts`): the kit's `tokens.css` and `default.css`, then `src/styles/tokens.css`, then `src/styles/app.css`.
+The CSS loads in this order (`styles/index.css`, exported as `@loadsheet/ui/styles.css`): the layer order `theme, base, ui-sdk, components, utilities`, the kit's `tokens.css` and `default.scoped.css`, then `styles/tokens.css`, then `styles/app.css`. Everything is scoped to the element with `class="ui-sdk loadsheet"` (`<body>` in `apps/web`), so the page can sit inside a site with its own theme, Nuxt UI or Tailwind: the kit styles only inside `.ui-sdk`, and `app.css` prefixes every rule with `:where(.loadsheet)`, which keeps each rule's specificity.
 
-- `tokens.css` sets the kit's shadcn names (`--background`, `--foreground`, `--card`, `--muted`, `--muted-foreground`, `--border`, `--input`, `--primary`, `--ring`) and loadsheet's own names (below). Each colour is defined twice: on `:root`, and again under `:root[data-theme="dark"]`.
+- `tokens.css` sets the kit's shadcn names (`--background`, `--foreground`, `--card`, `--muted`, `--muted-foreground`, `--border`, `--input`, `--primary`, `--ring`) and loadsheet's own names (below). Each colour is defined twice: on `.loadsheet`, and again under `[data-theme="dark"]`, which `apps/web` sets on `<html>`.
 - `app.css` uses only `var(--…)` names. If a colour isn't a token, add it to both theme blocks in `tokens.css` first. A hex value in `app.css` or a `.vue` file breaks dark mode.
 
 | Role                                               | Token                                  |
@@ -40,7 +42,7 @@ Each loaded thing has one kind colour: `--k-mcp`, `--k-instr`, `--k-skill`, `--k
 - The harness's own prompt: use `k-h`, which draws the grey hatch (`--hatch-h`). It is context the user can't remove, so it is neither a kind nor dead.
 - Text on a solid kind block is `--on-k`. On a hatch, the label sits on a `--background` pill.
 
-## The report page (`pages/Report.vue`)
+## The report page (`views/Report.vue`)
 
 It answers one question: how much of the window a session started now uses before you type. `lib/context.ts` turns the sheet into a `Context` (`contextOf`): one segment per kind with every installed line at its full tokens, plus a harness segment for `fixedTokens` minus what your files add. Lines without `scope` are no longer installed and stay out. History (means, never-used) isn't on this page.
 

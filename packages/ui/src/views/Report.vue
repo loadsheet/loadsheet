@@ -71,7 +71,7 @@ const exact = (e: MouseEvent) =>
       <RouterLink
         v-if="h.fixes.value.length"
         class="fixl"
-        :to="{ path: '/report/fixes', query: { h: route.query.h, r: route.query.r } }"
+        :to="{ name: 'fixes', query: { h: route.query.h, r: route.query.r } }"
         >{{ plural(h.fixes.value.length, "fix", "fixes") }}</RouterLink
       >
       <div v-if="table" class="ctools">

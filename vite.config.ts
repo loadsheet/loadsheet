@@ -27,6 +27,36 @@ const nodeFreeImports = {
   ],
 };
 
+// The report UI renders in the browser and, inside apps/site, on Nuxt's server: no Node builtins, none of the
+// Node-side packages, and nothing from Nuxt, so the shell that mounts it stays free to be Vite or Nuxt.
+const uiMessage =
+  "@loadsheet/ui runs in the browser and in Nuxt SSR: no Node builtins, kit, harnesses, loadsheet or Nuxt.";
+const uiImports = {
+  paths: [
+    ...builtinModules,
+    "@loadsheet/kit",
+    "@loadsheet/harnesses",
+    "loadsheet",
+    "nuxt",
+    "#imports",
+    "#app",
+  ].map((name) => ({ name, message: uiMessage })),
+  patterns: [
+    {
+      group: [
+        "node:*",
+        "@loadsheet/kit/*",
+        "@loadsheet/harnesses/*",
+        "loadsheet/*",
+        "nuxt/*",
+        "#app/*",
+      ],
+      message: uiMessage,
+    },
+    { regex: "\\.\\./(.*/)?(kit|harnesses|loadsheet)(/|$)", message: uiMessage },
+  ],
+};
+
 // What `nuxt build` and `wrangler dev` write in apps/site.
 const nuxtOutput = [
   "apps/site/.nuxt/**",
@@ -54,6 +84,7 @@ export default defineConfig({
         cache: {
           input: [
             "packages/*/src/**",
+            "packages/ui/src/**",
             "packages/schema/schema/**",
             "packages/*/package.json",
             "packages/*/tsdown.config.ts",
@@ -86,10 +117,12 @@ export default defineConfig({
           name: "packages",
           include: ["packages/*/test/**/*.test.ts"],
           // fleet runs as its own project, with its own setup and timeouts.
-          exclude: ["**/node_modules/**", "packages/fleet/**"],
+          exclude: ["**/node_modules/**", "packages/fleet/**", "packages/ui/**"],
         },
       },
       "packages/fleet",
+      // The report UI, with Vue's plugin and its aliases to the workspace sources.
+      "packages/ui",
       // The web app's own tests, with its aliases to the workspace sources.
       "apps/web",
     ],
@@ -113,6 +146,10 @@ export default defineConfig({
       {
         files: ["packages/kit/src/node/**"],
         rules: { "no-restricted-imports": "off" },
+      },
+      {
+        files: ["packages/ui/src/**"],
+        rules: { "no-restricted-imports": ["error", uiImports] },
       },
       {
         files: ["packages/resolve/src/**"],

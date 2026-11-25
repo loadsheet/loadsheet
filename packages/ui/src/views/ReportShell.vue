@@ -4,7 +4,7 @@ import {
   SegmentedControlIndicator,
   SegmentedControlItem,
 } from "@ui-sdk/vue/segmented-control";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute } from "vue-router";
 import CopyIcon from "../components/CopyIcon.vue";
 import HarnessMark from "../components/HarnessMark.vue";
 import Logo from "../components/Logo.vue";
@@ -12,17 +12,20 @@ import StateBox from "../components/StateBox.vue";
 import ThemeToggle from "../components/ThemeToggle.vue";
 import CopyButton from "../components/CopyButton.vue";
 import { useHarness } from "../lib/harness";
-import { pickReport } from "../lib/open";
-import { harnessName, linkError, report, shareLink } from "../lib/report";
+import { usePickReport } from "../lib/open";
+import { harnessName, shareLink } from "../lib/report";
+import { useLoadsheet } from "../lib/state";
 import { copied, copy } from "../lib/ui";
 
 const h = useHarness();
 const route = useRoute();
-const router = useRouter();
+const pickReport = usePickReport();
+const { report, linkError, shareBase } = useLoadsheet();
 async function share() {
   copy(
     await shareLink(
       report.value,
+      shareBase(),
       route.path,
       typeof route.query.h === "string" ? route.query.h : undefined,
     ),
@@ -34,7 +37,7 @@ async function share() {
 
 <template>
   <header class="bar">
-    <RouterLink to="/" class="home-link" aria-label="loadsheet home"
+    <RouterLink :to="{ name: 'home' }" class="home-link" aria-label="loadsheet home"
       ><Logo :size="19" word
     /></RouterLink>
     <SegmentedControl
@@ -64,10 +67,10 @@ async function share() {
       The address is cut short or was made by a newer loadsheet. Ask for the link again, or open the
       JSON file.
       <template #actions>
-        <button type="button" data-slot="button" data-variant="solid" @click="pickReport(router)">
+        <button type="button" data-slot="button" data-variant="solid" @click="pickReport">
           Open a report file
         </button>
-        <RouterLink data-slot="button" to="/">Go home</RouterLink>
+        <RouterLink data-slot="button" :to="{ name: 'home' }">Go home</RouterLink>
       </template>
     </StateBox>
   </main>

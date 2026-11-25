@@ -1,29 +1,30 @@
 /*
   loadsheet's theme for @vite-hub/kit. The kit's parts read the shadcn/ui names, so this file sets those names to the
   map identity: a near-white page, white panels, one teal accent, and a colour per kind of loaded thing. The names
-  after the shadcn set are loadsheet's own. The fonts are Geist (SIL OFL 1.1, see ../assets/fonts/OFL.txt), inlined
+  after the shadcn set are loadsheet's own. The fonts are Geist (SIL OFL 1.1, see ../fonts/OFL.txt), inlined
   into the built page.
 */
 @font-face {
   font-family: "Geist";
-  src: url("../assets/fonts/geist.woff2") format("woff2");
+  src: url("../fonts/geist.woff2") format("woff2");
   font-weight: 100 900;
   font-display: swap;
 }
 @font-face {
   font-family: "Geist Mono";
-  src: url("../assets/fonts/geist-mono.woff2") format("woff2");
+  src: url("../fonts/geist-mono.woff2") format("woff2");
   font-weight: 100 900;
   font-display: swap;
 }
 @font-face {
   font-family: "Geist Pixel Square";
-  src: url("../assets/fonts/geist-pixel-square.woff2") format("woff2");
+  src: url("../fonts/geist-pixel-square.woff2") format("woff2");
   font-weight: 400;
   font-display: swap;
 }
 
-:root {
+/* On the scope root, not :root, so a page around loadsheet's views (a docs page with Nuxt UI) keeps its own tokens. */
+.loadsheet {
   color-scheme: light;
   /* The base step: 6px controls (the kit's --ui-radius is 1.5×). */
   --radius: 0.25rem;
@@ -95,7 +96,8 @@
   --bar: 52px;
 }
 
-:root[data-theme="dark"] {
+:where([data-theme="dark"]) .loadsheet,
+.loadsheet:where([data-theme="dark"]) {
   color-scheme: dark;
   --background: #121211;
   --foreground: #ececea;

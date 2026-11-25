@@ -1,0 +1,25 @@
+{
+  "name": "@loadsheet/ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "loadsheet's Vue views, components and styles, shared by the static report page and loadsheet.dev; source only, built by the app that uses it.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles/index.css"
+  },
+  "dependencies": {
+    "@loadsheet/core": "workspace:*",
+    "@loadsheet/schema": "workspace:*",
+    "@ui-sdk/core": "catalog:",
+    "@ui-sdk/vue": "catalog:",
+    "@vite-hub/kit": "catalog:",
+    "vue": "^3.5.46",
+    "vue-router": "^5.5.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.11",
+    "vite-plus": "catalog:"
+  }
+}

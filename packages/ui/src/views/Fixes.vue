@@ -11,13 +11,14 @@ import {
   fixView,
   fmt,
   plural,
-  report,
   saved,
   type Finding,
 } from "../lib/report";
+import { useLoadsheet } from "../lib/state";
 import { copy } from "../lib/ui";
 
 const h = useHarness();
+const { report } = useLoadsheet();
 const groups = computed(() =>
   [
     { level: "cut", name: "Cut" },
@@ -47,7 +48,7 @@ const notes = computed(() => coverage(report.value));
     <template v-if="h.fixes.value.length">
       <RouterLink
         class="back"
-        :to="{ path: '/report', query: { h: $route.query.h, r: $route.query.r } }"
+        :to="{ name: 'report', query: { h: $route.query.h, r: $route.query.r } }"
         >← Report</RouterLink
       >
       <div class="ph">
@@ -65,7 +66,7 @@ const notes = computed(() => coverage(report.value));
           data-slot="button"
           data-variant="solid"
           data-size="lg"
-          @click="copy(agentPrompt(h.fixes.value), 'Copied. Paste it into your agent')"
+          @click="copy(agentPrompt(h.fixes.value, report), 'Copied. Paste it into your agent')"
         >
           Copy all for your agent
         </button>
@@ -79,9 +80,9 @@ const notes = computed(() => coverage(report.value));
               <div>
                 <b class="mono">{{ findingName(f) }}</b><span class="muted">{{ kindOf(f) }}</span>
               </div>
-              <p>{{ evidence(f) }}</p>
+              <p>{{ evidence(f, report) }}</p>
             </div>
-            <Cmd v-if="fixView(f)" :fix="fixView(f)!" />
+            <Cmd v-if="fixView(f, report)" :fix="fixView(f, report)!" />
             <b class="save num">{{ saved(f) ? `−${fmt(saved(f))}` : "" }}</b>
           </li>
         </ul>
@@ -92,7 +93,7 @@ const notes = computed(() => coverage(report.value));
       <template #actions>
         <RouterLink
           data-slot="button"
-          :to="{ path: '/report', query: { h: $route.query.h, r: $route.query.r } }"
+          :to="{ name: 'report', query: { h: $route.query.h, r: $route.query.r } }"
           >Back to the map</RouterLink
         >
       </template>

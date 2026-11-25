@@ -1,29 +1,24 @@
 import { parseReport, type Finding, type Line, type Report, type Sheet } from "@loadsheet/schema";
-import { shallowRef } from "vue";
 import example from "../../../../examples/report.example.json";
 import packExample from "../../../../examples/report.pack.example.json";
-import { fromShareCode, shareCode } from "./share";
+import { shareCode } from "./share";
 import mattpocock from "../data/pack.mattpocock-skills.json";
 import pstack from "../data/pack.pstack.json";
 
 export type { Finding, Line, Report, Sheet };
 
-/** `loadsheet --ui` and `loadsheet build` inline the report as `<script type="application/json" id="report">`. */
-function inlined(): Report | undefined {
-  const el = document.getElementById("report");
-  return el?.textContent ? parseReport(JSON.parse(el.textContent)) : undefined;
-}
-
-const fromPage = inlined();
 /** The example the landing page draws, whatever report is open. */
 export const exampleReport = parseReport(example);
-export const report = shallowRef<Report>(fromPage ?? exampleReport);
-export const isExample = shallowRef(!fromPage);
+export interface Pack {
+  report: Report;
+  title: string;
+  by?: string;
+}
 /**
   Packs this page can show without a server. The two named ones were read from the repositories' own
   plugin manifests and SKILL.md files (names, descriptions and sizes), the way the pack checker will.
 */
-export const packs: Record<string, { report: Report; title: string; by?: string }> = {
+export const bundledPacks: Readonly<Record<string, Pack>> = {
   "mattpocock/skills": {
     report: parseReport(mattpocock),
     title: "Matt Pocock's skills",
@@ -32,22 +27,6 @@ export const packs: Record<string, { report: Report; title: string; by?: string 
   "cursor/plugins/pstack": { report: parseReport(pstack), title: "pstack", by: "Lauren Tan" },
   "northwind-ai/agent-skills": { report: parseReport(packExample), title: "agent-skills" },
 };
-/** Where `/` goes when the CLI inlined a report: the user's own report, or the pack it read. */
-export const home = (() => {
-  if (!fromPage) return undefined;
-  if (fromPage.mode !== "pack") return "/report";
-  // A folder's name goes into the route, where `#`, `?` or `%` would change what it reads.
-  const slug =
-    packSlug(fromPage.source ?? "") ??
-    fromPage.source
-      ?.split(/[\\/]/)
-      .filter(Boolean)
-      .at(-1)
-      ?.replace(/[^\w.-]+/g, "-") ??
-    "pack";
-  packs[slug] = { report: fromPage, title: slug.split("/").at(-1)! };
-  return `/pack/${slug}`;
-})();
 /** `github.com/owner/repo`, `owner/repo` or `github.com/owner/repo/tree/main/dir` → `owner/repo[/dir]`. */
 export function packSlug(input: string): string | undefined {
   const m = input
@@ -57,39 +36,15 @@ export function packSlug(input: string): string | undefined {
     .match(/^([\w.-]+)\/([\w.-]+)(?:\/tree\/[^/]+((?:\/[\w.-]+)+))?/);
   return m ? `${m[1]}/${m[2]!.replace(/\.git$/, "")}${m[3] ?? ""}` : undefined;
 }
+/** The pack page for `owner/repo[/dir]`, by route name, one `slug` segment per folder. */
+export const packRoute = (slug: string) => ({ name: "pack", params: { slug: slug.split("/") } });
 /** Tokens a pack adds to every session once installed: what the model is shown before it uses anything. */
 export const packTokens = (r: Report) => r.sheet[0]!.lines.reduce((n, l) => n + l.tokens.value, 0);
 
-export async function shareLink(r: Report, path = "/report", h?: string) {
+/** A link that opens `r` at `path` (and harness `h`) on the page at `base`; the report rides in the fragment, without its descriptions. */
+export async function shareLink(r: Report, base: string, path = "/report", h?: string) {
   const code = await shareCode(r);
-  // A page the CLI served or wrote is on 127.0.0.1 or on disk, where no one else can open it.
-  const base = fromPage ? "https://loadsheet.dev/" : `${location.origin}${location.pathname}`;
   return `${base}#${path}?${h ? `h=${encodeURIComponent(h)}&` : ""}r=${code}`;
-}
-/** Set when the URL carried a report this page couldn't read, so the page can say so instead of showing the example. */
-export const linkError = shallowRef<string>();
-/** True while the report on screen came from a shared link. */
-export const shared = shallowRef(false);
-/** Resolves once a report in the URL, if any, is loaded; main.ts mounts after it. */
-export const ready = (async () => {
-  const code = new URLSearchParams(location.hash.split("?")[1] ?? "").get("r");
-  if (!code || fromPage) return;
-  try {
-    report.value = await fromShareCode(code);
-    isExample.value = false;
-    shared.value = true;
-  } catch (e) {
-    linkError.value = e instanceof Error ? e.message : String(e);
-  }
-})();
-
-/** Reads a report.json the user dropped or picked. Throws a SchemaError with every issue's path. */
-export async function openFile(file: File) {
-  const next = parseReport(JSON.parse(await file.text()));
-  report.value = next;
-  isExample.value = false;
-  shared.value = false;
-  linkError.value = undefined;
 }
 
 // ─── words ───
@@ -200,12 +155,12 @@ export const RULE: Record<string, string> = {
 /** A rule a newer loadsheet added still reads as words. */
 export const ruleName = (rule: string) =>
   RULE[rule] ?? rule.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
-const limit = (rule: "heavy-instructions" | "expensive-description") =>
-  fmt(report.value.config.rules[rule].maxChars);
+const limit = (r: Report, rule: "heavy-instructions" | "expensive-description") =>
+  fmt(r.config.rules[rule].maxChars);
 const machinesOf = (f: Finding) => list([...new Set(f.where.map((w) => w.machine))]);
 
-/** The one-line reason under a fix. */
-export function evidence(f: Finding): string {
+/** The one-line reason under a fix, against the limits in `r`'s config. */
+export function evidence(f: Finding, r: Report): string {
   const e = f.evidence;
   const n = (k: string) => fmt(e[k] ?? 0);
   switch (f.rule) {
@@ -218,7 +173,7 @@ export function evidence(f: Finding): string {
     case "heavy-instructions":
       return `${n("chars")} characters, read in ${n("sessions")} sessions.`;
     case "expensive-description":
-      return `Its description is ${n("listedChars")} characters and every session reads it. Aim for ${limit("expensive-description")}.`;
+      return `Its description is ${n("listedChars")} characters and every session reads it. Aim for ${limit(r, "expensive-description")}.`;
     case "manual-only":
       return `You called it ${times(e.byUser ?? 0)}. The model never picked it up.`;
     case "invisible-skill":
@@ -246,7 +201,7 @@ export type FixView =
   | { type: "cmd"; text: string }
   | { type: "set"; text: string; file: string }
   | { type: "ask"; text: string };
-export function fixView(f: Finding): FixView | undefined {
+export function fixView(f: Finding, r: Report): FixView | undefined {
   const x = f.fixes[0];
   if (!x) return undefined;
   if (x.run) return { type: "cmd", text: x.run };
@@ -260,19 +215,19 @@ export function fixView(f: Finding): FixView | undefined {
   if (f.rule === "heavy-instructions")
     return {
       type: "ask",
-      text: `Shorten ${x.path} to under ${limit("heavy-instructions")} characters`,
+      text: `Shorten ${x.path} to under ${limit(r, "heavy-instructions")} characters`,
     };
   if (f.rule === "expensive-description")
     return {
       type: "ask",
-      text: `Shorten the description of the ${name} skill to ${limit("expensive-description")} characters`,
+      text: `Shorten the description of the ${name} skill to ${limit(r, "expensive-description")} characters`,
     };
   const verb = { remove: "Remove", dedupe: "Keep one copy of", shorten: "Shorten" } as const;
   return { type: "ask", text: `${verb[x.action as keyof typeof verb] ?? "Change"} ${x.path}` };
 }
 /** The fix as one line for a person or an agent. */
-export function fixLine(f: Finding) {
-  const v = fixView(f);
+export function fixLine(f: Finding, r: Report) {
+  const v = fixView(f, r);
   if (!v) return "";
   return v.type === "set" ? `Set ${v.text} in ${f.fixes[0]!.path}` : v.text;
 }
@@ -292,14 +247,14 @@ export function actionName(f: Finding) {
           : "Remove";
 }
 
-export function agentPrompt(fs: Finding[]): string {
+export function agentPrompt(fs: Finding[], r: Report): string {
   const acts = fs.filter((f) => f.fixes.length);
   return (
     `loadsheet found ${plural(acts.length, "fix", "fixes")} in my agent setup. Show me the list, apply the ones I approve one at a time, and tell me what changed:\n` +
     acts
       .map(
         (f, i) =>
-          `${i + 1}. ${findingName(f)}: ${fixLine(f)}${f.fixes.length > 1 ? ` (on ${list(f.fixes.flatMap((x) => (x.machine ? [x.machine] : [])))})` : ""}`,
+          `${i + 1}. ${findingName(f)}: ${fixLine(f, r)}${f.fixes.length > 1 ? ` (on ${list(f.fixes.flatMap((x) => (x.machine ? [x.machine] : [])))})` : ""}`,
       )
       .join("\n")
   );
@@ -349,7 +304,7 @@ export function coverage(r: Report): string[] {
     );
   for (const f of r.findings.filter((f) => f.level === "info"))
     out.push(
-      `${f.where[0] ? `${harnessName(f.where[0].harness)} on ${f.where[0].machine}: ` : ""}${evidence(f)}`,
+      `${f.where[0] ? `${harnessName(f.where[0].harness)} on ${f.where[0].machine}: ` : ""}${evidence(f, r)}`,
     );
   return out;
 }

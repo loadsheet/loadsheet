@@ -2,10 +2,12 @@
 import { computed } from "vue";
 import StateBox from "./StateBox.vue";
 import { useHarness } from "../lib/harness";
-import { day, harnessName, report } from "../lib/report";
+import { day, harnessName } from "../lib/report";
+import { useLoadsheet } from "../lib/state";
 
 /** The current harness is installed but has nothing on its sheet; offer the busiest one that has. */
 const h = useHarness();
+const { report } = useLoadsheet();
 const busiest = computed(
   () => report.value.sheet.filter((s) => s.lines.length).sort((a, b) => b.sessions - a.sessions)[0],
 );

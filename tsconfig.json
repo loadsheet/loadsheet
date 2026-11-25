@@ -23,5 +23,7 @@
     "scripts",
     "tsdown.shared.ts",
     "vite.config.ts"
-  ]
+  ],
+  // The report UI is Vue and DOM code with its own tsconfig.
+  "exclude": ["packages/ui"]
 }
