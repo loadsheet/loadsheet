@@ -41,4 +41,16 @@ describe("shareLink", () => {
       report.sheet.flatMap((s) => s.lines).length,
     );
   });
+
+  it("in the path form, puts the report in the fragment of its own path, where no server sees it", async () => {
+    const link = new URL(
+      await shareLink(report, "https://loadsheet.dev/", "/report/fixes", "codex", "path"),
+    );
+    expect(link.origin + link.pathname).toBe("https://loadsheet.dev/report/fixes");
+    expect(link.searchParams.get("h")).toBe("codex");
+    const code = new URLSearchParams(link.hash.slice(1)).get("r")!;
+    expect((await fromShareCode(code)).sheet.flatMap((s) => s.lines)).toHaveLength(
+      report.sheet.flatMap((s) => s.lines).length,
+    );
+  });
 });

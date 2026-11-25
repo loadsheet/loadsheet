@@ -12,6 +12,9 @@ function flip() {
   style.textContent = "*{transition:none!important}";
   document.head.append(style);
   root.dataset.theme = dark.value ? "dark" : "light";
+  // A host with Nuxt's colour mode marks the theme as a class too, and the kit reads either.
+  root.classList.toggle("dark", dark.value);
+  root.classList.toggle("light", !dark.value);
   try {
     localStorage.setItem("theme", root.dataset.theme);
   } catch {}

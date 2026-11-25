@@ -27,6 +27,11 @@ export const bundledPacks: Readonly<Record<string, Pack>> = {
   "cursor/plugins/pstack": { report: parseReport(pstack), title: "pstack", by: "Lauren Tan" },
   "northwind-ai/agent-skills": { report: parseReport(packExample), title: "agent-skills" },
 };
+/** Why a server couldn't read a pack: the `code` of its answer, such as `not-found`, and its message. */
+export interface PackError {
+  code: string;
+  message: string;
+}
 /** `github.com/owner/repo`, `owner/repo` or `github.com/owner/repo/tree/main/dir` → `owner/repo[/dir]`. */
 export function packSlug(input: string): string | undefined {
   const m = input
@@ -41,10 +46,24 @@ export const packRoute = (slug: string) => ({ name: "pack", params: { slug: slug
 /** Tokens a pack adds to every session once installed: what the model is shown before it uses anything. */
 export const packTokens = (r: Report) => r.sheet[0]!.lines.reduce((n, l) => n + l.tokens.value, 0);
 
+/**
+  How a share link addresses the page: `hash` for a page with a hash router (`<base>#/report?h=…&r=…`), `path` for
+  loadsheet.dev's own routes (`<base>report?h=…#r=…`). Either way the report rides in the fragment.
+*/
+export type ShareForm = "hash" | "path";
 /** A link that opens `r` at `path` (and harness `h`) on the page at `base`; the report rides in the fragment, without its descriptions. */
-export async function shareLink(r: Report, base: string, path = "/report", h?: string) {
+export async function shareLink(
+  r: Report,
+  base: string,
+  path = "/report",
+  h?: string,
+  form: ShareForm = "hash",
+) {
   const code = await shareCode(r);
-  return `${base}#${path}?${h ? `h=${encodeURIComponent(h)}&` : ""}r=${code}`;
+  const harness = h ? `h=${encodeURIComponent(h)}` : "";
+  return form === "path"
+    ? `${base.replace(/\/+$/, "")}${path}${harness ? `?${harness}` : ""}#r=${code}`
+    : `${base}#${path}?${harness ? `${harness}&` : ""}r=${code}`;
 }
 
 // ─── words ───

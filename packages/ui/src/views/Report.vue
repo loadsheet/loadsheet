@@ -22,7 +22,10 @@ const router = useRouter();
 const ctx = computed(() => (h.sheet.value ? contextOf(h.sheet.value) : undefined));
 const table = computed(() => route.query.view === "table");
 const show = (v: "map" | "table") =>
-  router.replace({ query: { ...route.query, view: v === "table" ? "table" : undefined } });
+  router.replace({
+    query: { ...route.query, view: v === "table" ? "table" : undefined },
+    hash: route.hash,
+  });
 
 const st = reactive(freshView());
 watch(h.current, () => Object.assign(st, freshView()));
@@ -71,7 +74,7 @@ const exact = (e: MouseEvent) =>
       <RouterLink
         v-if="h.fixes.value.length"
         class="fixl"
-        :to="{ name: 'fixes', query: { h: route.query.h, r: route.query.r } }"
+        :to="{ name: 'fixes', query: { h: route.query.h, r: route.query.r }, hash: route.hash }"
         >{{ plural(h.fixes.value.length, "fix", "fixes") }}</RouterLink
       >
       <div v-if="table" class="ctools">

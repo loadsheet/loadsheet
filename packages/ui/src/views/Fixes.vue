@@ -48,7 +48,7 @@ const notes = computed(() => coverage(report.value));
     <template v-if="h.fixes.value.length">
       <RouterLink
         class="back"
-        :to="{ name: 'report', query: { h: $route.query.h, r: $route.query.r } }"
+        :to="{ name: 'report', query: { h: $route.query.h, r: $route.query.r }, hash: $route.hash }"
         >← Report</RouterLink
       >
       <div class="ph">
@@ -93,7 +93,11 @@ const notes = computed(() => coverage(report.value));
       <template #actions>
         <RouterLink
           data-slot="button"
-          :to="{ name: 'report', query: { h: $route.query.h, r: $route.query.r } }"
+          :to="{
+            name: 'report',
+            query: { h: $route.query.h, r: $route.query.r },
+            hash: $route.hash,
+          }"
           >Back to the map</RouterLink
         >
       </template>

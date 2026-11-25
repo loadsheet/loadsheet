@@ -1,6 +1,13 @@
 import { parseReport, type Report } from "@loadsheet/schema";
 import { type App, type InjectionKey, type ShallowRef, inject, shallowRef } from "vue";
-import { type Pack, bundledPacks, exampleReport, packRoute, packSlug } from "./report";
+import {
+  type Pack,
+  type ShareForm,
+  bundledPacks,
+  exampleReport,
+  packRoute,
+  packSlug,
+} from "./report";
 import { fromShareCode } from "./share";
 
 /**
@@ -19,6 +26,8 @@ export interface Loadsheet {
   packs: Record<string, Pack>;
   /** The page a share link opens on, such as `https://loadsheet.dev/`. */
   shareBase: () => string;
+  /** How a share link addresses that page. */
+  shareForm: ShareForm;
   /** Reads a report.json the user dropped or picked. Throws a SchemaError with every issue's path. */
   openFile: (file: File) => Promise<void>;
   /** Opens the report a share code carries, or sets `linkError` when it can't be read. */
@@ -34,6 +43,8 @@ export interface LoadsheetOptions {
   /** Packs beside the bundled ones, such as the one the CLI inlined. */
   packs?: Record<string, Pack>;
   shareBase: () => string;
+  /** @default "hash" */
+  shareForm?: ShareForm;
 }
 
 export function createLoadsheet(options: LoadsheetOptions): Loadsheet {
@@ -44,6 +55,7 @@ export function createLoadsheet(options: LoadsheetOptions): Loadsheet {
     linkError: shallowRef(),
     packs: { ...bundledPacks, ...options.packs },
     shareBase: options.shareBase,
+    shareForm: options.shareForm ?? "hash",
     async openFile(file) {
       state.report.value = parseReport(JSON.parse(await file.text()));
       state.isExample.value = false;

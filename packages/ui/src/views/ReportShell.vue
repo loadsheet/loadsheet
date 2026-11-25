@@ -20,7 +20,7 @@ import { copied, copy } from "../lib/ui";
 const h = useHarness();
 const route = useRoute();
 const pickReport = usePickReport();
-const { report, linkError, shareBase } = useLoadsheet();
+const { report, linkError, shareBase, shareForm } = useLoadsheet();
 async function share() {
   copy(
     await shareLink(
@@ -28,6 +28,7 @@ async function share() {
       shareBase(),
       route.path,
       typeof route.query.h === "string" ? route.query.h : undefined,
+      shareForm,
     ),
     "Link copied. The report travels in the link itself",
     "share",

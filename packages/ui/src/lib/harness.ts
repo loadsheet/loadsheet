@@ -32,6 +32,7 @@ export function useHarness() {
   const saving = computed(() => saves(fixes.value));
   /** No sheet anywhere has a line: loadsheet found nothing to read. */
   const empty = computed(() => !report.value.sheet.some((s) => s.lines.length));
-  const set = (h: string) => router.replace({ query: { ...route.query, h } });
+  // The hash may hold the shared report (`#r=…`), so it stays.
+  const set = (h: string) => router.replace({ query: { ...route.query, h }, hash: route.hash });
   return { all, current, sheet, cost, sum, fixes, saving, empty, set };
 }

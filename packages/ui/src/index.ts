@@ -20,6 +20,8 @@ export {
 } from "./lib/state";
 export {
   type Pack as PackEntry,
+  type PackError,
+  type ShareForm,
   bundledPacks,
   exampleReport,
   packRoute,

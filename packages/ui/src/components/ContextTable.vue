@@ -21,6 +21,8 @@ import { esc, hideTip, showTip } from "../lib/ui";
   The same segments as rows. Skills open into where they come from; every list shows its top five and folds the
   rest behind one full-width row. An item with a description shows its first sentence, and the whole of it on click.
 */
+/** `free: false` leaves out the last row, the window left free, where there is no session to fill it (a pack). */
+const props = withDefaults(defineProps<{ free?: boolean }>(), { free: true });
 const view = inject(VIEW)!;
 const st = view.st;
 const TOP = 5;
@@ -117,8 +119,9 @@ const rows = computed<Row[]>(() => {
       if (gopen) list(s, items, key, 2);
     }
   }
-  if (!q) out.push({ t: "free", key: "free", tokens: view.ctx().window - view.ctx().total });
-  else if (!out.length) out.push({ t: "none", key: "none" });
+  if (q && !out.length) out.push({ t: "none", key: "none" });
+  else if (!q && props.free)
+    out.push({ t: "free", key: "free", tokens: view.ctx().window - view.ctx().total });
   return out;
 });
 
