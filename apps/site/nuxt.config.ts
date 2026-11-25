@@ -3,9 +3,6 @@ import { defineNuxtConfig } from "nuxt/config";
 import viteHubNuxt from "vite-hub/nuxt";
 import { writeSchemas } from "./scripts/schema.ts";
 
-// A staging build deploys as the Worker loadsheet-next on its workers.dev URL, so it names no public URL.
-const staging = process.env.LOADSHEET_STAGING === "1";
-
 export default defineNuxtConfig({
   compatibilityDate: "2026-11-01",
   modules: [
@@ -16,9 +13,9 @@ export default defineNuxtConfig({
     "vite-hub/docs/nuxt",
   ],
   vitehub: {
-    name: staging ? "loadsheet-next" : "loadsheet",
+    name: "loadsheet",
     host: "cloudflare",
-    ...(staging ? {} : { publicUrl: "https://loadsheet.dev" }),
+    publicUrl: "https://loadsheet.dev",
     console: true,
     health: true,
     comments: false,
