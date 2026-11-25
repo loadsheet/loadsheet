@@ -417,6 +417,28 @@ importers:
         specifier: workspace:*
         version: link:../../apps/web
 
+  packages/resolve:
+    dependencies:
+      '@loadsheet/core':
+        specifier: workspace:*
+        version: link:../core
+      '@loadsheet/harnesses':
+        specifier: workspace:*
+        version: link:../harnesses
+      '@loadsheet/kit':
+        specifier: workspace:*
+        version: link:../kit
+      '@loadsheet/schema':
+        specifier: workspace:*
+        version: link:../schema
+      skills:
+        specifier: 'catalog:'
+        version: 1.9.0
+    devDependencies:
+      tar:
+        specifier: 'catalog:'
+        version: 7.5.23
+
   packages/schema:
     dependencies:
       valibot:

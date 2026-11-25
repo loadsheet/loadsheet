@@ -1,0 +1,24 @@
+{
+  "name": "@loadsheet/resolve",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Weighs a public GitHub skills source as a pack Report, with the skills that the `skills` CLI would find; runs in Node and in a Cloudflare Worker.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@loadsheet/core": "workspace:*",
+    "@loadsheet/harnesses": "workspace:*",
+    "@loadsheet/kit": "workspace:*",
+    "@loadsheet/schema": "workspace:*",
+    "skills": "catalog:"
+  },
+  "devDependencies": {
+    "tar": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}

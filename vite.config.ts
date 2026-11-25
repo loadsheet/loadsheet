@@ -35,6 +35,16 @@ const nuxtOutput = [
   "apps/site/.wrangler/**",
 ];
 
+// resolve runs in a Cloudflare Worker too: no git, no child processes, and no CLI or fleet.
+const workerMessage =
+  "resolve runs in a Cloudflare Worker: no child processes, git, loadsheet or @loadsheet/fleet.";
+const workerImports = {
+  paths: ["child_process", "node:child_process", "simple-git", "loadsheet", "@loadsheet/fleet"].map(
+    (name) => ({ name, message: workerMessage }),
+  ),
+  patterns: [{ group: ["loadsheet/*", "@loadsheet/fleet/*"], message: workerMessage }],
+};
+
 export default defineConfig({
   run: {
     tasks: {
@@ -101,6 +111,10 @@ export default defineConfig({
       {
         files: ["packages/kit/src/node/**"],
         rules: { "no-restricted-imports": "off" },
+      },
+      {
+        files: ["packages/resolve/src/**"],
+        rules: { "no-restricted-imports": ["error", workerImports] },
       },
     ],
   },

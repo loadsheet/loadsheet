@@ -1,6 +1,12 @@
 import { gzipSync } from "node:zlib";
 import { describe, expect, it } from "vite-plus/test";
-import { githubFiles, githubUrl, parseGithubUrl, readTar } from "../src/node/index.ts";
+import {
+  ArchiveTooLargeError,
+  githubFiles,
+  githubUrl,
+  parseGithubUrl,
+  readTar,
+} from "../src/node/index.ts";
 
 const encoder = new TextEncoder();
 
@@ -173,5 +179,21 @@ describe("githubFiles", () => {
     await expect(
       githubFiles("https://github.com/o/r/tree/x", { fetch: serve(404).get }),
     ).rejects.toThrow("GitHub has no ref x in o/r");
+  });
+
+  it("stops at maxArchiveBytes, gzipped or unpacked", async () => {
+    const gzipped = gzipSync(archive);
+    const tooSmall = { fetch: serve(200, gzipped).get, maxArchiveBytes: gzipped.length - 1 };
+    await expect(githubFiles("https://github.com/o/r", tooSmall)).rejects.toThrow(
+      ArchiveTooLargeError,
+    );
+    // A small gzip that unpacks past the limit is stopped while unpacking.
+    const unpacked = { fetch: serve(200, gzipped).get, maxArchiveBytes: archive.length - 1 };
+    expect(gzipped.length).toBeLessThan(archive.length - 1);
+    await expect(githubFiles("https://github.com/o/r", unpacked)).rejects.toThrow(
+      ArchiveTooLargeError,
+    );
+    const roomy = { fetch: serve(200, gzipped).get, maxArchiveBytes: archive.length };
+    expect((await githubFiles("https://github.com/o/r", roomy)).paths).toContain("README.md");
   });
 });

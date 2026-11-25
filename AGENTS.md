@@ -14,11 +14,12 @@ Each package's dependencies in `package.json` are the layering. Keep imports ins
 | `@loadsheet/harnesses`             | schema, kit's `.`, tinyaml            | rules; `node:*`, `@loadsheet/kit/node`: an adapter receives `Files` from kit                     |
 | `@loadsheet/core`                  | schema                                | kit, harnesses, `node:*`; it is isomorphic and runs in the browser                               |
 | `loadsheet` (`packages/loadsheet`) | schema, kit, harnesses, core, fleet   | nothing; with fleet's own commands, the only place that parses argv                              |
+| `@loadsheet/resolve` (private)     | schema, kit, harnesses, core, skills  | git, `child_process`, `loadsheet`, fleet; it runs in a Cloudflare Worker, so `fetch` is injected |
 | `@loadsheet/fixtures` (private)    | Node                                  | every other package; only tests and scripts import it, and it is not built                       |
 | `@loadsheet/fleet`                 | Node, and the dependencies it bundles | schema, kit, harnesses, core, `loadsheet`; the name it runs under, which `run(argv, name)` takes |
 | `fleetrc` (`packages/fleetrc`)     | `@loadsheet/fleet`                    | anything but `run`; it is the bin npm `fleetrc` users run, and must keep behaving as before      |
 
-`vp lint` fails when `packages/core/src` or `packages/schema/src` imports a Node builtin, kit, harnesses or `loadsheet`, and when `packages/harnesses/src` or `packages/kit/src` outside `node/` imports a Node builtin or `@loadsheet/kit/node`.
+`vp lint` fails when `packages/core/src` or `packages/schema/src` imports a Node builtin, kit, harnesses or `loadsheet`, when `packages/harnesses/src` or `packages/kit/src` outside `node/` imports a Node builtin or `@loadsheet/kit/node`, and when `packages/resolve/src` imports `child_process`, `simple-git`, `loadsheet` or fleet.
 
 ## Privacy
 

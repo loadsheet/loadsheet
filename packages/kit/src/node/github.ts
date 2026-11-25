@@ -124,16 +124,78 @@ export const readTar = (archive: Uint8Array): Map<string, Uint8Array> => {
 /** Options for githubFiles; fetch is replaceable so tests need no network. */
 export interface GithubFilesOptions {
   fetch?: typeof fetch;
+  /** The largest file kept; a larger one is left out. */
   maxBytes?: number;
+  /** The most bytes the tarball may hold, gzipped or unpacked; no limit when absent. */
+  maxArchiveBytes?: number;
 }
+
+/** A tarball larger than `maxArchiveBytes`, gzipped or unpacked. */
+export class ArchiveTooLargeError extends Error {
+  readonly source: string;
+  readonly limit: number;
+
+  constructor(source: string, limit: number) {
+    super(`${source} is larger than ${limit} bytes`);
+    this.name = "ArchiveTooLargeError";
+    this.source = source;
+    this.limit = limit;
+  }
+}
+
+// Stops reading as soon as the body passes the limit, so an oversized archive is never held whole.
+const readCapped = async (response: Response, limit: number, source: string) => {
+  if (Number(response.headers.get("content-length")) > limit) {
+    await response.body?.cancel();
+    throw new ArchiveTooLargeError(source, limit);
+  }
+  if (!response.body) return new Uint8Array(await response.arrayBuffer());
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > limit) {
+      await reader.cancel();
+      throw new ArchiveTooLargeError(source, limit);
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return bytes;
+};
+
+const gunzip = (bytes: Uint8Array, limit: number, source: string) => {
+  if (!Number.isFinite(limit)) return gunzipSync(bytes);
+  try {
+    return gunzipSync(bytes, { maxOutputLength: limit });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ERR_BUFFER_TOO_LARGE") {
+      throw new ArchiveTooLargeError(source, limit);
+    }
+    throw error;
+  }
+};
 
 /**
  * A GitHub repository (or one folder of it) as Files named `owner/repo`, from codeload's tarball.
- * Throws on a URL that is not a GitHub repository, and on a repository or ref GitHub does not serve.
+ * Throws on a URL that is not a GitHub repository, on a repository or ref GitHub does not serve,
+ * and with ArchiveTooLargeError on a tarball past `maxArchiveBytes`.
  */
 export const githubFiles = async (
   url: string,
-  { fetch: get = fetch, maxBytes = MAX_FILE_BYTES }: GithubFilesOptions = {},
+  {
+    fetch: get = fetch,
+    maxBytes = MAX_FILE_BYTES,
+    maxArchiveBytes = Number.POSITIVE_INFINITY,
+  }: GithubFilesOptions = {},
 ): Promise<Files> => {
   const { owner, repo, ref, subdir } = parseGithubUrl(url);
   const name = `${owner}/${repo}`;
@@ -149,7 +211,10 @@ export const githubFiles = async (
     );
   }
   if (!response.ok) throw new Error(`GitHub answered ${response.status} for ${name}@${at}`);
-  const archive = readTar(gunzipSync(new Uint8Array(await response.arrayBuffer())));
+  const source = `${name}@${at}`;
+  const archive = readTar(
+    gunzip(await readCapped(response, maxArchiveBytes, source), maxArchiveBytes, source),
+  );
 
   // codeload puts everything under one `<repo>-<sha>/` folder.
   const prefix = subdir ? `${subdir}/` : "";
