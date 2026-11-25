@@ -9,7 +9,7 @@ catalog:
   "@ui-sdk/core": 0.1.0-beta.17
   "@ui-sdk/vue": 0.1.0-beta.17
   "@valibot/to-json-schema": ^1.8.0
-  "@vite-hub/kit": 0.5.0
+  "@vite-hub/kit": 0.5.1
   # A preview build; drop blockExoticSubdeps below once @vite-hub/schedule/os is on npm.
   "@vite-hub/schedule": https://pkg.pr.new/vite-hub/vitehub/@vite-hub/schedule@6b1390a
   ajv: ^8.20.0
@@ -33,8 +33,37 @@ catalog:
 blockExoticSubdeps: false
 allowBuilds:
   esbuild: false
+  # wrangler dev runs the built Worker in workerd, which downloads its binary in an install script.
+  workerd: true
+  vue-demi: false
 
 minimumReleaseAgeExclude:
   - "@ui-sdk/core@0.1.0-beta.17"
   - "@ui-sdk/vue@0.1.0-beta.17"
-  - "@vite-hub/kit@0.5.0"
+  - "@vite-hub/kit@0.5.1"
+  - "@nuxt/kit-nightly@5.0.0-2611251439-b19192b"
+  - "@nuxt/nitro-server-nightly@5.0.0-2611251439-b19192b"
+  - "@nuxt/schema-nightly@5.0.0-2611251439-b19192b"
+  - "@nuxt/vite-builder-nightly@5.0.0-2611251439-b19192b"
+  - "@nuxt/vite-server-nightly@5.0.0-2611251439-b19192b"
+  - "@vite-hub/auth@0.5.1"
+  - "@vite-hub/blob@0.5.1"
+  - "@vite-hub/bundle@0.5.1"
+  - "@vite-hub/cli@0.5.1"
+  - "@vite-hub/comments@0.5.1"
+  - "@vite-hub/content@0.5.1"
+  - "@vite-hub/database@0.5.1"
+  - "@vite-hub/docs@0.5.1"
+  - "@vite-hub/env@0.5.1"
+  - "@vite-hub/forge@0.5.1"
+  - "@vite-hub/markdown-template@0.5.1"
+  - "@vite-hub/rate-limit@0.5.1"
+  - "@vite-hub/realtime@0.5.1"
+  - "@vite-hub/runtime@0.5.1"
+  - "@vite-hub/sandbox@0.5.1"
+  - "@vite-hub/source@0.5.1"
+  - "@vite-hub/ui@0.5.1"
+  - "@vite-hub/web-container@0.5.1"
+  - "@vite-hub/workspace@0.5.1"
+  - nuxt-nightly@5.0.0-2611251439-b19192b
+  - vite-hub@0.5.1

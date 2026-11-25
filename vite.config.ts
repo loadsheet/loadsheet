@@ -27,6 +27,14 @@ const nodeFreeImports = {
   ],
 };
 
+// What `nuxt build` and `wrangler dev` write in apps/site.
+const nuxtOutput = [
+  "apps/site/.nuxt/**",
+  "apps/site/.output/**",
+  "apps/site/.vitehub/**",
+  "apps/site/.wrangler/**",
+];
+
 export default defineConfig({
   run: {
     tasks: {
@@ -77,9 +85,9 @@ export default defineConfig({
   staged: {
     "*": "vp check --fix",
   },
-  fmt: { ignorePatterns: ["**/dist/**"] },
+  fmt: { ignorePatterns: ["**/dist/**", ...nuxtOutput] },
   lint: {
-    ignorePatterns: ["**/dist/**"],
+    ignorePatterns: ["**/dist/**", ...nuxtOutput],
     options: { typeAware: true, typeCheck: false },
     overrides: [
       {

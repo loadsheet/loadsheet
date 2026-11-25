@@ -3,3 +3,7 @@ dist
 .vite-hooks
 .DS_Store
 .cache
+.nuxt
+.output
+.vitehub
+.wrangler
