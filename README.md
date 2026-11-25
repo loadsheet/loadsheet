@@ -24,7 +24,6 @@ npx loadsheet --json   # the Report as JSON
 
 To have your agent apply the fixes you accept, paste it the prompt in [`docs/agent-prompt.md`](docs/agent-prompt.md).
 
-
 ## Development
 
 Node 24 and pnpm. `pnpm install`, then `pnpm build` builds every package and `pnpm check` runs format, lint and typecheck. `pnpm test` runs the tests against the built CLI. [`AGENTS.md`](AGENTS.md) describes the package layers.
