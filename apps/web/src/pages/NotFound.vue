@@ -1,29 +1,26 @@
 <script setup lang="ts">
-import Logo from "../components/Logo.vue";
+import { useRouter } from "vue-router";
+import SiteTop from "../components/SiteTop.vue";
+import StateBox from "../components/StateBox.vue";
+import { pickReport } from "../lib/open";
+
+const router = useRouter();
 </script>
 
 <template>
-  <header class="top">
-    <RouterLink class="brand" to="/"><Logo />loadsheet</RouterLink>
-  </header>
-  <main class="page">
-    <div data-slot="vh-empty" data-variant="outline">
-      <h3 data-slot="vh-empty-title">This page doesn't exist</h3>
-      <p data-slot="vh-empty-description">
-        The link may be from an older loadsheet. The report and the pack checker are still here.
-      </p>
-      <div data-slot="vh-empty-actions">
-        <RouterLink data-slot="button" data-variant="solid" data-size="sm" to="/report"
-          >Open the report</RouterLink
-        ><RouterLink data-slot="button" data-size="sm" to="/">Home</RouterLink>
-      </div>
-    </div>
-  </main>
+  <div class="land">
+    <SiteTop />
+    <main class="w pg-body">
+      <StateBox title="This link doesn’t hold a report">
+        The address is cut short or was made by a newer loadsheet. Ask for the link again, or open
+        the JSON file.
+        <template #actions>
+          <button type="button" data-slot="button" data-variant="solid" @click="pickReport(router)">
+            Open a report file
+          </button>
+          <RouterLink data-slot="button" to="/">Go home</RouterLink>
+        </template>
+      </StateBox>
+    </main>
+  </div>
 </template>
-
-<style scoped>
-.row {
-  display: flex;
-  gap: 8px;
-}
-</style>

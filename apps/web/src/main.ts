@@ -3,11 +3,9 @@ import { createRouter, createWebHashHistory } from "vue-router";
 import App from "./App.vue";
 import Landing from "./pages/Landing.vue";
 import ReportShell from "./pages/ReportShell.vue";
-import Overview from "./pages/Overview.vue";
-import MapPage from "./pages/Map.vue";
-import Skills from "./pages/Skills.vue";
+import Report from "./pages/Report.vue";
+import List from "./pages/List.vue";
 import Fixes from "./pages/Fixes.vue";
-import Open from "./pages/Open.vue";
 import Pack from "./pages/Pack.vue";
 import NotFound from "./pages/NotFound.vue";
 import { home, ready } from "./lib/report";
@@ -37,14 +35,15 @@ const router = createRouter({
       path: "/report",
       component: ReportShell,
       children: [
-        { path: "", redirect: "/report/overview" },
-        { path: "overview", component: Overview },
-        { path: "map", component: MapPage },
-        { path: "skills", component: Skills },
+        { path: "", component: Report },
+        { path: "list", component: List },
         { path: "fixes", component: Fixes },
+        // Links from before the map: Overview and Map merged into the Report, Skills into the List.
+        { path: "overview", redirect: (to) => ({ path: "/report", query: to.query }) },
+        { path: "map", redirect: (to) => ({ path: "/report", query: to.query }) },
+        { path: "skills", redirect: (to) => ({ path: "/report/list", query: to.query }) },
       ],
     },
-    { path: "/open", component: Open },
     // owner/repo, or owner/repo/dir for a pack that lives in a folder of a bigger repository.
     { path: "/pack/:slug(.+)", component: Pack },
     { path: "/:rest(.*)*", component: NotFound },
