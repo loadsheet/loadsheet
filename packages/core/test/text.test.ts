@@ -102,10 +102,12 @@ describe("renderText on the fleet example", () => {
     );
     expect(text).toContain("Machines: laptop, server\n");
     expect(text).toContain("not read: mini (ssh: connect to host mini port 22");
-    expect(text).toMatch(
-      /claude-code {2}598 sessions {2}each starts with ~17,317 tokens \(measured\)/u,
+    expect(text).toContain(
+      "  claude-code  598 sessions  each starts with ~17,317 of ~200,000 tokens (measured)\n" +
+        "                             your setup ~11,696, the harness's own ~5,621\n" +
+        "  codex        204 sessions  each starts with ~11,677 of ~258,400 tokens (measured)\n" +
+        "                             your setup ~6,731, the harness's own ~4,946\n",
     );
-    expect(text).toMatch(/codex {8}204 sessions {2}each starts with ~11,677 tokens \(measured\)/u);
   });
 
   it("prints every fix in full: machines, action, path, command and key", () => {
@@ -194,7 +196,7 @@ describe("renderText", () => {
   it("shows the ten heaviest lines and sums the rest", () => {
     const lines = Array.from({ length: 14 }, (_, index) => line(`s${index}`, 100 - index));
     const text = renderText(report(lines, []));
-    expect(text).toContain("claude-code: 14 lines, ~1,309 tokens listed; the 10 heaviest");
+    expect(text).toContain("claude-code: 14 lines, your setup ~1,309 tokens; the 10 heaviest");
     expect(text).toContain("skill:s9\n");
     expect(text).not.toContain("skill:s10");
     expect(text).toContain("and 4 more lines, ~354 tokens together");

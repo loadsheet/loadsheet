@@ -1,6 +1,6 @@
 export { NO_SIGNALS, runRules, type RuleInput } from "./engine.ts";
 export { packReport, type PackReportInput } from "./pack.ts";
-export { buildReport, type BuildReportInput } from "./report.ts";
+export { buildReport, RECENT_DAYS, type BuildReportInput } from "./report.ts";
 export {
   defineRule,
   estimateTokens,
@@ -10,4 +10,5 @@ export {
   type RuleSheet,
   type Unfiltered,
 } from "./rules/rule.ts";
+export { harnessTokens, setupTokens } from "./setup.ts";
 export { PROMPT_DOC, renderText } from "./text.ts";

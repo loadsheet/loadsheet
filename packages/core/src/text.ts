@@ -1,5 +1,6 @@
 import type { Finding, Fix, Grade, Line, Report, Sheet, Skipped } from "@loadsheet/schema";
 import { SIGNALS } from "@loadsheet/schema";
+import { harnessTokens, setupTokens } from "./setup.ts";
 
 /** Where the prompt a person pastes into their agent lives. */
 export const PROMPT_DOC = "https://github.com/loadsheet/loadsheet/blob/main/docs/agent-prompt.md";
@@ -86,6 +87,22 @@ const tokens = (value: number) => `~${num(value)}`;
 const dayCount = ([first, last]: [string, string]) =>
   Math.round((Date.parse(`${last}T00:00:00Z`) - Date.parse(`${first}T00:00:00Z`)) / 86_400_000) + 1;
 
+/**
+ * What a session starts with, of its context window, then the setup's share and the harness's own
+ * on a line of their own.
+ */
+const startsWith = (sheet: Sheet): [string, string?] => {
+  const window = sheet.contextWindow ? ` of ${tokens(sheet.contextWindow)}` : "";
+  const setup = tokens(setupTokens(sheet));
+  if (!sheet.fixedTokens) {
+    return [`your setup ${setup} tokens${window}; no session reported what it started with`];
+  }
+  return [
+    `each starts with ${tokens(sheet.fixedTokens.value)}${window} tokens (${sheet.fixedTokens.basis})`,
+    `your setup ${setup}, the harness's own ${tokens(harnessTokens(sheet)!)}`,
+  ];
+};
+
 const header = (report: Report): string[] => {
   if (report.mode === "pack") {
     const harness = report.sheet[0]?.harness;
@@ -103,20 +120,20 @@ const header = (report: Report): string[] => {
   for (const machine of unread) {
     out.push(`  not read: ${machine.name}${machine.error ? ` (${machine.error})` : ""}`);
   }
-  if (report.sheet.length) {
-    out.push(
-      ...table(
-        report.sheet.map((sheet) => [
-          sheet.harness,
-          plural(sheet.sessions, "session"),
-          sheet.fixedTokens
-            ? `each starts with ${tokens(sheet.fixedTokens.value)} tokens (${sheet.fixedTokens.basis})`
-            : "no token counts",
-        ]),
-        [1],
-      ),
-    );
-  }
+  const starts = report.sheet.map(startsWith);
+  const rows = table(
+    report.sheet.map((sheet, index) => [
+      sheet.harness,
+      plural(sheet.sessions, "session"),
+      starts[index]![0],
+    ]),
+    [1],
+  );
+  rows.forEach((row, index) => {
+    const [first, second] = starts[index]!;
+    out.push(row);
+    if (second) out.push(" ".repeat(row.length - first.length) + second);
+  });
   return out;
 };
 
@@ -134,9 +151,11 @@ const sheetBlock = (report: Report, sheet: Sheet): string[] => {
   );
   const shown = lines.slice(0, SHEET_ROWS);
   const rest = lines.slice(SHEET_ROWS);
-  const total = lines.reduce((sum, line) => sum + line.tokens.value, 0);
   const title =
-    `${sheet.harness}: ${plural(lines.length, "line")}, ${tokens(total)} tokens listed` +
+    `${sheet.harness}: ${plural(lines.length, "line")}, ` +
+    (report.mode === "pack"
+      ? `${tokens(setupTokens(sheet))} tokens listed`
+      : `your setup ${tokens(setupTokens(sheet))} tokens`) +
     (rest.length ? `; the ${shown.length} heaviest` : "");
   if (!lines.length) return [`${sheet.harness}: nothing installed or listed`];
   const pack = report.mode === "pack";
@@ -382,7 +401,19 @@ const findingRows = (findings: Finding[]) =>
  * shows the end of a long report, and it is what a person reads first.
  */
 const findingsBlocks = (report: Report): { details: string[]; summary: string[] } => {
-  if (!report.findings.length) return { details: [], summary: ["No findings."] };
+  const sessions = report.coverage.reduce((sum, row) => sum + row.sessions, 0);
+  if (!report.findings.length) {
+    if (report.mode !== "pack" && sessions === 0) {
+      const where = report.machines.length > 1 ? "on these machines" : "on this machine";
+      return {
+        details: [],
+        summary: [
+          `No Claude Code or Codex sessions were found ${where} in the last ${plural(report.config.window, "day")}, so there is nothing to judge yet.`,
+        ],
+      };
+    }
+    return { details: [], summary: ["No findings."] };
+  }
   const showMachine = report.machines.length > 1;
   const label = (finding: Finding) => finding.item ?? finding.pack ?? finding.id;
 

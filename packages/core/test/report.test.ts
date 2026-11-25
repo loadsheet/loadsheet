@@ -12,7 +12,13 @@ import {
   type Signal,
 } from "@loadsheet/schema";
 import { describe, expect, it } from "vite-plus/test";
-import { buildReport, renderText, type BuildReportInput } from "../src/index.ts";
+import {
+  buildReport,
+  harnessTokens,
+  renderText,
+  setupTokens,
+  type BuildReportInput,
+} from "../src/index.ts";
 
 const EXACT: Record<Signal, Grade> = {
   listing: "exact",
@@ -2105,5 +2111,92 @@ describe("buildReport", () => {
     ]);
     expect(built.sheet.map((s) => s.harness)).toEqual(["claude-code"]);
     expect(built.coverage).toHaveLength(2);
+  });
+});
+
+describe("what a session starts with", () => {
+  const cellOn = (day: string, fixedTokens: number, measured: number): SessionCell => ({
+    day,
+    harness: "claude-code",
+    via: "cli",
+    sessions: measured,
+    fixedTokens,
+    measured,
+  });
+
+  it("averages fixedTokens over the last 7 days, and over the window when none in them reported", () => {
+    const recent = report([
+      scan("laptop", {
+        sessions: [
+          cellOn(FIRST, 50_000, 5),
+          cellOn("2026-11-17", 40_000, 2),
+          cellOn("2026-11-18", 30_000, 3),
+        ],
+      }),
+    ]);
+    expect(recent.sheet[0]!.fixedTokens).toEqual({ value: 10_000, basis: "measured" });
+
+    const old = report([
+      scan("laptop", { sessions: [cellOn(FIRST, 50_000, 5), cellOn("2026-11-17", 40_000, 5)] }),
+    ]);
+    expect(old.sheet[0]!.fixedTokens).toEqual({ value: 9_000, basis: "measured" });
+  });
+
+  it("gives each sheet the largest context window any machine reports", () => {
+    const built = report([
+      scan("laptop", { coverage: [coverage("laptop", "claude-code", { contextWindow: 200_000 })] }),
+      scan("server", {
+        coverage: [coverage("server", "claude-code", { contextWindow: 1_000_000 })],
+      }),
+      scan("mini", { coverage: [coverage("mini", "claude-code")] }),
+    ]);
+    expect(built.sheet[0]!.contextWindow).toBe(1_000_000);
+    expect(report([scan("laptop")]).sheet[0]!.contextWindow).toBeUndefined();
+  });
+
+  it("splits it into the setup, the lines with a scope, and the harness's own", () => {
+    const built = report([
+      scan("laptop", {
+        items: [
+          skill("a", { chars: { listed: 400, body: 0 } }),
+          skill("b", { chars: { listed: 800, body: 0 } }),
+        ],
+        sessions: [cellOn("2026-11-20", 10_000, 1)],
+        cells: [cell("a", 1, { chars: 400 }), cell("b", 1, { chars: 800 })],
+      }),
+    ]);
+    const sheet = built.sheet[0]!;
+    const setup = sheet.lines.reduce((sum, line) => sum + line.tokens.value, 0);
+    expect(setup).toBeGreaterThan(0);
+    expect(setupTokens(sheet)).toBe(setup);
+    expect(harnessTokens(sheet)).toBe(10_000 - setup);
+    expect(harnessTokens({ ...sheet, fixedTokens: { value: 1, basis: "measured" } })).toBe(0);
+    const { fixedTokens: _fixed, ...unmeasured } = sheet;
+    expect(harnessTokens(unmeasured)).toBeUndefined();
+    expect(renderText(built)).toContain(
+      `your setup ~${setup.toLocaleString("en-US")}, the harness's own`,
+    );
+  });
+
+  it("puts a skill's or subagent's description on its line", () => {
+    const built = report([
+      scan("laptop", {
+        items: [skill("a", { description: "Use when deploying." })],
+        cells: [cell("a", 30)],
+      }),
+    ]);
+    expect(built.sheet[0]!.lines[0]!.description).toBe("Use when deploying.");
+  });
+
+  it("says when no session was found, instead of no findings", () => {
+    const empty = report([
+      scan("laptop", {
+        coverage: [coverage("laptop", "claude-code", { sessions: 0 })],
+        sessions: [],
+      }),
+    ]);
+    const text = renderText(empty);
+    expect(text).toContain("No Claude Code or Codex sessions were found on this machine");
+    expect(text).not.toContain("No findings");
   });
 });

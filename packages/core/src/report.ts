@@ -33,6 +33,8 @@ export interface BuildReportInput {
 
 const RANK: Record<Grade, number> = { none: 0, inferred: 1, exact: 2 };
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** Days the headline figure, what a session starts with, is averaged over: a setup grows. */
+export const RECENT_DAYS = 7;
 
 const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 const byTokens = (a: Line, b: Line) => b.tokens.value - a.tokens.value || compare(a.item, b.item);
@@ -151,6 +153,11 @@ const buildSheet = (
   const perMachine = new Map<string, number>();
   let fixedTokens = 0;
   let measured = 0;
+  let recentTokens = 0;
+  let recentMeasured = 0;
+  const recentSince = new Date(Date.parse(`${last}T00:00:00Z`) - (RECENT_DAYS - 1) * DAY_MS)
+    .toISOString()
+    .slice(0, 10);
   let firstDay: Day | undefined;
   let lastDay: Day | undefined;
   const usage = new Map<Id, Usage>();
@@ -165,6 +172,10 @@ const buildSheet = (
       perMachine.set(scan.machine, (perMachine.get(scan.machine) ?? 0) + cell.sessions);
       fixedTokens += cell.fixedTokens;
       measured += cell.measured;
+      if (cell.day >= recentSince) {
+        recentTokens += cell.fixedTokens;
+        recentMeasured += cell.measured;
+      }
     }
     for (const cell of scan.cells) {
       if (cell.harness !== harness || !keep(cell)) continue;
@@ -216,6 +227,11 @@ const buildSheet = (
       use: { byModel: used?.byModel ?? 0, byUser: used?.byUser ?? 0 },
     };
     if (used?.lastUsed) line.use.lastUsed = used.lastUsed;
+    if (
+      install?.description !== undefined &&
+      (id.startsWith("skill:") || id.startsWith("subagent:"))
+    )
+      line.description = install.description;
     if (install) {
       line.scope = install.scope;
       if (install.pack !== undefined) line.pack = install.pack;
@@ -235,9 +251,16 @@ const buildSheet = (
   ]);
 
   const sheet: Sheet = { harness, sessions, lines };
-  if (measured > 0) {
+  // The last days' sessions, as the setup is now; the whole window's when none of those reported.
+  if (recentMeasured > 0) {
+    sheet.fixedTokens = { value: Math.round(recentTokens / recentMeasured), basis: "measured" };
+  } else if (measured > 0) {
     sheet.fixedTokens = { value: Math.round(fixedTokens / measured), basis: "measured" };
   }
+  const windows = coverage.flatMap((row) =>
+    row.contextWindow === undefined ? [] : [row.contextWindow],
+  );
+  if (windows.length) sheet.contextWindow = Math.max(...windows);
   return {
     sheet,
     rules: {
