@@ -4,10 +4,9 @@ import {
   SegmentedControlIndicator,
   SegmentedControlItem,
 } from "@ui-sdk/vue/segmented-control";
-import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import CopyIcon from "../components/CopyIcon.vue";
-import ItemPanel from "../components/ItemPanel.vue";
+import HarnessMark from "../components/HarnessMark.vue";
 import Logo from "../components/Logo.vue";
 import StateBox from "../components/StateBox.vue";
 import ThemeToggle from "../components/ThemeToggle.vue";
@@ -20,19 +19,6 @@ import { copied, copy } from "../lib/ui";
 const h = useHarness();
 const route = useRoute();
 const router = useRouter();
-const tabs = computed(() => [
-  { to: "/report", name: "Map" },
-  { to: "/report/list", name: "List", n: h.sheet.value?.lines.length, quiet: true },
-  { to: "/report/fixes", name: "Fixes", n: h.fixes.value.length },
-]);
-/** The item in `?item=`, on the Map and the List. */
-const line = computed(() => {
-  const id = route.query.item;
-  return route.path === "/report/fixes" || typeof id !== "string"
-    ? undefined
-    : h.sheet.value?.lines.find((l) => l.item === id);
-});
-const close = () => router.replace({ query: { ...route.query, item: undefined } });
 async function share() {
   copy(
     await shareLink(
@@ -51,20 +37,7 @@ async function share() {
     <RouterLink to="/" class="home-link" aria-label="loadsheet home"
       ><Logo :size="19" word
     /></RouterLink>
-    <nav class="tabs" aria-label="Views">
-      <RouterLink
-        v-for="t in tabs"
-        :key="t.to"
-        :to="{ path: t.to, query: { h: $route.query.h, r: $route.query.r } }"
-        :class="{ on: $route.path === t.to }"
-        :aria-current="$route.path === t.to ? 'page' : undefined"
-      >
-        {{ t.name }}<i v-if="t.n" class="num" :data-quiet="t.quiet || undefined">{{ t.n }}</i>
-      </RouterLink>
-    </nav>
-    <span class="grow" />
     <SegmentedControl
-      v-if="h.all.value.length > 1"
       class="harness"
       aria-label="Harness"
       :value="h.current.value"
@@ -76,20 +49,15 @@ async function share() {
         :key="x.id"
         :value="x.id"
         :data-off="!x.sessions || undefined"
-        >{{ harnessName(x.id) }}</SegmentedControlItem
+        ><HarnessMark :id="x.id" />{{ harnessName(x.id) }}</SegmentedControlItem
       >
     </SegmentedControl>
-    <button
-      type="button"
-      data-slot="button"
-      data-size="sm"
-      class="share"
-      title="Copy a link that carries this report in the URL"
-      @click="share"
-    >
-      <CopyIcon v-if="copied.key === 'share'" done />Share
-    </button>
-    <ThemeToggle />
+    <div class="right">
+      <button type="button" data-slot="button" data-size="sm" class="share" @click="share">
+        <CopyIcon v-if="copied.key === 'share'" done />Share
+      </button>
+      <ThemeToggle />
+    </div>
   </header>
   <main v-if="linkError" class="pg-body">
     <StateBox title="This link doesn’t hold a report">
@@ -114,14 +82,5 @@ async function share() {
       </template>
     </StateBox>
   </main>
-  <div v-else class="shell" :data-panel="line ? '' : undefined">
-    <ItemPanel
-      v-if="line && h.sheet.value"
-      :key="line.item"
-      :line
-      :sheet="h.sheet.value"
-      @close="close"
-    />
-    <RouterView />
-  </div>
+  <RouterView v-else />
 </template>

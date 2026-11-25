@@ -4,100 +4,114 @@ import {
   SegmentedControlIndicator,
   SegmentedControlItem,
 } from "@ui-sdk/vue/segmented-control";
-import { computed, ref } from "vue";
+import { computed, provide, reactive, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import Legend from "../components/Legend.vue";
+import ContextBar from "../components/ContextBar.vue";
+import ContextMap from "../components/ContextMap.vue";
+import ContextTable from "../components/ContextTable.vue";
 import NoSessions from "../components/NoSessions.vue";
-import Treemap, { type Block } from "../components/Treemap.vue";
+import { VIEW, contextOf, freshView, short } from "../lib/context";
 import { useHarness } from "../lib/harness";
-import { fmt, harnessName, isDead, kindOf, plural, shortName } from "../lib/report";
+import { fmt } from "../lib/report";
+import { hideTip, showTip } from "../lib/ui";
 
+/** What a session started now loads before you type, against the model's window: a map, or the same as a table. */
 const h = useHarness();
 const route = useRoute();
 const router = useRouter();
-/** Starts on your setup, so the small blocks have room; Everything adds the harness's own tokens. */
-const view = ref<"setup" | "all">("setup");
-const name = computed(() => harnessName(h.current.value));
-const all = computed(() => view.value === "all" && !!h.sum.value?.harness);
+const ctx = computed(() => (h.sheet.value ? contextOf(h.sheet.value) : undefined));
+const table = computed(() => route.query.view === "table");
+const show = (v: "map" | "table") =>
+  router.replace({ query: { ...route.query, view: v === "table" ? "table" : undefined } });
 
-const blocks = computed<Block[]>(() => {
-  const sheet = h.sheet.value;
-  if (!sheet) return [];
-  const lines = sheet.lines.map((l) => ({
-    id: l.item,
-    name: l.ref.name,
-    label: shortName(l),
-    value: h.cost.value(l),
-    group: kindOf(l),
-    dead: isDead(l),
-  }));
-  return all.value
-    ? [
-        {
-          id: "harness",
-          name: `${name.value} itself`,
-          label: `${name.value} itself`,
-          value: h.sum.value!.harness,
-          group: "harness" as const,
-        },
-        ...lines,
-      ]
-    : lines;
-});
-const sub = computed(() => {
-  const s = h.sum.value!;
-  const setup = s.harness ? `${fmt(s.setup)} is your setup` : "";
-  const dead = s.dead.tokens ? `${fmt(s.dead.tokens)} of that was never used` : "";
-  return setup && dead ? `${setup}, and ${dead}.` : setup || dead ? `${setup || dead}.` : "";
-});
-const selected = computed(() =>
-  typeof route.query.item === "string" ? route.query.item : undefined,
+const st = reactive(freshView());
+watch(h.current, () => Object.assign(st, freshView()));
+/** Skills from one place only open straight onto their list. */
+watch(
+  ctx,
+  (c) => {
+    const skills = c?.segments.find((s) => s.id === "skill");
+    const groups = new Set(skills?.items.filter((i) => i.tokens > 0).map((i) => i.group));
+    if (groups.size === 1) st.src.add(`skill:${[...groups][0]}`);
+  },
+  { immediate: true },
 );
-const select = (id: string) =>
-  router.replace({ query: { ...route.query, item: selected.value === id ? undefined : id } });
+provide(VIEW, {
+  st,
+  ctx: () => ctx.value!,
+  harness: () => h.current.value,
+  reveal(seg, { group, item, more }) {
+    Object.assign(st, { sel: seg, all: false, q: "" });
+    st.open.add(seg);
+    if (seg === "skill" && group) st.src.add(`skill:${group}`);
+    if (more) st.more.add(seg);
+    if (item) st.desc.add(`${seg}:${item}`);
+    st.flash = item ? `item:${seg}:${item}` : seg === "skill" && group ? `skill:${group}` : null;
+    show("table");
+    if (!st.flash) scrollTo({ top: 0 });
+  },
+});
+function expandAll() {
+  st.all = !st.all;
+  st.flash = null;
+  if (!st.all) st.src.clear();
+}
+const exact = (e: MouseEvent) =>
+  showTip(e, `<b>${fmt(ctx.value!.total)} tokens</b> before you type`);
 </script>
 
 <template>
-  <NoSessions v-if="!h.sheet.value" />
-  <main v-else class="pg-body">
-    <div class="ph">
-      <div>
-        <h1 class="px">{{ fmt(h.sum.value!.total) }} tokens before you type</h1>
-        <p v-if="sub" class="sub">{{ sub }}</p>
+  <NoSessions v-if="!ctx" />
+  <main v-else class="ctx">
+    <h1 class="big" @mouseenter="exact" @mousemove="exact" @mouseleave="hideTip">
+      {{ short(ctx.total) }}<span class="of">of {{ short(ctx.window) }} used before you type</span>
+    </h1>
+    <ContextBar />
+    <div class="views">
+      <div v-if="table" class="ctools">
+        <input
+          v-model="st.q"
+          type="search"
+          class="inp"
+          placeholder="Find a skill or file"
+          aria-label="Find a skill, file or tool"
+          autocomplete="off"
+          spellcheck="false"
+          @input="st.flash = null"
+        />
+        <button type="button" data-slot="button" data-variant="ghost" @click="expandAll">
+          {{ st.all ? "Collapse all" : "Expand all" }}
+        </button>
       </div>
-      <RouterLink
-        v-if="h.fixes.value.length"
-        data-slot="button"
-        data-variant="solid"
-        data-size="lg"
-        :to="{ path: '/report/fixes', query: { h: $route.query.h, r: $route.query.r } }"
-        >Review {{ plural(h.fixes.value.length, "fix", "fixes")
-        }}<span v-if="h.saving.value" class="num">−{{ fmt(h.saving.value) }}</span></RouterLink
-      >
-    </div>
-    <div class="tools">
       <SegmentedControl
-        v-if="h.sum.value!.harness"
-        aria-label="What the map shows"
-        :value="view"
-        @update:value="(v) => v && (view = v as 'setup' | 'all')"
+        class="vsw"
+        aria-label="View"
+        :value="table ? 'table' : 'map'"
+        @update:value="(v) => v && show(v as 'map' | 'table')"
       >
         <SegmentedControlIndicator />
-        <SegmentedControlItem value="setup">Your setup</SegmentedControlItem>
-        <SegmentedControlItem value="all">Everything</SegmentedControlItem>
+        <SegmentedControlItem value="map">
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+            <rect x="1" y="1" width="7" height="12" rx="1.5" fill="currentColor" />
+            <rect x="9" y="1" width="4" height="7" rx="1" fill="currentColor" />
+            <rect x="9" y="9" width="4" height="4" rx="1" fill="currentColor" />
+          </svg>
+          Map
+        </SegmentedControlItem>
+        <SegmentedControlItem value="table">
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+            <path
+              d="M1.5 3h11M1.5 7h11M1.5 11h11"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+            />
+          </svg>
+          Table
+        </SegmentedControlItem>
       </SegmentedControl>
-      <Legend
-        :kinds="h.sum.value!.kinds"
-        :dead="h.sum.value!.dead"
-        :harness="all ? { name: `${name} itself`, tokens: h.sum.value!.harness } : undefined"
-      />
     </div>
-    <Treemap
-      class="tm-report"
-      :blocks="blocks"
-      :selected="selected"
-      :unit="h.sheet.value.sessions ? 'tokens a session' : 'tokens'"
-      @select="select"
-    />
+    <ContextTable v-if="table" />
+    <ContextMap v-else />
   </main>
 </template>

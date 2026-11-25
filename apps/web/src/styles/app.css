@@ -791,79 +791,47 @@ button.b {
   font-size: 13.5px;
 }
 
-/* ─── The report: bar, page head, tools ─── */
+/* ─── The report: top bar, page head ─── */
+/* The logo left, the harness switch centred on the page, share and theme right. */
 .bar {
   position: sticky;
   top: 0;
   z-index: 10;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 20px;
+  gap: 14px;
   height: var(--bar);
-  padding: 0 14px 0 16px;
+  padding: 0 14px 0 20px;
   border-bottom: 1px solid var(--border);
   background: var(--card);
 }
-.tabs {
-  display: flex;
-  align-self: stretch;
-  gap: 2px;
+.bar .home-link {
+  justify-self: start;
 }
-.tabs a {
+.bar .right {
   display: flex;
   align-items: center;
+  justify-self: end;
+  gap: 8px;
+}
+.bar .harness {
+  justify-self: center;
+  border-radius: 9px;
+}
+.bar .harness [data-slot="segmented-control-item"] {
   gap: 7px;
-  margin-bottom: -1px;
-  padding: 0 12px;
-  border-bottom: 2px solid transparent;
-  color: var(--muted-foreground);
-  font-size: 14px;
-  font-weight: 500;
+  height: 28px;
+  padding: 0 12px 0 9px;
+  border-radius: 7px;
 }
-.tabs a.on {
-  border-bottom-color: var(--foreground);
-  color: var(--foreground);
+.bar .harness [data-slot="segmented-control-indicator"] {
+  border-radius: 7px;
 }
-@media (hover: hover) and (pointer: fine) {
-  .tabs a:hover {
-    color: var(--foreground);
-  }
+.hmark {
+  flex: none;
 }
-.tabs i {
-  padding: 3px 5px;
-  border-radius: 3px;
-  background: var(--foreground);
-  color: var(--background);
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 600;
-  line-height: 1;
-}
-.tabs i[data-quiet] {
-  background: var(--muted);
-  color: var(--muted-foreground);
-}
-.shell {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-}
-.shell > main {
-  grid-row: 1;
-  grid-column: 1;
-}
-.shell[data-panel] {
-  grid-template-columns: minmax(0, 1fr) 420px;
-}
-.shell[data-panel] .ph {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 18px;
-}
-.shell[data-panel] .tools {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 12px;
-}
+
 .pg-body {
   min-width: 0;
   padding: 32px 40px 40px;
@@ -890,140 +858,7 @@ button.b {
   color: var(--muted-foreground);
   font-size: 15px;
 }
-.tools {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px 20px;
-  min-height: 32px;
-  margin-bottom: 14px;
-}
 
-/* ─── The item panel: beside the map, in the page flow ─── */
-.panel {
-  position: sticky;
-  top: var(--bar);
-  grid-row: 1;
-  grid-column: 2;
-  align-self: start;
-  height: calc(100dvh - var(--bar));
-  overflow-y: auto;
-  padding: 20px 24px 24px;
-  border-left: 1px solid var(--border);
-  background: var(--card);
-  outline: none;
-}
-.panel-h {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.panel-h > div {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.panel h2 {
-  margin-top: 18px;
-  font-size: 24px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  overflow-wrap: anywhere;
-}
-.panel .path {
-  margin-top: 6px;
-  color: var(--muted-foreground);
-  font-size: 12.5px;
-  overflow-wrap: anywhere;
-}
-.stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin: 24px 0 8px;
-  padding: 18px 0;
-  border-block: 1px solid var(--border);
-}
-.stats dt,
-.rows dt {
-  color: var(--muted-foreground);
-  font-size: 12.5px;
-  font-weight: 500;
-}
-.stats dd {
-  margin-top: 2px;
-  font-size: 26px;
-  font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: -0.02em;
-}
-.stats small {
-  display: block;
-  margin-top: 1px;
-  color: var(--muted-foreground);
-  font-size: 12px;
-}
-.meter {
-  margin-top: 18px;
-}
-.meter-l {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 7px;
-  font-size: 13.5px;
-}
-.meter-l b {
-  font-size: 13px;
-  font-weight: 600;
-}
-.mbar {
-  height: 8px;
-  overflow: hidden;
-  border-radius: 2px;
-  background: var(--muted);
-}
-.mbar i {
-  display: block;
-  height: 100%;
-  border-radius: 2px;
-}
-.rows {
-  margin-top: 18px;
-}
-.rows > div {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 34px;
-  border-bottom: 1px solid var(--border);
-}
-.rows dt {
-  font-size: 13.5px;
-}
-.rows dd {
-  font-size: 13px;
-  font-weight: 600;
-}
-.fixbox {
-  margin-top: 24px;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  background: var(--background);
-}
-.fixbox-h {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  font-size: 14.5px;
-  font-weight: 600;
-}
-.fixbox p {
-  margin: 4px 0 12px;
-  color: var(--muted-foreground);
-  font-size: 13.5px;
-}
 .save {
   color: var(--acc);
   font-size: 14px;
@@ -1031,108 +866,609 @@ button.b {
   text-align: right;
 }
 
-/* ─── List ─── */
-.lt-wrap {
-  overflow-x: auto;
+/* ─── The context page: what loads before you type, as a bar, a map and a table ─── */
+.ctx {
+  display: grid;
+  gap: 18px;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px 32px 40px;
+  font-size: 13px;
+  line-height: 1.45;
 }
-.lt {
+.ctx .big {
+  width: fit-content;
+  font: 400 44px/1 var(--font-pixel);
+  letter-spacing: 0.01em;
+}
+.ctx .big .of {
+  margin-left: 6px;
+  color: var(--muted-foreground);
+  font: 400 15px/1.2 var(--font-sans);
+  letter-spacing: 0;
+}
+.faint {
+  color: var(--ui-text-dimmed);
+}
+.sw {
+  display: inline-block;
+  flex: none;
+  width: 9px;
+  height: 9px;
+  margin-right: 8px;
+  border-radius: 2px;
+  background: var(--k);
+  vertical-align: -1px;
+}
+.sw.free {
+  background: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--input);
+}
+
+/* The window bar: one segment per kind at its true share; the rest of the track is free. */
+.cbar {
+  position: relative;
+  height: 48px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--muted);
+}
+.cbar .s {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-right: 1px solid var(--card);
+  transition:
+    filter 0.1s,
+    opacity 0.15s var(--ease);
+}
+.cbar .s.dim {
+  opacity: 0.35;
+}
+.cbar .s.on {
+  box-shadow: inset 0 0 0 2px var(--foreground);
+}
+.cbar .s:focus-visible {
+  outline-offset: -2px;
+}
+.cscale {
+  position: relative;
+  height: 16px;
+  margin-top: 4px;
+  color: var(--ui-text-dimmed);
+  font-size: 11px;
+}
+.cscale span {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.cscale span:first-child {
+  transform: none;
+}
+.cscale span.end {
+  transform: translateX(-100%);
+}
+
+/* The row above the map or table: the table's search on the left, the view switch on the right. */
+.views {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: -6px;
+}
+.ctools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: auto;
+}
+.ctools .inp {
+  width: 260px;
+  max-width: 52vw;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  background: var(--card);
+  box-shadow: none;
+  font-size: 13px;
+}
+.ctools [data-slot="button"] {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  box-shadow: inset 0 0 0 1px var(--input);
+}
+.vsw [data-slot="segmented-control-item"] {
+  gap: 6px;
+  padding: 0 10px 0 8px;
+  font-size: 12px;
+}
+.vsw svg {
+  opacity: 0.85;
+}
+
+/* The map. Each segment has a title row above its tiles; a tile is its kind's colour washed into the panel. */
+.cmap {
+  position: relative;
+  height: 480px;
+  margin: 4px -3px 0;
+}
+.mseg {
+  position: absolute;
+  cursor: pointer;
+  transition: opacity 0.15s var(--ease);
+}
+.mseg.dim {
+  opacity: 0.35;
+}
+.mseg .mh {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  left: 1px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.mseg .mh .sw {
+  margin-right: 0;
+}
+.mseg .mh .num {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 400;
+}
+.tile {
+  position: absolute;
+  overflow: hidden;
+  padding: 3px 5px;
+  border-radius: var(--r-b);
+  background: color-mix(in oklch, var(--k) 11%, var(--card));
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--k) 42%, var(--card));
+}
+.tile.tiny {
+  padding: 0;
+}
+.tile.solo {
+  padding: 6px 8px;
+}
+.tile.jumps,
+.tile.group {
+  cursor: pointer;
+}
+.tile .tn {
+  display: block;
+  overflow: hidden;
+  color: var(--foreground);
+  font: 10px/1.25 var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tile .tn.brk {
+  width: 100%;
+  overflow-wrap: normal;
+  text-overflow: clip;
+  white-space: normal;
+}
+.tile.solo .tn {
+  font: 500 12px/1.3 var(--font-sans);
+}
+.tile.group .tn {
+  font-weight: 500;
+}
+.tile .tt {
+  display: block;
+  overflow: hidden;
+  color: color-mix(in oklch, var(--k) 35%, var(--foreground));
+  font-size: 10px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tile.stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.tile.stack :is(.tn, .tt) {
+  max-width: 100%;
+}
+.more-tile {
+  background: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--input);
+}
+.open-t {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  background: var(--card);
+  color: var(--foreground);
+  font: 500 11px/1 var(--font-sans);
+  white-space: nowrap;
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--k) 30%, var(--border)),
+    0 1px 2px rgb(0 0 0 / 0.06);
+  transition:
+    transform 0.12s var(--ease),
+    background 0.12s,
+    opacity 0.12s var(--ease);
+}
+.open-t.mid {
+  position: static;
+  margin-top: 6px;
+}
+.open-t:active {
+  transform: scale(0.96);
+}
+/* The harness can't be trimmed, so it is a strip along the bottom rather than a block among the rest. */
+.mseg.fixed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  padding: 0 10px;
+  border-radius: var(--r-b);
+  background: color-mix(in oklch, var(--k) 6%, var(--card));
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--k) 18%, transparent);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.mseg.fixed .sw {
+  margin: 0;
+}
+.mseg.fixed b {
+  font-weight: 500;
+}
+.mseg.fixed .num {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.mseg.fixed .fxs {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  text-overflow: ellipsis;
+}
+.mseg.fixed.on {
+  box-shadow: inset 0 0 0 1.5px var(--foreground);
+}
+.ctx a.doc {
+  flex: none;
+  margin-left: auto;
+  padding: 2px 0 2px 12px;
+  border-radius: 2px;
+  color: var(--acc);
+  font: 400 12px var(--font-sans);
+  white-space: nowrap;
+}
+td a.doc {
+  margin-left: 10px;
+}
+
+/* The table. */
+.ccard {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--card);
+}
+.ctable {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13.5px;
 }
-.lt th {
-  padding: 0 12px 8px;
+.ctable :is(th, td) {
+  padding: 7px 10px;
   border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+.ctable tr:last-child td {
+  border-bottom: 0;
+}
+.ctable th {
+  border-bottom-color: var(--input);
   color: var(--muted-foreground);
   font-size: 12px;
   font-weight: 500;
-  text-align: left;
   white-space: nowrap;
 }
-.lt td {
-  height: 38px;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-}
-.lt tr:last-child td {
-  border-bottom: 0;
-}
-.lt :is(th, td):first-child {
-  padding-left: 4px;
-}
-.lt tr[aria-selected="true"] td {
-  background: var(--muted);
-}
-.c-name {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  border-radius: var(--r-b);
-}
-.c-name b {
-  font-size: 13px;
-  font-weight: 500;
-}
-@media (hover: hover) and (pointer: fine) {
-  .c-name:hover b {
-    text-decoration: underline;
-    text-underline-offset: 0.2em;
-  }
-}
-tr[data-dead] .c-name b {
-  color: var(--k-dead);
-}
-.c-tok {
-  width: 230px;
-}
-.c-tok b {
-  display: inline-block;
-  width: 46px;
-  font-size: 13px;
-  font-weight: 600;
+.ctable .r {
   text-align: right;
 }
-.tb {
-  display: inline-block;
-  width: 150px;
-  height: 8px;
-  margin-right: 10px;
+.ctable .c-bar {
+  width: 30%;
+}
+.ctable td:first-child {
+  width: 100%;
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ctable td .sw {
+  margin-top: -2px;
   vertical-align: middle;
 }
-.tb i {
-  display: block;
-  min-width: 3px;
-  height: 100%;
-  border-radius: 2px;
+.ctable :is(tr.grp, tr.src) {
+  cursor: pointer;
 }
-.lt .c-num {
-  font-size: 13px;
-  text-align: right;
+.ctable tr:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: -2px;
 }
-.use {
+.ctable tr.grp.on td {
+  background: var(--muted);
+}
+.ctable tr.grp td:first-child {
+  font-weight: 500;
+}
+.car {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
   color: var(--muted-foreground);
+  vertical-align: middle;
+  transition: transform 0.15s var(--ease);
 }
-.use b {
-  color: var(--foreground);
+.car svg {
+  display: block;
+}
+:is(tr.grp.open, tr.src.open, tr.it.d-open) .car {
+  transform: rotate(90deg);
+}
+.ctable tr.src td {
   font-size: 13px;
+}
+.ctable tr.src td:first-child {
+  padding-left: 32px;
   font-weight: 500;
 }
-.c-last {
-  font-size: 13px;
+.ctable tr.off td {
+  color: var(--ui-text-dimmed);
 }
-.c-fix {
-  text-align: right;
+.ctable tr.src.off td:first-child {
+  font-weight: 400;
 }
-.c-fix a {
-  border-radius: var(--r-b);
+.ctable tr.it td {
+  padding-top: 5px;
+  padding-bottom: 5px;
+  font-size: 12px;
+}
+.ctable tr.it td:first-child {
+  padding-left: 49px;
+  font-family: var(--font-mono);
+}
+.ctable tr.it.l2 td:first-child {
+  padding-left: 54px;
+}
+.ctable tr.it .car.ic {
+  margin-left: -22px;
+}
+.ctable tr.it.has-d {
+  cursor: pointer;
+}
+.ctable tr.it.d-open td {
+  vertical-align: top;
+}
+.ctable tr.it.d-open td:first-child {
+  white-space: normal;
+}
+.ctable .desc {
+  display: inline-block;
+  max-width: min(56ch, 100%);
+  margin-left: 12px;
+  overflow: hidden;
+  color: var(--ui-text-dimmed);
+  font: 400 12px var(--font-sans);
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+.ctable .dfull {
+  display: block;
+  max-width: 68ch;
+  margin: 4px 0 2px;
+  color: var(--muted-foreground);
+  font: 400 12px/1.55 var(--font-sans);
+  white-space: normal;
+}
+.dhelp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  margin-left: 6px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--input);
+  color: var(--ui-text-dimmed);
+  font: 600 10px/1 var(--font-sans);
+  vertical-align: -2px;
+  cursor: help;
+  transition:
+    color 0.12s,
+    box-shadow 0.12s;
+}
+.note {
+  margin-left: 10px;
+  color: var(--ui-text-dimmed);
+  font: 400 12px var(--font-sans);
+}
+.tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--on-k);
+  font: 500 10.5px/1.5 var(--font-sans);
+  vertical-align: 1px;
+}
+.mini {
+  min-width: 80px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--muted);
+}
+.mini i {
+  display: block;
+  height: 100%;
+}
+.ctable tr.more-row td {
+  max-width: none;
+  padding: 0;
+}
+.more-b {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 10px 10px 27px;
   color: var(--acc);
-  font-size: 13.5px;
-  font-weight: 500;
+  font: 500 12px/1 var(--font-sans);
+  text-align: left;
+  transition: background 0.12s;
+}
+.more-row.l2 .more-b {
+  padding-left: 32px;
+}
+.more-b:active {
+  background: var(--input);
+}
+.more-b:focus-visible {
+  outline-offset: -2px;
+}
+.more-b .mi {
+  display: inline-flex;
+  justify-content: center;
+  width: 16px;
+}
+.more-b .mi.up {
+  transform: rotate(180deg);
+}
+.more-b .mv {
+  margin-left: 4px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 400;
+}
+.ctable td.empty {
+  padding: 18px 12px;
+}
+.ctable tr.flash td {
+  animation: flash 1.6s var(--ease);
+}
+@keyframes flash {
+  0%,
+  35% {
+    background: color-mix(in oklch, var(--k-skill) 16%, var(--card));
+  }
+  100% {
+    background: transparent;
+  }
+}
+.tip .dim {
+  opacity: 0.7;
 }
 @media (hover: hover) and (pointer: fine) {
-  .c-fix a:hover {
+  .cbar .s:hover {
+    filter: brightness(1.12) saturate(1.1);
+  }
+  .tile:hover {
+    background: color-mix(in oklch, var(--k) 18%, var(--card));
+  }
+  .more-tile:hover {
+    background: color-mix(in oklch, var(--k) 10%, var(--muted));
+  }
+  .open-t {
+    opacity: 0;
+  }
+  .tile:hover .open-t,
+  .tile:focus-within .open-t {
+    opacity: 1;
+  }
+  .open-t:hover {
+    background: color-mix(in oklch, var(--k) 8%, var(--card));
+  }
+  .ctx a.doc:hover {
     text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .ctable :is(tr.grp, tr.src, tr.it):hover td {
+    background: var(--muted);
+  }
+  .ctable tr.more-row:hover td {
+    background: transparent;
+  }
+  .more-b:hover {
+    background: var(--muted);
+  }
+  .ctable tr.it.has-d:hover .desc {
+    color: var(--muted-foreground);
+  }
+  .dhelp:hover {
+    box-shadow: inset 0 0 0 1px var(--muted-foreground);
+    color: var(--foreground);
+  }
+}
+@media (max-width: 640px) {
+  .ctx {
+    padding: 20px 16px 28px;
+  }
+  .ctx .big {
+    font-size: 34px;
+  }
+  .cmap {
+    height: 380px;
+  }
+  .ctable :is(th, td):nth-child(3) {
+    display: none;
+  }
+  .ctable tr.it td:first-child {
+    padding-left: 28px;
+  }
+}
+@media (max-width: 560px) {
+  .views {
+    flex-wrap: wrap;
+  }
+  .ctools {
+    order: 2;
+    width: 100%;
+    margin-right: 0;
+  }
+  .ctools .inp {
+    flex: 1;
+    width: auto;
+    max-width: none;
+    min-width: 0;
+    font-size: 16px;
+  }
+  .ctools [data-slot="button"] {
+    white-space: nowrap;
+  }
+  .note {
+    display: none;
+  }
+  .ctable :is(th, td):nth-child(5) {
+    display: none;
   }
 }
 
@@ -1228,24 +1564,8 @@ tr[data-dead] .c-name b {
   .mp-l {
     max-width: 560px;
   }
-  .shell[data-panel] {
-    grid-template-columns: minmax(0, 1fr) 360px;
-  }
 }
 @media (max-width: 900px) {
-  .shell[data-panel] {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .panel {
-    position: static;
-    grid-column: 1;
-    height: auto;
-    border-bottom: 1px solid var(--border);
-    border-left: 0;
-  }
-  .shell[data-panel] > main {
-    grid-row: 2;
-  }
   .fx {
     grid-template-columns: 10px minmax(0, 1fr) 64px;
   }
@@ -1263,21 +1583,11 @@ tr[data-dead] .c-name b {
     padding: 0 16px;
   }
   .bar {
-    flex-wrap: wrap;
-    height: auto;
-    padding: 8px 12px 0 16px;
-    gap: 8px 12px;
+    grid-template-columns: auto 1fr auto;
+    padding: 0 10px 0 16px;
   }
-  .bar .harness {
-    order: 5;
-    width: 100%;
-    overflow-x: auto;
-  }
-  .bar .tabs {
-    order: 6;
-    width: 100%;
-    height: 42px;
-    margin-left: -12px;
+  .bar .lock > span {
+    display: none;
   }
   .pg-body {
     padding: 24px 16px 32px;
@@ -1300,9 +1610,6 @@ tr[data-dead] .c-name b {
   .tm-land {
     height: 300px;
   }
-  .tm-report {
-    height: 440px;
-  }
   .inp,
   .pack .inp {
     font-size: 16px;
@@ -1310,17 +1617,7 @@ tr[data-dead] .c-name b {
   .inp.search {
     width: 100%;
   }
-  .lt .c-kind,
-  .lt .c-ses,
-  .lt .c-last {
-    display: none;
-  }
-  .c-tok {
-    width: auto;
-  }
-  .tb {
-    width: 60px;
-  }
+
   .state[data-slot="vh-empty"] {
     padding: 40px 20px 32px;
   }

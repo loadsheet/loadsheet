@@ -78,6 +78,11 @@
   --k-agent: #0e7490;
   --k-dead: #b91c1c;
   --k-h: #c4c4be;
+  /* The context page's harness segment, and skills that live in the project. */
+  --k-harness: #8f8f88;
+  --k-pskill: #4338ca;
+  /* Claude Code's mark in the harness switch. */
+  --logo-claude: #d97757;
   /* Text on a solid kind colour. */
   --on-k: #ffffff;
   --hatch-dead: repeating-linear-gradient(
@@ -120,5 +125,8 @@
   --k-agent: #2fc1dd;
   --k-dead: #f87171;
   --k-h: #4a4a46;
+  --k-harness: #5c5c57;
+  --k-pskill: #a5b4fc;
+  --logo-claude: #d97757;
   --on-k: #10100f;
 }

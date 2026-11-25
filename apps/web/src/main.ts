@@ -1,10 +1,9 @@
 import { createApp } from "vue";
-import { createRouter, createWebHashHistory } from "vue-router";
+import { type RouteLocation, createRouter, createWebHashHistory } from "vue-router";
 import App from "./App.vue";
 import Landing from "./pages/Landing.vue";
 import ReportShell from "./pages/ReportShell.vue";
 import Report from "./pages/Report.vue";
-import List from "./pages/List.vue";
 import Fixes from "./pages/Fixes.vue";
 import Pack from "./pages/Pack.vue";
 import NotFound from "./pages/NotFound.vue";
@@ -36,12 +35,17 @@ const router = createRouter({
       component: ReportShell,
       children: [
         { path: "", component: Report },
-        { path: "list", component: List },
         { path: "fixes", component: Fixes },
-        // Links from before the map: Overview and Map merged into the Report, Skills into the List.
+        // Links from older pages: Overview and Map are the Report, the List and Skills its table.
         { path: "overview", redirect: (to) => ({ path: "/report", query: to.query }) },
         { path: "map", redirect: (to) => ({ path: "/report", query: to.query }) },
-        { path: "skills", redirect: (to) => ({ path: "/report/list", query: to.query }) },
+        ...["list", "skills"].map((path) => ({
+          path,
+          redirect: (to: RouteLocation) => ({
+            path: "/report",
+            query: { ...to.query, view: "table" },
+          }),
+        })),
       ],
     },
     // owner/repo, or owner/repo/dir for a pack that lives in a folder of a bigger repository.
