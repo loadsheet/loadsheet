@@ -1,0 +1,104 @@
+# loadsheet web design
+
+The web UI (`apps/web`) is a map of what an agent loads before you type. Every block is sized by its tokens and coloured by its kind. Everything else (type, chrome, copy) stays quiet so the map carries the page.
+
+## Tokens
+
+The CSS loads in this order (`src/main.ts`): the kit's `tokens.css` and `default.css`, then `src/styles/tokens.css`, then `src/styles/app.css`.
+
+- `tokens.css` sets the kit's shadcn names (`--background`, `--foreground`, `--card`, `--muted`, `--muted-foreground`, `--border`, `--input`, `--primary`, `--ring`) and loadsheet's own names (below). Each colour is defined twice: on `:root`, and again under `:root[data-theme="dark"]`.
+- `app.css` uses only `var(--…)` names. If a colour isn't a token, add it to both theme blocks in `tokens.css` first. A hex value in `app.css` or a `.vue` file breaks dark mode.
+
+| Role                                               | Token                                  |
+| -------------------------------------------------- | -------------------------------------- |
+| Page / panel / sunk well                           | `--background` / `--card` / `--muted`  |
+| Text / secondary text                              | `--foreground` / `--muted-foreground`  |
+| Hairline / control border                          | `--border` / `--input`                 |
+| Ink (the one solid button)                         | `--primary` on `--primary-foreground`  |
+| Accent: `$` prompt, savings, row links, focus ring | `--acc` (selection tint: `--acc-tint`) |
+| Block corner / card corner                         | `--r-b` (3px) / `--r-lg` (8px)         |
+| Motion curve                                       | `--ease`                               |
+| Report bar height (the panel sticks under it)      | `--bar`                                |
+
+The kit's rules sit in `@layer ui-sdk`, and every rule in `app.css` is unlayered, so `app.css` always wins. Wrap a reset of a bare element in `:where()` and skip kit parts, e.g. `button:where(:not([data-slot]))`. A plain `button { background: none }` blanks the solid button. At specificity 0,1,1 it also beat `.b` and wiped the colour off every treemap block.
+
+## Type
+
+Three faces, all inlined into the single built HTML file:
+
+- `--font-pixel` (Geist Pixel Square), always weight 400, through `.px` or the `.lock` wordmark. Use it for exactly three things: the wordmark, the page `h1`, and the state title (`[data-slot="vh-empty-title"]`). Body text, labels and numbers in pixel type become unreadable below 20px.
+- `--font-sans` (Geist): all running text. Body is 14px; secondary lines are 13–13.5px. Nothing goes below 10.5px (the strip label in a block).
+- `--font-mono` (Geist Mono), through `.mono` or `code`: item names, paths, commands, and every number. Numbers use `.num` (mono with tabular figures), so columns line up.
+
+Page titles: `.ph h1` is 34px (28px under 760px); the landing `h1` is 46px.
+
+## Kinds and the hatch
+
+Each loaded thing has one kind colour: `--k-mcp`, `--k-instr`, `--k-skill`, `--k-agent`. Add the class `k-mcp`, `k-instr`, `k-skill`, `k-agent`, `k-dead` or `k-h` to an element and it sets `--c`. An `i` with one of those classes renders a 10–11px square; `.b` renders a block. Kind names come from `KINDS` / `kindName()` in `lib/report.ts`.
+
+- Never used (`isDead()`): use `k-dead`, never the item's kind. It draws the red hatch (`--hatch-dead`) with a 1.5px `--k-dead` inset ring. Dead always outranks kind, so the reader sees waste before category.
+- The harness's own prompt: use `k-h`, which draws the grey hatch (`--hatch-h`). It is context the user can't remove, so it is neither a kind nor dead.
+- Text on a solid kind block is `--on-k`. On a hatch, the label sits on a `--background` pill.
+
+## The map (`components/Treemap.vue`)
+
+Every chart that shows sizes is this component. The only other bars are the `.tb` token bar in the list and the `.mbar` meter in the panel, and both take a kind class.
+
+- Pass `Block[]` built from the report: `value` comes from `costOn(sheet)`, never a literal. Groups go harness, mcp, instr, skill, agent. Each group is squarified, and inside it used blocks come first, then dead ones. A group narrower than 200px and taller than 1.5× its width stacks its blocks as full-width strips.
+- A block shows its label only when it fits: name and number at ≥56×50px, a one-line strip at ≥64×16px, nothing smaller. The full name is always in the DOM as `.sr` text, so search, screen readers and the page test find it.
+- Every non-harness block is a `button` with `aria-pressed` that toggles `?item=`. Pass `:interactive="false"` only when there is no panel to open (the pack page).
+- The legend is `components/Legend.vue`, fed by `totals(sheet)`.
+
+## Buttons
+
+Use the kit button (`data-slot="button"`) for any action. Navigation styled as a button is a `RouterLink` with `data-slot="button"`.
+
+Variants (set with `data-variant`): none (outlined, the default), `solid`, `ghost`. Sizes (set with `data-size`): `sm` (28px), none (36px), `lg` (40px). Those are all the overrides `app.css` restyles. Any other kit variant renders off-brand.
+
+```
+Is it the main action of this view?
+ ├── Yes → data-variant="solid" (data-size="lg" in a page head). One per view.
+ └── No
+      ├── Icon only (close, theme) → data-variant="ghost" with aria-label
+      ├── Copy a command → <CopyButton> (sm, hairline square, turns --acc when done)
+      └── Default → no variant (outlined)
+```
+
+```vue
+<!-- Correct: the page's one ink button -->
+<button
+  type="button"
+  data-slot="button"
+  data-variant="solid"
+  data-size="lg"
+>Copy all for your agent</button>
+<!-- Incorrect: a second solid in the same view; the head loses its one action -->
+<RouterLink data-slot="button" data-variant="solid" to="/">Go home</RouterLink>
+```
+
+On every pressable thing, `:active` scales to .96. Hover styles live only inside `@media (hover: hover) and (pointer: fine)`, because a tap would otherwise leave them stuck. Focus is the global 2px `--acc` outline. Under `prefers-reduced-motion`, transitions drop to 0.
+
+## Controls and chips
+
+- Switching between peer views in place: the `@ui-sdk/vue` SegmentedControl (harness switcher, Your setup / Everything). A segment for a harness with 0 sessions gets `data-off`, which dims it but keeps it clickable.
+- Switching between peer content panels: `@ui-sdk/vue` Tabs (the landing start card). Switching between routes: `.tabs` links in the report bar, with counts in `i.num` (`data-quiet` when the count isn't a to-do).
+- Filtering a list: `.fchip` buttons with `aria-pressed`. Status labels: `.chip`; "never used" is `.chip.no`. Kind labels: `.kchip` (square plus name).
+- Commands: `components/Cmd.vue`, given `fixView(f)`. `cmd` shows a `$` prompt in `--acc`, `set` shows a front-matter key, and `ask` is a plain sentence for the agent in an outlined well.
+- Feedback after copying: the `copy()` toast in `lib/ui.ts`.
+
+## Rows, panel, states
+
+- List rows (`table.lt`), heaviest first. A dead row's name turns `--k-dead`. The last column links the row's first fix by `actionName()`.
+- Item panel (`components/ItemPanel.vue`), opened by `?item=`. It sits beside the page in the `.shell` grid (420px, sticky under `--bar`), never over it, so the map stays visible and clickable. Under 900px it stacks above the page.
+- States go through `components/StateBox.vue` (the kit's `vh-empty`): the dashed four-block glyph, a pixel title, one sentence, then actions with at most one `solid`. Use it for every dead end: no sessions for a harness (`NoSessions.vue`), nothing read, nothing to fix, a broken link, an unknown pack.
+
+## Copy
+
+- Each page gets a title plus at most one short line (`.sub`). No eyebrow line above the title, and no caption under a chart.
+- Keep control labels, the numbers, and the one-line reason on each fix (`evidence()`). Cut every other sentence that doesn't change what the reader does next.
+- Numbers come from the report through `fmt()`. Anything the schema doesn't carry is left out, never written in.
+- Title states as the fact ("Nothing to fix", "Cursor has no sessions here") and describe the next action in the button.
+
+## Marks
+
+The mark is four blocks: the ink harness, then MCP, instructions and skills. It lives in `components/Logo.vue` (`size`, `word`). The favicon in `index.html` is the same paths as an inline SVG with a dark-scheme media query. The touch icon is an inline 180px PNG of the mark on an ink tile.
