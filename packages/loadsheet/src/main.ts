@@ -6,7 +6,13 @@ import { buildReport, packReport, PROMPT_DOC, renderText } from "@loadsheet/core
 import { runOnFleet, type RunResult } from "@loadsheet/fleet";
 import { claudeCode, findHarness, harnesses } from "@loadsheet/harnesses";
 import type { Files } from "@loadsheet/kit";
-import { dirFiles, githubFiles, githubUrl, scanMachine } from "@loadsheet/kit/node";
+import {
+  dirFiles,
+  githubFiles,
+  githubUrl,
+  scanMachine,
+  type ScanProgress,
+} from "@loadsheet/kit/node";
 import { parseConfig, resolveConfig, RULES, type Config } from "@loadsheet/schema";
 import pkg from "../package.json" with { type: "json" };
 import { fleetScans } from "./fleet.ts";
@@ -16,7 +22,7 @@ const ids = harnesses.map((h) => h.id).join(", ");
 const usage = `loadsheet ${pkg.version}
 Reports which skills, instruction files and MCP servers cost your coding agents context without being used.
 
-Usage: loadsheet [options]                     Scan this machine's sessions, and its fleet's, and report
+Usage: loadsheet [options]                     Scan this machine's sessions and report
        loadsheet <dir | GitHub URL> [options]  Weigh a skill pack, with no usage data
        loadsheet fleet [command] [options]     Run fleetrc, which keeps a fleet's skills in sync;
                                                \`loadsheet fleet --help\` lists its commands
@@ -28,11 +34,12 @@ Usage: loadsheet [options]                     Scan this machine's sessions, and
                       A pack in a folder named fleet or build is ./fleet or ./build.
 
 Options:
-  --local               Report this machine alone, even when it has a fleet
+  --fleet               Also ask every other machine of this machine's fleet for its Scan, over
+                        ssh, and report them all in one Report
   --scan                Print this machine's Scan as JSON: what each machine of a fleet sends.
                         It holds every session in --days: --harness, --ignore, --via,
                         --exclude-via and --rule shape a Report
-  --timeout <seconds>   How long to wait for each machine of the fleet (default 300)
+  --timeout <seconds>   With --fleet, how long to wait for each machine (default 300)
   --config <path>       Config file (default $XDG_CONFIG_HOME/loadsheet/config.json,
                         else ~/.config/loadsheet/config.json)
   --days <n>            Days of history to read (default 30)
@@ -52,10 +59,10 @@ Options:
 Flags override the config file; --ignore adds to its list, the others replace it.
 Rules: ${RULES.join(", ")}.
 
-A fleet: when fleetrc's config.json ($XDG_CONFIG_HOME/fleetrc, else ~/.config/fleetrc) names a
-manifest whose fleet lists other machines, loadsheet asks each over ssh for its Scan, counters
-and names with no text, by running \`npx -y loadsheet@${pkg.version} --scan --days <n>\` there, and
-reports every machine in one Report. LOADSHEET_FLEET_COMMAND, split on spaces, replaces
+With --fleet: when fleetrc's config.json ($XDG_CONFIG_HOME/fleetrc, else ~/.config/fleetrc) names a
+manifest whose fleet lists other machines, loadsheet asks each over ssh for its Scan, counters,
+names and skill descriptions, by running \`npx -y loadsheet@${pkg.version} --scan --days <n>\` there,
+and reports every machine in one Report. LOADSHEET_FLEET_COMMAND, split on spaces, replaces
 \`npx -y loadsheet@${pkg.version}\`, to run another build there, such as one not yet on npm.
 
 loadsheet changes none of your files. To have your agent apply the fixes you accept,
@@ -88,6 +95,8 @@ try {
       rule: { type: "string", multiple: true },
       "no-cache": { type: "boolean" },
       json: { type: "boolean" },
+      fleet: { type: "boolean" },
+      // The default since 0.1.0; still taken so older scripts keep working.
       local: { type: "boolean" },
       scan: { type: "boolean" },
       timeout: { type: "string" },
@@ -109,9 +118,12 @@ if (values.help) {
   process.exit(0);
 }
 if (positionals.length > 1) fail(`Expected at most one pack, got ${positionals.length}`);
-for (const flag of ["local", "scan", "timeout"] as const)
+if (values.fleet && values.scan) fail("--scan prints this machine's Scan; it takes no --fleet");
+if (values.fleet && values.local) fail("--local and --fleet ask for different reports");
+for (const flag of ["fleet", "local", "scan", "timeout"] as const)
   if (positionals.length > 0 && values[flag] !== undefined)
     fail(`--${flag} is for this machine and its fleet, not a pack`);
+if (values.timeout !== undefined && !values.fleet) fail("--timeout is for --fleet");
 const timeoutMs = values.timeout === undefined ? 300_000 : Number(values.timeout) * 1000;
 if (!/^\d+$/u.test(values.timeout ?? "300") || timeoutMs < 1000 || timeoutMs > 86_400_000)
   fail(`--timeout takes a whole number of seconds from 1 to 86400, got ${values.timeout}`);
@@ -223,12 +235,55 @@ const askFleet = async (): Promise<RunResult[] | undefined> => {
   }
 };
 
+/**
+ * Progress on stderr for a scan that takes over 2 s, such as a first run, which reads every
+ * transcript before the cache holds them. On a terminal one line is rewritten in place and cleared
+ * at the end; elsewhere a line is printed every 5 s.
+ */
+function scanProgress() {
+  const started = Date.now();
+  const tty = process.stderr.isTTY === true;
+  const names: Record<string, string> = { "claude-code": "Claude Code", codex: "Codex" };
+  let latest: ScanProgress | undefined;
+  let printed = 0;
+  let shown = false;
+  const line = () =>
+    latest
+      ? `Reading ${names[latest.harness] ?? latest.harness} sessions: ${latest.done.toLocaleString("en-US")} of ${latest.total.toLocaleString("en-US")} files`
+      : "Reading this machine's sessions";
+  const show = () => {
+    if (tty) process.stderr.write(`\r\u001b[2K${line()}`);
+    else process.stderr.write(`${line()}\n`);
+    printed = Date.now();
+    shown = true;
+  };
+  const timer = setTimeout(() => {
+    if (!tty)
+      process.stderr.write("The first run reads every transcript; later runs use a cache.\n");
+    show();
+  }, 2000);
+  timer.unref();
+  return {
+    update: (progress: ScanProgress) => {
+      latest = progress;
+      if (Date.now() - started < 2000) return;
+      if (tty ? Date.now() - printed >= 100 : Date.now() - printed >= 5000) show();
+    },
+    stop: () => {
+      clearTimeout(timer);
+      if (shown && tty) process.stderr.write("\r\u001b[2K");
+    },
+  };
+}
+
 if (positionals.length === 0) {
   for (const id of config.harnesses ?? []) {
     if (!findHarness(id)) fail(`Unknown harness ${id}`);
   }
-  const fleet = values.local || values.scan ? undefined : askFleet();
+  const fleet = values.fleet ? askFleet() : undefined;
   let scan;
+  // A fleet host's --scan runs over ssh, where no one reads stderr.
+  const progress = values.scan ? { update: () => {}, stop: () => {} } : scanProgress();
   try {
     // Every harness is read, whatever --harness says: whether a path is safe to remove depends on
     // every harness that loads it. The Report keeps only the wanted harnesses' sheets.
@@ -236,12 +291,15 @@ if (positionals.length === 0) {
       harnesses,
       days: config.window,
       tool,
+      onProgress: progress.update,
       ...(values["no-cache"] ? { cacheDir: false as const } : {}),
     });
   } catch (error) {
+    progress.stop();
     process.stderr.write(`Cannot scan this machine: ${(error as Error).message}\n`);
     process.exit(1);
   }
+  progress.stop();
   if (values.scan) {
     process.stdout.write(`${JSON.stringify(scan)}\n`);
   } else {

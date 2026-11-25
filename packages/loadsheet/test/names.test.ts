@@ -100,7 +100,7 @@ describe("a use of something neither installed nor listed", () => {
     expect(scan.stderr).toBe("");
     expect(parseScan(JSON.parse(scan.stdout)).coverage.some((row) => row.sessions > 0)).toBe(true);
     expect(scan.stdout).not.toContain("PRIVATE");
-    const json = run(home, {}, "--json", "--local");
+    const json = run(home, {}, "--json");
     expect(json.stderr).toBe("");
     parseReport(JSON.parse(json.stdout));
     expect(json.stdout).not.toContain("PRIVATE");
@@ -204,7 +204,7 @@ describe("a use of something neither installed nor listed", () => {
         "",
       ].join("\n"),
     });
-    for (const args of [["--scan"], ["--json", "--local"]]) {
+    for (const args of [["--scan"], ["--json"]]) {
       const result = run(home, {}, ...args);
       expect(result.stderr).toBe("");
       expect(result.stdout).toContain("mcp:harbor");

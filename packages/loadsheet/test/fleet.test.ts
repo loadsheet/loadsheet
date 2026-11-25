@@ -154,7 +154,7 @@ describe("loadsheet with a fleet", () => {
 
   it("merges the other machine's Scan into one Report, with findings from both", () => {
     manifest(["box"]);
-    const result = loadsheet(["--json", ...findings]);
+    const result = loadsheet(["--fleet", "--json", ...findings]);
     expect(result.status, result.stderr).toBe(0);
     expect(result.stderr).toBe("Read 2 of 2 machines\n");
     const report = parseReport(JSON.parse(result.stdout));
@@ -179,7 +179,7 @@ describe("loadsheet with a fleet", () => {
 
   it("lists a host that sends no Scan with a fixed phrase, and nothing it printed", () => {
     manifest(["box", "extra", "gone", "junk", "broken", "slow"]);
-    const json = loadsheet(["--json", "--timeout", "4", ...findings]);
+    const json = loadsheet(["--fleet", "--json", "--timeout", "4", ...findings]);
     expect(json.status, json.stderr).toBe(0);
     expect(json.stderr).toBe("Read 3 of 7 machines\n");
     const report = parseReport(JSON.parse(json.stdout));
@@ -195,7 +195,7 @@ describe("loadsheet with a fleet", () => {
       { name: "slow", reachable: false, error: "timed out" },
     ]);
     // The text says the same, from the same Report.
-    const text = loadsheet(["--timeout", "4", ...findings]);
+    const text = loadsheet(["--fleet", "--timeout", "4", ...findings]);
     expect(text.status, text.stderr).toBe(0);
     expect(text.stdout).toContain("not read: junk (sent no Scan)");
     for (const output of [json.stdout, json.stderr, text.stdout, text.stderr]) {
@@ -207,7 +207,7 @@ describe("loadsheet with a fleet", () => {
 
   it("reports this machine alone, exit 0, when no other machine answers", () => {
     manifest(["gone"]);
-    const result = loadsheet(["--json"]);
+    const result = loadsheet(["--fleet", "--json"]);
     expect(result.status).toBe(0);
     expect(result.stderr).toBe("Read 1 of 2 machines; no other machine could be read\n");
     expect(parseReport(JSON.parse(result.stdout)).machines).toEqual([
@@ -269,21 +269,23 @@ describe("loadsheet with a fleet", () => {
   it("takes a fleet of empty entries for no fleet", () => {
     rmSync(log, { force: true });
     manifest(["", " "]);
-    const result = loadsheet(["--json"]);
+    const result = loadsheet(["--fleet", "--json"]);
     expect(result.status).toBe(0);
     expect(result.stderr).toBe("");
     expect(parseReport(JSON.parse(result.stdout)).mode).toBe("local");
     expect(sshCalls()).toBe(false);
   });
 
-  it("--local and a machine with no fleet config start no ssh", () => {
+  it("reports this machine alone without --fleet, with the old --local, and with no fleet config", () => {
     rmSync(log, { force: true });
     manifest(["box"]);
-    const local = loadsheet(["--json", "--local"]);
-    expect(local.status).toBe(0);
-    expect(local.stderr).toBe("");
-    expect(parseReport(JSON.parse(local.stdout)).mode).toBe("local");
-    const none = loadsheet(["--json"], { XDG_CONFIG_HOME: join(root, "no-config") });
+    for (const args of [["--json"], ["--json", "--local"]]) {
+      const local = loadsheet(args);
+      expect(local.status).toBe(0);
+      expect(local.stderr).toBe("");
+      expect(parseReport(JSON.parse(local.stdout)).mode).toBe("local");
+    }
+    const none = loadsheet(["--fleet", "--json"], { XDG_CONFIG_HOME: join(root, "no-config") });
     expect(none.status).toBe(0);
     expect(none.stderr).toBe("");
     expect(parseReport(JSON.parse(none.stdout)).mode).toBe("local");

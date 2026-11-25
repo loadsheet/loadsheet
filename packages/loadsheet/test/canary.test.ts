@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { findCanary, findCanaryInDir } from "@loadsheet/fixtures";
-import { parseReport, parseScan } from "@loadsheet/schema";
+import { parseReport, parseScan, shareableReport } from "@loadsheet/schema";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
 // The whole CLI on an invented home where every text that must stay on the machine carries its own
@@ -24,7 +24,8 @@ const C = {
   toolInput: "CANARY-LS-tool-input",
   toolOutput: "CANARY-LS-tool-output",
   skillBody: "CANARY-LS-skill-body",
-  skillDescription: "CANARY-LS-skill-description",
+  // Not a canary: findCanary always looks for CANARY-LS, and a local Report carries this one.
+  skillDescription: "MARK-LS-skill-description",
   instructionBody: "CANARY-LS-instruction-body",
   codexInstructionBody: "CANARY-LS-codex-instruction-body",
   mcpEnv: "CANARY-LS-mcp-env",
@@ -40,7 +41,11 @@ const C = {
   agentLine: "CANARY-LS-agent-line",
   agentBody: "CANARY-LS-agent-body",
 } as const;
-const canaries = Object.values(C);
+/** Every canary. The cache and a shared Report hold none of them. */
+const all = Object.values(C);
+// A skill's description is what the harness lists for it: a Report on the user's own machines
+// carries it, and only a Report shared through loadsheet.dev must not.
+const canaries = all.filter((c) => c !== C.skillDescription);
 
 /** The canaries in `text`, raw or JSON-escaped. */
 const leaks = (text: string) =>
@@ -321,7 +326,7 @@ describe("no canary leaves the machine", () => {
     const text = files.map((file) => `${file}\n${readFileSync(file, "utf8")}`).join("\n");
     expect(canaries.filter((c) => !text.includes(c) && c !== C.processEnv)).toEqual([]);
 
-    const result = run("--json", "--local");
+    const result = run("--json");
     expect(result.stderr).toBe("");
     const report = parseReport(JSON.parse(result.stdout));
     expect(Object.fromEntries(report.sheet.map((s) => [s.harness, s.sessions]))).toEqual({
@@ -351,7 +356,7 @@ describe("no canary leaves the machine", () => {
   });
 
   it("the text report", () => {
-    const result = run("--local");
+    const result = run();
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("brew-notes");
     expect(leaks(result.stdout + result.stderr)).toEqual([]);
@@ -359,11 +364,15 @@ describe("no canary leaves the machine", () => {
   });
 
   it("--json", () => {
-    const result = run("--json", "--local");
+    const result = run("--json");
     expect(result.status).toBe(0);
     expect(leaks(result.stdout + result.stderr)).toEqual([]);
-    expect(findCanary(parseReport(JSON.parse(result.stdout)), canaries)).toEqual([]);
+    const report = parseReport(JSON.parse(result.stdout));
+    expect(findCanary(report, canaries)).toEqual([]);
     expect(result.stdout).not.toContain(root);
+    // The descriptions are there, and a shared Report drops them.
+    expect(findCanary(report, [C.skillDescription])).not.toEqual([]);
+    expect(findCanary(shareableReport(report), all)).toEqual([]);
   });
 
   it("the Scan a fleet host prints for --scan", () => {
@@ -376,7 +385,7 @@ describe("no canary leaves the machine", () => {
 
   it("the page loadsheet build writes", async () => {
     const out = join(root, "site");
-    const result = run("build", "--local", "--out", out);
+    const result = run("build", "--out", out);
     expect(result.stderr).toBe("");
     expect(result.status).toBe(0);
     expect(leaks(readFileSync(join(out, "index.html"), "utf8"))).toEqual([]);
@@ -384,7 +393,7 @@ describe("no canary leaves the machine", () => {
   });
 
   it("the page loadsheet --ui serves", async () => {
-    const child = spawn(process.execPath, [cli, "--ui", "--local"], { cwd: home, env });
+    const child = spawn(process.execPath, [cli, "--ui"], { cwd: home, env });
     try {
       const port = await new Promise<number>((done, failed) => {
         let out = "";
@@ -407,11 +416,11 @@ describe("no canary leaves the machine", () => {
   });
 
   it("the cache folder's files", async () => {
-    expect(run("--json", "--local").status).toBe(0);
+    expect(run("--json").status).toBe(0);
     const files = readdirSync(cache, { recursive: true, withFileTypes: true }).filter((entry) =>
       entry.isFile(),
     );
     expect(files.length).toBeGreaterThan(0);
-    expect(await findCanaryInDir(cache, [...canaries, root])).toEqual([]);
+    expect(await findCanaryInDir(cache, [...all, root])).toEqual([]);
   });
 });
