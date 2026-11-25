@@ -4,7 +4,7 @@
   "compatibility_date": "2026-11-01",
   "assets": { "directory": "./dist" },
   "routes": [{ "pattern": "loadsheet.dev", "custom_domain": true }],
-  // The site sits behind Cloudflare Access until launch, so no public workers.dev or preview URLs.
+  // loadsheet.dev is the only public address: no workers.dev or preview URLs.
   "workers_dev": false,
   "preview_urls": false,
 }
