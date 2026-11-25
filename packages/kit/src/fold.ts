@@ -215,6 +215,15 @@ export const buildScan = (input: {
 }): Scan => {
   const tallies = input.harnesses.map((part) => sumTallies([part.tally], input.window));
   const total = sumTallies(tallies);
+  // A name reaches a Scan from installed files or a harness's own listing, never from a use alone:
+  // a use's name comes from transcript text, so a cell no Item and no listing names is dropped.
+  // Only a listing in the window counts, so a Scan depends on its window's sessions alone.
+  const named = new Set(
+    input.harnesses.flatMap((part, index) => [
+      ...part.items.map((item) => item.id),
+      ...tallies[index]!.cells.filter((cell) => cell.sessions > 0).map((cell) => cell.item),
+    ]),
+  );
   return {
     schema: 1,
     tool: input.tool,
@@ -232,7 +241,7 @@ export const buildScan = (input: {
       "first",
     ),
     sessions: total.sessions,
-    cells: total.cells,
+    cells: total.cells.filter((cell) => named.has(cell.item)),
   };
 };
 

@@ -1,5 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import { homedir, hostname } from "node:os";
+import { posix } from "node:path";
 import type { Day, Scan } from "@loadsheet/schema";
 import {
   buildScan,
@@ -53,11 +54,15 @@ export const scanWindow = (now: Date, days: number): { window: [Day, Day]; since
   return { window: [dayOf(sinceMs), dayOf(today)], sinceMs };
 };
 
+/** `path` by its spelling alone, without a trailing `/`, as the adapters' `normalPath` spells it. */
+const normal = (path: string) => posix.normalize(path).replace(/(?<=.)\/+$/u, "");
+
 /** `path` keyed `~/...` under `home`, and absolute elsewhere. */
 const homeKey = (path: string, home: string) => {
-  const root = home.replace(/\/+$/u, "");
-  if (path === root) return "~";
-  return path.startsWith(`${root}/`) ? `~/${path.slice(root.length + 1)}` : path;
+  const root = normal(home);
+  const at = normal(path);
+  if (at === root) return "~";
+  return at.startsWith(`${root}/`) ? `~/${at.slice(root.length + 1)}` : at;
 };
 
 /** A source file a harness names, such as `~/.claude.json`, which grows with use past MAX_FILE_BYTES. */
@@ -179,7 +184,11 @@ const readTranscripts = async (
  */
 export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> => {
   const now = options.now ?? new Date();
-  const place: Place = options.place ?? { home: homedir(), env: process.env };
+  const place: Place = options.place ?? {
+    home: homedir(),
+    env: process.env,
+    cwd: process.cwd(),
+  };
   const cacheDir = options.cacheDir ?? defaultCacheDir(place);
   const concurrency = options.concurrency ?? 16;
   const { window, sinceMs } = scanWindow(now, options.days);

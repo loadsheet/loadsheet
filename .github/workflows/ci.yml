@@ -72,21 +72,53 @@ jobs:
       # Codex runs hooks with the user's $SHELL, so fleet tests the hook's shell form in fish and zsh too.
       - name: Install fish and zsh
         run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends fish zsh
+      # The page tests open the built web UI in the runner's Chrome, and fail without it.
       - name: Test
         run: pnpm test --project packages
+        env:
+          LOADSHEET_BROWSER: google-chrome
       # Keep the full suite on the oldest Vite+ runtime as well as the current Node.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22.18.0
       - name: Test on Node 22.18
         run: node_modules/.bin/vp test
+        env:
+          LOADSHEET_BROWSER: google-chrome
+
+  # The tarballs npm will receive, packed from the build without prepack: what each holds, then
+  # installed together with npm and run as `npx loadsheet` (scripts/check-tarballs.ts).
+  tarballs:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
+      - run: corepack enable
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: packages
+          path: packages
+      - run: pnpm install --frozen-lockfile
+      - name: Pack, install and run the tarballs
+        run: pnpm check:tarballs
 
   # fleet's suite against the built CLI on Linux, macOS and Windows, with Node 22 and 24.
   fleet:
     name: fleet (${{ matrix.os }}, node ${{ matrix.node }})
     needs: build
     runs-on: ${{ matrix.os }}
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 45 || 15 }}
+    # A runner that gives the tests one worker runs the files one after another: on Windows a passing
+    # run then takes 35 minutes, and one stopped at 45 had a quarter of the suite left. With several
+    # workers it takes up to 25 minutes on Windows and 11 on macOS.
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 75 || 30 }}
     strategy:
       fail-fast: false
       matrix:
@@ -120,7 +152,7 @@ jobs:
     name: timer e2e (${{ matrix.os }})
     needs: build
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:

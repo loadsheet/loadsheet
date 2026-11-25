@@ -12,6 +12,7 @@ import {
   readCodexConfig,
   type CodexState,
 } from "../src/index.ts";
+import { readTomlFlags } from "../src/codex-toml.ts";
 
 const FIXTURE = NodePath.join(import.meta.dirname, "fixtures/codex/session.jsonl");
 const machine = codex.machine;
@@ -141,6 +142,41 @@ describe("codex listing", () => {
       item: item?.id,
       chars: item?.chars.listed,
     });
+  });
+
+  it("reads a section only up to its closing tag, and none without one", () => {
+    const listedItems = (...messages: string[]) =>
+      parseAll([meta(), ...messages.map(developer)])
+        .facts.filter((fact) => fact.type === "listed")
+        .map((fact) => (fact.type === "listed" ? fact.item : ""));
+    expect(
+      listedItems(
+        `${skillsSection([lines[0]!], roots)}\n- after: example (file: /invented/example/SKILL.md)`,
+        "<tools>\n- mcp__docs\n</tools>\n- mcp__after",
+      ),
+    ).toEqual(["skill:review", "mcp:docs"]);
+    expect(
+      listedItems(
+        skillsSection([lines[0]!], roots).replace("</skills_instructions>", ""),
+        "<tools>\n- mcp__docs",
+      ),
+    ).toEqual([]);
+  });
+
+  it("lists no entry whose name is not shaped like a skill's or a server's", () => {
+    const listedItems = (...messages: string[]) =>
+      parseAll([meta(), ...messages.map(developer)])
+        .facts.filter((fact) => fact.type === "listed")
+        .map((fact) => (fact.type === "listed" ? fact.item : ""));
+    expect(
+      listedItems(
+        skillsSection(
+          [lines[0]!, "- /home/u/PRIVATE/notes: more of a description (file: r0/review/SKILL.md)"],
+          roots,
+        ),
+        "<tools>\nDeferred tool namespaces:\n- mcp__docs: Reads docs.\n- mcp__/home/u/PRIVATE\n</tools>",
+      ),
+    ).toEqual(["skill:review", "mcp:docs"]);
   });
 
   it("reads the listing once, from world_state when it comes first", () => {
@@ -572,6 +608,16 @@ describe("codex machine", () => {
     ]);
   });
 
+  it("takes a relative CODEX_HOME under the working directory, as Codex does", () => {
+    const at = (cwd: string | undefined, value: string) =>
+      machine.home({ home: "/home/u", env: { CODEX_HOME: value }, ...(cwd ? { cwd } : {}) });
+    expect(at("/home/u", ".")).toBe("/home/u");
+    expect(at("/home/u/work", "./state/codex/")).toBe("/home/u/work/state/codex");
+    expect(at("/home/u/work", "../codex")).toBe("/home/u/codex");
+    expect(at("/home/u/work", "/data/codex")).toBe("/data/codex");
+    expect(at(undefined, "codex")).toBe("/home/u/codex");
+  });
+
   const config = [
     'model = "gpt-5"',
     'api_key = "sk-SECRET-KEY"',
@@ -848,6 +894,90 @@ describe("codex machine", () => {
       ["fourth", true],
       ["after", true],
     ]);
+  });
+
+  it("reads no header, selector or flag inside a multi-line string, escaped quotes included", () => {
+    const servers = (lines: string[]) => [...readCodexConfig(lines.join("\n")).mcpServers.keys()];
+    expect(
+      servers([
+        "[mcp_servers.harbor]",
+        "[mcp_servers.harbor.env]",
+        String.raw`TOKEN = """start \"""`,
+        "[mcp_servers.PRIVATE-ENV]",
+        '"""',
+      ]),
+    ).toEqual(["harbor"]);
+    expect(
+      servers([
+        "[mcp_servers.harbor]",
+        "[mcp_servers.harbor.env]",
+        'TOKEN = """',
+        String.raw`start \"""`,
+        "[mcp_servers.PRIVATE-ENV]",
+        '"""',
+      ]),
+    ).toEqual(["harbor"]);
+    // A backslash escapes nothing in a literal string, so `\'''` closes it.
+    expect(
+      servers(["[mcp_servers.harbor]", String.raw`note = '''start \'''`, "[mcp_servers.after]"]),
+    ).toEqual(["harbor", "after"]);
+    const config = readCodexConfig(
+      [
+        "[[skills.config]]",
+        'path = "/home/u/.agents/skills/kept/SKILL.md"',
+        'note = """',
+        "[mcp_servers.PRIVATE-NOTE]",
+        'name = "PRIVATE"',
+        "enabled = true",
+        '"""',
+        "enabled = false",
+      ].join("\n"),
+    );
+    expect([...config.mcpServers]).toEqual([]);
+    expect(config.skills).toEqual([
+      { path: "/home/u/.agents/skills/kept/SKILL.md", enabled: false },
+    ]);
+    const flags = readTomlFlags(
+      [
+        "[compat]",
+        String.raw`note = """start \"""`,
+        "PRIVATE = true",
+        '"""',
+        'other = """',
+        String.raw`still \"""`,
+        "SECRET = false",
+        '"""',
+        "kept = true",
+      ].join("\n"),
+    );
+    expect([...flags]).toEqual([["compat.kept", true]]);
+  });
+
+  it("tracks a multi-line string that opens on the line where another closes", () => {
+    const config = readCodexConfig(
+      [
+        "[mcp_servers.harbor]",
+        'args = [ """first',
+        'end""", """second',
+        "[mcp_servers.PRIVATE-ARG]",
+        'end""" ]',
+        "note = '''one",
+        "two''' # '''",
+        "[mcp_servers.after]",
+      ].join("\n"),
+    );
+    expect([...config.mcpServers.keys()]).toEqual(["harbor", "after"]);
+    const flags = readTomlFlags(
+      [
+        "[compat]",
+        'args = [ """first',
+        'end""", """second',
+        "PRIVATE = true",
+        'end""" ]',
+        "kept = true",
+      ].join("\n"),
+    );
+    expect([...flags]).toEqual([["compat.kept", true]]);
   });
 
   it("reads a pack's skills with their descriptions, named after its Codex plugin", async () => {

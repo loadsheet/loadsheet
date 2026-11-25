@@ -22,13 +22,15 @@ Each package's dependencies in `package.json` are the layering. Keep imports ins
 
 ## Privacy
 
-A Scan or Report holds counters and names only. Transcript text, tool input and output, skill and instruction bodies, session ids, environment variables and absolute home paths stay out of both.
+A Scan or Report holds counters and names only. A pack's Report (`loadsheet <pack>`) also carries each skill's description, the text a harness would list for it. Transcript text, tool input and output, skill and instruction bodies, session ids, environment variables and absolute home paths stay out of both.
 
 Real transcripts are private. Read them a few lines at a time. Make a fixture with `pnpm --filter @loadsheet/fixtures sanitize <in.jsonl> <out.jsonl> --policy <module>`: it replaces every string its policy does not name with the canary `CANARY-LS` and every object key with `key-N`, so read the output before you commit it. Tests assert that `findCanary` and `findCanaryInDir` find nothing in a Scan, a Report or the cache.
 
 ## Writes
 
 loadsheet reads the user's files and edits none of them. It writes only to its own cache directory; fixes go to the user's agent as commands.
+
+`loadsheet build` is the one command that writes where the user says, and it never overwrites anything it did not write: it writes into a folder that is missing or empty, or one holding the `.loadsheet-build` marker it wrote before, and replaces only the files that marker lists; otherwise it stops with exit code 2. `loadsheet --ui` serves the same page from memory and writes nothing.
 
 ## Commands
 

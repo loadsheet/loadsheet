@@ -25,7 +25,7 @@
     "provenance": true
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && node scripts/copy-web.ts",
     "prepack": "pnpm --filter loadsheet... build"
   },
   "dependencies": {
@@ -34,6 +34,10 @@
     "@loadsheet/harnesses": "workspace:*",
     "@loadsheet/kit": "workspace:*",
     "@loadsheet/schema": "workspace:*"
+  },
+  "devDependencies": {
+    "@loadsheet/fixtures": "workspace:*",
+    "@loadsheet/web": "workspace:*"
   },
   "engines": {
     "node": ">=22.12.0"

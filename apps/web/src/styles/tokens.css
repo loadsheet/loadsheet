@@ -1,0 +1,115 @@
+/*
+  loadsheet's theme for @vite-hub/kit. The kit's parts read the shadcn/ui names, so this file sets those names to the
+  palette of the first inspector prototype (Drop ap5rp8ygjj3g): a neutral near-white page, white panels, one teal
+  accent, red for waste, and vivid kind colours. System fonts, no texture. The names after the shadcn set are
+  loadsheet's own.
+*/
+:root {
+  color-scheme: light;
+  /* The base step: 4px badges, 6px controls, 8px cards. */
+  --radius: 0.25rem;
+
+  --background: #fbfbfa;
+  --foreground: #1c1c1a;
+  --card: #ffffff;
+  --card-foreground: var(--foreground);
+  --popover: #ffffff;
+  --popover-foreground: var(--foreground);
+  --primary: #1c1c1a;
+  --primary-foreground: #fbfbfa;
+  /* One sunk grey serves wells, hovers and the chosen tab. */
+  --secondary: #f3f3f1;
+  --secondary-foreground: var(--foreground);
+  --muted: #f3f3f1;
+  --muted-foreground: #6b6b66;
+  --accent: #f3f3f1;
+  --accent-foreground: var(--foreground);
+  --destructive: #b91c1c;
+  --border: #e4e4e0;
+  --input: #d4d4cf;
+  --ring: #0f766e;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+
+  /* The steps and tones shadcn has no name for, as @vite-hub/kit names them. */
+  --ui-text: var(--foreground);
+  --ui-text-dimmed: #9a9a94;
+  --ui-border-accented: var(--input);
+  --ui-font-size: 0.8125rem;
+  --ui-warning: #b45309;
+  --vh-text-warning: #b45309;
+  --ui-error: #b91c1c;
+  --vh-text-error: #b91c1c;
+  --ui-info: #0f766e;
+  --vh-text-info: #0f766e;
+  --ui-success: #15803d;
+  --vh-text-success: #15803d;
+  --shadow-popover:
+    0 0 0 1px var(--border), 0 4px 8px -4px rgb(0 0 0 / 0.06), 0 16px 24px -8px rgb(0 0 0 / 0.12);
+  --shadow-dialog:
+    0 0 0 1px var(--border), 0 8px 16px -4px rgb(0 0 0 / 0.06), 0 24px 32px -8px rgb(0 0 0 / 0.14);
+  --overlay: rgb(0 0 0 / 0.2);
+
+  /* loadsheet's own. */
+  --faint: var(--ui-text-dimmed);
+  --acc: var(--ring);
+  --acc-tint: color-mix(in oklab, var(--acc) 12%, transparent);
+  /* Waste: tokens spent every session on something nobody uses. */
+  --bad: var(--destructive);
+  --bad-tint: color-mix(in oklab, var(--bad) 7%, var(--card));
+  --bad-line: color-mix(in oklab, var(--bad) 35%, var(--border));
+  --good: var(--ui-success);
+  --pop: var(--shadow-popover);
+  --k-harness: #64748b;
+  --k-instr: #15803d;
+  --k-mcp: #ea580c;
+  --k-agents: #0d9488;
+  --k-used: #2563eb;
+  --k-lazy: #7c3aed;
+  --k-dead: #b91c1c;
+  --on-k: #ffffff;
+  --ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --bar: 44px;
+  --r-sm: var(--radius);
+  --r-md: calc(var(--radius) * 1.5);
+  --r-lg: calc(var(--radius) * 2);
+}
+
+/* Dark keeps the same steps: the page darkest, panels one up, sunk one more; lines solid, since alpha ones glow. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #121211;
+  --foreground: #ececea;
+  --card: #1a1a19;
+  --popover: #1a1a19;
+  --primary: #ececea;
+  --primary-foreground: #121211;
+  --secondary: #222220;
+  --muted: #222220;
+  --muted-foreground: #a3a39d;
+  --accent: #222220;
+  --destructive: #f87171;
+  --border: #2c2c2a;
+  --input: #3a3a37;
+  --ring: #2dd4bf;
+  --ui-text-dimmed: #76766f;
+  --ui-warning: #f59e0b;
+  --vh-text-warning: #f59e0b;
+  --ui-error: #f87171;
+  --vh-text-error: #f87171;
+  --ui-info: #2dd4bf;
+  --vh-text-info: #2dd4bf;
+  --ui-success: #4ade80;
+  --vh-text-success: #4ade80;
+  --shadow-popover: 0 0 0 1px var(--input), 0 16px 40px -12px rgb(0 0 0 / 0.7);
+  --shadow-dialog: 0 0 0 1px var(--input), 0 24px 48px -12px rgb(0 0 0 / 0.8);
+  --overlay: rgb(0 0 0 / 0.5);
+  --k-harness: #94a3b8;
+  --k-instr: #4ade80;
+  --k-mcp: #fb923c;
+  --k-agents: #2dd4bf;
+  --k-used: #60a5fa;
+  --k-lazy: #a78bfa;
+  --k-dead: #f87171;
+  --on-k: #121211;
+}

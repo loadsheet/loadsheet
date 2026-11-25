@@ -123,6 +123,12 @@ const instructionsFromFragment = (fragment: string): Instructions | undefined =>
   return splitInstructions(fragment.slice(open + INSTRUCTIONS_OPEN.length, close), !!header[1]);
 };
 
+/** A section's text up to its first closing tag, or undefined when it has none. */
+const section = (text: string, close: string): string | undefined => {
+  const end = text.indexOf(close);
+  return end === -1 ? undefined : text.slice(0, end);
+};
+
 /** Reads the skills section's lines into State and returns one `listed` per skill. */
 const readSkillListing = (body: string, state: CodexState, emit: (fact: ListedInput) => void) => {
   const lines = body.split("\n");
@@ -135,7 +141,9 @@ const readSkillListing = (body: string, state: CodexState, emit: (fact: ListedIn
   const chars = new Map<string, { chars: number; bare: boolean }>();
   for (const line of lines) {
     const match = SKILL_LINE.exec(line);
-    if (!match) continue;
+    // Codex writes a skill's name and description on one line, so a line whose name is not a
+    // skill's name is other text, such as a description's second line holding a path.
+    if (!match || !SKILL_NAME.test(match[1]!)) continue;
     const name = match[1]!;
     const known = chars.get(name);
     chars.set(name, {
@@ -376,11 +384,14 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
     if (payload.type === "message") {
       for (const text of texts(payload)) {
         if (payload.role === "developer" && text.startsWith("<skills_instructions>")) {
-          readSkills(text);
+          const body = section(text, "</skills_instructions>");
+          if (body !== undefined) readSkills(body);
         } else if (payload.role === "developer" && text.startsWith("<tools>\n")) {
+          const body = section(text, "</tools>");
+          if (body === undefined) continue;
           readServers(
-            text.split("\n").flatMap((entry) => {
-              const match = /^- mcp__([^:\s]+)(?:: .*)?$/u.exec(entry);
+            body.split("\n").flatMap((entry) => {
+              const match = /^- mcp__([A-Za-z0-9_-]+)(?:: .*)?$/u.exec(entry);
               return match ? [[match[1]!, entry.length + 1] as [string, number]] : [];
             }),
           );

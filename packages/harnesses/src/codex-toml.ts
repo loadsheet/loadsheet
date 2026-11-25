@@ -66,17 +66,30 @@ const keyParts = (key: string): string[] => {
  * is skipped without being kept.
  */
 /**
- * The triple quote a line opens and does not close. Strings on the line are read past and a comment
- * ends it, so a quote inside either opens nothing.
+ * Where the multi-line string `triple` opened before `from` closes on `line`, or -1 when it runs on
+ * past the line. In a `"""` string a backslash escapes the next character; in a `'''` one nothing does.
  */
-const leftOpen = (line: string): string | undefined => {
-  for (let at = 0; at < line.length; at++) {
+const closeOf = (line: string, triple: string, from = 0): number => {
+  if (triple === "'''") return line.indexOf(triple, from);
+  for (let at = from; at < line.length; at++) {
+    if (line[at] === "\\") at++;
+    else if (line.startsWith(triple, at)) return at;
+  }
+  return -1;
+};
+
+/**
+ * The triple quote a line opens at or after `from` and does not close. Strings on the line are read
+ * past and a comment ends it, so a quote inside either opens nothing.
+ */
+const leftOpen = (line: string, from = 0): string | undefined => {
+  for (let at = from; at < line.length; at++) {
     const quote = line[at]!;
     if (quote === "#") return undefined;
     if (quote !== '"' && quote !== "'") continue;
     const triple = quote.repeat(3);
     if (line.startsWith(triple, at)) {
-      const end = line.indexOf(triple, at + 3);
+      const end = closeOf(line, triple, at + 3);
       if (end === -1) return triple;
       at = end + 2;
       continue;
@@ -85,6 +98,15 @@ const leftOpen = (line: string): string | undefined => {
     while (at < line.length && line[at] !== quote) at += quote === '"' && line[at] === "\\" ? 2 : 1;
   }
   return undefined;
+};
+
+/**
+ * The multi-line string still open after a line read inside `triple`: the same one when the line
+ * does not close it, else whichever the rest of the line opens, as in `end""", """next`.
+ */
+const stillOpen = (line: string, triple: string): string | undefined => {
+  const end = closeOf(line, triple);
+  return end === -1 ? triple : leftOpen(line, end + 3);
 };
 
 const KEY_VALUE =
@@ -133,7 +155,7 @@ export const readTomlFlags = (source: string): Map<string, boolean | string[]> =
       continue;
     }
     if (multiline !== undefined) {
-      if (line.split(multiline).length % 2 === 0) multiline = undefined;
+      multiline = stillOpen(line, multiline);
       continue;
     }
     if (/^\s*#/u.test(line)) continue;
@@ -175,10 +197,13 @@ export const readCodexConfig = (source: string): CodexConfig => {
 
   for (const line of source.replace(/\r\n?/gu, "\n").split("\n")) {
     if (multiline !== undefined) {
-      if (line.split(multiline).length % 2 === 0) multiline = undefined;
+      multiline = stillOpen(line, multiline);
       continue;
     }
     if (/^\s*#/u.test(line)) continue;
+    // A string's text is never a header, a selector or a switch, so open strings are tracked first.
+    multiline = leftOpen(line);
+    if (multiline !== undefined) continue;
     const array = ARRAY_HEADER.exec(line);
     if (array) {
       const [root, key, ...rest] = keyParts(array[1]!);
@@ -198,8 +223,6 @@ export const readCodexConfig = (source: string): CodexConfig => {
         continue;
       }
     }
-    multiline = leftOpen(line);
-    if (multiline !== undefined) continue;
     const header = HEADER.exec(line);
     if (header) {
       table = keyParts(header[1]!);

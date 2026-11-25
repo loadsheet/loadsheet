@@ -162,13 +162,15 @@ export const uniqueFixes = (fixes: Fix[]) => {
   });
 };
 
-/** Keeps a skill from one harness's model on every machine that has it. */
+/** Keeps a skill from one harness's model on every machine where the model may still invoke it. */
 // A hide-from-model Fix needs a key or a command, so a harness loadsheet has no table for gets none.
 export const hideFixes = (sheet: RuleSheet, line: Line): Fix[] => {
   const hide = HARNESSES[sheet.harness]?.hide;
   if (!hide) return [];
   return uniqueFixes(
-    installsOf(sheet, line).flatMap(({ machine, item }) => withMachine(machine, hide(item)) ?? []),
+    installsOf(sheet, line).flatMap(({ machine, item }) =>
+      item.modelInvocable ? (withMachine(machine, hide(item)) ?? []) : [],
+    ),
   );
 };
 
@@ -198,8 +200,12 @@ const removeOne = (
   unfiltered: Unfiltered,
 ): Fix | undefined => {
   const table = HARNESSES[sheet.harness];
+  // A copy the model may not invoke is hidden or off already, as after this fix was applied: its
+  // finding stays while past sessions count, and there is nothing left to hide.
   const hide = () =>
-    table ? withMachine(machine, table.hide(item) ?? table.off?.(item, sheet, machine)) : undefined;
+    table && item.modelInvocable
+      ? withMachine(machine, table.hide(item) ?? table.off?.(item, sheet, machine))
+      : undefined;
   const items = unfiltered.items(machine);
   // This harness used it in sessions the filters left out, under this id or another one its file
   // had, so nothing about it is dead there.

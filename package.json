@@ -16,6 +16,7 @@
     "typecheck": "tsrs --noEmit",
     "test": "vp test",
     "check": "vp check && pnpm typecheck",
+    "check:tarballs": "node scripts/check-tarballs.ts",
     "ready": "vp fmt && pnpm build && pnpm check && pnpm test",
     "prepare": "vp config"
   },
