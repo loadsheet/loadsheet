@@ -45,6 +45,11 @@ const notes = computed(() => coverage(report.value));
 <template>
   <main class="pg-body narrow">
     <template v-if="h.fixes.value.length">
+      <RouterLink
+        class="back"
+        :to="{ path: '/report', query: { h: $route.query.h, r: $route.query.r } }"
+        >← Report</RouterLink
+      >
       <div class="ph">
         <div>
           <h1 class="px">

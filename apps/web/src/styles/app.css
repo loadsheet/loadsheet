@@ -841,6 +841,17 @@ button.b {
   max-width: 1000px;
   margin: 0 auto;
 }
+.back {
+  display: inline-block;
+  margin-bottom: 12px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .back:hover {
+    color: var(--foreground);
+  }
+}
 .ph {
   display: flex;
   align-items: flex-end;
