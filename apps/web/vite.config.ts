@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vite-plus";
@@ -58,10 +59,33 @@ function hostedComments(projectId = process.env.LOADSHEET_COMMENTS_PROJECT_ID) {
   };
 }
 
+/**
+ * The JSON Schemas at the URLs their `$id`s name, such as https://loadsheet.dev/schema/v1.json for the
+ * Report: `@loadsheet/schema`'s files, emitted as schema/*.json beside the page.
+ */
+function schemaFiles() {
+  const files = {
+    "v1.json": "report.v1.json",
+    "scan.v1.json": "scan.v1.json",
+    "config.v1.json": "config.v1.json",
+  };
+  return {
+    name: "loadsheet:schema-files",
+    generateBundle(this: { emitFile(file: object): string }) {
+      for (const [name, source] of Object.entries(files))
+        this.emitFile({
+          type: "asset",
+          fileName: `schema/${name}`,
+          source: readFileSync(new URL(`../../packages/schema/schema/${source}`, import.meta.url)),
+        });
+    },
+  };
+}
+
 export default defineConfig({
   // Relative paths, so the page works from whatever folder `loadsheet build` copies it into.
   base: "./",
-  plugins: [vue(), singleFile(), hostedComments()],
+  plugins: [vue(), singleFile(), hostedComments(), schemaFiles()],
   resolve: {
     // Read the contract from source so the app needs no package build.
     alias: {

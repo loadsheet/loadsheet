@@ -36,6 +36,7 @@ export default defineConfig({
         cache: {
           input: [
             "packages/*/src/**",
+            "packages/schema/schema/**",
             "packages/*/package.json",
             "packages/*/tsdown.config.ts",
             "packages/fleet/scripts/agent-table.ts",
