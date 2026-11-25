@@ -1,6 +1,6 @@
 /*
   Every rule sits under the scope root, `.loadsheet`, which a host puts on the element that holds loadsheet's views
-  (apps/web: <body>), so none of it restyles a page around them, such as a docs page with Nuxt UI. `:where()` keeps
+  (apps/page: <body>), so none of it restyles a page around them, such as a docs page with Nuxt UI. `:where()` keeps
   each selector's specificity as it was. The root takes the page's base: its text, font and background.
 */
 :where(.loadsheet) *,

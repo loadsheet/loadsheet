@@ -80,7 +80,7 @@ export default defineConfig({
     tasks: {
       "packages:build": {
         // The web UI builds first: `loadsheet` copies its page into dist/web.
-        command: 'pnpm -r --filter "./packages/*" --filter @loadsheet/web run build',
+        command: 'pnpm -r --filter "./packages/*" --filter @loadsheet/page run build',
         cache: {
           input: [
             "packages/*/src/**",
@@ -90,10 +90,10 @@ export default defineConfig({
             "packages/*/tsdown.config.ts",
             "packages/fleet/scripts/agent-table.ts",
             "packages/loadsheet/scripts/copy-web.ts",
-            "apps/web/src/**",
-            "apps/web/index.html",
-            "apps/web/package.json",
-            "apps/web/vite.config.ts",
+            "apps/page/src/**",
+            "apps/page/index.html",
+            "apps/page/package.json",
+            "apps/page/vite.config.ts",
             "packages/*/README.md",
             "packages/*/LICENSE",
             "tsdown.shared.ts",
@@ -104,7 +104,7 @@ export default defineConfig({
             ".node-version",
             "vite.config.ts",
           ],
-          output: ["packages/*/dist/**", "apps/web/dist/**"],
+          output: ["packages/*/dist/**", "apps/page/dist/**"],
           env: ["NODE_ENV"],
         },
       },
@@ -123,8 +123,8 @@ export default defineConfig({
       "packages/fleet",
       // The report UI, with Vue's plugin and its aliases to the workspace sources.
       "packages/ui",
-      // The web app's own tests, with its aliases to the workspace sources.
-      "apps/web",
+      // The CLI page's own tests, with its aliases to the workspace sources.
+      "apps/page",
     ],
   },
   staged: {

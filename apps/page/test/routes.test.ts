@@ -24,11 +24,6 @@ describe("the page's routes", () => {
     expect(old.currentRoute.value.query).toEqual({ h: "codex", view: "table" });
   });
 
-  it("show the landing under ViteHub's sign-in code, not the missing-report page", () => {
-    expect(r.resolve("/vhc=abc").matched[0]?.path).toBe("/vhc=:code");
-    expect(r.resolve("/nowhere").matched[0]?.path).toBe("/:rest(.*)*");
-  });
-
   it("open a page the CLI wrote on its own report", async () => {
     const cli = router({ name: "pack", params: { slug: ["owner", "repo"] } });
     await cli.push("/");

@@ -251,6 +251,28 @@ importers:
         specifier: 'catalog:'
         version: 1.7.0(@types/node@26.6.6)(@vitest/ui@5.1.0)(esbuild@0.28.2)(jiti@2.7.0)(publint@0.3.25)(typescript@7.0.2)(yaml@2.9.1)
 
+  apps/page:
+    dependencies:
+      '@loadsheet/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      valibot:
+        specifier: 'catalog:'
+        version: 1.5.0(typescript@7.0.2)
+      vue:
+        specifier: ^3.5.46
+        version: 3.5.46(typescript@7.0.2)
+      vue-router:
+        specifier: ^5.5.1
+        version: 5.5.1(@vue/compiler-sfc@3.5.46)(esbuild@0.28.2)(rolldown@1.3.3)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vue@3.5.46(typescript@7.0.2))
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.11
+        version: 6.0.11(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vue@3.5.46(typescript@7.0.2))
+      vite-plus:
+        specifier: 'catalog:'
+        version: 1.7.0(@types/node@26.6.6)(@vitest/ui@5.1.0)(esbuild@0.28.2)(jiti@2.7.0)(publint@0.3.25)(typescript@7.0.2)(yaml@2.9.1)
+
   apps/site:
     dependencies:
       '@comark/html':
@@ -320,28 +342,6 @@ importers:
       wrangler:
         specifier: ^4.158.0
         version: 4.168.0(@types/node@26.6.6)(vitest@5.1.0)
-
-  apps/web:
-    dependencies:
-      '@loadsheet/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
-      valibot:
-        specifier: 'catalog:'
-        version: 1.5.0(typescript@7.0.2)
-      vue:
-        specifier: ^3.5.46
-        version: 3.5.46(typescript@7.0.2)
-      vue-router:
-        specifier: ^5.5.1
-        version: 5.5.1(@vue/compiler-sfc@3.5.46)(esbuild@0.28.2)(rolldown@1.3.3)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vue@3.5.46(typescript@7.0.2))
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.11
-        version: 6.0.11(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vue@3.5.46(typescript@7.0.2))
-      vite-plus:
-        specifier: 'catalog:'
-        version: 1.7.0(@types/node@26.6.6)(@vitest/ui@5.1.0)(esbuild@0.28.2)(jiti@2.7.0)(publint@0.3.25)(typescript@7.0.2)(yaml@2.9.1)
 
   packages/core:
     dependencies:
@@ -428,9 +428,9 @@ importers:
       '@loadsheet/fixtures':
         specifier: workspace:*
         version: link:../fixtures
-      '@loadsheet/web':
+      '@loadsheet/page':
         specifier: workspace:*
-        version: link:../../apps/web
+        version: link:../../apps/page
 
   packages/resolve:
     dependencies:

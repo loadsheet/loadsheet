@@ -1,8 +1,8 @@
 {
-  "name": "@loadsheet/web",
+  "name": "@loadsheet/page",
   "version": "0.0.0",
   "private": true,
-  "description": "loadsheet's report page: a hash-routed shell over @loadsheet/ui, built as one HTML file that the CLI ships and loadsheet.dev serves.",
+  "description": "loadsheet's report page: a hash-routed shell over @loadsheet/ui, built as one HTML file that the CLI ships with `--ui` and `build`.",
   "type": "module",
   "scripts": {
     "dev": "vp dev",

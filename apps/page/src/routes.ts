@@ -28,9 +28,6 @@ export function routes(home?: RouteLocationRaw): RouteRecordRaw[] {
         })),
       ],
     },
-    // ViteHub's sign-in sends a new tab back to `#vhc=<code>`, which this router reads as `/vhc=<code>`. The comments
-    // embed takes the code from the URL itself, so the page under it is the landing, not "This link doesn’t hold a report".
-    { path: "/vhc=:code", component: Landing },
     // owner/repo, or owner/repo/dir for a pack that lives in a folder of a bigger repository.
     { path: "/pack/:slug+", name: "pack", component: Pack },
     { path: "/:rest(.*)*", component: NotFound },

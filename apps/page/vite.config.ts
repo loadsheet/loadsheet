@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vite-plus";
@@ -35,57 +34,10 @@ function singleFile() {
   };
 }
 
-/**
- * ViteHub hosted comments for reviewing loadsheet.dev, as gpu-engine's docs have them. Only a build with
- * LOADSHEET_COMMENTS_PROJECT_ID gets the embed, and it starts only over https, so the page the CLI opens from
- * localhost or a file never talks to the Console.
- */
-function hostedComments(projectId = process.env.LOADSHEET_COMMENTS_PROJECT_ID) {
-  if (projectId && !/^[\w-]+$/.test(projectId))
-    throw new Error(`LOADSHEET_COMMENTS_PROJECT_ID is not a project id: ${projectId}`);
-  return {
-    name: "loadsheet:hosted-comments",
-    transformIndexHtml: () =>
-      projectId
-        ? [
-            {
-              tag: "script",
-              attrs: { type: "module" },
-              children: `if(location.protocol==="https:"){const s=document.createElement("script");s.type="module";s.src="https://console.vitehub.dev/hosted-comments.js";s.dataset.vitehubComments="${projectId}";document.head.append(s)}`,
-              injectTo: "head" as const,
-            },
-          ]
-        : [],
-  };
-}
-
-/**
- * The JSON Schemas at the URLs their `$id`s name, such as https://loadsheet.dev/schema/v1.json for the
- * Report: `@loadsheet/schema`'s files, emitted as schema/*.json beside the page.
- */
-function schemaFiles() {
-  const files = {
-    "v1.json": "report.v1.json",
-    "scan.v1.json": "scan.v1.json",
-    "config.v1.json": "config.v1.json",
-  };
-  return {
-    name: "loadsheet:schema-files",
-    generateBundle(this: { emitFile(file: object): string }) {
-      for (const [name, source] of Object.entries(files))
-        this.emitFile({
-          type: "asset",
-          fileName: `schema/${name}`,
-          source: readFileSync(new URL(`../../packages/schema/schema/${source}`, import.meta.url)),
-        });
-    },
-  };
-}
-
 export default defineConfig({
   // Relative paths, so the page works from whatever folder `loadsheet build` copies it into.
   base: "./",
-  plugins: [vue(), singleFile(), hostedComments(), schemaFiles()],
+  plugins: [vue(), singleFile()],
   resolve: {
     // Read the contract from source so the app needs no package build.
     alias: {
