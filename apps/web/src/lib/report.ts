@@ -14,7 +14,9 @@ function inlined(): Report | undefined {
 }
 
 const fromPage = inlined();
-export const report = shallowRef<Report>(fromPage ?? parseReport(example));
+/** The example the landing page draws, whatever report is open. */
+export const exampleReport = parseReport(example);
+export const report = shallowRef<Report>(fromPage ?? exampleReport);
 export const isExample = shallowRef(!fromPage);
 /**
   Packs this page can show without a server. The two named ones were read from the repositories' own
@@ -53,7 +55,7 @@ export function packSlug(input: string): string | undefined {
 export const packTokens = (r: Report) => r.sheet[0]!.lines.reduce((n, l) => n + l.tokens.value, 0);
 
 /*
-  A shared report rides in the URL: `#/report/overview?r=<deflate-raw, base64url>`.
+  A shared report rides in the URL: `#/report?r=<deflate-raw, base64url>`.
   It is the same Report the page already shows, counters and names only, and the fragment never reaches a server.
 */
 async function pipe(bytes: Uint8Array, stream: CompressionStream | DecompressionStream) {
@@ -63,7 +65,7 @@ async function pipe(bytes: Uint8Array, stream: CompressionStream | Decompression
     ).arrayBuffer(),
   );
 }
-export async function shareLink(r: Report, path = "/report/overview", h?: string) {
+export async function shareLink(r: Report, path = "/report", h?: string) {
   const z = await pipe(
     new TextEncoder().encode(JSON.stringify(r)),
     new CompressionStream("deflate-raw"),
@@ -103,6 +105,7 @@ export async function openFile(file: File) {
   report.value = next;
   isExample.value = false;
   shared.value = false;
+  linkError.value = undefined;
 }
 
 // ─── words ───
@@ -128,8 +131,10 @@ export const pct = (n: number) => `${(n * 100).toFixed(n < 0.1 ? 1 : 0)}%`;
 export const plural = (n: number, one: string, many = `${one}s`) =>
   `${fmt(n)} ${n === 1 ? one : many}`;
 
-/** Tokens a SKILL.md body adds when invoked: the report gives characters, so this is an estimate. */
-export const bodyTokens = (l: Line) => Math.round(l.chars.body / 4);
+export const times = (n: number) => (n === 1 ? "once" : n === 2 ? "twice" : `${fmt(n)} times`);
+const list = (xs: string[]) =>
+  xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}` : (xs[0] ?? "");
+
 export const uses = (l: Line) => l.use.byModel + l.use.byUser;
 export const isUsed = (l: Line) => uses(l) > 0;
 /** What a line adds to the average session: its tokens times the share of sessions it was in. */
@@ -137,122 +142,59 @@ export const perSession = (l: Line) => l.tokens.value * l.exposure.share;
 export const itemName = (id: string) => id.replace(/^(skill|mcp|subagent|instructions):/, "");
 export const findingName = (f: Finding) =>
   f.item ? itemName(f.item) : (f.pack ?? (f.where[0] ? harnessName(f.where[0].harness) : f.rule));
-/** "5 skills, 2 subagents and 1 instruction file", leaving out kinds with none. */
-export function kinds(ls: Line[]): string {
-  const parts = (
-    [
-      ["skill", "skill"],
-      ["subagent", "subagent"],
-      ["instructions", "instruction file"],
-      ["mcp", "MCP server"],
-    ] as const
-  )
-    .map(([k, w]) => [ls.filter((l) => l.ref.kind === k).length, w] as const)
-    .filter(([n]) => n)
-    .map(([n, w]) => plural(n, w));
-  return parts.length > 1
-    ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`
-    : (parts[0] ?? "nothing");
-}
 /** A plugin skill is named `pack:skill`; inside its pack the prefix is noise. */
 export const shortName = (l: Line) =>
   l.pack && l.ref.name.startsWith(`${l.pack.split("/").pop()}:`)
     ? l.ref.name.slice(l.ref.name.indexOf(":") + 1)
     : l.ref.name;
 
-// ─── what every session starts with, by kind ───
+// ─── kinds: each loaded thing is a block in the colour of its kind ───
 
-export type KindId = "harness" | "instr" | "mcp" | "agents" | "used" | "dead";
-export interface Segment {
-  id: KindId;
-  name: string;
-  what: string;
-  color: string;
-  tokens: number;
-  lines: Line[];
-}
-
-const KINDS: {
-  id: Exclude<KindId, "harness">;
-  name: string;
-  color: string;
-  what: string;
-  test: (l: Line) => boolean;
-}[] = [
-  {
-    id: "instr",
-    name: "Instructions",
-    color: "--k-instr",
-    what: "CLAUDE.md, AGENTS.md and the files they pull in. Sent in every session of the project they belong to.",
-    test: (l) => l.ref.kind === "instructions",
-  },
-  {
-    id: "mcp",
-    name: "MCP servers",
-    color: "--k-mcp",
-    what: "Tool names and schemas from your MCP servers. Sent in every session that has the server.",
-    test: (l) => l.ref.kind === "mcp",
-  },
-  {
-    id: "agents",
-    name: "Subagents",
-    color: "--k-agents",
-    what: "The subagents the model can call, by name and description.",
-    test: (l) => l.ref.kind === "subagent",
-  },
-  {
-    id: "used",
-    name: "Skills you use",
-    color: "--k-used",
-    what: "Each skill's name and description is listed every session. These were used at least once.",
-    test: (l) => l.ref.kind === "skill" && isUsed(l),
-  },
-  {
-    id: "dead",
-    name: "Skills never used",
-    color: "--k-dead",
-    what: "Listed in every session, and no session in the window used them.",
-    test: (l) => l.ref.kind === "skill" && !isUsed(l),
-  },
+export type Kind = "mcp" | "instr" | "skill" | "agent";
+/** In the order the map, the legend and the filters show them. */
+export const KINDS: { id: Kind; one: string; many: string }[] = [
+  { id: "mcp", one: "MCP server", many: "MCP servers" },
+  { id: "instr", one: "Instruction file", many: "Instruction files" },
+  { id: "skill", one: "Skill", many: "Skills" },
+  { id: "agent", one: "Subagent", many: "Subagents" },
 ];
+const KIND_OF = { mcp: "mcp", instructions: "instr", skill: "skill", subagent: "agent" } as const;
+export const kindOf = (l: Line): Kind => KIND_OF[l.ref.kind];
+export const kindName = (k: Kind) => KINDS.find((x) => x.id === k)!.one;
+/**
+  Loaded in at least one session and used in none. Instruction files are read, not called, so they never count;
+  a pack's lines have no sessions, so nothing in a pack does either.
+*/
+export const isDead = (l: Line) =>
+  l.ref.kind !== "instructions" && l.exposure.sessions > 0 && !isUsed(l);
+/** A line's size on the map: the tokens it adds to the average session, or its tokens when there is no history. */
+export const costOn = (sheet: Sheet) => (l: Line) =>
+  sheet.sessions > 0 ? perSession(l) : l.tokens.value;
 
-export interface Context {
-  sheet: Sheet;
-  fixed: number;
-  basis: "measured" | "estimated";
-  yours: number;
-  segments: Segment[];
+export interface Totals {
+  /** Every kind with at least one line, with its count and tokens. */
+  kinds: { id: Kind; many: string; count: number; tokens: number }[];
+  dead: { count: number; tokens: number };
+  /** Tokens your setup adds; `total` adds the harness's own, when the report measured it. */
+  setup: number;
+  harness: number;
+  total: number;
 }
-
-export function context(sheet: Sheet | undefined): Context | undefined {
-  if (!sheet || !sheet.lines.length) return undefined;
-  const segments: Segment[] = KINDS.map((k) => {
-    const lines = sheet.lines.filter(k.test).sort((a, b) => perSession(b) - perSession(a));
-    return {
-      id: k.id,
-      name: k.name,
-      what: k.what,
-      color: k.color,
-      lines,
-      tokens: lines.reduce((n, l) => n + perSession(l), 0),
-    };
-  });
-  const yours = segments.reduce((n, s) => n + s.tokens, 0);
-  const fixed = sheet.fixedTokens?.value ?? yours;
-  const own: Segment = {
-    id: "harness",
-    name: `${harnessName(sheet.harness)} itself`,
-    what: `System prompt, built-in tools and environment. ${harnessName(sheet.harness)} sends these every session; you can't change them, so loadsheet only counts them.`,
-    color: "--k-harness",
-    tokens: Math.max(0, fixed - yours),
-    lines: [],
-  };
+export function totals(sheet: Sheet): Totals {
+  const cost = costOn(sheet);
+  const kinds = KINDS.map((k) => {
+    const ls = sheet.lines.filter((l) => kindOf(l) === k.id);
+    return { ...k, count: ls.length, tokens: ls.reduce((n, l) => n + cost(l), 0) };
+  }).filter((k) => k.count);
+  const dead = sheet.lines.filter(isDead);
+  const setup = kinds.reduce((n, k) => n + k.tokens, 0);
+  const total = Math.max(setup, sheet.fixedTokens?.value ?? setup);
   return {
-    sheet,
-    fixed,
-    basis: sheet.fixedTokens?.basis ?? "estimated",
-    yours,
-    segments: sheet.fixedTokens ? [own, ...segments] : segments,
+    kinds,
+    dead: { count: dead.length, tokens: dead.reduce((n, l) => n + cost(l), 0) },
+    setup,
+    harness: total - setup,
+    total,
   };
 }
 
@@ -274,33 +216,37 @@ export const RULE: Record<string, string> = {
 /** A rule a newer loadsheet added still reads as words. */
 export const ruleName = (rule: string) =>
   RULE[rule] ?? rule.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
+const limit = (rule: "heavy-instructions" | "expensive-description") =>
+  fmt(report.value.config.rules[rule].maxChars);
+const machinesOf = (f: Finding) => list([...new Set(f.where.map((w) => w.machine))]);
 
+/** The one-line reason under a fix. */
 export function evidence(f: Finding): string {
   const e = f.evidence;
   const n = (k: string) => fmt(e[k] ?? 0);
   switch (f.rule) {
+    case "idle-mcp":
+      return `Loaded in ${n("sessions")} sessions. The model never called it.`;
+    case "dead-pack":
+      return `Listed in ${n("sessions")} sessions. None of its ${n("skills")} skills was used.`;
+    case "dead-skill":
+      return `Listed in ${n("sessions")} sessions. Never used, by the model or by you.`;
+    case "heavy-instructions":
+      return `${n("chars")} characters, read in ${n("sessions")} sessions.`;
+    case "expensive-description":
+      return `Its description is ${n("listedChars")} characters and every session reads it. Aim for ${limit("expensive-description")}.`;
+    case "manual-only":
+      return `You called it ${times(e.byUser ?? 0)}. The model never picked it up.`;
     case "invisible-skill":
       return `Listed without its description in ${n("bare")} of ${n("sessions")} sessions, so the model can't tell when to use it.`;
-    case "dead-skill":
-      return `Not used once in ${n("sessions")} sessions over ${n("days")} days.`;
-    case "manual-only":
-      return `You called it ${n("byUser")} times; the model never did. Hide it from the model and keep the slash command.`;
-    case "expensive-description":
-      return `Its listing is ${n("listedChars")} characters, over the ${fmt(report.value.config.rules["expensive-description"].maxChars)} limit.`;
-    case "dead-pack":
-      return `${n("skills")} skills, none used in ${n("sessions")} sessions.`;
-    case "duplicate":
-      return `${n("copies")} copies installed; every session lists both.`;
-    case "heavy-instructions":
-      return `${n("chars")} characters, over the ${fmt(report.value.config.rules["heavy-instructions"].maxChars)} limit, loaded in ${n("sessions")} sessions.`;
-    case "idle-mcp":
-      return `${n("calls")} tool calls in ${n("sessions")} sessions. Its tools are listed in every one.`;
-    case "harness-mismatch":
-      return `Installed for a harness with ${n("sessions")} sessions in the window.`;
     case "drift":
-      return `${n("variants")} different versions across ${n("machines")} machines.`;
+      return `${machinesOf(f)} have different copies of it.`;
+    case "duplicate":
+      return `${n("copies")} copies installed, and every session lists each one.`;
+    case "harness-mismatch":
+      return "Installed for a harness with no sessions.";
     case "short-history":
-      return `Only ${n("days")} days and ${n("sessions")} sessions so far; rules that need a month of history wait.`;
+      return `Only ${n("days")} days and ${n("sessions")} sessions so far, so checks that need a month wait.`;
     default:
       return Object.entries(e)
         .map(([k, v]) => `${k} ${fmt(v)}`)
@@ -308,27 +254,59 @@ export function evidence(f: Finding): string {
   }
 }
 
-/** One line a person or agent can act on: the exact command when there is one, else the change in words. */
-export function fixText(f: Finding): { cmd?: string; note?: string } {
+/**
+  How a fix reads: the exact command, the setting to add to a file, or, when neither exists, the change in words for
+  an agent to make.
+*/
+export type FixView =
+  | { type: "cmd"; text: string }
+  | { type: "set"; text: string; file: string }
+  | { type: "ask"; text: string };
+export function fixView(f: Finding): FixView | undefined {
   const x = f.fixes[0];
-  if (!x) return {};
-  if (x.run) return { cmd: x.run };
-  switch (x.action) {
-    case "hide-from-model":
-    case "set":
-      return { note: `Set ${x.set?.key}: ${String(x.set?.value)} in ${x.path}` };
-    case "shorten":
-      return { note: `Shorten ${x.path}` };
-    case "dedupe":
-      return { note: `Keep one copy of ${x.path}` };
-    case "remove":
-      return { note: `Remove ${x.path}` };
+  if (!x) return undefined;
+  if (x.run) return { type: "cmd", text: x.run };
+  const name = findingName(f);
+  if (f.rule === "drift")
+    return { type: "ask", text: `Compare the ${name} skill on ${machinesOf(f)} and keep one copy` };
+  if (x.set) {
+    const text = `${x.set.key}: ${String(x.set.value)}`;
+    return { type: "set", text, file: x.path.split("/").at(-1)! };
   }
+  if (f.rule === "heavy-instructions")
+    return {
+      type: "ask",
+      text: `Shorten ${x.path} to under ${limit("heavy-instructions")} characters`,
+    };
+  if (f.rule === "expensive-description")
+    return {
+      type: "ask",
+      text: `Shorten the description of the ${name} skill to ${limit("expensive-description")} characters`,
+    };
+  const verb = { remove: "Remove", dedupe: "Keep one copy of", shorten: "Shorten" } as const;
+  return { type: "ask", text: `${verb[x.action as keyof typeof verb] ?? "Change"} ${x.path}` };
 }
-export const fixLine = (f: Finding) => {
-  const t = fixText(f);
-  return t.cmd ?? t.note ?? "";
-};
+/** The fix as one line for a person or an agent. */
+export function fixLine(f: Finding) {
+  const v = fixView(f);
+  if (!v) return "";
+  return v.type === "set" ? `Set ${v.text} in ${f.fixes[0]!.path}` : v.text;
+}
+/** The short verb a row links with. */
+export function actionName(f: Finding) {
+  if (f.rule === "dead-pack") return "Remove pack";
+  if (f.rule === "drift") return "Sync";
+  const a = f.fixes[0]?.action;
+  return a === "hide-from-model"
+    ? "Hide from model"
+    : a === "dedupe"
+      ? "Keep one"
+      : a === "shorten"
+        ? "Shorten"
+        : a === "set"
+          ? "Change setting"
+          : "Remove";
+}
 
 export function agentPrompt(fs: Finding[]): string {
   const acts = fs.filter((f) => f.fixes.length);
@@ -337,14 +315,57 @@ export function agentPrompt(fs: Finding[]): string {
     acts
       .map(
         (f, i) =>
-          `${i + 1}. ${findingName(f)}: ${fixLine(f)}${f.fixes.length > 1 ? ` (on ${f.fixes.map((x) => x.machine).join(" and ")})` : ""}`,
+          `${i + 1}. ${findingName(f)}: ${fixLine(f)}${f.fixes.length > 1 ? ` (on ${list(f.fixes.flatMap((x) => (x.machine ? [x.machine] : [])))})` : ""}`,
       )
       .join("\n")
   );
 }
 
-export const findingsFor = (r: Report, l: Line) =>
-  r.findings.filter(
+/** Findings about one harness: those that name it, and those that name none. */
+export const findingsOn = (r: Report, harness: string) =>
+  r.findings.filter((f) => !f.where.length || f.where.some((w) => w.harness === harness));
+/** What a person can act on in one harness, biggest saving first. */
+export const fixesOn = (r: Report, harness: string) =>
+  findingsOn(r, harness)
+    .filter((f) => f.level !== "info" && f.fixes.length)
+    .sort((a, b) => saved(b) - saved(a));
+export const findingsFor = (r: Report, harness: string, l: Line) =>
+  fixesOn(r, harness).filter(
     (f) => f.item === l.item || (f.rule === "dead-pack" && l.pack && f.pack === l.pack),
   );
-export const saves = (fs: Finding[]) => fs.reduce((n, f) => n + (f.savesTokens?.value ?? 0), 0);
+export const saved = (f: Finding) => f.savesTokens?.value ?? 0;
+export const saves = (fs: Finding[]) => fs.reduce((n, f) => n + saved(f), 0);
+
+const SIGNAL: Record<string, string> = {
+  listing: "what it lists",
+  modelUse: "the model's calls",
+  userUse: "your own calls",
+  instructions: "instruction files",
+  mcp: "MCP servers",
+  tokens: "token counts",
+};
+/** What the report read and what it couldn't, one line each, for the folded coverage note. */
+export function coverage(r: Report): string[] {
+  const read = r.coverage.filter((c) => c.installed && c.sessions > 0);
+  const idle = r.coverage.filter((c) => c.installed && c.sessions === 0);
+  const harnesses = (cs: typeof read) => list([...new Set(cs.map((c) => harnessName(c.harness)))]);
+  const machines = (cs: typeof read) => list([...new Set(cs.map((c) => c.machine))]);
+  const out: string[] = [];
+  if (read.length) out.push(`Read ${harnesses(read)} on ${machines(read)}.`);
+  for (const c of idle)
+    out.push(`${harnessName(c.harness)} on ${c.machine} is installed and had no sessions.`);
+  for (const m of r.machines.filter((m) => !m.reachable)) out.push(`${m.name} was unreachable.`);
+  for (const s of r.skipped)
+    out.push(
+      `Skipped ${ruleName(s.rule).toLowerCase()} on ${harnessName(s.harness)}: ${
+        s.reason === "missing-signal" && s.missing?.length
+          ? `it doesn't record ${list(s.missing.map((m) => SIGNAL[m] ?? m))}.`
+          : "not enough sessions yet."
+      }`,
+    );
+  for (const f of r.findings.filter((f) => f.level === "info"))
+    out.push(
+      `${f.where[0] ? `${harnessName(f.where[0].harness)} on ${f.where[0].machine}: ` : ""}${evidence(f)}`,
+    );
+  return out;
+}

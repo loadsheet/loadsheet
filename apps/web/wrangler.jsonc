@@ -1,0 +1,10 @@
+// loadsheet.dev: the built index.html served as static assets. Workers Builds deploys it on push.
+{
+  "name": "loadsheet",
+  "compatibility_date": "2026-11-01",
+  "assets": { "directory": "./dist" },
+  "routes": [{ "pattern": "loadsheet.dev", "custom_domain": true }],
+  // The site sits behind Cloudflare Access until launch, so no public workers.dev or preview URLs.
+  "workers_dev": false,
+  "preview_urls": false,
+}

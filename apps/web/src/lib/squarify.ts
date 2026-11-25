@@ -6,16 +6,21 @@ export interface Rect<T> {
   h: number;
 }
 
-/** Squarified treemap (Bruls, Huizing, van Wijk): rows that keep each block close to square. */
+/**
+  Squarified treemap (Bruls, Huizing, van Wijk): rows that keep each block close to square. Items go largest first
+  unless `ordered` keeps the order given, so a caller can put some items last.
+*/
 export function squarify<T extends { value: number }>(
   items: T[],
   x: number,
   y: number,
   w: number,
   h: number,
+  ordered = false,
 ): Rect<T>[] {
   const out: Rect<T>[] = [];
-  const list = items.filter((i) => i.value > 0).sort((a, b) => b.value - a.value);
+  const list = items.filter((i) => i.value > 0);
+  if (!ordered) list.sort((a, b) => b.value - a.value);
   const total = list.reduce((n, i) => n + i.value, 0);
   if (!total) return out;
   const scale = (w * h) / total;
