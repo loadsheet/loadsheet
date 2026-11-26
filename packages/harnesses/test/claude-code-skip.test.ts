@@ -9,6 +9,7 @@ const FIXTURE = NodePath.join(import.meta.dirname, "fixtures/claude-code/session
 
 const bytes = (buffer: Buffer): LineBytes => ({
   length: buffer.length,
+  bytes: buffer,
   includes: (ascii) => buffer.includes(ascii, 0, "latin1"),
   slice: (start, end) => buffer.toString("latin1", start, end ?? buffer.length),
 });
