@@ -32,7 +32,9 @@ export interface CodexState {
 const LOCATOR_KINDS = "file|executor package|cloud package|custom resource";
 const SKILL_LINE = new RegExp(`^- (.+?): (?:(.*) )?\\((?:${LOCATOR_KINDS}): (.+)\\)$`, "u");
 const ROOT_LINE = /^- `(r\d+)` = `(.+)`$/u;
-const SKILL_REF = /[^\s"'`()<>;|&=\\]*SKILL\.md/gu;
+// A match starts only where a path can: tried from inside a long word, the scan would run to the
+// word's end from each of its characters.
+const SKILL_REF = /(?<![^\s"'`()<>;|&=\\])[^\s"'`()<>;|&=\\]*SKILL\.md/gu;
 const MCP_REF = /\bmcp__([A-Za-z0-9_-]+)/gu;
 /** The whole fragment Codex injects for a `$skill` mention, tags and all. */
 const USER_SKILL =
@@ -415,7 +417,7 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
     if (payload.type !== "custom_tool_call" && payload.type !== "function_call") return [];
     if (state.copying || payload.name === "apply_patch") return [];
     const text = toolText(payload) ?? "";
-    for (const reference of text.match(SKILL_REF) ?? []) {
+    for (const reference of text.includes("SKILL.md") ? (text.match(SKILL_REF) ?? []) : []) {
       for (const path of expandBraces(reference)) {
         const name = skillAt(path, state);
         if (name === undefined || state.turn.includes(name)) continue;
