@@ -34,6 +34,9 @@ export default defineNuxtConfig({
     site: { name: "loadsheet", url: "https://loadsheet.dev" },
     comments: false,
   },
+  // /mcp is the MCP check page only for a request that asks for HTML (server/middleware/mcp-page.ts); the link
+  // checker's request reaches the docs MCP server there instead.
+  linkChecker: { excludeLinks: ["/mcp"] },
   css: ["@loadsheet/ui/styles.css"],
   // Geist and Geist Mono, the variable fonts that stylesheet draws loadsheet's pages in, for every page and the docs'
   // OG images. Left to its provider, @nuxt/fonts would serve static cuts from Google and strip the stylesheet's own.

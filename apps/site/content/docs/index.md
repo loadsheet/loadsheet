@@ -29,4 +29,4 @@ It reads Claude Code, Codex, Grok, Pi, OpenCode, Cursor, Gemini and Kiro. Each h
 npx loadsheet
 ```
 
-[Install and first run](/docs/guide) has the rest. To weigh a skill pack before you install it, see [Weigh a skill pack](/docs/guide/packs).
+[Install and first run](/docs/guide) has the rest. To weigh a skill pack before you install it, see [Weigh a skill pack](/docs/guide/packs). To see whether an MCP server's tools work in Claude, ChatGPT, Cursor and other clients, paste its URL into [the MCP check](/mcp).

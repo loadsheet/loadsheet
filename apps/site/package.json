@@ -13,6 +13,7 @@
   "dependencies": {
     "@comark/html": "^0.9.2",
     "@comark/vue": "^0.9.2",
+    "@loadsheet/mcp": "workspace:*",
     "@loadsheet/resolve": "workspace:*",
     "@loadsheet/schema": "workspace:*",
     "@loadsheet/ui": "workspace:*",
@@ -25,6 +26,7 @@
     "@vite-hub/rate-limit": "0.5.1",
     "comark": "^0.9.2",
     "comark-ui": "^0.12.2",
+    "drizzle-orm": "1.0.0-rc.6",
     "h3": "^2.0.8",
     "nuxt": "npm:nuxt-nightly@5.0.0-2611251439-b19192b",
     "tailwindcss": "^4.1.0",

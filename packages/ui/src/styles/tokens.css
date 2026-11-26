@@ -92,6 +92,11 @@
     transparent 1.5px 5px
   );
   --hatch-h: repeating-linear-gradient(135deg, var(--k-h) 0 1.5px, transparent 1.5px 6px);
+  /* What a client does to an MCP server: nothing, a harmless rewrite, a problem, or a tool left out. */
+  --s-ok: #15803d;
+  --s-info: #8f8f88;
+  --s-warn: #b45309;
+  --s-error: #b91c1c;
   --ease: cubic-bezier(0.23, 1, 0.32, 1);
   --bar: 52px;
 }
@@ -131,4 +136,8 @@
   --k-pskill: #a5b4fc;
   --logo-claude: #d97757;
   --on-k: #10100f;
+  --s-ok: #3fbf78;
+  --s-info: #76766f;
+  --s-warn: #f59e0b;
+  --s-error: #f87171;
 }

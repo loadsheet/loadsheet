@@ -43,10 +43,22 @@ export default defineHandler(async (event) => {
     return report;
   } catch (error) {
     if (!(error instanceof ResolveError)) throw error;
+    // An https URL off GitHub is most likely an MCP server someone wants checked, which /mcp does.
+    const mcp = error.code === "unsupported-source" && looksLikeMcpUrl(source);
     throw new HTTPError({
       status: STATUS[error.code],
       message: error.message,
-      data: { code: error.code },
+      data: {
+        code: error.code,
+        ...(mcp
+          ? { see: "/mcp", hint: "To check an MCP server, open /mcp or POST { url } to /api/mcp." }
+          : {}),
+      },
     });
   }
 });
+
+function looksLikeMcpUrl(source: string): boolean {
+  const url = URL.parse(source.trim());
+  return url?.protocol === "https:" && !/(^|\.)github(usercontent)?\.com$/i.test(url.hostname);
+}

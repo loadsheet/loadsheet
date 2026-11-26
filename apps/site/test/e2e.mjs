@@ -77,6 +77,89 @@ for (const source of ["/etc", "file:///etc", "git@github.com:a/b", "ssh://git@gi
   });
 }
 
+await check("/api/resolve points an MCP URL at /mcp", async () => {
+  const res = await get(
+    `/api/resolve?source=${encodeURIComponent("https://mcp.deepwiki.com/mcp")}`,
+  );
+  assert.equal(res.status, 400);
+  const body = await res.json();
+  assert.equal(body.data?.code, "unsupported-source");
+  assert.equal(body.data?.see, "/mcp");
+});
+
+const postMcp = (body) =>
+  fetch(`${base}/api/mcp`, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify(body),
+  });
+
+await check("/api/mcp checks a pasted tools/list, uncached", async () => {
+  const toolList = JSON.parse(
+    await readFile(
+      new URL("../../../packages/mcp/test/fixtures/context7.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  const res = await postMcp({ toolList });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("cache-control"), "no-store");
+  const body = await res.json();
+  assert.equal(body.toolCount, toolList.tools.length);
+  assert.ok(body.diagnostics.length > 0, "no diagnostics");
+});
+
+for (const [url, code] of [
+  ["http://mcp.deepwiki.com/mcp", "not-https"],
+  ["https://127.0.0.1/mcp", "private-host"],
+  ["https://localhost/mcp", "private-host"],
+]) {
+  await check(`/api/mcp refuses ${url} as ${code}`, async () => {
+    const res = await postMcp({ url });
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).error, code);
+  });
+}
+
+await check(
+  "/mcp renders its form and title on the server, and the header links to it",
+  async () => {
+    const res = await get("/mcp");
+    assert.equal(res.status, 200);
+    const html = await res.text();
+    assert.match(html, /<title>Check an MCP server in every client · loadsheet<\/title>/);
+    assert.ok(withoutScripts(html).includes("Does your MCP server work in every client?"));
+    assert.ok(withoutScripts(await (await get("/")).text()).includes('href="/mcp"'));
+    assert.match(res.headers.get("vary") ?? "", /accept/i);
+  },
+);
+
+await check("/mcp still answers MCP clients as the docs MCP server", async () => {
+  const res = await fetch(`${base}/mcp`, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "e2e", version: "0" },
+      },
+    }),
+  });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.ok(body.result?.serverInfo, JSON.stringify(body));
+  const stream = await fetch(`${base}/mcp`, { headers: { accept: "text/event-stream" } });
+  assert.ok(
+    !(stream.headers.get("content-type") ?? "").includes("text/html"),
+    "an event-stream GET got the page",
+  );
+  await stream.body?.cancel();
+});
+
 await check("/report HTML holds no Report data", async () => {
   const res = await get("/report");
   assert.equal(res.status, 200);

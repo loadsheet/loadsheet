@@ -1,12 +1,14 @@
 // loadsheet's views and the parts they are made of. The host installs `createLoadsheet()`, registers the routes
 // `home`, `report` (with `fixes`), and `pack` (a `slug` of one segment per folder), and puts `class="ui-sdk loadsheet"`
-// on the element that holds them, with `@loadsheet/ui/styles.css` loaded.
+// on the element that holds them, with `@loadsheet/ui/styles.css` loaded. A host with a server for `POST /api/mcp`
+// also registers `mcp` for the MCP check, and the site header links to it.
 export { default as Landing } from "./views/Landing.vue";
 export { default as ReportShell } from "./views/ReportShell.vue";
 export { default as Report } from "./views/Report.vue";
 export { default as Fixes } from "./views/Fixes.vue";
 export { default as Pack } from "./views/Pack.vue";
 export { default as NotFound } from "./views/NotFound.vue";
+export { default as Mcp } from "./views/Mcp.vue";
 export { default as Overlays } from "./components/Overlays.vue";
 export { default as StateBox } from "./components/StateBox.vue";
 export {
@@ -29,3 +31,4 @@ export {
   shareLink,
 } from "./lib/report";
 export { fromShareCode, shareCode } from "./lib/share";
+export type { McpCheck, McpCheckError } from "./lib/mcp";

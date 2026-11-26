@@ -7,12 +7,13 @@
 import { createHash, randomBytes } from "node:crypto";
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Cell, SessionCell } from "@loadsheet/schema";
-import type { Tally, TranscriptFormat, VersionSeen, WindowSeen } from "../index.ts";
+import type { Cell, Day } from "@loadsheet/schema";
+import type { Tally, TranscriptFormat } from "../index.ts";
+import { Accumulator } from "../sum.ts";
 import type { ReadPosition } from "./reader.ts";
 
 /** The layout of a cache file; a change here starts every cache cold. */
-const CACHE_LAYOUT = 2;
+const CACHE_LAYOUT = 3;
 
 /** What the cache keeps for one transcript file. */
 export interface CachedFile {
@@ -34,6 +35,11 @@ export interface HarnessCache {
   key(path: string): string;
   get(key: string): CachedFile | undefined;
   /**
+   * The sum of `files`' tallies, keeping only the days inside `window`. Those `get` returned are
+   * summed as the cache file holds them, without building their Tally.
+   */
+  sum(files: Iterable<CachedFile>, window: readonly [Day, Day]): Tally;
+  /**
    * Writes `files` as the whole cache, atomically; files it leaves out are forgotten. Writes
    * nothing when `files` holds exactly the entries `get` returned from the file on disk.
    */
@@ -46,19 +52,48 @@ export const defaultCacheDir = (place: {
   env: Readonly<Record<string, string | undefined>>;
 }): string => join(place.env.XDG_CACHE_HOME || join(place.home, ".cache"), "loadsheet");
 
-const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
+const sha256 = (text: string | Uint8Array) => createHash("sha256").update(text).digest("hex");
 
-/** A hash of everything a cache file holds, so one cut short or changed by anything else opens empty. */
-const checksum = (document: Record<string, unknown>) =>
-  sha256(
-    JSON.stringify(
-      ["layout", "tool", "format", "salt", "strings", "files"].map((field) => document[field]),
-    ),
+// A cache file is `{"layout":3,"sum":"<sha256 of the document's text>","doc":<document>}`, so one
+// cut short or changed by anything else opens empty, and checking it hashes the bytes as read.
+const HEAD = `{"layout":${CACHE_LAYOUT},"sum":"`;
+const DOC = '","doc":';
+const HEAD_BYTES = Buffer.from(HEAD);
+const DOC_BYTES = Buffer.from(DOC);
+const SUM_LENGTH = 64;
+const DOC_AT = HEAD.length + SUM_LENGTH + DOC.length;
+
+const storedText = (document: string) => `${HEAD}${sha256(document)}${DOC}${document}}`;
+
+/** The document a cache file holds, or undefined when its layout or sum is not this one's. */
+const storedDocument = (bytes: Buffer): unknown => {
+  if (
+    bytes.length <= DOC_AT ||
+    !bytes.subarray(0, HEAD.length).equals(HEAD_BYTES) ||
+    !bytes.subarray(DOC_AT - DOC.length, DOC_AT).equals(DOC_BYTES) ||
+    bytes[bytes.length - 1] !== 0x7d
+  ) {
+    return undefined;
+  }
+  const document = bytes.subarray(DOC_AT, -1);
+  if (sha256(document) !== bytes.toString("latin1", HEAD.length, HEAD.length + SUM_LENGTH)) {
+    return undefined;
+  }
+  return JSON.parse(document.toString("utf8")) as unknown;
+};
+
+/** Changes when the harness's parser or its `skip` does, so a new format starts cold. */
+const formatFingerprint = (format: TranscriptFormat<unknown>) => {
+  const skip = (format as { skip?: unknown }).skip;
+  return sha256(
+    JSON.stringify([
+      format.markers,
+      format.initial(),
+      format.parse.toString(),
+      typeof skip === "function" ? skip.toString() : null,
+    ]),
   );
-
-/** Changes when the harness's parser does, so a new format starts cold. */
-const formatFingerprint = (format: TranscriptFormat<unknown>) =>
-  sha256(JSON.stringify([format.markers, format.initial(), format.parse.toString()]));
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -66,6 +101,13 @@ const isCount = (value: unknown): value is number =>
   Number.isSafeInteger(value) && (value as number) >= 0;
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/u;
+
+/** A `YYYY-MM-DD` calendar day, which the window filter compares as a string. */
+const isDay = (text: string) => {
+  if (!DAY.test(text)) return false;
+  const time = Date.parse(`${text}T00:00:00Z`);
+  return !Number.isNaN(time) && new Date(time).toISOString().slice(0, 10) === text;
+};
 
 /** Thrown while decoding a malformed entry, which then opens as a miss. */
 class Malformed extends Error {}
@@ -88,9 +130,12 @@ class StringTable {
 /** Reads encoded counters and string references, throwing Malformed on anything else. */
 class Decoder {
   readonly strings: readonly string[];
+  /** Per string: 0 not checked yet, 1 a day, -1 not one. */
+  readonly #days: Int8Array;
 
   constructor(strings: readonly string[]) {
     this.strings = strings;
+    this.#days = new Int8Array(strings.length);
   }
 
   isRef(value: unknown): value is number {
@@ -107,11 +152,9 @@ class Decoder {
   /** A `YYYY-MM-DD` calendar day, which the window filter compares as a string. */
   day(value: unknown): string {
     const text = this.text(value);
-    if (!DAY.test(text)) throw new Malformed();
-    const time = Date.parse(`${text}T00:00:00Z`);
-    if (Number.isNaN(time) || new Date(time).toISOString().slice(0, 10) !== text) {
-      throw new Malformed();
-    }
+    const index = value as number;
+    if (this.#days[index] === 0) this.#days[index] = isDay(text) ? 1 : -1;
+    if (this.#days[index] === -1) throw new Malformed();
     return text;
   }
 
@@ -196,11 +239,15 @@ const retable = (raw: unknown, from: readonly string[], to: StringTable): unknow
   return raw;
 };
 
-// A Tally encodes as [sessions, cells, versions]:
+// A Tally encodes as [sessions, cells, versions, windows]:
 //   sessions: day, harness, via, sessions, fixedTokens, measured, ...
 //   cells:    day, harness, via, [item, sessions, bare, chars, byModel, byUser, ...], ...
 //   versions: harness, day, version, ...
-//   windows:  harness, day, tokens, ... (absent in a cache written before windows were read)
+//   windows:  harness, day, tokens, ...
+// Within each tuple the strings come first: `refs` is how many.
+
+/** An encoded tally, as `checkTally` accepted it. */
+type EncodedTally = [number[], (number | number[])[], number[], number[]];
 
 const encodeTally = (tally: Tally, table: StringTable): unknown => {
   const sessions: number[] = [];
@@ -237,70 +284,121 @@ const encodeTally = (tally: Tally, table: StringTable): unknown => {
   return [sessions, cells, versions, windows];
 };
 
-const decodeTally = (raw: unknown, decoder: Decoder): Tally => {
-  if (!Array.isArray(raw) || (raw.length !== 3 && raw.length !== 4)) throw new Malformed();
-  const [rawSessions, rawCells, rawVersions, rawWindows = []] = raw as unknown[];
-
-  const sessions: SessionCell[] = [];
-  const flatSessions = decoder.tuples(rawSessions, 6);
+/** Throws Malformed unless `raw` is an encoded tally. */
+const checkTally = (raw: unknown, decoder: Decoder): EncodedTally => {
+  if (!Array.isArray(raw) || raw.length !== 4) throw new Malformed();
+  const [sessions, groups, versions, windows] = raw as unknown[];
+  const flatSessions = decoder.tuples(sessions, 6);
   for (let index = 0; index < flatSessions.length; index += 6) {
-    sessions.push({
-      day: decoder.day(flatSessions[index]),
-      harness: decoder.text(flatSessions[index + 1]),
-      via: decoder.text(flatSessions[index + 2]),
-      sessions: decoder.count(flatSessions[index + 3]),
-      fixedTokens: decoder.count(flatSessions[index + 4]),
-      measured: decoder.count(flatSessions[index + 5]),
-    });
+    decoder.day(flatSessions[index]);
+    decoder.text(flatSessions[index + 1]);
+    decoder.text(flatSessions[index + 2]);
+    for (let at = 3; at < 6; at += 1) decoder.count(flatSessions[index + at]);
   }
-
-  const cells: Cell[] = [];
-  const groups = decoder.tuples(rawCells, 4);
-  for (let index = 0; index < groups.length; index += 4) {
-    const day = decoder.day(groups[index]);
-    const harness = decoder.text(groups[index + 1]);
-    const via = decoder.text(groups[index + 2]);
-    const items = decoder.tuples(groups[index + 3], 6);
+  const flatGroups = decoder.tuples(groups, 4);
+  for (let index = 0; index < flatGroups.length; index += 4) {
+    decoder.day(flatGroups[index]);
+    decoder.text(flatGroups[index + 1]);
+    decoder.text(flatGroups[index + 2]);
+    const items = decoder.tuples(flatGroups[index + 3], 6);
     for (let at = 0; at < items.length; at += 6) {
-      cells.push({
-        day,
-        harness,
-        via,
-        item: decoder.text(items[at]),
-        sessions: decoder.count(items[at + 1]),
-        bare: decoder.count(items[at + 2]),
-        chars: decoder.count(items[at + 3]),
-        byModel: decoder.count(items[at + 4]),
-        byUser: decoder.count(items[at + 5]),
-      });
+      decoder.text(items[at]);
+      for (let count = 1; count < 6; count += 1) decoder.count(items[at + count]);
     }
   }
-
-  const versions: VersionSeen[] = [];
-  const flatVersions = decoder.tuples(rawVersions, 3);
+  const flatVersions = decoder.tuples(versions, 3);
   for (let index = 0; index < flatVersions.length; index += 3) {
-    versions.push({
-      harness: decoder.text(flatVersions[index]),
-      day: decoder.day(flatVersions[index + 1]),
-      version: decoder.text(flatVersions[index + 2]),
-    });
+    decoder.text(flatVersions[index]);
+    decoder.day(flatVersions[index + 1]);
+    decoder.text(flatVersions[index + 2]);
   }
-  const windows: WindowSeen[] = [];
-  const flatWindows = decoder.tuples(rawWindows, 3);
+  const flatWindows = decoder.tuples(windows, 3);
   for (let index = 0; index < flatWindows.length; index += 3) {
-    windows.push({
-      harness: decoder.text(flatWindows[index]),
-      day: decoder.day(flatWindows[index + 1]),
-      tokens: decoder.count(flatWindows[index + 2]),
-    });
+    decoder.text(flatWindows[index]);
+    decoder.day(flatWindows[index + 1]);
+    decoder.count(flatWindows[index + 2]);
   }
-  return windows.length ? { sessions, cells, versions, windows } : { sessions, cells, versions };
+  return raw as EncodedTally;
+};
+
+/** Adds an encoded tally's counters inside the sum's window to it, building no Tally. */
+const addTally = (sum: Accumulator, raw: EncodedTally, strings: readonly string[]): void => {
+  const [sessions, groups, versions, windows] = raw;
+  for (let index = 0; index < sessions.length; index += 6) {
+    const day = strings[sessions[index]!]!;
+    if (!sum.keep(day)) continue;
+    const cell = sum.session(day, strings[sessions[index + 1]!]!, strings[sessions[index + 2]!]!);
+    cell.sessions += sessions[index + 3]!;
+    cell.fixedTokens += sessions[index + 4]!;
+    cell.measured += sessions[index + 5]!;
+  }
+  for (let index = 0; index < groups.length; index += 4) {
+    const day = strings[groups[index] as number]!;
+    if (!sum.keep(day)) continue;
+    const harness = strings[groups[index + 1] as number]!;
+    const via = strings[groups[index + 2] as number]!;
+    const items = groups[index + 3] as number[];
+    for (let at = 0; at < items.length; at += 6) {
+      const cell = sum.cell(day, harness, via, strings[items[at]!]!);
+      cell.sessions += items[at + 1]!;
+      cell.bare += items[at + 2]!;
+      cell.chars += items[at + 3]!;
+      cell.byModel += items[at + 4]!;
+      cell.byUser += items[at + 5]!;
+    }
+  }
+  for (let index = 0; index < versions.length; index += 3) {
+    const day = strings[versions[index + 1]!]!;
+    if (!sum.keep(day)) continue;
+    const harness = strings[versions[index]!]!;
+    sum.version({ harness, day, version: strings[versions[index + 2]!]! });
+  }
+  for (let index = 0; index < windows.length; index += 3) {
+    const day = strings[windows[index + 1]!]!;
+    if (sum.keep(day))
+      sum.window({ harness: strings[windows[index]!]!, day, tokens: windows[index + 2]! });
+  }
+};
+
+/** The Tally of an encoded tally. */
+const decodeTally = (raw: EncodedTally, strings: readonly string[]): Tally => {
+  const sum = new Accumulator();
+  addTally(sum, raw, strings);
+  return sum.result();
+};
+
+/** `flat`'s tuples of `stride` with their first `refs` moved from one table to another. */
+const retableTuples = (
+  flat: readonly number[],
+  stride: number,
+  refs: number,
+  from: readonly string[],
+  to: StringTable,
+): number[] => flat.map((value, index) => (index % stride < refs ? to.ref(from[value]!) : value));
+
+/** An encoded tally moved from one table to another, without decoding it. */
+const retableTally = (
+  raw: EncodedTally,
+  from: readonly string[],
+  to: StringTable,
+): EncodedTally => {
+  const [sessions, groups, versions, windows] = raw;
+  return [
+    retableTuples(sessions, 6, 3, from, to),
+    groups.map((value, index) =>
+      index % 4 === 3
+        ? retableTuples(value as number[], 6, 1, from, to)
+        : to.ref(from[value as number]!),
+    ),
+    retableTuples(versions, 3, 3, from, to),
+    retableTuples(windows, 3, 2, from, to),
+  ];
 };
 
 // A CachedFile encodes as
 // [size, mtimeMs, ctimeMs, hasTail (0 or 1), offset, guardLength, guardHash, state, tally].
 
-const encodeFile = (file: CachedFile, state: unknown, table: StringTable): unknown[] => {
+const encodeFile = (file: CachedFile, state: unknown, tally: unknown): unknown[] => {
   const { position } = file;
   return [
     file.size,
@@ -311,18 +409,26 @@ const encodeFile = (file: CachedFile, state: unknown, table: StringTable): unkno
     position.guardLength,
     position.guardHash,
     state,
-    encodeTally(file.tally, table),
+    tally,
   ];
 };
 
-/** The entry and its encoded state, which is decoded only when a read resumes from it. */
-const decodeFile = (raw: unknown, decoder: Decoder): { file: CachedFile; state: unknown } => {
+/** An entry as the cache file holds it, its state and tally decoded only when they are read. */
+interface OpenedFile {
+  readonly file: CachedFile;
+  readonly state: unknown;
+  readonly tally: EncodedTally;
+}
+
+const decodeFile = (raw: unknown, decoder: Decoder): OpenedFile => {
   if (!Array.isArray(raw) || raw.length !== 9) throw new Malformed();
   const [size, mtimeMs, ctimeMs, hasTail, offset, guardLength, guardHash, state, tally] = raw;
   if (typeof mtimeMs !== "number" || typeof ctimeMs !== "number") throw new Malformed();
   if (hasTail !== 0 && hasTail !== 1) throw new Malformed();
   checkValue(state, decoder);
+  const encoded = checkTally(tally, decoder);
   let decoded: { value: unknown } | undefined;
+  let decodedTally: Tally | undefined;
   const strings = decoder.strings;
   const file: CachedFile = {
     size: decoder.count(size),
@@ -338,9 +444,43 @@ const decodeFile = (raw: unknown, decoder: Decoder): { file: CachedFile; state: 
         return decoded.value;
       },
     },
-    tally: decodeTally(tally, decoder),
+    get tally() {
+      decodedTally ??= decodeTally(encoded, strings);
+      return decodedTally;
+    },
   };
-  return { file, state };
+  return { file, state, tally: encoded };
+};
+
+/** The cache file's document, when it is one this tool saved for this format. */
+interface Document {
+  readonly salt: string;
+  readonly strings: string[];
+  readonly files: Record<string, unknown>;
+}
+
+const readDocument = async (
+  file: string,
+  tool: string,
+  fingerprint: string,
+): Promise<Document | undefined> => {
+  try {
+    const stored = storedDocument(await readFile(file));
+    if (
+      isRecord(stored) &&
+      stored.tool === tool &&
+      stored.format === fingerprint &&
+      typeof stored.salt === "string" &&
+      Array.isArray(stored.strings) &&
+      stored.strings.every((text) => typeof text === "string") &&
+      isRecord(stored.files)
+    ) {
+      return stored as unknown as Document;
+    }
+  } catch {
+    // Missing, unreadable, or nested too deep to parse, which nothing loadsheet saved is.
+  }
+  return undefined;
 };
 
 /**
@@ -356,39 +496,17 @@ export const openCache = async (
 ): Promise<HarnessCache> => {
   const file = join(dir, `${harness.replace(/[^\w.-]/gu, "_")}.json`);
   const fingerprint = formatFingerprint(format);
-  let entries = new Map<string, unknown>();
-  let decoder = new Decoder([]);
-  let salt: string | undefined;
-
-  const stored: unknown = await readFile(file, "utf8")
-    .then((text) => JSON.parse(text) as unknown)
-    .catch(() => undefined);
-  try {
-    if (
-      isRecord(stored) &&
-      stored.layout === CACHE_LAYOUT &&
-      stored.tool === tool &&
-      stored.format === fingerprint &&
-      typeof stored.salt === "string" &&
-      Array.isArray(stored.strings) &&
-      stored.strings.every((text) => typeof text === "string") &&
-      isRecord(stored.files) &&
-      stored.sum === checksum(stored)
-    ) {
-      salt = stored.salt;
-      entries = new Map(Object.entries(stored.files));
-      decoder = new Decoder(stored.strings as string[]);
-    }
-  } catch {
-    // Nested too deep to hash, which nothing loadsheet saved is: the cache opens empty.
-  }
+  const stored = await readDocument(file, tool, fingerprint);
+  const entries = new Map(Object.entries(stored?.files ?? {}));
+  const decoder = new Decoder(stored?.strings ?? []);
+  const salt = stored?.salt;
   // A fresh salt per cold cache, so keys cannot be matched against a guessed path's hash.
   const keySalt = salt ?? randomBytes(16).toString("hex");
 
   /** Entries decoded by `get`, null when malformed. */
   const opened = new Map<string, CachedFile | null>();
-  /** The encoded state of each CachedFile `get` returned, to save it without decoding. */
-  const states = new WeakMap<CachedFile, unknown>();
+  /** What the cache file holds for each CachedFile `get` returned, to sum and save it as it is. */
+  const held = new WeakMap<CachedFile, OpenedFile>();
 
   const unchanged = (next: ReadonlyMap<string, CachedFile>) => {
     if (salt === undefined || next.size !== entries.size) return false;
@@ -402,9 +520,9 @@ export const openCache = async (
       let entry = opened.get(key);
       if (entry === undefined && entries.has(key)) {
         try {
-          const { file, state } = decodeFile(entries.get(key), decoder);
-          states.set(file, state);
-          entry = file;
+          const decoded = decodeFile(entries.get(key), decoder);
+          held.set(decoded.file, decoded);
+          entry = decoded.file;
         } catch {
           // Malformed: read the transcript again, as if it were not cached.
           entry = null;
@@ -413,6 +531,15 @@ export const openCache = async (
       }
       return entry ?? undefined;
     },
+    sum(files, window) {
+      const sum = new Accumulator(window);
+      for (const entry of files) {
+        const encoded = held.get(entry)?.tally;
+        if (encoded) addTally(sum, encoded, decoder.strings);
+        else sum.tally(entry.tally);
+      }
+      return sum.result();
+    },
     async save(next) {
       if (unchanged(next)) return;
       const temporary = `${file}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`;
@@ -420,25 +547,30 @@ export const openCache = async (
         const table = new StringTable();
         const files: Record<string, unknown> = {};
         for (const [key, entry] of next) {
-          const state = states.has(entry)
-            ? retable(states.get(entry), decoder.strings, table)
-            : encodeValue(entry.position.state, table);
-          files[key] = encodeFile(entry, state, table);
+          const opened = held.get(entry);
+          files[key] = opened
+            ? encodeFile(
+                entry,
+                retable(opened.state, decoder.strings, table),
+                retableTally(opened.tally, decoder.strings, table),
+              )
+            : encodeFile(
+                entry,
+                encodeValue(entry.position.state, table),
+                encodeTally(entry.tally, table),
+              );
         }
-        const document = {
-          layout: CACHE_LAYOUT,
+        const document = JSON.stringify({
           tool,
           format: fingerprint,
           salt: keySalt,
           strings: table.strings,
           files,
-        };
+        });
         await mkdir(dir, { recursive: true, mode: 0o700 });
         // A directory that was already there keeps its mode, so the names in it could be listed.
         await chmod(dir, 0o700);
-        await writeFile(temporary, JSON.stringify({ ...document, sum: checksum(document) }), {
-          mode: 0o600,
-        });
+        await writeFile(temporary, storedText(document), { mode: 0o600 });
         await rename(temporary, file);
       } catch {
         // The cache only saves time: a run that cannot write it still returns its Scan.

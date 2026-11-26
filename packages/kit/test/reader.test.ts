@@ -157,6 +157,127 @@ describe("resume property", () => {
   });
 });
 
+describe("reading modes", () => {
+  const line = (n: number, text = "x") => JSON.stringify({ k: "rec", n, text }) + "\n";
+
+  it.each([4, 5])(
+    "gives the same result for any chunk size, async or sync, seed %i",
+    async (seed) => {
+      const path = NodePath.join(dir, "t.jsonl");
+      await NodeFSP.writeFile(path, generate(seed, 200, 300));
+      const expected = await read(path, undefined, { maxLineBytes: 600 });
+      expect(expected.records.length).toBeGreaterThan(100);
+      expect(expected.skippedLines).toBeGreaterThan(0);
+      for (const chunkBytes of [1, 2, 3, 7, 13, 64, 1021, 1 << 20]) {
+        for (const sync of [false, true]) {
+          const result = await read(path, undefined, { maxLineBytes: 600, chunkBytes, sync });
+          expect(result, `chunkBytes ${chunkBytes}, sync ${sync}`).toEqual(expected);
+        }
+      }
+    },
+  );
+
+  it.each([false, true])("parses a line many chunks long, sync %s", async (sync) => {
+    const path = NodePath.join(dir, "t.jsonl");
+    const long = "日本".repeat(3000);
+    await NodeFSP.writeFile(path, line(1) + line(2, long) + line(3) + line(4, long).trimEnd());
+    const result = await read(path, undefined, { chunkBytes: 64, sync });
+    expect(result.records.map((entry) => [entry.n, entry.text.length])).toEqual([
+      [1, 1],
+      [2, long.length],
+      [3, 1],
+    ]);
+    expect(result.tail.map((entry) => [entry.n, entry.text.length])).toEqual([[4, long.length]]);
+  });
+
+  it.each([1, 2])(
+    "resumes from a position in sync mode as in async mode, seed %i",
+    async (seed) => {
+      const content = generate(seed, 8, 40);
+      for (let split = 0; split <= content.length; split += 3) {
+        await expectResumeMatchesFull(content, [split], {
+          chunkBytes: 16,
+          maxLineBytes: 90,
+          sync: true,
+        });
+      }
+    },
+    60_000,
+  );
+
+  it("resumes in one mode from a position read in the other", async () => {
+    const path = NodePath.join(dir, "t.jsonl");
+    await NodeFSP.writeFile(path, line(1) + line(2));
+    const first = await read(path, undefined, { sync: true });
+    await NodeFSP.appendFile(path, line(3));
+    const second = await read(path, first.position);
+    expect(second.resumed).toBe(true);
+    expect(second.records).toEqual([{ n: 3, text: "x", seq: 3 }]);
+    await NodeFSP.appendFile(path, line(4));
+    const third = await read(path, second.position, { sync: true });
+    expect(third.resumed).toBe(true);
+    expect(third.records).toEqual([{ n: 4, text: "x", seq: 4 }]);
+  });
+
+  it.each([false, true])(
+    "calls skip before the marker test and decoding, sync %s",
+    async (sync) => {
+      const path = NodePath.join(dir, "t.jsonl");
+      // A marked line that is neither UTF-8 nor JSON: parse would see U+FFFD and fail if it got there.
+      const broken = Buffer.concat([
+        Buffer.from('{"k":"rec","n":9,"text":"SKIP'),
+        Buffer.from([0xff, 0xfe, 0xc3]),
+        Buffer.from("\r\n"),
+      ]);
+      const content = Buffer.concat([
+        Buffer.from(line(1)),
+        broken,
+        Buffer.from('{"k":"other"}\n' + line(2) + line(3, "SKIP").trimEnd()),
+      ]);
+      await NodeFSP.writeFile(path, content);
+      const seen: { length: number; head: string; tail: string }[] = [];
+      const parsed: string[] = [];
+      const format: LineFormat<{ count: number }, Entry> = {
+        ...counting,
+        skip(bytes, state) {
+          expect(state.count).toBeLessThan(3);
+          seen.push({
+            length: bytes.length,
+            head: bytes.slice(0, 5),
+            tail: bytes.slice(bytes.length - 3),
+          });
+          return bytes.includes("SKIP");
+        },
+        parse(raw, state) {
+          parsed.push(raw);
+          if (raw.includes("\uFFFD")) throw new Error("a skipped line was decoded");
+          return counting.parse(raw, state);
+        },
+      };
+      const result = await readTranscript(path, format, undefined, { chunkBytes: 5, sync });
+      expect(result).not.toBeNull();
+      expect(result!.records.map((entry) => [entry.n, entry.seq])).toEqual([
+        [1, 1],
+        [2, 2],
+      ]);
+      expect(result!.tail).toEqual([]);
+      // Every line reaches skip, marked or not, without its carriage return.
+      expect(seen.map((entry) => entry.length)).toEqual([
+        Buffer.byteLength(line(1)) - 1,
+        broken.length - 2,
+        13,
+        Buffer.byteLength(line(2)) - 1,
+        Buffer.byteLength(line(3, "SKIP")) - 1,
+      ]);
+      expect(seen[1]).toEqual({ length: broken.length - 2, head: '{"k":', tail: "\xff\xfe\xc3" });
+      expect(parsed).toEqual([line(1).trimEnd(), line(2).trimEnd()]);
+      // A skipped line still moves the position past it.
+      expect(result!.position.offset).toBe(content.length - Buffer.byteLength(line(3, "SKIP")) + 1);
+      expect(result!.position.state).toEqual({ count: 2 });
+    },
+  );
+});
+
 describe("readTranscript", () => {
   const line = (n: number, text = "x") => JSON.stringify({ k: "rec", n, text }) + "\n";
 

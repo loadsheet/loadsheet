@@ -30,5 +30,6 @@ loadsheet edits none of your files. It writes its scan cache to `~/.cache/loadsh
 - A Share link from the web page holds the Report after the `#` of the URL, which browsers do not send to loadsheet.dev. The link drops every description first.
 - `npx loadsheet <GitHub URL>` downloads that repository's archive from GitHub.
 - A pack page on loadsheet.dev downloads a public GitHub repository. It takes no token and stores nothing.
+- [The MCP check](/mcp) on loadsheet.dev reads the `tools/list` of the public MCP server you paste, once. It takes no token and never stores the URL; it keeps only a daily count of checks.
 
 Nothing else does. loadsheet sends no telemetry.
