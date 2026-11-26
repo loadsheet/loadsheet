@@ -137,6 +137,8 @@ export default defineConfig({
       "packages/ui",
       // The CLI page's own tests, with its aliases to the workspace sources.
       "apps/page",
+      // loadsheet.dev's server code that runs without Nuxt; e2e.mjs checks a running site.
+      { test: { name: "site", include: ["apps/site/test/**/*.test.ts"] } },
     ],
   },
   staged: {

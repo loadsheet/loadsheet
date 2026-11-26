@@ -96,7 +96,7 @@ test("reports a 401 with a hint and the status", async () => {
     (caught: unknown) => caught,
   );
   expect(error).toBeInstanceOf(McpFetchError);
-  expect(error).toMatchObject({ status: 401 });
+  expect(error).toMatchObject({ reason: "http", status: 401 });
   expect((error as Error).message).toContain("needs authorization");
 });
 
@@ -249,7 +249,10 @@ test("stops reading once the responses pass maxBytes, over JSON and SSE", async 
   const sseUrl = await toolsServer((_cursor, response, id) => sse(response, id, { tools }));
   for (const url of [jsonUrl, sseUrl]) {
     await expect(fetchMcpToolList(url, { maxBytes: 2_000 })).rejects.toThrow(
-      new McpFetchError("The server's responses passed `maxBytes` before tools/list ended."),
+      new McpFetchError(
+        "The server's responses passed `maxBytes` before tools/list ended.",
+        "too-large",
+      ),
     );
     expect((await fetchMcpToolList(url, { maxBytes: 100_000 })).tools).toHaveLength(200);
   }

@@ -28,11 +28,28 @@ export interface FetchMcpToolListOptions {
   fetch?: typeof globalThis.fetch;
 }
 
+/**
+ * Why a read failed: `invalid-url` before any request, `http` for a non-2xx answer (see `status`),
+ * `timeout` per request or at the deadline, `too-large` past `maxBytes`, `too-many-pages` past
+ * `maxPages`, `invalid-response` when the answer isn't an MCP `tools/list`, and `network` when the
+ * request couldn't be sent or its body read.
+ */
+export type McpFetchErrorReason =
+  | "invalid-url"
+  | "http"
+  | "timeout"
+  | "too-large"
+  | "too-many-pages"
+  | "invalid-response"
+  | "network";
+
 export class McpFetchError extends Error {
+  readonly reason: McpFetchErrorReason;
   readonly status: number | undefined;
-  constructor(message: string, status?: number) {
+  constructor(message: string, reason: McpFetchErrorReason, status?: number) {
     super(message);
     this.name = "McpFetchError";
+    this.reason = reason;
     this.status = status;
   }
 }
@@ -46,7 +63,8 @@ export async function fetchMcpToolList(
   options: FetchMcpToolListOptions = {},
 ): Promise<McpToolList> {
   const endpoint = parseMcpEndpoint(url);
-  if (!endpoint) throw new McpFetchError("Expected an absolute HTTP(S) MCP endpoint.");
+  if (!endpoint)
+    throw new McpFetchError("Expected an absolute HTTP(S) MCP endpoint.", "invalid-url");
   const maxPages = options.maxPages ?? 40;
   const { request, close } = createRequester(endpoint, options);
   try {
@@ -64,18 +82,22 @@ export async function fetchMcpToolList(
         nextCursor?: unknown;
       };
       if (!Array.isArray(result?.tools))
-        throw new McpFetchError("The server's tools/list result has no `tools` array.");
+        throw new McpFetchError(
+          "The server's tools/list result has no `tools` array.",
+          "invalid-response",
+        );
       try {
         tools.push(...validateTools(result.tools));
       } catch (error) {
         if (!(error instanceof TypeError)) throw error;
-        throw new McpFetchError(error.message);
+        throw new McpFetchError(error.message, "invalid-response");
       }
       cursor = typeof result.nextCursor === "string" ? result.nextCursor : undefined;
       if (!cursor) return { initialize, tools };
     }
     throw new McpFetchError(
       `The server's tools/list kept paginating past ${maxPages} pages; raise \`maxPages\` to read more.`,
+      "too-many-pages",
     );
   } finally {
     await close();
@@ -139,6 +161,7 @@ function createRequester(url: URL, options: FetchMcpToolListOptions) {
               : "";
         throw new McpFetchError(
           `${method} answered HTTP ${response.status}.${hint}`,
+          "http",
           response.status,
         );
       }
@@ -150,7 +173,7 @@ function createRequester(url: URL, options: FetchMcpToolListOptions) {
       const message = await readMessage(response, id, budget);
       if (message.error) {
         const code = typeof message.error.code === "number" ? ` ${message.error.code}` : "";
-        throw new McpFetchError(`${method} returned JSON-RPC error${code}.`);
+        throw new McpFetchError(`${method} returned JSON-RPC error${code}.`, "invalid-response");
       }
       if (method === "initialize") {
         const version = (message.result as McpInitializeResult | undefined)?.protocolVersion;
@@ -163,10 +186,17 @@ function createRequester(url: URL, options: FetchMcpToolListOptions) {
       if (deadline.aborted)
         throw new McpFetchError(
           `${method} was still running at the ${deadlineMs} ms deadline for the whole read.`,
+          "timeout",
         );
       if (error instanceof DOMException && error.name === "TimeoutError")
-        throw new McpFetchError(`${method} got no complete response within ${timeout} ms.`);
-      throw new McpFetchError(`${method} failed to send the request or read the response.`);
+        throw new McpFetchError(
+          `${method} got no complete response within ${timeout} ms.`,
+          "timeout",
+        );
+      throw new McpFetchError(
+        `${method} failed to send the request or read the response.`,
+        "network",
+      );
     }
   }
   return { request, close };
@@ -196,7 +226,10 @@ async function readMessage(
     ? await readEventStream(response.body, id, budget)
     : matchingMessage(await readText(response.body, budget), id);
   if (message) return message;
-  throw new McpFetchError(`The server sent no JSON-RPC response for request ${id}.`);
+  throw new McpFetchError(
+    `The server sent no JSON-RPC response for request ${id}.`,
+    "invalid-response",
+  );
 }
 
 /** Yields the body's chunks, failing once they pass what is left of `maxBytes`. */
@@ -211,6 +244,7 @@ async function* chunks(body: Response["body"], budget: ByteBudget) {
       if (budget.left < 0)
         throw new McpFetchError(
           "The server's responses passed `maxBytes` before tools/list ended.",
+          "too-large",
         );
       yield value;
     }
