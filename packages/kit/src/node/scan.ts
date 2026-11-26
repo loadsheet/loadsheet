@@ -1,12 +1,10 @@
 import { readFile, stat } from "node:fs/promises";
-import { homedir, hostname } from "node:os";
+import { availableParallelism, homedir, hostname } from "node:os";
 import { posix } from "node:path";
 import type { Day, Scan } from "@loadsheet/schema";
 import {
   buildScan,
-  foldFacts,
   sumTallies,
-  type Fact,
   type Files,
   type Harness,
   type HarnessScan,
@@ -17,7 +15,14 @@ import {
 import { defaultCacheDir, openCache, type CachedFile } from "./cache.ts";
 import { dirFiles } from "./files.ts";
 import { reachesOf, withReach } from "./reach.ts";
-import { listTranscriptFiles, readTranscript, type TranscriptFile } from "./reader.ts";
+import { listTranscriptFiles, type TranscriptFile } from "./reader.ts";
+import {
+  openTranscriptPool,
+  readTranscriptTally,
+  type TranscriptJob,
+  type TranscriptPool,
+  type TranscriptRead,
+} from "./workers.ts";
 
 export interface ScanMachineOptions {
   /** The harnesses to read; those without a `machine` reader are skipped. */
@@ -38,8 +43,16 @@ export interface ScanMachineOptions {
    * only, and writes no cache in a directory it cannot make so.
    */
   readonly cacheDir?: string | false;
-  /** Transcript files read at once; default 16. */
+  /** Transcript files read at once; default 16, or two per worker when that is more. */
   readonly concurrency?: number;
+  /**
+   * A module that calls `serveTranscripts` with the harnesses' formats. When given, transcripts
+   * the cache does not hold are read on worker threads running it, so a first run uses more than
+   * one core; without it they are read on this thread.
+   */
+  readonly worker?: URL | string;
+  /** The most worker threads to start; default one fewer than the cores, at most 8. */
+  readonly workers?: number;
   /** Called as each harness's transcript files are read: how many of how many are done. */
   readonly onProgress?: (progress: ScanProgress) => void;
 }
@@ -129,6 +142,11 @@ const transcriptFiles = async (roots: readonly string[], sinceMs: number) => {
   return [...files.values()];
 };
 
+/** Fewer files than this are read on this thread: starting workers would cost more than it saves. */
+const MIN_POOLED_FILES = 8;
+/** Files each worker reads at once, so one waits on the disk while another parses. */
+const READS_PER_WORKER = 2;
+
 /** One harness's counters from its transcripts, reading from the cache what has not changed. */
 const readTranscripts = async (
   machine: MachineReader<unknown>,
@@ -139,6 +157,7 @@ const readTranscripts = async (
     tool: string;
     cacheDir: string | false;
     concurrency: number;
+    pool: (files: number) => TranscriptPool | undefined;
     onProgress?: (progress: ScanProgress) => void;
   },
 ): Promise<Tally[]> => {
@@ -152,7 +171,8 @@ const readTranscripts = async (
   const files = await transcriptFiles(machine.roots(place), sinceMs);
   const kept = new Map<string, CachedFile>();
   const tallies: Tally[] = [];
-  const readOne = async (file: TranscriptFile) => {
+  const toRead: { file: TranscriptFile; key?: string; resume?: CachedFile }[] = [];
+  for (const file of files) {
     const key = cache?.key(file.path);
     const cached = key === undefined ? undefined : cache?.get(key);
     const unchanged =
@@ -162,37 +182,44 @@ const readTranscripts = async (
     if (cached && unchanged && !cached.hasTail) {
       kept.set(key!, cached);
       tallies.push(cached.tally);
-      return;
+      continue;
     }
     // A file that changed without growing may have been rewritten before the cached position.
     const resume = cached && (unchanged || file.size > cached.size) ? cached : undefined;
-    let read = await readTranscript<unknown, Fact>(file.path, format, resume?.position);
-    if (read === null && resume) read = await readTranscript<unknown, Fact>(file.path, format);
-    if (read === null) return;
-    const fresh = foldFacts(harness, read.records);
-    const committed = read.resumed && resume ? sumTallies([resume.tally, fresh]) : fresh;
-    tallies.push(committed, foldFacts(harness, read.tail));
-    if (key !== undefined) {
-      kept.set(key, {
-        size: file.size,
-        mtimeMs: file.mtimeMs,
-        ctimeMs: file.ctimeMs,
-        // A compressed file is read in full, so only its tail Facts make it worth reading again.
-        hasTail: file.path.endsWith(".zst")
-          ? read.tail.length > 0
-          : read.position.offset < file.size,
-        position: read.position,
-        tally: committed,
-      });
-    }
-  };
+    toRead.push({ file, ...(key === undefined ? {} : { key }), ...(resume ? { resume } : {}) });
+  }
 
-  let done = 0;
+  let done = files.length - toRead.length;
   options.onProgress?.({ harness, done, total: files.length });
 
-  await eachLimited(files, options.concurrency, async (file) => {
+  const pool = options.pool(toRead.length);
+  const read = (job: TranscriptJob): Promise<TranscriptRead | null> =>
+    pool ? pool.read(job) : readTranscriptTally(format, job);
+  const atOnce = Math.max(options.concurrency, pool ? pool.size * READS_PER_WORKER : 0);
+  await eachLimited(toRead, atOnce, async ({ file, key, resume }) => {
     try {
-      await readOne(file);
+      const result = await read({
+        harness,
+        path: file.path,
+        ...(resume ? { position: resume.position } : {}),
+      });
+      if (result === null) return;
+      const committed =
+        result.resumed && resume ? sumTallies([resume.tally, result.fresh]) : result.fresh;
+      tallies.push(committed, result.tail);
+      if (key !== undefined) {
+        kept.set(key, {
+          size: file.size,
+          mtimeMs: file.mtimeMs,
+          ctimeMs: file.ctimeMs,
+          // A compressed file is read in full, so only its tail Facts make it worth reading again.
+          hasTail: file.path.endsWith(".zst")
+            ? result.tailFacts
+            : result.position.offset < file.size,
+          position: result.position,
+          tally: committed,
+        });
+      }
     } finally {
       done += 1;
       options.onProgress?.({ harness, done, total: files.length });
@@ -217,36 +244,49 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
     cwd: process.cwd(),
   };
   const cacheDir = options.cacheDir ?? defaultCacheDir(place);
-  const concurrency = options.concurrency ?? 16;
+  const maxWorkers = options.workers ?? Math.min(8, availableParallelism() - 1);
   const { window, sinceMs } = scanWindow(now, options.days);
 
+  // Started for the first harness with enough files to read, and kept for the others.
+  let pool: TranscriptPool | undefined;
+  const poolFor = (files: number) => {
+    if (pool || !options.worker || maxWorkers < 1 || files < MIN_POOLED_FILES) return pool;
+    pool = openTranscriptPool(options.worker, Math.min(maxWorkers, Math.ceil(files / 4)));
+    return pool;
+  };
+
   const parts: HarnessScan[] = [];
-  for (const harness of options.harnesses) {
-    const machine = harness.machine;
-    if (!machine) continue;
-    const installed = await exists(machine.home(place));
-    // An inventory-only harness that is not installed claims nothing, though it would find
-    // skills in a folder it shares with others, such as `~/.agents/skills`.
-    const files =
-      installed || machine.transcripts
-        ? await sourceFiles(machine.sources(place), place.home)
-        : undefined;
-    const items = files ? await machine.inventory(files, place) : [];
-    const contextWindow = files ? await machine.contextWindow?.(files) : undefined;
-    const tallies = await readTranscripts(machine, harness.id, place, sinceMs, {
-      tool: options.tool,
-      cacheDir,
-      concurrency,
-      ...(options.onProgress ? { onProgress: options.onProgress } : {}),
-    });
-    parts.push({
-      harness: harness.id,
-      installed,
-      signals: harness.signals,
-      items,
-      tally: sumTallies(tallies, window),
-      ...(contextWindow === undefined ? {} : { contextWindow }),
-    });
+  try {
+    for (const harness of options.harnesses) {
+      const machine = harness.machine;
+      if (!machine) continue;
+      const installed = await exists(machine.home(place));
+      // An inventory-only harness that is not installed claims nothing, though it would find
+      // skills in a folder it shares with others, such as `~/.agents/skills`.
+      const files =
+        installed || machine.transcripts
+          ? await sourceFiles(machine.sources(place), place.home)
+          : undefined;
+      const items = files ? await machine.inventory(files, place) : [];
+      const contextWindow = files ? await machine.contextWindow?.(files) : undefined;
+      const tallies = await readTranscripts(machine, harness.id, place, sinceMs, {
+        tool: options.tool,
+        cacheDir,
+        concurrency: options.concurrency ?? 16,
+        pool: poolFor,
+        ...(options.onProgress ? { onProgress: options.onProgress } : {}),
+      });
+      parts.push({
+        harness: harness.id,
+        installed,
+        signals: harness.signals,
+        items,
+        tally: sumTallies(tallies, window),
+        ...(contextWindow === undefined ? {} : { contextWindow }),
+      });
+    }
+  } finally {
+    await pool?.close();
   }
 
   // What removing each Item reaches, across every harness's Items, since one harness's folder can
