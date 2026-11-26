@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -15,7 +16,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PROMPT_DOC } from "@loadsheet/core";
 import { defaultCacheDir } from "@loadsheet/kit/node";
-import { parseReport } from "@loadsheet/schema";
+import { parseReport, parseScan } from "@loadsheet/schema";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 import pkg from "../package.json" with { type: "json" };
 
@@ -166,7 +167,7 @@ describe("loadsheet (this machine)", () => {
     expect(result.stdout).not.toContain(root);
   });
 
-  it("keeps compiled code only in its cache directory, and none with --no-cache", () => {
+  it("writes only the scan cache and returns the same Scan without it", () => {
     const scan = (cache: string, ...args: string[]) => {
       const result = spawnSync(process.execPath, [cli, "--scan", ...args], {
         encoding: "utf8",
@@ -174,24 +175,24 @@ describe("loadsheet (this machine)", () => {
         env: { ...env, XDG_CACHE_HOME: cache },
       });
       expect(result.status).toBe(0);
-      return JSON.parse(result.stdout) as { scannedAt: string };
+      const { scannedAt: _, ...payload } = parseScan(JSON.parse(result.stdout));
+      return payload;
     };
-    const cache = join(root, "compile-cache");
+    const cache = join(root, "scan-cache");
     const dir = defaultCacheDir({ home, env: { XDG_CACHE_HOME: cache } });
-    scan(cache);
-    expect(readdirSync(join(dir, "compile"), { recursive: true }).length).toBeGreaterThan(0);
+    const expected = scan(cache);
+    expect(readdirSync(dir).length).toBeGreaterThan(0);
+    expect(existsSync(join(dir, "compile"))).toBe(false);
     expect(readdirSync(cache)).toEqual(["loadsheet"]);
 
     const none = join(root, "no-cache");
-    scan(none, "--no-cache");
-    expect(() => readdirSync(none)).toThrow();
+    expect(scan(none, "--no-cache")).toEqual(expected);
+    expect(existsSync(none)).toBe(false);
 
     // A cache directory that cannot be made leaves the Scan as it is.
     const blocked = join(root, "blocked");
     writeFileSync(blocked, "");
-    const { scannedAt: _, ...expected } = scan(none, "--no-cache");
-    const { scannedAt: __, ...got } = scan(blocked);
-    expect(got).toEqual(expected);
+    expect(scan(blocked)).toEqual(expected);
   });
 
   it("a flag overrides the config file", () => {
