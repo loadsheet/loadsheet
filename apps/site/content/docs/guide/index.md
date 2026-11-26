@@ -17,6 +17,7 @@ Later runs read only what was added to each transcript since the last run. loads
 ## Pick what it reads
 
 ```sh
+npx loadsheet claude                 # Claude Code, item by item
 npx loadsheet --days 7               # only the last 7 days
 npx loadsheet --harness claude-code  # only Claude Code's sheet
 npx loadsheet --json                 # the Report as JSON, for scripts and agents

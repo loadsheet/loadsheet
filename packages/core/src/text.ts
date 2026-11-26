@@ -18,7 +18,7 @@ const ITEM_WIDTH = 32;
  * Control characters and direction overrides made visible. Names, paths and commands come from
  * files on the machine, and one of them must not move the cursor or recolour the terminal.
  */
-const visible = (text: string) =>
+export const visible = (text: string) =>
   text.replace(
     /[\p{Cc}\u202a-\u202e\u2066-\u2069]/gu,
     (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`,

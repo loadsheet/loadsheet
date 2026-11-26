@@ -1,8 +1,15 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
-import { parseArgs } from "node:util";
-import { buildReport, packReport, PROMPT_DOC, renderText } from "@loadsheet/core";
+import { parseArgs, styleText } from "node:util";
+import {
+  buildReport,
+  packReport,
+  PROMPT_DOC,
+  renderSummary,
+  renderText,
+  type Style,
+} from "@loadsheet/core";
 import { runOnFleet, type RunResult } from "@loadsheet/fleet";
 import { claudeCode, findHarness, harnesses } from "@loadsheet/harnesses";
 import type { Files } from "@loadsheet/kit";
@@ -22,7 +29,10 @@ const ids = harnesses.map((h) => h.id).join(", ");
 const usage = `loadsheet ${pkg.version}
 Reports which skills, instruction files and MCP servers cost your coding agents context without being used.
 
-Usage: loadsheet [options]                     Scan this machine's sessions and report
+Usage: loadsheet [options]                     Scan this machine's sessions: how much of each
+                                               harness's context is taken before you type, and
+                                               what you can get back
+       loadsheet <harness> [--all] [options]   The same for one harness, item by item
        loadsheet <dir | GitHub URL> [options]  Weigh a skill pack, with no usage data
        loadsheet fleet [command] [options]     Run fleetrc, which keeps a fleet's skills in sync;
                                                \`loadsheet fleet --help\` lists its commands
@@ -30,8 +40,9 @@ Usage: loadsheet [options]                     Scan this machine's sessions and 
                                                (default ./loadsheet-report)
        loadsheet --ui [--port <n>] [options]   Serve the report as a web page on 127.0.0.1
 
+  <harness>           A harness id, or the part before its dash, such as claude for claude-code.
   <dir | GitHub URL>  A URL is https://github.com/<owner>/<repo>[/tree/<ref>[/<folder>]].
-                      A pack in a folder named fleet or build is ./fleet or ./build.
+                      A pack in a folder named fleet, build or a harness is ./<folder>.
 
 Options:
   --fleet               Also ask every other machine of this machine's fleet for its Scan, over
@@ -52,7 +63,9 @@ Options:
   --rule <id>.<option>=<n>
                         Set a rule's threshold, repeatable
   --no-cache            Read every transcript in full and write no cache
-  --json                Print the Report as JSON
+  --all                 With <harness>, list every skill, not only the heaviest
+  --full                Print every finding and fix in full, as text
+  --json                Print the Report as JSON: what your agent reads to apply fixes
   -v, --version         Print the version
   -h, --help            Print this help
 
@@ -95,6 +108,8 @@ try {
       rule: { type: "string", multiple: true },
       "no-cache": { type: "boolean" },
       json: { type: "boolean" },
+      all: { type: "boolean" },
+      full: { type: "boolean" },
       fleet: { type: "boolean" },
       // The default since 0.1.0; still taken so older scripts keep working.
       local: { type: "boolean" },
@@ -118,6 +133,18 @@ if (values.help) {
   process.exit(0);
 }
 if (positionals.length > 1) fail(`Expected at most one pack, got ${positionals.length}`);
+
+/** The harness `loadsheet <harness>` breaks down: its id, or the part before its dash. */
+const breakdown = harnesses.find(
+  (harness) => harness.id === positionals[0] || harness.id.split("-")[0] === positionals[0],
+)?.id;
+if (breakdown !== undefined) {
+  if (values.harness) fail(`Name the harness once: loadsheet ${breakdown} reads only it`);
+  values.harness = [breakdown];
+  positionals.length = 0;
+}
+if (values.all && breakdown === undefined)
+  fail(`--all lists every skill of one harness, such as loadsheet ${claudeCode.id} --all`);
 if (values.fleet && values.scan) fail("--scan prints this machine's Scan; it takes no --fleet");
 if (values.fleet && values.local) fail("--local and --fleet ask for different reports");
 for (const flag of ["fleet", "local", "scan", "timeout"] as const)
@@ -205,8 +232,33 @@ const withFlags = (file: Config): Config => {
 
 const config = resolveConfig(withFlags(await readConfigFile()));
 const tool = `loadsheet@${pkg.version}`;
+
+/** Colour when stdout is a terminal, unless NO_COLOR says otherwise; FORCE_COLOR asks for it. */
+const colour = (() => {
+  const { FORCE_COLOR, NO_COLOR, TERM } = process.env;
+  if (FORCE_COLOR !== undefined) return FORCE_COLOR !== "0" && FORCE_COLOR !== "false";
+  if (NO_COLOR) return false;
+  return process.stdout.isTTY === true && TERM !== "dumb";
+})();
+const style: Style | undefined = colour
+  ? (format, text) => styleText(format, text, { validateStream: false })
+  : undefined;
+
+/** Where it ran, with the home directory as ~, which the summary names after the version. */
+const cwd = () => {
+  const home = homedir();
+  const here = process.cwd();
+  return here === home || here.startsWith(`${home}/`) ? `~${here.slice(home.length)}` : here;
+};
+
 const print = (report: Parameters<typeof renderText>[0]) =>
-  process.stdout.write(values.json ? `${JSON.stringify(report, null, 2)}\n` : renderText(report));
+  process.stdout.write(
+    values.json
+      ? `${JSON.stringify(report, null, 2)}\n`
+      : report.mode === "pack" || values.full
+        ? renderText(report)
+        : renderSummary(report, { style, harness: breakdown, all: values.all, cwd: cwd() }),
+  );
 
 /**
  * The Scan of each other machine in this machine's fleet, or undefined when it has none. A fleet

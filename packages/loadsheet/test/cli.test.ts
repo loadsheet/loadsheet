@@ -385,8 +385,40 @@ describe("loadsheet on fixtures/home", () => {
     expect(digests()).toEqual(before);
   });
 
-  it("prints every fix as text and ends by naming the prompt", () => {
+  it("prints what a session starts with and what it can get back", () => {
     const result = inHome();
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(
+      /^loadsheet \d+\.\d+\.\d+ · ~\n\nClaude Code {2}~[\d.]+k of 200k before you type\n/u,
+    );
+    expect(result.stdout).toContain("You can get back");
+    expect(result.stdout).toContain("remove 1 skill never used in 3650 days");
+    expect(result.stdout).toContain("More detail    loadsheet claude-code\n");
+    expect(result.stdout).not.toContain("\u001b[");
+  });
+
+  it("loadsheet claude breaks Claude Code down, and colours it when asked", () => {
+    const result = inHome("claude");
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("skills · 3 listed");
+    expect(result.stdout).toContain("~/.claude/skills/<name>  $ rm -r ~/.claude/skills/<name>");
+    expect(result.stdout).toMatch(/old-notes +\d+ +never +hide\n/u);
+    const coloured = spawnSync(process.execPath, [cli, "claude"], {
+      encoding: "utf8",
+      cwd: home,
+      env: { PATH: process.env.PATH ?? "", HOME: home, XDG_CACHE_HOME: cache, FORCE_COLOR: "1" },
+    });
+    expect(coloured.stdout).toContain("\u001b[");
+  });
+
+  it("--all is for one harness", () => {
+    const result = inHome("--all");
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("--all lists every skill of one harness");
+  });
+
+  it("--full prints every fix as text and ends by naming the prompt", () => {
+    const result = inHome("--full");
     expect(result.status).toBe(0);
     expect(result.stdout).toContain(
       "remove ~/.claude/skills/old-notes  $ rm -r ~/.claude/skills/old-notes",

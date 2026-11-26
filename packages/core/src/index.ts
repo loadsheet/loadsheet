@@ -11,4 +11,11 @@ export {
   type Unfiltered,
 } from "./rules/rule.ts";
 export { harnessTokens, setupTokens } from "./setup.ts";
+export {
+  harnessName,
+  renderSummary,
+  type Format,
+  type Style,
+  type SummaryOptions,
+} from "./summary.ts";
 export { PROMPT_DOC, renderText } from "./text.ts";

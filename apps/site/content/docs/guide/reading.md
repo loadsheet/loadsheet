@@ -1,61 +1,51 @@
 ---
 title: Read the report
-description: What each part of loadsheet's text report means, from the session budget to the findings.
+description: What loadsheet prints, from how much context each harness takes before you type to what you can get back.
 navigation.order: 1
 ---
 
-`npx loadsheet` prints the report in five parts. `npx loadsheet --json` prints the same numbers as a [Report](/docs/reference/schemas).
+`npx loadsheet` prints a short summary. `npx loadsheet <harness>` breaks one harness down item by item. `npx loadsheet --full` prints every finding and fix in full, and `npx loadsheet --json` prints the same numbers as a [Report](/docs/reference/schemas).
 
-## The machine
-
-```txt
-loadsheet@0.1.0: local report, 2026-10-27 to 2026-11-25 (30 days)
-Machine: laptop
-  claude-code  2,535 sessions  each starts with ~60,438 of ~200,000 tokens (measured)
-                               your setup ~16,518, the harness's own ~43,920
-```
-
-For each harness: how many sessions it read, and how many tokens a session holds before you type. "Your setup" is the part loadsheet can trace to your skills, instruction files and MCP servers. "The harness's own" is the rest: its system prompt and built-in tools. `(measured)` means the harness logged the number. A harness that logs none shows your setup only.
-
-## The sheets
-
-One sheet per harness, with its 10 heaviest lines:
+## Before you type
 
 ```txt
-claude-code: 248 lines, your setup ~16,518 tokens; the 10 heaviest
-  tokens    in    uses  item
-   1,861  100%       -  instructions:CLAUDE.md
-     580   99%  21,707  mcp:github
-     334   97%       7  skill:pdf
+loadsheet 0.1.1 · ~/work
+
+Claude Code  ~17.3k of 200k before you type
+████████████████████████████████████████░░░░░░░░░░░░░░░░░░░░ 182.7k free
+■ harness 5.6k  ■ instructions 6.7k  ■ skills 0.8k  ■ MCP 4.1k  ■ agents 0.1k
 ```
 
-| Column   | Meaning                                                                                  |
-| -------- | ---------------------------------------------------------------------------------------- |
-| `tokens` | What the line adds to every session it is in.                                            |
-| `in`     | Share of the harness's sessions that listed or loaded it.                                |
-| `uses`   | Times the model or you invoked it. `-` for instruction files, which are always read.     |
-| `item`   | The line's id, `kind:name`. The kinds are `skill`, `instructions`, `mcp` and `subagent`. |
+For each harness with sessions in the window: how many tokens a session holds before you type, of the model's context window. The bar splits them by part. `harness` is the harness's own system prompt and built-in tools; the rest is your setup: instruction files, skills, MCP servers and agents. Every harness is drawn on the same scale, so a lighter harness has a shorter bar.
 
-A pack report shows `listed` and `body` instead of `in` and `uses`: the characters of the listing entry and of the whole file. A pack has no sessions. See [Weigh a skill pack](/docs/guide/packs).
-
-## What each harness lets loadsheet see
-
-Harnesses log different things. For each harness and each signal, the table says `exact`, `inferred`, or `-` for nothing. `listing` is whether a transcript shows which skills the session listed. `modelUse` and `userUse` are invocations by the model and by you. A rule that needs a signal the harness does not log does not run on it, and the report says so under "Rules not run".
-
-## Findings
-
-Findings come grouped by rule, cut first, then fix, then info:
+## You can get back
 
 ```txt
-dead-skill (cut), 145: listed for weeks and never invoked
-  ~180  skill:frontend-design      in 3,863 sessions over 30 days, never invoked
-    hide-from-model ~/.claude/settings.json
+You can get back                                      tokens per session
+  Claude Code  shorten 1 skill description over 300 chars          −0.1k
+               remove 1 skill never used in 30 days                  −53
+  Ask first    data-toolkit plugin: 6 skills never used            −0.3k
 ```
 
-- The level in brackets says how strongly the rule asks for action. `cut` removes context that does nothing. `fix` keeps the item and changes it. `info` is for you to know, with nothing to change.
-- `~180` is the tokens each session would save once the finding is fixed.
-- The indented lines are the fixes: an action and the file it changes. The JSON Report holds the exact key and value or command for each. [Rules](/docs/reference/rules) lists what each rule checks.
+Each row is one kind of change, with the tokens every session would save once it is made. A skill that two rules flag is counted once. `Ask first` is the biggest change loadsheet has no safe edit for, such as skills that come with a plugin: turning the plugin off also turns off its hooks and commands, so that call is yours. [Rules](/docs/reference/rules) lists what each rule checks.
 
-## The summary
+The summary ends with the command for each harness's breakdown. loadsheet changes none of your files: to apply the changes, see [Apply fixes with your agent](/docs/guide/fixes).
 
-The last lines count the findings by rule, with the tokens they would save per session and how many have a fix. loadsheet changes none of your files. To act on the findings, see [Apply fixes with your agent](/docs/guide/fixes).
+## One harness
+
+```txt
+skills · 9 listed                     0.4k     uses
+  used, heaviest first
+  terraform-plan                        57        1
+  bench-compare                         47        5
+
+  never used in 30 days, heaviest first
+  docx-builder                          49    never   hide
+  + 3 more: 3 used, 0 never used   loadsheet codex --all
+```
+
+`npx loadsheet claude-code`, or `npx loadsheet claude`, lists the harness's instruction files, skills, MCP servers and agents with their tokens and uses. Skills come in two groups, used and never used, the heaviest first; `--all` lists every one. `hide` marks a skill loadsheet has a fix for. Under "You can get back" each change names the file it edits, with the skill's name as `<name>`.
+
+## The full report
+
+`npx loadsheet --full` prints what the summary is built from: each harness's heaviest lines, what each harness lets loadsheet see, every finding grouped by rule with each fix's action, file, key and command, and the rules that did not run. A skill pack's report, `npx loadsheet ./skills`, always prints in full. See [Weigh a skill pack](/docs/guide/packs).

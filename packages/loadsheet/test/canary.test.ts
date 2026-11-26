@@ -355,13 +355,16 @@ describe("no canary leaves the machine", () => {
     );
   });
 
-  it("the text report", () => {
-    const result = run();
-    expect(result.status).toBe(0);
-    expect(result.stdout).toContain("brew-notes");
-    expect(leaks(result.stdout + result.stderr)).toEqual([]);
-    expect(result.stdout).not.toContain(root);
-  });
+  it.each([{ args: [] as string[] }, { args: ["claude-code", "--all"] }, { args: ["--full"] }])(
+    "the text report, $args",
+    ({ args }) => {
+      const result = run(...args);
+      expect(result.status).toBe(0);
+      if (args.length) expect(result.stdout).toContain("brew-notes");
+      expect(leaks(result.stdout + result.stderr)).toEqual([]);
+      expect(result.stdout).not.toContain(root);
+    },
+  );
 
   it("--json", () => {
     const result = run("--json");
