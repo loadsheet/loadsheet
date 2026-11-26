@@ -32,7 +32,12 @@ const pkg = JSON.parse(readFileSync(join(fleetrcDir, "package.json"), "utf8")) a
   version: string;
   bin: { fleetrc: string };
 };
-export const version = pkg.version;
+/** fleetrc is private, so a release leaves its version alone. */
+export const fleetrcVersion = pkg.version;
+/** The version the CLI reports, which is this package's (src/version.ts), not fleetrc's. */
+export const version = (
+  JSON.parse(readFileSync(join(fleetDir, "package.json"), "utf8")) as { version: string }
+).version;
 export const cli = resolve(fleetrcDir, pkg.bin.fleetrc);
 export const isWindows = process.platform === "win32";
 

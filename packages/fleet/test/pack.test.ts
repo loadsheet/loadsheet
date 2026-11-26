@@ -5,7 +5,15 @@ import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vite-plus/test";
-import { fleetrcDir, isWindows, machine, remote, skills, version } from "./fixture.ts";
+import {
+  fleetrcDir,
+  fleetrcVersion,
+  isWindows,
+  machine,
+  remote,
+  skills,
+  version,
+} from "./fixture.ts";
 
 describe("packed tarball", () => {
   it("installs, prints its version, and plans an init", async () => {
@@ -29,7 +37,7 @@ describe("packed tarball", () => {
     for (const dir of [fileURLToPath(new URL("..", import.meta.url)), fleetrcDir])
       run("pnpm", dir, "pack", "--pack-destination", out);
     const tarballs = readdirSync(out).sort();
-    expect(tarballs).toEqual([`fleetrc-${version}.tgz`, `loadsheet-fleet-${version}.tgz`]);
+    expect(tarballs).toEqual([`fleetrc-${fleetrcVersion}.tgz`, `loadsheet-fleet-${version}.tgz`]);
     const project = join(m.root, "project");
     mkdirSync(project);
     writeFileSync(join(project, "package.json"), JSON.stringify({ name: "smoke", private: true }));
