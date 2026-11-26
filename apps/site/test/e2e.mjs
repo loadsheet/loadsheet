@@ -121,6 +121,18 @@ for (const [url, code] of [
   });
 }
 
+await check(
+  "/mcp renders its form and title on the server, and the header links to it",
+  async () => {
+    const res = await get("/mcp");
+    assert.equal(res.status, 200);
+    const html = await res.text();
+    assert.match(html, /<title>Check an MCP server in every client · loadsheet<\/title>/);
+    assert.ok(withoutScripts(html).includes("Does your MCP server work in every client?"));
+    assert.ok(withoutScripts(await (await get("/")).text()).includes('href="/mcp"'));
+  },
+);
+
 await check("/report HTML holds no Report data", async () => {
   const res = await get("/report");
   assert.equal(res.status, 200);

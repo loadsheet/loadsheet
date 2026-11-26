@@ -11,16 +11,17 @@ The CSS loads in this order (`styles/index.css`, exported as `@loadsheet/ui/styl
 - `tokens.css` sets the kit's shadcn names (`--background`, `--foreground`, `--card`, `--muted`, `--muted-foreground`, `--border`, `--input`, `--primary`, `--ring`) and loadsheet's own names (below). Each colour is defined twice: on `.loadsheet`, and again under `[data-theme="dark"]`, which the host sets on `<html>`.
 - `app.css` uses only `var(--…)` names. If a colour isn't a token, add it to both theme blocks in `tokens.css` first. A hex value in `app.css` or a `.vue` file breaks dark mode.
 
-| Role                                               | Token                                  |
-| -------------------------------------------------- | -------------------------------------- |
-| Page / panel / sunk well                           | `--background` / `--card` / `--muted`  |
-| Text / secondary text                              | `--foreground` / `--muted-foreground`  |
-| Hairline / control border                          | `--border` / `--input`                 |
-| Ink (the one solid button)                         | `--primary` on `--primary-foreground`  |
-| Accent: `$` prompt, savings, row links, focus ring | `--acc` (selection tint: `--acc-tint`) |
-| Block corner / card corner                         | `--r-b` (3px) / `--r-lg` (8px)         |
-| Motion curve                                       | `--ease`                               |
-| Report header height                               | `--bar`                                |
+| Role                                               | Token                                            |
+| -------------------------------------------------- | ------------------------------------------------ |
+| Page / panel / sunk well                           | `--background` / `--card` / `--muted`            |
+| Text / secondary text                              | `--foreground` / `--muted-foreground`            |
+| Hairline / control border                          | `--border` / `--input`                           |
+| Ink (the one solid button)                         | `--primary` on `--primary-foreground`            |
+| Accent: `$` prompt, savings, row links, focus ring | `--acc` (selection tint: `--acc-tint`)           |
+| Block corner / card corner                         | `--r-b` (3px) / `--r-lg` (8px)                   |
+| Motion curve                                       | `--ease`                                         |
+| Report header height                               | `--bar`                                          |
+| MCP client status: fine / rewrite / problem / out  | `--s-ok` / `--s-info` / `--s-warn` / `--s-error` |
 
 The kit's rules sit in `@layer ui-sdk`, and every rule in `app.css` is unlayered, so `app.css` always wins. Wrap a reset of a bare element in `:where()` and skip kit parts, e.g. `button:where(:not([data-slot]))`. A plain `button { background: none }` blanks the solid button. At specificity 0,1,1 it also beat `.b` and wiped the colour off every treemap block.
 
@@ -53,6 +54,10 @@ It answers one question: how much of the window a session started now uses befor
 - `components/ContextMap.vue`: segments squarified (7% floor), ordered by `RANK`, skills biggest top-left. The harness is a fixed strip under the map with a link to its docs (`HDOC`), never a block. Personal skills get one tile each; a plugin or other source is one tile with an "Open table" button; other kinds fold small items into "+N more". Tile text is 10px mono and hides when the tile is too small. Clicking a skill tile opens the table on that row.
 - `components/ContextTable.vue`: one row per segment, then source groups for skills, then items, heaviest first. Lists over six show the top five plus a full-width "Show more" row. Skills with 0 tokens sit in "Installed, not loaded". A description shows its first sentence and expands on click; the "?" button's tooltip says where it comes from. The last row is the free window. The pack page renders the same table over the pack's lines with `:free="false"`, every skill listed and described, so its rows match the report's table.
 - The map and the table share one `ViewState` through `provide(VIEW)`, so selection, open rows and search survive a switch.
+
+## The MCP check (`views/Mcp.vue`)
+
+One column, 820px wide: a URL with three servers to try, then the answer. The verdict is a pixel line ("Works in all 9 clients", or "Breaks in N of 9 clients" in `--s-error`), with the server, its tool count and URL above it in mono and the one "Copy fix prompt" button beside it. A pill per client carries a dot in its worst status: `--s-ok`, `--s-info` (a harmless rewrite), `--s-warn` or `--s-error` (a tool left out). Problems follow worst first (`mcpProblems()` in `lib/mcp.ts`), one card per Diagnostic Code with a 3px bar in its status, a plain title, the clients it hits, the fix, and a link to the code's Doctor docs. Notes (info) and the CI command fold away. A server that wants a token gets the Doctor command instead of a report; any other failure is a pixel title in `--s-error` and one plain line.
 
 ## The treemap (`components/Treemap.vue`)
 
