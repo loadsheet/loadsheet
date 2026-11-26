@@ -91,6 +91,14 @@ await check("a made-up path answers 404", async () => {
   assert.match(await res.text(), /loadsheet has no page here/);
 });
 
+for (const name of ["v1.json", "scan.v1.json", "config.v1.json"]) {
+  await check(`/schema/${name} serves the schema its $id names`, async () => {
+    const res = await fetch(`${base}/schema/${name}`);
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).$id, `https://loadsheet.dev/schema/${name}`);
+  });
+}
+
 await check("/docs answers 200 with the docs theme, not loadsheet's layout", async () => {
   const res = await get("/docs");
   assert.equal(res.status, 200);

@@ -82,8 +82,9 @@ export default defineNuxtConfig({
   },
   hooks: {
     // The JSON Schemas at https://loadsheet.dev/schema/*.json, the URLs their `$id`s name.
+    // Not under .nuxt, which a fresh build clears after this hook runs.
     "nitro:config"(config) {
-      const dir = join(import.meta.dirname, ".nuxt/schema");
+      const dir = join(import.meta.dirname, "node_modules/.cache/loadsheet-schema");
       writeSchemas(dir);
       (config.publicAssets ??= []).push({ dir, baseURL: "/schema", maxAge: 300 });
     },
