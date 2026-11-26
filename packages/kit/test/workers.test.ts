@@ -1,7 +1,8 @@
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { Worker } from "node:worker_threads";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { defineHarness, type Harness } from "../src/index.ts";
 import {
   MIN_POOLED_BYTES,
@@ -101,6 +102,44 @@ describe("scanMachine on worker threads", () => {
     await expect(scan({ worker, cacheDir: false, id: "unknown" })).rejects.toThrow(
       "No transcript format for unknown",
     );
+  });
+});
+
+describe("worker failures", () => {
+  const job = { harness: "counting", path: "unused.jsonl" };
+
+  it.each([
+    ['throw new Error("startup failed")', "startup failed"],
+    ["process.exit(0)", "A transcript reader exited with code 0"],
+  ])("rejects reads submitted after the worker runs %s", async (source, message) => {
+    const on = vi.spyOn(Worker.prototype, "on");
+    const pool = openTranscriptPool(new URL(`data:text/javascript,${encodeURIComponent(source)}`));
+    try {
+      pool.grow(1);
+      const thread = on.mock.contexts[0] as Worker;
+      on.mockRestore();
+      await new Promise<void>((resolve) => thread.once("exit", () => resolve()));
+      await expect(pool.read(job, 1)).rejects.toThrow(message);
+    } finally {
+      on.mockRestore();
+      await pool.close();
+    }
+  });
+
+  it("rejects assigned and queued reads when a worker dies", async () => {
+    const source = `import { parentPort } from "node:worker_threads";
+      parentPort.once("message", () => { throw new Error("worker failed"); });`;
+    const pool = openTranscriptPool(
+      new URL(`data:text/javascript,${encodeURIComponent(source)}`),
+      1,
+    );
+    try {
+      await Promise.all(
+        [1, 2, 3].map((bytes) => expect(pool.read(job, bytes)).rejects.toThrow("worker failed")),
+      );
+    } finally {
+      await pool.close();
+    }
   });
 });
 

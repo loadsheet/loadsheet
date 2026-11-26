@@ -98,6 +98,7 @@ const READS_PER_WORKER = 2;
 
 export const openTranscriptPool = (url: URL | string, size = 0): TranscriptPool => {
   type Queued = {
+    readonly id: number;
     readonly job: TranscriptJob;
     readonly bytes: number;
     readonly resolve: (read: TranscriptRead | null) => void;
@@ -105,14 +106,47 @@ export const openTranscriptPool = (url: URL | string, size = 0): TranscriptPool 
   };
   type Slot = { readonly worker: Worker; readonly pending: Map<number, Queued> };
   const slots: Slot[] = [];
-  // Smallest first, so the largest is popped off the end.
   const queue: Queued[] = [];
   let next = 0;
   let closed = false;
+  let failure: Error | undefined;
+
+  const comesFirst = (left: Queued, right: Queued) =>
+    left.bytes > right.bytes || (left.bytes === right.bytes && left.id < right.id);
+
+  const enqueue = (read: Queued) => {
+    let index = queue.length;
+    queue.push(read);
+    while (index > 0) {
+      const parent = (index - 1) >>> 1;
+      if (!comesFirst(read, queue[parent]!)) break;
+      queue[index] = queue[parent]!;
+      index = parent;
+    }
+    queue[index] = read;
+  };
+
+  const dequeue = (): Queued => {
+    const first = queue[0]!;
+    const last = queue.pop()!;
+    if (queue.length === 0) return first;
+    let index = 0;
+    for (;;) {
+      const left = 2 * index + 1;
+      if (left >= queue.length) break;
+      const right = left + 1;
+      const child = right < queue.length && comesFirst(queue[right]!, queue[left]!) ? right : left;
+      if (!comesFirst(queue[child]!, last)) break;
+      queue[index] = queue[child]!;
+      index = child;
+    }
+    queue[index] = last;
+    return first;
+  };
 
   const dispatch = () => {
+    if (closed || failure) return;
     while (queue.length) {
-      const largest = queue.at(-1)!;
       let slot: Slot | undefined;
       for (const candidate of slots) {
         if (candidate.pending.size >= READS_PER_WORKER) continue;
@@ -120,19 +154,30 @@ export const openTranscriptPool = (url: URL | string, size = 0): TranscriptPool 
         if (slot.pending.size === 0) break;
       }
       if (!slot) return;
-      queue.pop();
-      const id = next++;
+      const largest = dequeue();
+      const { id, job } = largest;
       slot.pending.set(id, largest);
-      slot.worker.postMessage({ id, job: largest.job } satisfies Request);
+      slot.worker.postMessage({ id, job } satisfies Request);
     }
+  };
+
+  const rejectReads = (error: Error) => {
+    for (const { reject } of queue) reject(error);
+    queue.length = 0;
+    for (const { pending } of slots) {
+      for (const { reject } of pending.values()) reject(error);
+      pending.clear();
+    }
+  };
+
+  const fail = (error: Error) => {
+    if (closed || failure) return;
+    failure = error;
+    rejectReads(error);
   };
 
   const start = (): Slot => {
     const slot: Slot = { worker: new Worker(url), pending: new Map() };
-    const fail = (error: Error) => {
-      for (const { reject } of slot.pending.values()) reject(error);
-      slot.pending.clear();
-    };
     slot.worker.on("message", (response: Response) => {
       const waiting = slot.pending.get(response.id);
       if (!waiting) return;
@@ -153,32 +198,23 @@ export const openTranscriptPool = (url: URL | string, size = 0): TranscriptPool 
       return slots.length;
     },
     grow: (size) => {
-      if (closed) return;
+      if (closed || failure) return;
       while (slots.length < size) slots.push(start());
       dispatch();
     },
     read: (job, bytes) =>
       new Promise((resolve, reject) => {
-        if (closed) {
-          reject(new Error("The transcript readers are closed"));
+        if (failure || closed) {
+          reject(failure ?? new Error("The transcript readers are closed"));
           return;
         }
-        // Before reads of the same size, so those queued earlier go first.
-        let low = 0;
-        let high = queue.length;
-        while (low < high) {
-          const middle = (low + high) >>> 1;
-          if (queue[middle]!.bytes < bytes) low = middle + 1;
-          else high = middle;
-        }
-        queue.splice(low, 0, { job, bytes, resolve, reject });
+        enqueue({ id: next++, job, bytes, resolve, reject });
         dispatch();
       }),
     close: async () => {
       if (closed) return;
       closed = true;
-      const error = new Error("The transcript readers are closed");
-      for (const { reject } of queue.splice(0)) reject(error);
+      rejectReads(new Error("The transcript readers are closed"));
       await Promise.all(slots.map(({ worker }) => worker.terminate()));
     },
   };
