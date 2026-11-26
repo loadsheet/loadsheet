@@ -43,7 +43,7 @@ type Row =
   | { t: "it"; key: string; s: Segment; i: CItem; lvl: number; desc?: string; open: boolean }
   | { t: "more"; key: string; list: string; lvl: number; n: number; tokens: number }
   | { t: "fewer"; key: string; list: string; lvl: number }
-  | { t: "free"; key: string; tokens: number }
+  | { t: "free"; key: string; tokens: number | undefined }
   | { t: "none"; key: string };
 
 const rows = computed<Row[]>(() => {
@@ -120,8 +120,7 @@ const rows = computed<Row[]>(() => {
     }
   }
   if (q && !out.length) out.push({ t: "none", key: "none" });
-  else if (!q && props.free)
-    out.push({ t: "free", key: "free", tokens: view.ctx().window - view.ctx().total });
+  else if (!q && props.free) out.push({ t: "free", key: "free", tokens: view.ctx().free });
   return out;
 });
 
@@ -361,10 +360,14 @@ watch(
             </td>
           </tr>
           <tr v-else-if="r.t === 'free'">
-            <td><span class="car" /><span class="sw free" />Free</td>
-            <td class="r num">{{ short(r.tokens) }}</td>
+            <td>
+              <span class="car" /><span class="sw free" />{{
+                r.tokens === undefined ? "Free for your chat is unknown" : "Free"
+              }}
+            </td>
+            <td class="r num">{{ r.tokens === undefined ? "—" : short(r.tokens) }}</td>
             <td class="c-bar" />
-            <td class="r num muted">{{ share(r.tokens, win) }}</td>
+            <td class="r num muted">{{ r.tokens === undefined ? "—" : share(r.tokens, win) }}</td>
             <td class="c-n" />
           </tr>
           <tr v-else>

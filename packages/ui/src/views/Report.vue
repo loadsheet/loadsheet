@@ -4,15 +4,15 @@ import {
   SegmentedControlIndicator,
   SegmentedControlItem,
 } from "@ui-sdk/vue/segmented-control";
-import { computed, provide, reactive, watch } from "vue";
+import { computed, provide, reactive, useId, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import ContextBar from "../components/ContextBar.vue";
 import ContextMap from "../components/ContextMap.vue";
 import ContextTable from "../components/ContextTable.vue";
 import NoSessions from "../components/NoSessions.vue";
-import { VIEW, contextOf, freshView, short } from "../lib/context";
+import { TOKEN_ABOUT, VIEW, contextOf, freshView, short, takeaway } from "../lib/context";
 import { useHarness } from "../lib/harness";
-import { fmt, plural } from "../lib/report";
+import { fmt, harnessName, plural } from "../lib/report";
 import { hideTip, showTip } from "../lib/ui";
 
 /** What a session started now loads before you type, against the model's window: a map, or the same as a table. */
@@ -61,14 +61,49 @@ function expandAll() {
 }
 const exact = (e: MouseEvent) =>
   showTip(e, `<b>${fmt(ctx.value!.total)} tokens</b> before you type`);
+const take = computed(() => ctx.value && takeaway(ctx.value, harnessName(h.current.value)));
+const tokenHelpId = useId();
+function tokenFocus(e: FocusEvent) {
+  const r = (e.target as HTMLElement).getBoundingClientRect();
+  showTip({ clientX: r.right, clientY: r.bottom } as MouseEvent, TOKEN_ABOUT);
+}
 </script>
 
 <template>
   <NoSessions v-if="!ctx" />
   <main v-else class="ctx">
-    <h1 class="big" @mouseenter="exact" @mousemove="exact" @mouseleave="hideTip">
-      {{ short(ctx.total) }}<span class="of">of {{ short(ctx.window) }} used before you type</span>
-    </h1>
+    <div class="lead">
+      <h1 class="big">
+        <span @mouseenter="exact" @mousemove="exact" @mouseleave="hideTip">{{
+          short(ctx.total)
+        }}</span
+        ><span class="of"
+          ><span class="unit">tokens</span>
+          {{ ctx.measured ? "used before you type" : "from your setup" }}, out of a
+          {{ short(ctx.window) }} chat limit<button
+            type="button"
+            class="dhelp"
+            aria-label="What is a token?"
+            :aria-describedby="tokenHelpId"
+            @mouseenter="showTip($event, TOKEN_ABOUT)"
+            @mousemove="showTip($event, TOKEN_ABOUT)"
+            @mouseleave="hideTip"
+            @focus="tokenFocus"
+            @blur="hideTip"
+            @keydown.esc="hideTip"
+          >
+            ?
+          </button></span
+        >
+      </h1>
+      <span :id="tokenHelpId" hidden>{{ TOKEN_ABOUT }}</span>
+      <p class="take">
+        <template v-for="(p, i) in take" :key="i"
+          ><strong v-if="typeof p === 'object'">{{ p.b }}</strong
+          ><template v-else>{{ p }}</template></template
+        >
+      </p>
+    </div>
     <ContextBar />
     <div class="views">
       <RouterLink

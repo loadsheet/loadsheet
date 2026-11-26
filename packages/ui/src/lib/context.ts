@@ -4,8 +4,8 @@ import type { InjectionKey } from "vue";
 import { harnessName } from "./report";
 
 /**
-  What a new session started now loads, before you type: every installed line at its full tokens, plus the
-  harness's own prompt. History (means over sessions, never-used flags) stays out of this view.
+  What a new session started now loads, before you type: the startup cost of installed entries, plus the
+  harness's own prompt when measured. History (means over sessions, never-used flags) stays out of this view.
 */
 
 export type SegId = "harness" | "instructions" | "skill" | "pskill" | "mcp" | "subagent";
@@ -25,34 +25,73 @@ export interface Segment {
   label: string;
   short?: string;
   sub: string;
+  /** What this kind is, in words for someone who has never counted tokens. */
+  about: string;
   tokens: number;
   items: CItem[];
 }
 export interface Context {
+  /** Known tokens, including the built-ins when measured. */
   total: number;
+  /** Whether startup tokens were measured, even if the built-in share is zero. */
+  measured: boolean;
   /** What your own files add; the harness is the rest. */
   setup: number;
   /** The model's context window: the Report's, or 200k for a Report that predates it. */
   window: number;
+  /** Space left in the window, unknown if built-ins weren't measured and setup doesn't fill it. */
+  free: number | undefined;
   segments: Segment[];
 }
 
 /** The window a Report without `contextWindow` is drawn against. */
 export const DEFAULT_WINDOW = 200_000;
 
-const KINDS: { id: SegId; label: string; short?: string; sub: string }[] = [
-  { id: "harness", label: "Harness", sub: "system prompt and built-in tools" },
-  { id: "instructions", label: "Instructions", sub: "CLAUDE.md, AGENTS.md, memory" },
-  { id: "skill", label: "Skills", sub: "names and descriptions" },
+const SKILLS_ABOUT =
+  "Reusable instructions. The startup list can include skill names or short descriptions.";
+const KINDS: { id: SegId; label: string; short?: string; sub: string; about: string }[] = [
+  {
+    id: "harness",
+    label: "Harness",
+    sub: "built-in instructions and tools",
+    about: "The agent’s own instructions and tools. They load in every chat.",
+  },
+  {
+    id: "instructions",
+    label: "Instructions",
+    sub: "CLAUDE.md, AGENTS.md, memory",
+    about:
+      "Files like CLAUDE.md or AGENTS.md with your rules. The agent can load the text or just list the file at startup.",
+  },
+  { id: "skill", label: "Skills", sub: "skill listings", about: SKILLS_ABOUT },
   {
     id: "pskill",
     label: "Project skills",
     short: "Project",
     sub: "skills that live in this project",
+    about: SKILLS_ABOUT,
   },
-  { id: "mcp", label: "MCP servers", short: "MCP", sub: "tool definitions" },
-  { id: "subagent", label: "Subagents", short: "Agents", sub: "agent descriptions" },
+  {
+    id: "mcp",
+    label: "MCP servers",
+    short: "MCP",
+    sub: "extra tool listings",
+    about:
+      "Servers that give the agent extra tools. At startup the agent may see only tool names, or more detail about the tools.",
+  },
+  {
+    id: "subagent",
+    label: "Subagents",
+    short: "Agents",
+    sub: "agent descriptions",
+    about:
+      "Helpers the agent can hand work to. The agent can list them at startup so it knows who to call.",
+  },
 ];
+
+/** What the "?" beside the headline says. */
+export const TOKEN_ABOUT =
+  "A token is a small piece of text, about ¾ of a word. Everything in a chat uses tokens.";
 
 /** Where each harness documents its own prompt. */
 export const HDOC: Record<string, { label: string; url: string; what: string }> = {
@@ -108,8 +147,8 @@ export function contextOf(sheet: Sheet): Context {
     if (skills) skills.label = "Global skills";
   }
   const setup = setupTokens(sheet);
-  const harness = harnessTokens(sheet) ?? 0;
-  if (harness > 0) {
+  const harness = harnessTokens(sheet);
+  if (harness !== undefined && harness > 0) {
     segments.unshift({
       ...KINDS[0]!,
       label: harnessName(sheet.harness),
@@ -117,9 +156,12 @@ export function contextOf(sheet: Sheet): Context {
       items: [],
     });
   }
-  const total = setup + harness;
+  const total = setup + (harness ?? 0);
   const window = sheet.contextWindow ?? DEFAULT_WINDOW;
-  return { total, setup, window: Math.max(window, total), segments };
+  const measured = harness !== undefined;
+  const remaining = Math.max(0, window - total);
+  const free = measured || remaining === 0 ? remaining : undefined;
+  return { total, measured, setup, window, free, segments };
 }
 
 const SRC: Record<string, string> = {
@@ -220,11 +262,79 @@ export interface ContextView {
 }
 export const VIEW = Symbol("context-view") as InjectionKey<ContextView>;
 
-/** Axis ticks for the window, about five of them, ending on the window itself. */
-export function ticks(win: number): number[] {
-  const step = [25_000, 50_000, 100_000, 250_000, 500_000].find((s) => win / s <= 5) ?? 500_000;
-  const t: number[] = [];
-  for (let v = 0; v < win - step * 0.35; v += step) t.push(v);
-  t.push(win);
-  return t;
+/** A sentence as text runs; `b` runs are the numbers and names worth bolding. */
+export type Phrase = (string | { b: string })[];
+
+/** Above this a single part is worth naming on its own. */
+const BIG_PART = 5000;
+
+/**
+  One sentence on what this setup loads, for someone who has never counted tokens. It describes; it never tells the
+  reader what to change.
+*/
+export function takeaway(c: Context, agent: string): Phrase {
+  const used = Math.round((c.total / c.window) * 100);
+  const { measured } = c;
+  if (c.total > c.window)
+    return [
+      measured ? "That’s " : "Your setup alone uses ",
+      { b: `${used}%` },
+      " of the limit, more than the chat can hold.",
+    ];
+  if (used >= 50)
+    return measured
+      ? ["That’s ", { b: `${used}%` }, " of the limit, so there’s less room for a long chat."]
+      : ["Your setup alone uses ", { b: `${used}%` }, " of the limit, not counting built-ins."];
+  const seg = (id: SegId) => c.segments.find((s) => s.id === id);
+  const skills = [seg("skill"), seg("pskill")].flatMap((s) => s?.items ?? []);
+  const parts: { id: SegId; tokens: number; items: CItem[] }[] = [
+    ...["instructions", "mcp", "subagent"].flatMap((id) => {
+      const s = seg(id as SegId);
+      return s ? [{ id: s.id, tokens: s.tokens, items: s.items }] : [];
+    }),
+    { id: "skill", tokens: skills.reduce((n, i) => n + i.tokens, 0), items: skills },
+  ];
+  const top = parts.sort((a, b) => b.tokens - a.tokens)[0]!;
+  const loaded = top.items.filter((i) => i.tokens > 0);
+  if (top.tokens > BIG_PART) {
+    if (top.id === "mcp") {
+      const server = [...loaded].sort((a, b) => b.tokens - a.tokens)[0]!;
+      return [
+        "Extra tools from MCP servers add the most. ",
+        { b: server.name },
+        " alone takes ",
+        { b: tok(server.tokens) },
+        " to make its tools available before you use them.",
+      ];
+    }
+    if (top.id === "instructions")
+      return [
+        "Your instruction files add ",
+        { b: tok(top.tokens) },
+        ` before you type, from the rules or file listings ${agent} sees at startup.`,
+      ];
+    return [
+      "Your ",
+      { b: count(loaded.length, top.id) },
+      " add ",
+      { b: tok(top.tokens) },
+      ` to ${agent}’s startup list, before you use them.`,
+    ];
+  }
+  const harness = seg("harness")?.tokens ?? 0;
+  if (!measured)
+    return [
+      "Your setup is light, but there’s no measurement for the built-in instructions and tools.",
+    ];
+  const free = [{ b: `${100 - used}%` }, " free for your chat."];
+  return harness
+    ? [
+        `Your setup is light. ${agent} itself takes `,
+        { b: tok(harness) },
+        ", and you added ",
+        { b: tok(c.setup) },
+        ". That leaves ",
+        ...free,
+      ]
+    : ["Your setup is light. It adds ", { b: tok(c.setup) }, ", which leaves ", ...free];
 }
