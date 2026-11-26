@@ -13,16 +13,11 @@ import {
 import { runOnFleet, type RunResult } from "@loadsheet/fleet";
 import { claudeCode, findHarness, harnesses } from "@loadsheet/harnesses";
 import type { Files } from "@loadsheet/kit";
-import {
-  dirFiles,
-  githubFiles,
-  githubUrl,
-  scanMachine,
-  type ScanProgress,
-} from "@loadsheet/kit/node";
+import { dirFiles, githubFiles, githubUrl, scanMachine } from "@loadsheet/kit/node";
 import { parseConfig, resolveConfig, RULES, type Config } from "@loadsheet/schema";
 import pkg from "../package.json" with { type: "json" };
 import { fleetScans } from "./fleet.ts";
+import { scanProgress } from "./progress.ts";
 
 const ids = harnesses.map((h) => h.id).join(", ");
 
@@ -286,74 +281,6 @@ const askFleet = async (): Promise<RunResult[] | undefined> => {
     return undefined;
   }
 };
-
-/** `seconds` as `~8s` or `~2m 05s`. */
-const duration = (seconds: number) => {
-  const whole = Math.max(1, Math.round(seconds));
-  return whole < 60
-    ? `~${whole}s`
-    : `~${Math.floor(whole / 60)}m ${String(whole % 60).padStart(2, "0")}s`;
-};
-
-/**
- * Progress on stderr for a scan that takes over 2 s, such as a first run, which reads every
- * transcript before the cache holds them. On a terminal one line with a bar and the time left is
- * rewritten in place and cleared at the end; elsewhere a line is printed every 5 s.
- */
-function scanProgress() {
-  const started = Date.now();
-  const tty = process.stderr.isTTY === true;
-  const names: Record<string, string> = { "claude-code": "Claude Code", codex: "Codex" };
-  const count = (n: number) => n.toLocaleString("en-US");
-  let latest: ScanProgress | undefined;
-  // Where this harness's reads from disk began: files the cache holds count as done at once.
-  let from: { harness: string; done: number; at: number } | undefined;
-  let printed = 0;
-  let shown = false;
-  const line = () => {
-    if (!latest) return "Reading this machine's sessions";
-    const { harness, done, total } = latest;
-    const label = `Reading ${names[harness] ?? harness} sessions`;
-    const share = total > 0 ? done / total : 1;
-    const percent = `${Math.floor(share * 100)}%`;
-    const read = done - (from?.done ?? done);
-    const elapsed = (Date.now() - (from?.at ?? Date.now())) / 1000;
-    const left =
-      read > 0 && done < total && elapsed >= 1
-        ? [`${duration(((total - done) * elapsed) / read)} left`]
-        : [];
-    if (!tty)
-      return `${label}: ${count(done)} of ${count(total)} files, ${[percent, ...left].join(", ")}`;
-    const counts = `${count(done)}/${count(total)} files  ${[percent, ...left].join("  ")}`;
-    const width = Math.min(30, (process.stderr.columns ?? 80) - label.length - counts.length - 4);
-    if (width < 10) return `${label}: ${counts}`;
-    const filled = Math.round(share * width);
-    return `${label}  ${"█".repeat(filled)}${"░".repeat(width - filled)}  ${counts}`;
-  };
-  const show = () => {
-    if (!tty && !shown)
-      process.stderr.write("The first run reads every transcript; later runs use a cache.\n");
-    if (tty) process.stderr.write(`\r\u001b[2K${line()}`);
-    else process.stderr.write(`${line()}\n`);
-    printed = Date.now();
-    shown = true;
-  };
-  const timer = setTimeout(show, 2000);
-  timer.unref();
-  return {
-    update: (progress: ScanProgress) => {
-      if (from?.harness !== progress.harness)
-        from = { harness: progress.harness, done: progress.done, at: Date.now() };
-      latest = progress;
-      if (Date.now() - started < 2000) return;
-      if (tty ? Date.now() - printed >= 100 : Date.now() - printed >= 5000) show();
-    },
-    stop: () => {
-      clearTimeout(timer);
-      if (shown && tty) process.stderr.write("\r\u001b[2K");
-    },
-  };
-}
 
 if (positionals.length === 0) {
   for (const id of config.harnesses ?? []) {
