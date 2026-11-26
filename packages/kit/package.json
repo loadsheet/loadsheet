@@ -1,6 +1,6 @@
 {
   "name": "@loadsheet/kit",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Transcript reader, scan fold and the test kit for writing harness adapters.",
   "homepage": "https://loadsheet.dev",
   "license": "MIT",
