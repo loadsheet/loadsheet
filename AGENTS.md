@@ -1,47 +1,48 @@
 # loadsheet
 
-loadsheet is a CLI (`npx loadsheet`) that reads coding agents' session transcripts locally and reports which skills, instruction files and MCP servers cost context without being used. This repository is a pnpm workspace of the packages that build it, all versioned together.
+`npx loadsheet` reads coding agents' session transcripts on the user's machines and shows what every skill, `AGENTS.md`/`CLAUDE.md`, MCP server and subagent costs in context, and whether anything uses it. It hands the user's agent the exact commands to fix what it finds.
 
-## Layers
+## What we never compromise on
 
-Each package's dependencies in `package.json` are the layering. Keep imports inside its row.
+1. **Private by construction.** A Scan or Report holds counters and names, plus each skill's and subagent's description. Descriptions travel only between the user's own machines (`--fleet` uses the user's ssh). A Report shared through loadsheet.dev goes through `shareableReport`, which drops them. Transcript text, tool input and output, file bodies, session ids, environment variables and absolute home paths never reach any output or the cache.
+2. **Read-only on the user's machine.** loadsheet writes only to its own cache. Fixes go to the user's agent as commands. `loadsheet build` writes where the user says, and only over files it wrote before.
+3. **Works on a stock install.** Someone with a plain Claude Code or Codex setup must get a useful report. Group and name things by what every install has: personal skills, plugins, project files. Maxi's fleetrc manifest (`packages/harnesses/src/managed.ts`) is an extra, never what a view depends on.
+4. **Now, before history.** The main question is what a session started now loads before you type. Usage history serves as evidence behind a fix; it is not a view of its own yet.
 
-| Package                            | May import                            | Must not know                                                                                                       |
-| ---------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `@loadsheet/schema`                | nothing at runtime                    | anything else in the repo, Node                                                                                     |
-| `@loadsheet/kit` (`.`)             | schema                                | rules or findings; `node:*`, `@loadsheet/kit/node`; it runs in the browser                                          |
-| `@loadsheet/kit/node` (`src/node`) | schema, kit's `.`, Node               | rules or findings                                                                                                   |
-| `@loadsheet/harnesses`             | schema, kit's `.`, tinyaml            | rules; `node:*`, `@loadsheet/kit/node`: an adapter receives `Files` from kit                                        |
-| `@loadsheet/core`                  | schema                                | kit, harnesses, `node:*`; it is isomorphic and runs in the browser                                                  |
-| `loadsheet` (`packages/loadsheet`) | schema, kit, harnesses, core, fleet   | nothing; with fleet's own commands, the only place that parses argv                                                 |
-| `@loadsheet/ui` (private)          | schema, core, Vue, vue-router, ui-sdk | kit, harnesses, `node:*`, `loadsheet`, Nuxt; `document` or `location` outside a handler: it renders in Nuxt SSR too |
-| `@loadsheet/resolve` (private)     | schema, kit, harnesses, core, skills  | git, `child_process`, `loadsheet`, fleet; it runs in a Cloudflare Worker, so `fetch` is injected                    |
-| `@loadsheet/fixtures` (private)    | Node                                  | every other package; only tests and scripts import it, and it is not built                                          |
-| `@loadsheet/fleet`                 | Node, and the dependencies it bundles | schema, kit, harnesses, core, `loadsheet`; the name it runs under, which `run(argv, name)` takes                    |
-| `fleetrc` (`packages/fleetrc`)     | `@loadsheet/fleet`                    | anything but `run`; it is the bin npm `fleetrc` users run, and must keep behaving as before                         |
+## Where each package runs
 
-`vp lint` fails when `packages/core/src` or `packages/schema/src` imports a Node builtin, kit, harnesses or `loadsheet`, when `packages/harnesses/src` or `packages/kit/src` outside `node/` imports a Node builtin or `@loadsheet/kit/node`, when `packages/resolve/src` imports `child_process`, `simple-git`, `loadsheet` or fleet, and when `packages/ui/src` imports a Node builtin, kit, harnesses, `loadsheet` or Nuxt.
+The dependencies in each `package.json` are the layering, and `vp lint` rejects the imports that break it. The reasons:
 
-## Privacy
+- `@loadsheet/schema`, `@loadsheet/core`, kit's `.` and `@loadsheet/harnesses` run in the browser. Only `@loadsheet/kit/node` touches the disk; a harness adapter receives `Files` from it.
+- `@loadsheet/ui` renders in Nuxt SSR and in the CLI's single HTML file, so it reads `document` or `location` only inside handlers and never imports Nuxt.
+- `@loadsheet/resolve` runs in a Cloudflare Worker: `fetch` is injected, and there is no git or `child_process`.
+- `loadsheet` is the only package that parses argv, apart from fleet's own commands.
+- `@loadsheet/fleet` knows nothing of loadsheet. `fleetrc` is the bin npm users already run, so it keeps behaving as before.
+- `@loadsheet/fixtures` is for tests and scripts only.
 
-A Scan or Report holds counters and names, and each skill's and subagent's description, the text a harness would list for it. Descriptions travel only between the user's own machines (`--fleet` asks for Scans over the user's ssh); a Report shared through loadsheet.dev goes through `shareableReport` from `@loadsheet/schema`, which drops them. Transcript text, tool input and output, skill and instruction bodies, session ids, environment variables and absolute home paths stay out of all of them.
+## Web
 
-Real transcripts are private. Read them a few lines at a time. Make a fixture with `pnpm --filter @loadsheet/fixtures sanitize <in.jsonl> <out.jsonl> --policy <module>`: it replaces every string its policy does not name with the canary `CANARY-LS` and every object key with `key-N`, so read the output before you commit it. Tests assert that `findCanary` and `findCanaryInDir` find nothing in a Scan, a Report or the cache.
+There is one site and one deploy. `apps/site` is loadsheet.dev, a Nuxt 5 app on ViteHub (docs, CMS, console). It weighs a skills source from a URL with the same resolver as the skills CLI. `apps/page` is the fully static HTML file the CLI writes. Both mount `@loadsheet/ui`. Staging copies and `-next` projects are not part of the setup.
 
-## Writes
+- Read `DESIGN.md` before any UI change.
+- A new look, for a web page or the terminal output, is agreed on a prototype Maxi approves first; then it goes into the source.
 
-loadsheet reads the user's files and edits none of them. It writes only to its own cache directory; fixes go to the user's agent as commands.
+## Test data
 
-`loadsheet build` is the one command that writes where the user says, and it never overwrites anything it did not write: it writes into a folder that is missing or empty, or one holding the `.loadsheet-build` marker it wrote before, and replaces only the files that marker lists; otherwise it stops with exit code 2. `loadsheet --ui` serves the same page from memory and writes no page, though like the default command it may update the scan cache.
+Real transcripts are private. Read them a few lines at a time. Make a fixture with `pnpm --filter @loadsheet/fixtures sanitize`, and read its output before you commit it: the repository is public.
 
-## Git
+## Harnesses
 
-Commit to `main` and push it directly; open no branch or pull request. Before each push, rebase on `origin/main`, run `pnpm build`, `pnpm check` and `vp test packages/<name>` for each package you changed, and push only when they pass. Never force-push `main`.
+- Antigravity is not Gemini. Antigravity CLI keeps its config in `~/.gemini/config` and its sessions as SQLite files in `~/.gemini/antigravity-cli/conversations`.
+- Readers copied from `vite-hub/t3code` keep its MIT notice as a header comment.
 
-## Commands
+## Git and releases
 
-- `pnpm build`: builds every package (cached by `vp run`); tests run the built CLI, so build first.
-- `pnpm check`: format, lint and typecheck.
-- `vp test packages/<name>`: one package's tests.
+- Commit to `main` and push it; open no branch or pull request. Before each push, rebase on `origin/main` and run `pnpm build`, `pnpm check` and `vp test packages/<name>` for each package you changed. Tests run the built CLI, so build first. Never force-push `main`.
+- Every public package shares one version, because the release runs in lockstep. The private `fleetrc` stays at 0.0.0.
+- A push to `main` opens a `release/v*` pull request; merging it publishes to npm through trusted publishing. CI on that bot pull request waits for approval: `gh api -X POST repos/loadsheet/loadsheet/actions/runs/<id>/approve`.
+- A new public package needs its npm name claimed with a trusted publisher before its first release.
 
-Readers copied from `vite-hub/t3code` keep its MIT notice as a header comment.
+## Tracking
+
+Linear (team LOAD) holds only what needs a human: a blocker such as a payment or 2FA, a decision an agent can't make, or something people must review. Decide and do the rest without an issue. Keep plans, notes and status reports out of the repository; report in the chat.
