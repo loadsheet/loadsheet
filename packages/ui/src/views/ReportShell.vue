@@ -19,8 +19,7 @@ import { useLoadsheet } from "../lib/state";
 import { copied, copy } from "../lib/ui";
 
 const h = useHarness();
-/** Harnesses with sessions; one with none shows only while it is the one in `?h=`. */
-const shown = computed(() => h.all.value.filter((x) => x.sessions || x.id === h.current.value));
+const shown = computed(() => h.all.value.filter((x) => x.hasReport || x.id === h.current.value));
 const route = useRoute();
 const pickReport = usePickReport();
 const { report, linkError, shareBase, shareForm } = useLoadsheet();

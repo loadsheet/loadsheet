@@ -1,3 +1,4 @@
+import type { Report as ReportData } from "@loadsheet/schema";
 import { createSSRApp, h } from "vue";
 import { RouterView, createMemoryHistory, createRouter } from "vue-router";
 import { renderToString } from "vue/server-renderer";
@@ -13,11 +14,12 @@ import {
   ReportShell,
   bundledPacks,
   createLoadsheet,
+  exampleReport,
 } from "../src/index";
 
 // The views as Nuxt will render them on its server: no DOM, state from the installed loadsheet, links by name.
 // `pack` takes the props a host that reads packs on its server passes the pack page.
-async function render(url: string, pack?: Record<string, unknown>) {
+async function render(url: string, pack?: Record<string, unknown>, report?: ReportData) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -35,7 +37,7 @@ async function render(url: string, pack?: Record<string, unknown>) {
     ],
   });
   const app = createSSRApp({ render: () => [h(RouterView), h(Overlays)] })
-    .use(createLoadsheet({ shareBase: () => "https://loadsheet.dev/" }))
+    .use(createLoadsheet({ report, shareBase: () => "https://loadsheet.dev/" }))
     .use(router);
   await router.push(url);
   await router.isReady();
@@ -66,6 +68,58 @@ describe("the views on a server", () => {
   ])("render %s", async (url, text) => {
     const html = await render(url);
     expect(html).toContain(text);
+  });
+
+  const source = exampleReport.sheet.find((sheet) => sheet.harness === "claude-code")!;
+
+  it("keeps inventory-only harnesses in the switch but omits empty alternatives", async () => {
+    const report = {
+      ...exampleReport,
+      coverage: [],
+      sheet: [
+        source,
+        { ...source, harness: "opencode", sessions: 0 },
+        { ...source, harness: "cursor", sessions: 0, lines: [] },
+      ],
+    };
+    const html = await render("/report", undefined, report);
+    expect(html).toMatch(/aria-label="Harness"/);
+    expect(html).toContain("OpenCode");
+    expect(html).not.toContain("Cursor");
+    expect(await render("/report?h=cursor", undefined, report)).toContain("Cursor");
+  });
+
+  it("keeps the actual limit when startup goes over it", async () => {
+    const report = {
+      ...exampleReport,
+      sheet: [
+        {
+          ...source,
+          fixedTokens: { value: 215_000, basis: "measured" as const },
+          contextWindow: 200_000,
+        },
+      ],
+    };
+    const html = await render("/report?view=table", undefined, report);
+    expect(html).toContain("200k chat limit");
+    expect(html).toContain("108%");
+    expect(html).toContain("Free for your chat<small class=\"num\">0 tokens");
+  });
+
+  it("reports setup cost without claiming headroom when built-ins are unmeasured", async () => {
+    const report = { ...exampleReport, sheet: [{ ...source, fixedTokens: undefined }] };
+    const html = await render("/report?view=table", undefined, report);
+    expect(html).toContain("tokens</span> from your setup");
+    expect(html).toContain('Free for your chat<small class="num">Unknown');
+    expect(html).toContain("Free for your chat is unknown");
+    expect(html).not.toContain("free for your chat.");
+  });
+
+  it("associates the token definition with the help button", async () => {
+    const html = await render("/report");
+    const id = html.match(/aria-label="What is a token\?" aria-describedby="([^"]+)"/)?.[1];
+    expect(id).toBeTruthy();
+    expect(html).toContain(`id="${id}" hidden>A token is a small piece of text`);
   });
 
   it("render a pack a host passes in, each skill with its description", async () => {

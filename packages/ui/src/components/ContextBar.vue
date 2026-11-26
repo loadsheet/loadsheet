@@ -7,15 +7,16 @@ import { esc, hideTip, showTip } from "../lib/ui";
 const view = inject(VIEW)!;
 const st = view.st;
 const bars = computed(() => {
-  const { segments, window } = view.ctx();
+  const { segments, total, window } = view.ctx();
+  const width = Math.max(window, total);
   let x = 0;
   return segments.map((s) => {
-    const left = (x / window) * 100;
+    const left = (x / width) * 100;
     x += s.tokens;
-    return { s, left, width: (s.tokens / window) * 100 };
+    return { s, left, width: (s.tokens / width) * 100 };
   });
 });
-const free = computed(() => view.ctx().window - view.ctx().total);
+const free = computed(() => view.ctx().free);
 const name = (s: Segment) => (s.id === "harness" ? `${s.label}, built-in` : s.label);
 const tip = (s: Segment) => {
   const win = view.ctx().window;
@@ -52,7 +53,9 @@ function pick(s: Segment) {
         }}<small class="num">{{ tok(b.s.tokens) }}</small>
       </li>
       <li class="free">
-        <span class="sw free" />Free for your chat<small class="num">{{ tok(free) }}</small>
+        <span class="sw free" />Free for your chat<small class="num">{{
+          free === undefined ? "Unknown" : tok(free)
+        }}</small>
       </li>
     </ul>
   </div>

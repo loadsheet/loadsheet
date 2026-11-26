@@ -4,8 +4,8 @@ import type { InjectionKey } from "vue";
 import { harnessName } from "./report";
 
 /**
-  What a new session started now loads, before you type: every installed line at its full tokens, plus the
-  harness's own prompt. History (means over sessions, never-used flags) stays out of this view.
+  What a new session started now loads, before you type: the startup cost of installed entries, plus the
+  harness's own prompt when measured. History (means over sessions, never-used flags) stays out of this view.
 */
 
 export type SegId = "harness" | "instructions" | "skill" | "pskill" | "mcp" | "subagent";
@@ -31,11 +31,14 @@ export interface Segment {
   items: CItem[];
 }
 export interface Context {
+  /** Known tokens, including the built-ins when measured. */
   total: number;
   /** What your own files add; the harness is the rest. */
   setup: number;
   /** The model's context window: the Report's, or 200k for a Report that predates it. */
   window: number;
+  /** Space left in the window, unknown when built-ins weren't measured. */
+  free: number | undefined;
   segments: Segment[];
 }
 
@@ -43,7 +46,7 @@ export interface Context {
 export const DEFAULT_WINDOW = 200_000;
 
 const SKILLS_ABOUT =
-  "Reusable instructions. The agent sees a short description of each skill in every chat and reads the rest only when needed.";
+  "Reusable instructions. The startup list can include skill names or short descriptions.";
 const KINDS: { id: SegId; label: string; short?: string; sub: string; about: string }[] = [
   {
     id: "harness",
@@ -55,9 +58,9 @@ const KINDS: { id: SegId; label: string; short?: string; sub: string; about: str
     id: "instructions",
     label: "Instructions",
     sub: "CLAUDE.md, AGENTS.md, memory",
-    about: "Files like CLAUDE.md or AGENTS.md with your rules. They load in full in every chat.",
+    about: "Files like CLAUDE.md or AGENTS.md with your rules. The agent can load the text or just list the file at startup.",
   },
-  { id: "skill", label: "Skills", sub: "names and descriptions", about: SKILLS_ABOUT },
+  { id: "skill", label: "Skills", sub: "skill listings", about: SKILLS_ABOUT },
   {
     id: "pskill",
     label: "Project skills",
@@ -69,15 +72,15 @@ const KINDS: { id: SegId; label: string; short?: string; sub: string; about: str
     id: "mcp",
     label: "MCP servers",
     short: "MCP",
-    sub: "tool definitions",
-    about: "Servers that give the agent extra tools. Each tool’s description loads in every chat.",
+    sub: "extra tool listings",
+    about: "Servers that give the agent extra tools. At startup the agent may see only tool names, or more detail about the tools.",
   },
   {
     id: "subagent",
     label: "Subagents",
     short: "Agents",
     sub: "agent descriptions",
-    about: "Helpers the agent can hand work to. Each one’s description loads in every chat.",
+    about: "Helpers the agent can hand work to. The agent can list them at startup so it knows who to call.",
   },
 ];
 
@@ -139,8 +142,8 @@ export function contextOf(sheet: Sheet): Context {
     if (skills) skills.label = "Global skills";
   }
   const setup = setupTokens(sheet);
-  const harness = harnessTokens(sheet) ?? 0;
-  if (harness > 0) {
+  const harness = harnessTokens(sheet);
+  if (harness !== undefined && harness > 0) {
     segments.unshift({
       ...KINDS[0]!,
       label: harnessName(sheet.harness),
@@ -148,9 +151,10 @@ export function contextOf(sheet: Sheet): Context {
       items: [],
     });
   }
-  const total = setup + harness;
+  const total = setup + (harness ?? 0);
   const window = sheet.contextWindow ?? DEFAULT_WINDOW;
-  return { total, setup, window: Math.max(window, total), segments };
+  const free = harness === undefined ? undefined : Math.max(0, window - total);
+  return { total, setup, window, free, segments };
 }
 
 const SRC: Record<string, string> = {
@@ -263,12 +267,21 @@ const BIG_PART = 5000;
 */
 export function takeaway(c: Context, agent: string): Phrase {
   const used = Math.round((c.total / c.window) * 100);
-  if (used >= 50)
+  const measured = c.free !== undefined;
+  if (c.total > c.window)
     return [
-      "That’s ",
+      measured ? "That’s " : "Your setup alone uses ",
       { b: `${used}%` },
-      ` of the limit. Long chats fill up sooner, so ${agent} summarizes earlier messages more often.`,
+      " of the limit, more than the chat can hold.",
     ];
+  if (used >= 50)
+    return measured
+      ? [
+          "That’s ",
+          { b: `${used}%` },
+          " of the limit, so there’s less room for a long chat.",
+        ]
+      : ["Your setup alone uses ", { b: `${used}%` }, " of the limit, not counting built-ins."];
   const seg = (id: SegId) => c.segments.find((s) => s.id === id);
   const skills = [seg("skill"), seg("pskill")].flatMap((s) => s?.items ?? []);
   const parts: { id: SegId; tokens: number; items: CItem[] }[] = [
@@ -288,24 +301,26 @@ export function takeaway(c: Context, agent: string): Phrase {
         { b: server.name },
         " alone takes ",
         { b: tok(server.tokens) },
-        " in every chat, even when you don’t use it.",
+        " to make its tools available before you use them.",
       ];
     }
     if (top.id === "instructions")
       return [
         "Your instruction files add ",
         { b: tok(top.tokens) },
-        `. ${agent} loads them in full in every chat.`,
+        ` before you type, from the rules or file listings ${agent} sees at startup.`,
       ];
     return [
       "Your ",
       { b: count(loaded.length, top.id) },
       " add ",
       { b: tok(top.tokens) },
-      `. ${agent} loads a short description for each one in every chat, even when you don’t use it.`,
+      ` to ${agent}’s startup list, before you use them.`,
     ];
   }
   const harness = seg("harness")?.tokens ?? 0;
+  if (!measured)
+    return ["Your setup is light, but there’s no measurement for the built-in instructions and tools."];
   const free = [{ b: `${100 - used}%` }, " free for your chat."];
   return harness
     ? [

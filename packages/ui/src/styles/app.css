@@ -904,6 +904,7 @@
 }
 :where(.loadsheet) .ctx .take {
   max-width: 64ch;
+  overflow-wrap: anywhere;
   margin: 0;
   color: var(--muted-foreground);
   font-size: 14px;
