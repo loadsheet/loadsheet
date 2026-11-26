@@ -18,6 +18,7 @@ The dependencies in each `package.json` are the layering, and `vp lint` rejects 
 - `@loadsheet/schema`, `@loadsheet/core`, kit's `.` and `@loadsheet/harnesses` run in the browser. Only `@loadsheet/kit/node` touches the disk; a harness adapter receives `Files` from it.
 - `@loadsheet/ui` renders in Nuxt SSR and in the CLI's single HTML file, so it reads `document` or `location` only inside handlers and never imports Nuxt.
 - `@loadsheet/resolve` runs in a Cloudflare Worker: `fetch` is injected, and there is no git or `child_process`.
+- `@loadsheet/mcp` runs in a Worker and the browser. It imports no Node builtin, no other loadsheet package and no Ajv at runtime, and it never compiles code with `eval` or `new Function`.
 - `loadsheet` is the only package that parses argv, apart from fleet's own commands.
 - `@loadsheet/fleet` knows nothing of loadsheet. `fleetrc` is the bin npm users already run, so it keeps behaving as before.
 - `@loadsheet/fixtures` is for tests and scripts only.

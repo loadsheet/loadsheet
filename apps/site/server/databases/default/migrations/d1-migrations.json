@@ -1,3 +1,4 @@
 {
-  "20261125190803_cloudy_moonstone": "0000_cloudy_moonstone.sql"
+  "20261125190803_cloudy_moonstone": "0000_cloudy_moonstone.sql",
+  "20261126131123_mcp_counters": "0001_mcp_counters.sql"
 }

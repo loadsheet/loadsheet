@@ -1,0 +1,34 @@
+{
+  "name": "@loadsheet/mcp",
+  "version": "0.1.2",
+  "private": true,
+  "description": "Checks an MCP server's tools/list against what each MCP client does with it; runs in Node, the browser and a Cloudflare Worker.",
+  "homepage": "https://loadsheet.dev",
+  "license": "MIT",
+  "author": "onmax",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/loadsheet/loadsheet.git",
+    "directory": "packages/mcp"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "generate": "node scripts/generate.ts",
+    "prepack": "pnpm --filter @loadsheet/mcp build"
+  },
+  "devDependencies": {
+    "ajv": "catalog:",
+    "miniflare": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

@@ -77,6 +77,50 @@ for (const source of ["/etc", "file:///etc", "git@github.com:a/b", "ssh://git@gi
   });
 }
 
+await check("/api/resolve points an MCP URL at /mcp", async () => {
+  const res = await get(
+    `/api/resolve?source=${encodeURIComponent("https://mcp.deepwiki.com/mcp")}`,
+  );
+  assert.equal(res.status, 400);
+  const body = await res.json();
+  assert.equal(body.data?.code, "unsupported-source");
+  assert.equal(body.data?.see, "/mcp");
+});
+
+const postMcp = (body) =>
+  fetch(`${base}/api/mcp`, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify(body),
+  });
+
+await check("/api/mcp checks a pasted tools/list, uncached", async () => {
+  const toolList = JSON.parse(
+    await readFile(
+      new URL("../../../packages/mcp/test/fixtures/context7.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  const res = await postMcp({ toolList });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("cache-control"), "no-store");
+  const body = await res.json();
+  assert.equal(body.toolCount, toolList.tools.length);
+  assert.ok(body.diagnostics.length > 0, "no diagnostics");
+});
+
+for (const [url, code] of [
+  ["http://mcp.deepwiki.com/mcp", "not-https"],
+  ["https://127.0.0.1/mcp", "private-host"],
+  ["https://localhost/mcp", "private-host"],
+]) {
+  await check(`/api/mcp refuses ${url} as ${code}`, async () => {
+    const res = await postMcp({ url });
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).error, code);
+  });
+}
+
 await check("/report HTML holds no Report data", async () => {
   const res = await get("/report");
   assert.equal(res.status, 200);

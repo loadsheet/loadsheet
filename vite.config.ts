@@ -75,6 +75,18 @@ const workerImports = {
   patterns: [{ group: ["loadsheet/*", "@loadsheet/fleet/*"], message: workerMessage }],
 };
 
+// mcp runs in a Cloudflare Worker and the browser, where code can't be compiled at runtime: no Node
+// builtins, no other loadsheet package, and no eval. Its Ajv validators are compiled ahead of time.
+const mcpMessage =
+  "@loadsheet/mcp runs in Workers and the browser: no Node builtins, Ajv or other loadsheet packages.";
+const mcpImports = {
+  paths: [...builtinModules, "loadsheet", "ajv"].map((name) => ({ name, message: mcpMessage })),
+  patterns: [{ group: ["node:*", "@loadsheet/*", "loadsheet/*", "ajv/*"], message: mcpMessage }],
+};
+
+// Written by packages/mcp/scripts/generate.ts.
+const generated = ["packages/mcp/src/generated/**"];
+
 export default defineConfig({
   run: {
     tasks: {
@@ -125,14 +137,16 @@ export default defineConfig({
       "packages/ui",
       // The CLI page's own tests, with its aliases to the workspace sources.
       "apps/page",
+      // loadsheet.dev's server code that runs without Nuxt; e2e.mjs checks a running site.
+      { test: { name: "site", include: ["apps/site/test/**/*.test.ts"] } },
     ],
   },
   staged: {
     "*": "vp check --fix",
   },
-  fmt: { ignorePatterns: ["**/dist/**", ...nuxtOutput] },
+  fmt: { ignorePatterns: ["**/dist/**", ...nuxtOutput, ...generated] },
   lint: {
-    ignorePatterns: ["**/dist/**", ...nuxtOutput],
+    ignorePatterns: ["**/dist/**", ...nuxtOutput, ...generated],
     options: { typeAware: true, typeCheck: false },
     overrides: [
       {
@@ -154,6 +168,14 @@ export default defineConfig({
       {
         files: ["packages/resolve/src/**"],
         rules: { "no-restricted-imports": ["error", workerImports] },
+      },
+      {
+        files: ["packages/mcp/src/**"],
+        rules: {
+          "no-restricted-imports": ["error", mcpImports],
+          "no-eval": "error",
+          "no-new-func": "error",
+        },
       },
     ],
   },
