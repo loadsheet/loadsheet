@@ -11,6 +11,7 @@ import type {
   Signal,
 } from "@loadsheet/schema";
 import type { Fact } from "./index.ts";
+import { Accumulator, byKey, SEP } from "./sum.ts";
 
 /** A harness version a session that started on `day` ran. */
 export interface VersionSeen {
@@ -38,123 +39,6 @@ export interface Tally {
   readonly windows?: WindowSeen[];
 }
 
-const SEP = "\u0000";
-const sessionKey = (cell: { day: Day; harness: string; via: string }) =>
-  [cell.day, cell.harness, cell.via].join(SEP);
-const cellKey = (cell: { day: Day; harness: string; via: string; item: string }) =>
-  [cell.day, cell.harness, cell.via, cell.item].join(SEP);
-const versionKey = (seen: VersionSeen) => [seen.harness, seen.day, seen.version].join(SEP);
-const windowKey = (seen: WindowSeen) =>
-  [seen.harness, seen.day, String(seen.tokens).padStart(12, "0")].join(SEP);
-const byKey = <T>(key: (value: T) => string) => {
-  return (a: T, b: T) => {
-    const left = key(a);
-    const right = key(b);
-    return left < right ? -1 : left > right ? 1 : 0;
-  };
-};
-
-/** Sums counters by key; what `foldFacts`, `sumTallies` and `mergeScans` share. */
-class Accumulator {
-  readonly #sessions = new Map<string, SessionCell>();
-  readonly #cells = new Map<string, Cell>();
-  readonly #versions = new Map<string, VersionSeen>();
-  readonly #windows = new Map<string, WindowSeen>();
-
-  session(day: Day, harness: string, via: string): SessionCell {
-    const key = sessionKey({ day, harness, via });
-    let cell = this.#sessions.get(key);
-    if (!cell) {
-      cell = { day, harness, via, sessions: 0, fixedTokens: 0, measured: 0 };
-      this.#sessions.set(key, cell);
-    }
-    return cell;
-  }
-
-  cell(day: Day, harness: string, via: string, item: string): Cell {
-    const key = cellKey({ day, harness, via, item });
-    let cell = this.#cells.get(key);
-    if (!cell) {
-      cell = { day, harness, via, item, sessions: 0, bare: 0, chars: 0, byModel: 0, byUser: 0 };
-      this.#cells.set(key, cell);
-    }
-    return cell;
-  }
-
-  version(seen: VersionSeen): void {
-    const { harness, day, version } = seen;
-    this.#versions.set(versionKey(seen), { harness, day, version });
-  }
-
-  window(seen: WindowSeen): void {
-    const { harness, day, tokens } = seen;
-    this.#windows.set(windowKey(seen), { harness, day, tokens });
-  }
-
-  fact(harness: string, fact: Fact): void {
-    switch (fact.type) {
-      case "session":
-        this.session(fact.day, harness, fact.via).sessions += 1;
-        if (fact.version !== undefined) {
-          this.version({ harness, day: fact.day, version: fact.version });
-        }
-        return;
-      case "tokens": {
-        const cell = this.session(fact.day, harness, fact.via);
-        cell.fixedTokens += fact.tokens;
-        cell.measured += 1;
-        return;
-      }
-      case "window":
-        this.window({ harness, day: fact.day, tokens: fact.tokens });
-        return;
-      case "listed": {
-        const cell = this.cell(fact.day, harness, fact.via, fact.item);
-        cell.sessions += 1;
-        cell.chars += fact.chars;
-        if (fact.bare) cell.bare += 1;
-        return;
-      }
-      case "used": {
-        const cell = this.cell(fact.day, harness, fact.via, fact.item);
-        if (fact.by === "model") cell.byModel += 1;
-        else cell.byUser += 1;
-      }
-    }
-  }
-
-  tally(tally: Tally, keep: (day: Day) => boolean): void {
-    for (const from of tally.sessions) {
-      if (!keep(from.day)) continue;
-      const cell = this.session(from.day, from.harness, from.via);
-      cell.sessions += from.sessions;
-      cell.fixedTokens += from.fixedTokens;
-      cell.measured += from.measured;
-    }
-    for (const from of tally.cells) {
-      if (!keep(from.day)) continue;
-      const cell = this.cell(from.day, from.harness, from.via, from.item);
-      cell.sessions += from.sessions;
-      cell.bare += from.bare;
-      cell.chars += from.chars;
-      cell.byModel += from.byModel;
-      cell.byUser += from.byUser;
-    }
-    for (const seen of tally.versions) if (keep(seen.day)) this.version(seen);
-    for (const seen of tally.windows ?? []) if (keep(seen.day)) this.window(seen);
-  }
-
-  result(): Tally {
-    const tally: Tally = {
-      sessions: [...this.#sessions.values()].sort(byKey(sessionKey)),
-      cells: [...this.#cells.values()].sort(byKey(cellKey)),
-      versions: [...this.#versions.values()].sort(byKey(versionKey)),
-    };
-    if (this.#windows.size === 0) return tally;
-    return { ...tally, windows: [...this.#windows.values()].sort(byKey(windowKey)) };
-  }
-}
-
 /** Folds one harness's Facts into counters: `session` and `tokens` into SessionCells, `listed` and `used` into Cells. */
 export const foldFacts = (harness: string, facts: Iterable<Fact>): Tally => {
   const accumulator = new Accumulator();
@@ -164,9 +48,8 @@ export const foldFacts = (harness: string, facts: Iterable<Fact>): Tally => {
 
 /** Sums tallies, keeping only the days inside `window` when it is given. */
 export const sumTallies = (tallies: Iterable<Tally>, window?: readonly [Day, Day]): Tally => {
-  const keep = window ? (day: Day) => day >= window[0] && day <= window[1] : () => true;
-  const accumulator = new Accumulator();
-  for (const tally of tallies) accumulator.tally(tally, keep);
+  const accumulator = new Accumulator(window);
+  for (const tally of tallies) accumulator.tally(tally);
   return accumulator.result();
 };
 
@@ -320,7 +203,7 @@ export const mergeScans = (first: Scan, ...rest: Scan[]): Scan => {
 
   const counters = new Accumulator();
   for (const scan of ordered) {
-    counters.tally({ sessions: scan.sessions, cells: scan.cells, versions: [] }, () => true);
+    counters.tally({ sessions: scan.sessions, cells: scan.cells, versions: [] });
   }
   const total = counters.result();
 

@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PROMPT_DOC } from "@loadsheet/core";
+import { defaultCacheDir } from "@loadsheet/kit/node";
 import { parseReport } from "@loadsheet/schema";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 import pkg from "../package.json" with { type: "json" };
@@ -163,6 +164,34 @@ describe("loadsheet (this machine)", () => {
     expect(result.stdout).toContain("claude-code");
     expect(result.stdout).not.toContain(CANARY);
     expect(result.stdout).not.toContain(root);
+  });
+
+  it("keeps compiled code only in its cache directory, and none with --no-cache", () => {
+    const scan = (cache: string, ...args: string[]) => {
+      const result = spawnSync(process.execPath, [cli, "--scan", ...args], {
+        encoding: "utf8",
+        cwd: home,
+        env: { ...env, XDG_CACHE_HOME: cache },
+      });
+      expect(result.status).toBe(0);
+      return JSON.parse(result.stdout) as { scannedAt: string };
+    };
+    const cache = join(root, "compile-cache");
+    const dir = defaultCacheDir({ home, env: { XDG_CACHE_HOME: cache } });
+    scan(cache);
+    expect(readdirSync(join(dir, "compile"), { recursive: true }).length).toBeGreaterThan(0);
+    expect(readdirSync(cache)).toEqual(["loadsheet"]);
+
+    const none = join(root, "no-cache");
+    scan(none, "--no-cache");
+    expect(() => readdirSync(none)).toThrow();
+
+    // A cache directory that cannot be made leaves the Scan as it is.
+    const blocked = join(root, "blocked");
+    writeFileSync(blocked, "");
+    const { scannedAt: _, ...expected } = scan(none, "--no-cache");
+    const { scannedAt: __, ...got } = scan(blocked);
+    expect(got).toEqual(expected);
   });
 
   it("a flag overrides the config file", () => {

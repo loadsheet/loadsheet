@@ -153,6 +153,7 @@ const readTranscripts = async (
   harness: string,
   place: Place,
   sinceMs: number,
+  window: readonly [Day, Day],
   options: {
     tool: string;
     cacheDir: string | false;
@@ -171,6 +172,7 @@ const readTranscripts = async (
   const files = await transcriptFiles(machine.roots(place), sinceMs);
   const kept = new Map<string, CachedFile>();
   const tallies: Tally[] = [];
+  const fromCache: CachedFile[] = [];
   const toRead: { file: TranscriptFile; key?: string; resume?: CachedFile }[] = [];
   for (const file of files) {
     const key = cache?.key(file.path);
@@ -181,7 +183,7 @@ const readTranscripts = async (
       cached.ctimeMs === file.ctimeMs;
     if (cached && unchanged && !cached.hasTail) {
       kept.set(key!, cached);
-      tallies.push(cached.tally);
+      fromCache.push(cached);
       continue;
     }
     // A file that changed without growing may have been rewritten before the cached position.
@@ -226,6 +228,7 @@ const readTranscripts = async (
     }
   });
 
+  if (cache && fromCache.length) tallies.push(cache.sum(fromCache, window));
   // Files no longer listed, deleted or older than the window, leave the cache with their counters.
   await cache?.save(kept);
   return tallies;
@@ -269,7 +272,7 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
           : undefined;
       const items = files ? await machine.inventory(files, place) : [];
       const contextWindow = files ? await machine.contextWindow?.(files) : undefined;
-      const tallies = await readTranscripts(machine, harness.id, place, sinceMs, {
+      const tallies = await readTranscripts(machine, harness.id, place, sinceMs, window, {
         tool: options.tool,
         cacheDir,
         concurrency: options.concurrency ?? 16,
