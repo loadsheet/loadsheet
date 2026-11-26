@@ -21,7 +21,7 @@ function context(parts: Partial<Record<SegId, CItem[]>>, harness = 24_679): Cont
   if (harness) segments.unshift(seg("harness", [item("harness", harness)]));
   const setup = segments.filter((s) => s.id !== "harness").reduce((n, s) => n + s.tokens, 0);
   const total = setup + harness;
-  return { total, setup, window: 200_000, free: 200_000 - total, segments };
+  return { total, measured: true, setup, window: 200_000, free: 200_000 - total, segments };
 }
 const text = (p: Phrase) => p.map((r) => (typeof r === "string" ? r : r.b)).join("");
 
@@ -44,7 +44,9 @@ describe("the report's takeaway", () => {
       pskill: [item("c", 3000)],
       instructions: [item("CLAUDE.md", 6000)],
     });
-    expect(text(takeaway(c, "Codex"))).toMatch(/^Your 2 skills add 7k tokens to Codex’s startup list/);
+    expect(text(takeaway(c, "Codex"))).toMatch(
+      /^Your 2 skills add 7k tokens to Codex’s startup list/,
+    );
   });
 
   it("speaks of the limit once half of it is gone, and never says what to do", () => {

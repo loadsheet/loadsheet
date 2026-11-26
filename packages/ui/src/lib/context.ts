@@ -33,11 +33,13 @@ export interface Segment {
 export interface Context {
   /** Known tokens, including the built-ins when measured. */
   total: number;
+  /** Whether startup tokens were measured, even if the built-in share is zero. */
+  measured: boolean;
   /** What your own files add; the harness is the rest. */
   setup: number;
   /** The model's context window: the Report's, or 200k for a Report that predates it. */
   window: number;
-  /** Space left in the window, unknown when built-ins weren't measured. */
+  /** Space left in the window, unknown if built-ins weren't measured and setup doesn't fill it. */
   free: number | undefined;
   segments: Segment[];
 }
@@ -58,7 +60,8 @@ const KINDS: { id: SegId; label: string; short?: string; sub: string; about: str
     id: "instructions",
     label: "Instructions",
     sub: "CLAUDE.md, AGENTS.md, memory",
-    about: "Files like CLAUDE.md or AGENTS.md with your rules. The agent can load the text or just list the file at startup.",
+    about:
+      "Files like CLAUDE.md or AGENTS.md with your rules. The agent can load the text or just list the file at startup.",
   },
   { id: "skill", label: "Skills", sub: "skill listings", about: SKILLS_ABOUT },
   {
@@ -73,14 +76,16 @@ const KINDS: { id: SegId; label: string; short?: string; sub: string; about: str
     label: "MCP servers",
     short: "MCP",
     sub: "extra tool listings",
-    about: "Servers that give the agent extra tools. At startup the agent may see only tool names, or more detail about the tools.",
+    about:
+      "Servers that give the agent extra tools. At startup the agent may see only tool names, or more detail about the tools.",
   },
   {
     id: "subagent",
     label: "Subagents",
     short: "Agents",
     sub: "agent descriptions",
-    about: "Helpers the agent can hand work to. The agent can list them at startup so it knows who to call.",
+    about:
+      "Helpers the agent can hand work to. The agent can list them at startup so it knows who to call.",
   },
 ];
 
@@ -153,8 +158,10 @@ export function contextOf(sheet: Sheet): Context {
   }
   const total = setup + (harness ?? 0);
   const window = sheet.contextWindow ?? DEFAULT_WINDOW;
-  const free = harness === undefined ? undefined : Math.max(0, window - total);
-  return { total, setup, window, free, segments };
+  const measured = harness !== undefined;
+  const remaining = Math.max(0, window - total);
+  const free = measured || remaining === 0 ? remaining : undefined;
+  return { total, measured, setup, window, free, segments };
 }
 
 const SRC: Record<string, string> = {
@@ -267,7 +274,7 @@ const BIG_PART = 5000;
 */
 export function takeaway(c: Context, agent: string): Phrase {
   const used = Math.round((c.total / c.window) * 100);
-  const measured = c.free !== undefined;
+  const { measured } = c;
   if (c.total > c.window)
     return [
       measured ? "That’s " : "Your setup alone uses ",
@@ -276,11 +283,7 @@ export function takeaway(c: Context, agent: string): Phrase {
     ];
   if (used >= 50)
     return measured
-      ? [
-          "That’s ",
-          { b: `${used}%` },
-          " of the limit, so there’s less room for a long chat.",
-        ]
+      ? ["That’s ", { b: `${used}%` }, " of the limit, so there’s less room for a long chat."]
       : ["Your setup alone uses ", { b: `${used}%` }, " of the limit, not counting built-ins."];
   const seg = (id: SegId) => c.segments.find((s) => s.id === id);
   const skills = [seg("skill"), seg("pskill")].flatMap((s) => s?.items ?? []);
@@ -320,7 +323,9 @@ export function takeaway(c: Context, agent: string): Phrase {
   }
   const harness = seg("harness")?.tokens ?? 0;
   if (!measured)
-    return ["Your setup is light, but there’s no measurement for the built-in instructions and tools."];
+    return [
+      "Your setup is light, but there’s no measurement for the built-in instructions and tools.",
+    ];
   const free = [{ b: `${100 - used}%` }, " free for your chat."];
   return harness
     ? [

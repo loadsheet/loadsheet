@@ -103,7 +103,7 @@ describe("the views on a server", () => {
     const html = await render("/report?view=table", undefined, report);
     expect(html).toContain("200k chat limit");
     expect(html).toContain("108%");
-    expect(html).toContain("Free for your chat<small class=\"num\">0 tokens");
+    expect(html).toContain('Free for your chat<small class="num">0 tokens');
   });
 
   it("reports setup cost without claiming headroom when built-ins are unmeasured", async () => {
@@ -113,6 +113,26 @@ describe("the views on a server", () => {
     expect(html).toContain('Free for your chat<small class="num">Unknown');
     expect(html).toContain("Free for your chat is unknown");
     expect(html).not.toContain("free for your chat.");
+  });
+
+  it.each([200_000, 210_000])("reports zero headroom with %i setup tokens", async (tokens) => {
+    const line = source.lines.find((line) => line.scope)!;
+    const report = {
+      ...exampleReport,
+      sheet: [
+        {
+          ...source,
+          fixedTokens: undefined,
+          contextWindow: 200_000,
+          lines: [{ ...line, tokens: { ...line.tokens, value: tokens } }],
+        },
+      ],
+    };
+    const html = await render("/report?view=table", undefined, report);
+    expect(html).toContain("tokens</span> from your setup");
+    expect(html).toContain("Your setup alone uses");
+    expect(html).toContain('Free for your chat<small class="num">0 tokens');
+    expect(html).toContain('class="sw free"></span>Free</td><td class="r num">0</td>');
   });
 
   it("associates the token definition with the help button", async () => {

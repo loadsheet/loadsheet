@@ -79,7 +79,7 @@ function tokenFocus(e: FocusEvent) {
         }}</span
         ><span class="of"
           ><span class="unit">tokens</span>
-          {{ ctx.free === undefined ? "from your setup" : "used before you type" }}, out of a
+          {{ ctx.measured ? "used before you type" : "from your setup" }}, out of a
           {{ short(ctx.window) }} chat limit<button
             type="button"
             class="dhelp"
