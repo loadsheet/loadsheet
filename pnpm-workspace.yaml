@@ -17,6 +17,7 @@ catalog:
   cron-schedule: ^6.0.0
   fastest-levenshtein: 1.0.16
   jsonc-parser: 3.3.1
+  miniflare: 5.20261123.1-beta
   publint: ^0.3.25
   skills: ^1.9.0
   smol-toml: 1.9.1
