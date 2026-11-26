@@ -11,6 +11,8 @@
 
 ## Where each package runs
 
+Before you move code between packages, change a type that crosses one, or add a harness or a rule, read `SPEC.md`: it maps each package, the data that flows between them, and the files each addition touches.
+
 The dependencies in each `package.json` are the layering, and `vp lint` rejects the imports that break it. The reasons:
 
 - `@loadsheet/schema`, `@loadsheet/core`, kit's `.` and `@loadsheet/harnesses` run in the browser. Only `@loadsheet/kit/node` touches the disk; a harness adapter receives `Files` from it.
