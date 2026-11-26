@@ -33,9 +33,10 @@ export default defineNuxtConfig({
   docs: {
     site: { name: "loadsheet", url: "https://loadsheet.dev" },
     comments: false,
-    // /mcp is the MCP check page, and the docs MCP server would take that route.
-    mcp: false,
   },
+  // /mcp is the MCP check page only for a request that asks for HTML (server/middleware/mcp-page.ts); the link
+  // checker's request reaches the docs MCP server there instead.
+  linkChecker: { excludeLinks: ["/mcp"] },
   css: ["@loadsheet/ui/styles.css"],
   // Geist and Geist Mono, the variable fonts that stylesheet draws loadsheet's pages in, for every page and the docs'
   // OG images. Left to its provider, @nuxt/fonts would serve static cuts from Google and strip the stylesheet's own.
@@ -81,8 +82,6 @@ export default defineNuxtConfig({
     // A shared Report lives in the URL fragment, so these pages render only in the browser.
     "/report": { ssr: false },
     "/report/**": { ssr: false },
-    // The MCP check renders the same form for everyone and runs each check in the browser.
-    "/mcp": { prerender: true },
   },
   hooks: {
     // The JSON Schemas at https://loadsheet.dev/schema/*.json, the URLs their `$id`s name.

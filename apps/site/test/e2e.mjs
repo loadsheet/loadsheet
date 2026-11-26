@@ -130,8 +130,35 @@ await check(
     assert.match(html, /<title>Check an MCP server in every client · loadsheet<\/title>/);
     assert.ok(withoutScripts(html).includes("Does your MCP server work in every client?"));
     assert.ok(withoutScripts(await (await get("/")).text()).includes('href="/mcp"'));
+    assert.match(res.headers.get("vary") ?? "", /accept/i);
   },
 );
+
+await check("/mcp still answers MCP clients as the docs MCP server", async () => {
+  const res = await fetch(`${base}/mcp`, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "e2e", version: "0" },
+      },
+    }),
+  });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.ok(body.result?.serverInfo, JSON.stringify(body));
+  const stream = await fetch(`${base}/mcp`, { headers: { accept: "text/event-stream" } });
+  assert.ok(
+    !(stream.headers.get("content-type") ?? "").includes("text/html"),
+    "an event-stream GET got the page",
+  );
+  await stream.body?.cancel();
+});
 
 await check("/report HTML holds no Report data", async () => {
   const res = await get("/report");
