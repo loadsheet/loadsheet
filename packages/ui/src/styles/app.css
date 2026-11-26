@@ -303,9 +303,6 @@
   border-radius: 4px;
   font-size: 13px;
 }
-:where(.loadsheet) [data-slot="segmented-control-item"][data-off] {
-  opacity: 0.55;
-}
 :where(.loadsheet) [data-slot="segmented-control-indicator"] {
   border: 0;
   border-radius: 4px;
@@ -800,6 +797,7 @@
   justify-self: start;
 }
 :where(.loadsheet) .bar .right {
+  grid-column: 3;
   display: flex;
   align-items: center;
   justify-self: end;

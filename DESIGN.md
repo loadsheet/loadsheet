@@ -95,7 +95,7 @@ On every pressable thing, `:active` scales to .96. Hover styles live only inside
 
 ## Controls and chips
 
-- Switching between peer views in place: the `@ui-sdk/vue` SegmentedControl. The harness switch sits centred in the report header, each item with its mark (`components/HarnessMark.vue`) and name; a harness with 0 sessions gets `data-off`, which dims it but keeps it clickable. The Map / Table switch sits above the view, right-aligned.
+- Switching between peer views in place: the `@ui-sdk/vue` SegmentedControl. The harness switch sits centred in the report header, each item with its mark (`components/HarnessMark.vue`) and name. It lists only harnesses with sessions (plus the one in `?h=`), and it is hidden when that leaves one. The Map / Table switch sits above the view, right-aligned.
 - Switching between peer content panels: `@ui-sdk/vue` Tabs (the landing start card).
 - Filtering a list: `.fchip` buttons with `aria-pressed`. Status labels: `.chip`; "never used" is `.chip.no`. Kind labels: `.kchip` (square plus name).
 - Commands: `components/Cmd.vue`, given `fixView(f)`. `cmd` shows a `$` prompt in `--acc`, `set` shows a front-matter key, and `ask` is a plain sentence for the agent in an outlined well.
