@@ -38,9 +38,9 @@ Real transcripts are private. Read them a few lines at a time. Make a fixture wi
 
 ## Git and releases
 
-- Commit to `main` and push it; open no branch or pull request. Before each push, rebase on `origin/main` and run `pnpm build`, `pnpm check` and `vp test packages/<name>` for each package you changed. Tests run the built CLI, so build first. Never force-push `main`.
+- Work on a branch and open a pull request into `main`; push nothing to `main` directly. Before each push, rebase on `origin/main` and run `pnpm build`, `pnpm check` and `vp test packages/<name>` for each package you changed. Tests run the built CLI, so build first. Never force-push `main`.
 - Every public package shares one version, because the release runs in lockstep. The private `fleetrc` stays at 0.0.0.
-- A push to `main` opens a `release/v*` pull request; merging it publishes to npm through trusted publishing. CI on that bot pull request waits for approval: `gh api -X POST repos/loadsheet/loadsheet/actions/runs/<id>/approve`.
+- A merge into `main` opens a `release/v*` pull request; merging it publishes to npm through trusted publishing. CI on that bot pull request waits for approval: `gh api -X POST repos/loadsheet/loadsheet/actions/runs/<id>/approve`.
 - A new public package needs its npm name claimed with a trusted publisher before its first release.
 
 ## Tracking
