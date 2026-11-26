@@ -132,20 +132,80 @@ const LISTINGS = [
   "deferred_tools_delta",
   "instructions",
 ];
-/** Tool names a tool_use block counts under, as they start in the line's bytes. */
-const COUNTED_TOOLS = ['"Skill"', '"Agent"', '"Task"', '"mcp__'];
+const quoted = (name: string) => `"${name}"`;
+const READ_TOKENS = new Map(READ.map((type) => [type, quoted(type)]));
+const LISTING_TOKENS = LISTINGS.map(quoted);
+/**
+ * A string a line is searched for, and a part of it that starts with a byte JSON lines hold less
+ * often. A search skips ahead to its needle's first byte, so the part's search runs several times
+ * faster, and the whole string is searched for only in lines that hold the part.
+ */
+type Needle = readonly [whole: string, part: string];
+const holds = (line: LineBytes, [whole, part]: Needle) =>
+  line.includes(part) && line.includes(whole);
+/** A tool_use block's type. */
+const TOOL_USE: Needle = ['"tool_use"', '_use"'];
+/** The Skill tool's name and MCP tools', as they start in the line's bytes. */
+const SKILL: Needle = ['"Skill"', 'Skill"'];
+const MCP: Needle = ['"mcp__', "__"];
+const SUBAGENT_TOOLS = ['"Agent"', '"Task"'];
+/**
+ * An Agent or Task call counts only with a `subagent_type`: without one it runs general-purpose,
+ * which is built in. Searched for before the tool names, which `attributionAgent` keys also end in.
+ */
+const SUBAGENT_TYPE = '_type"';
+/** What a slash command's text starts with. It starts with `<`, a byte JSON lines seldom hold. */
+const COMMAND_MESSAGE = "<command-message>";
 const HEAD_BYTES = 512;
 const TAIL_BYTES = 1024;
-const WHITESPACE = " \t\n\r";
-const SCALAR = String.raw`(?:null|true|false|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|"(?:[^"\\]|\\.)*")`;
-/**
- * The top-level `type` when only scalar members follow it to the line's closing brace. A quote
- * after `{` or `,` cannot be an escaped one, so the match starts at a key at the depth of that brace.
- */
-const TAIL_TYPE = new RegExp(
-  String.raw`(?<=[{,][ \t\n\r]*)"type"[ \t\n\r]*:[ \t\n\r]*"([^"\\]*)"(?:[ \t\n\r]*,[ \t\n\r]*"(?!type")[^"\\]*"[ \t\n\r]*:[ \t\n\r]*${SCALAR})*[ \t\n\r]*\}[ \t\n\r]*$`,
-  "u",
-);
+
+const QUOTE = 0x22;
+const COMMA = 0x2c;
+const COLON = 0x3a;
+const BACKSLASH = 0x5c;
+const OPEN = 0x7b;
+const CLOSE = 0x7d;
+const isSpace = (code: number) => code === 0x20 || code === 0x0a || code === 0x0d || code === 0x09;
+/** The first index from `at` on that is not JSON whitespace. */
+const skipSpace = (text: string, at: number) => {
+  while (at < text.length && isSpace(text.charCodeAt(at))) at += 1;
+  return at;
+};
+/** Where the string token at `at` closes when it has no escapes; -1 when it has or does not close. */
+const plainEnd = (text: string, at: number) => {
+  if (text.charCodeAt(at) !== QUOTE) return -1;
+  for (let index = at + 1; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    if (code === QUOTE) return index;
+    if (code === BACKSLASH) return -1;
+  }
+  return -1;
+};
+/** The value of the string token at `at`, when it has no escapes and ends in `text`. */
+const plainAt = (text: string, at: number) => {
+  const close = plainEnd(text, at);
+  return close === -1 ? undefined : text.slice(at + 1, close);
+};
+/** Whether the plain string token from `at` to `close` is `name`. */
+const isToken = (text: string, at: number, close: number, name: string) =>
+  close - at - 1 === name.length && text.startsWith(name, at + 1);
+/** Where the string token at `at` closes, escapes and all; -1 when it does not in `text`. */
+const stringEnd = (text: string, at: number) => {
+  for (let close = text.indexOf('"', at + 1); close !== -1; close = text.indexOf('"', close + 1)) {
+    let escapes = 0;
+    while (text.charCodeAt(close - 1 - escapes) === BACKSLASH) escapes += 1;
+    if (escapes % 2 === 0) return close;
+  }
+  return -1;
+};
+/** Where the number or literal at `at` ends: at whitespace, `,` or `}`. */
+const scalarEnd = (text: string, at: number) => {
+  for (; at < text.length; at += 1) {
+    const code = text.charCodeAt(at);
+    if (code === COMMA || code === CLOSE || isSpace(code)) break;
+  }
+  return at;
+};
 
 interface Head {
   /** The top-level `type`, when a string. */
@@ -162,75 +222,92 @@ interface Head {
  */
 const readHead = (text: string): Head => {
   const head: Head = {};
-  let at = 0;
-  const space = () => {
-    while (at < text.length && WHITESPACE.includes(text[at]!)) at += 1;
-  };
-  /** A string token without escapes. */
-  const plain = () => {
-    if (text[at] !== '"') return undefined;
-    const end = text.indexOf('"', at + 1);
-    if (end === -1) return undefined;
-    const value = text.slice(at + 1, end);
-    if (value.includes("\\")) return undefined;
-    at = end + 1;
-    return value;
-  };
-  /** Moves past a string token, escapes and all; false when it does not end in `text`. */
-  const string = () => {
-    for (at += 1; at < text.length; at += 1) {
-      if (text[at] === "\\") at += 1;
-      else if (text[at] === '"') {
-        at += 1;
-        return true;
-      }
-    }
-    return false;
-  };
-  space();
-  if (text[at] !== "{") return head;
-  at += 1;
+  let at = skipSpace(text, 0);
+  if (text.charCodeAt(at) !== OPEN) return head;
   for (;;) {
-    space();
-    const key = plain();
-    if (key === undefined) return head;
-    space();
-    if (text[at] !== ":") return head;
-    at += 1;
-    space();
-    const first = text[at];
-    if (first === "{") {
-      if (key !== "attachment") return head;
-      at += 1;
-      space();
-      if (plain() !== "type") return head;
-      space();
-      if (text[at] !== ":") return head;
-      at += 1;
-      space();
-      const type = plain();
+    at = skipSpace(text, at + 1);
+    const keyEnd = plainEnd(text, at);
+    if (keyEnd === -1) return head;
+    const key = at;
+    at = skipSpace(text, keyEnd + 1);
+    if (text.charCodeAt(at) !== COLON) return head;
+    at = skipSpace(text, at + 1);
+    const first = text.charCodeAt(at);
+    if (first === OPEN) {
+      if (!isToken(text, key, keyEnd, "attachment")) return head;
+      at = skipSpace(text, at + 1);
+      const typeEnd = plainEnd(text, at);
+      if (typeEnd === -1 || !isToken(text, at, typeEnd, "type")) return head;
+      at = skipSpace(text, typeEnd + 1);
+      if (text.charCodeAt(at) !== COLON) return head;
+      const type = plainAt(text, skipSpace(text, at + 1));
       if (type !== undefined) head.attachment = type;
       return head;
     }
-    if (first === undefined || first === "[") return head;
-    if (first === '"') {
-      if (key === "type") {
-        const type = plain();
+    if (first === QUOTE) {
+      if (isToken(text, key, keyEnd, "type")) {
+        const type = plainAt(text, at);
         if (type === undefined) return head;
         head.type = type;
-      } else if (!string()) return head;
-    } else {
-      const start = at;
-      while (at < text.length && !",}".includes(text[at]!) && !WHITESPACE.includes(text[at]!)) {
-        at += 1;
+        at += type.length + 2;
+      } else {
+        const close = stringEnd(text, at);
+        if (close === -1) return head;
+        at = close + 1;
       }
+    } else {
+      // An array, or the end of `text`.
+      if (first === 0x5b || at >= text.length) return head;
+      const start = at;
+      at = scalarEnd(text, at);
       if (at === text.length) return head;
-      if (key === "isSidechain") head.side = text.slice(start, at) === "true";
+      if (isToken(text, key, keyEnd, "isSidechain")) {
+        head.side = at - start === 4 && text.startsWith("true", start);
+      }
     }
-    space();
-    if (text[at] !== ",") return head;
-    at += 1;
+    at = skipSpace(text, at);
+    if (text.charCodeAt(at) !== COMMA) return head;
   }
+};
+
+/**
+ * The type a `"type"` key at `key` gives when no object or array follows it before the brace that
+ * ends `text`. A quote after `{` or `,` cannot be an escaped one, so the key is a member of an
+ * object; with no brace or bracket after it but the last, that object is the line's own.
+ */
+const lastMembersType = (text: string, key: number) => {
+  let before = key - 1;
+  while (before >= 0 && isSpace(text.charCodeAt(before))) before -= 1;
+  const opener = text.charCodeAt(before);
+  if (opener !== COMMA && opener !== OPEN) return undefined;
+  const colon = skipSpace(text, key + 6);
+  if (text.charCodeAt(colon) !== COLON) return undefined;
+  const value = skipSpace(text, colon + 1);
+  const type = plainAt(text, value);
+  if (type === undefined) return undefined;
+  const after = value + type.length + 2;
+  let close = text.length - 1;
+  while (close >= after && isSpace(text.charCodeAt(close))) close -= 1;
+  if (close < after || text.charCodeAt(close) !== CLOSE) return undefined;
+  const between = (char: string) => {
+    const at = text.indexOf(char, after);
+    return at !== -1 && at < close;
+  };
+  return between("{") || between("[") || between("}") ? undefined : type;
+};
+
+/** The top-level `type` read from a line's last bytes, when only scalar members follow it. */
+const tailType = (text: string) => {
+  for (
+    let key = text.lastIndexOf('"type"');
+    key !== -1;
+    key = text.lastIndexOf('"type"', key - 1)
+  ) {
+    const type = lastMembersType(text, key);
+    if (type !== undefined) return type;
+    if (key === 0) break;
+  }
+  return undefined;
 };
 
 const isEmpty = (record: Record<string, unknown>) => Object.keys(record).length === 0;
@@ -238,12 +315,12 @@ const isEmpty = (record: Record<string, unknown>) => Object.keys(record).length 
 /**
  * True only when `parse` would return no Facts and leave `state` as it is. Reads the line's head and
  * tail, and searches the whole line only for strings whose absence settles it. It assumes, as
- * Claude Code's writer guarantees, no duplicate keys and no escaped ASCII letters; a line that is
- * not JSON is a no-op either way.
+ * Claude Code's writer (`JSON.stringify`) guarantees, no duplicate keys and no escaped printable
+ * ASCII; a line that is not JSON is a no-op either way.
  */
 const skip = (line: LineBytes, state: ClaudeState): boolean => {
   const head = readHead(line.slice(0, HEAD_BYTES));
-  const type = head.type ?? TAIL_TYPE.exec(line.slice(Math.max(0, line.length - TAIL_BYTES)))?.[1];
+  const type = head.type ?? tailType(line.slice(Math.max(0, line.length - TAIL_BYTES)));
   if (type !== undefined && !READ.includes(type)) return true;
   if (state.day === undefined) return false;
   // Unknown counts as the main chain: every line that is a no-op there is one in a subagent's too.
@@ -254,20 +331,22 @@ const skip = (line: LineBytes, state: ClaudeState): boolean => {
     if (as === "attachment") {
       if (side) return true;
       return head.attachment === undefined
-        ? !LISTINGS.some((listing) => line.includes(`"${listing}"`))
+        ? !LISTING_TOKENS.some((listing) => line.includes(listing))
         : !LISTINGS.includes(head.attachment);
     }
     if (!quiet) return false;
-    if (as === "user") return !line.includes("command-message");
+    if (as === "user") return !line.includes(COMMAND_MESSAGE);
     if (as === "assistant") {
       if (!state.tokens && !side) return false;
-      return !line.includes("tool_use") || !COUNTED_TOOLS.some((name) => line.includes(name));
+      if (!holds(line, TOOL_USE)) return true;
+      if (holds(line, SKILL) || holds(line, MCP)) return false;
+      return !line.includes(SUBAGENT_TYPE) || !SUBAGENT_TOOLS.some((name) => line.includes(name));
     }
     return true;
   };
   // A type the line's ends do not show must be a no-op as each one its bytes could hold.
   return type === undefined
-    ? READ.every((as) => !line.includes(`"${as}"`) || noop(as))
+    ? READ.every((as) => noop(as) || !line.includes(READ_TOKENS.get(as)!))
     : noop(type);
 };
 

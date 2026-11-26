@@ -223,6 +223,41 @@ const CRAFTED = [
       ...at,
     }),
   ]),
+  ...[false, true].flatMap((side) => [
+    // A slash command after whitespace, or in a text block after a tool result.
+    user(side, " \n\t<command-message>a</command-message><command-name>a</command-name>"),
+    user(side, [
+      { type: "tool_result", tool_use_id: "t", content: "x" },
+      {
+        type: "text",
+        text: "<command-message>a</command-message>\n<command-name>/a</command-name>",
+      },
+    ]),
+    // Keys that hold the parts searched for first, but not the names.
+    assistant(side, [tool("Bash", { MySkill: 1, MyAgent: 1, a__b: 1, my_use: 1, my_type: 1 })]),
+    assistant(side, [tool("Agent", { subagent_type: "Explore" })]),
+    assistant(side, [tool("Task", { description: "x" })], undefined, { attributionAgent: "x" }),
+    assistant(side, [{ type: "text", text: "x", MySkill: 1, my_use: 1 }]),
+    // A counted tool after one that is not.
+    assistant(side, [tool("Bash"), tool("Skill", { skill: "a" })]),
+    assistant(side, [tool("Read"), tool("mcp__srv__go")]),
+    // Last members of every scalar kind, and a string that ends in `"type`.
+    assistant(side, [tool("Skill", { skill: "a" })], undefined, {
+      slug: '"type',
+      n: -1.5e3,
+      ok: true,
+      none: null,
+    }),
+    // A `"type"` key in a nested object that is the last member.
+    JSON.stringify({
+      parentUuid: null,
+      isSidechain: side,
+      message: { role: "assistant", content: [tool("Skill", { skill: "a" })] },
+      type: "assistant",
+      extra: { type: "system" },
+    }),
+  ]),
+  JSON.stringify({ type: "system" }),
   // Key orders Claude Code does not write: isSidechain after an object, or as a string.
   JSON.stringify({
     message: { role: "user", content: "hi" },

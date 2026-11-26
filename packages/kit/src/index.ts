@@ -111,20 +111,6 @@ export interface TranscriptFormat<State> {
   skip?(line: LineBytes, state: State): boolean;
   /** May mutate `state`. A throw fails the whole read, so catch malformed lines inside. */
   parse(line: string, state: State): readonly Fact[];
-  /**
-   * Called on a line's bytes before the marker gate and before decoding. True only when `parse`
-   * would return no records and leave `state` unchanged; must not mutate `state`.
-   */
-  skip?(line: LineBytes, state: State): boolean;
-}
-
-/** One transcript line's raw bytes, as `skip` sees them, possibly ending in a carriage return. */
-export interface LineBytes {
-  readonly length: number;
-  /** Whether the bytes contain this ASCII string. */
-  includes(ascii: string): boolean;
-  /** The bytes from `start` to `end`, one character per byte (latin1). */
-  slice(start: number, end?: number): string;
 }
 
 /** Where things are on one machine. A harness derives its own paths from it and reads nothing. */
