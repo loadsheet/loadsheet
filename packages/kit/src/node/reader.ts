@@ -22,10 +22,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import * as NodeFS from "node:fs";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import type { Transform } from "node:stream";
 import * as NodeZlib from "node:zlib";
+import type { LineBytes } from "../index.ts";
 
 export interface TranscriptFile {
   readonly path: string;
@@ -41,6 +43,11 @@ export interface LineFormat<State, Entry> {
   readonly markers: readonly [string, ...string[]];
   /** Plain JSON data; the reader copies it with structuredClone. */
   initial(): State;
+  /**
+   * True only when `parse` would return no records and leave `state` unchanged. Called before the
+   * marker test and before the line is decoded; the line counts as read either way.
+   */
+  skip?(line: LineBytes, state: State): boolean;
   /** May mutate `state`. A throw fails the whole read (null), so catch malformed lines inside. */
   parse(line: string, state: State): readonly Entry[];
 }
@@ -69,6 +76,11 @@ export interface ReadOptions {
   readonly maxLineBytes?: number;
   /** Bytes read from disk at a time. Default 256 KB. */
   readonly chunkBytes?: number;
+  /**
+   * Read a `.jsonl` file with blocking reads, for a worker thread where nothing else waits on the
+   * event loop. A `.jsonl.zst` file is read through its stream either way. Default false.
+   */
+  readonly sync?: boolean;
 }
 
 export const GUARD_LENGTH = 64;
@@ -140,23 +152,23 @@ export async function listTranscriptFiles(
   return { files: found.filter((file) => file !== undefined), failedPaths };
 }
 
-async function guardMatches(handle: NodeFSP.FileHandle, position: ReadPosition): Promise<boolean> {
-  const { offset, guardLength, guardHash } = position;
-  if (!Number.isSafeInteger(offset) || offset <= 0) return false;
-  if (guardLength !== Math.min(GUARD_LENGTH, offset)) return false;
-  const window = Buffer.alloc(guardLength);
-  const { bytesRead } = await handle.read(window, 0, guardLength, offset - guardLength);
-  return bytesRead === guardLength && fnv1a(window) === guardHash;
+/** A zeroed buffer for the guard window before `position.offset`; undefined when it cannot be resumed from. */
+function guardWindow(position: ReadPosition): Buffer | undefined {
+  const { offset, guardLength } = position;
+  if (!Number.isSafeInteger(offset) || offset <= 0) return undefined;
+  if (guardLength !== Math.min(GUARD_LENGTH, offset)) return undefined;
+  return Buffer.alloc(guardLength);
 }
 
 /**
- * Tests raw line bytes for any marker. Markers become latin1 strings of their UTF-8 bytes,
- * so one regex over a latin1 view matches bytes exactly, without decoding the line.
+ * Tests raw line bytes for any marker. One marker is searched from the line's end, where Claude
+ * Code writes `"entrypoint"`. Several become latin1 strings of their UTF-8 bytes, so one regex
+ * over a latin1 view matches bytes exactly, without decoding the line.
  */
 export function lineGate(markers: readonly [string, ...string[]]): (line: Buffer) => boolean {
   if (markers.length === 1) {
     const marker = Buffer.from(markers[0]);
-    return (line) => line.includes(marker);
+    return (line) => line.lastIndexOf(marker) !== -1;
   }
   const pattern = new RegExp(
     markers
@@ -168,6 +180,185 @@ export function lineGate(markers: readonly [string, ...string[]]): (line: Buffer
       .join("|"),
   );
   return (line) => pattern.test(line.toString("latin1"));
+}
+
+const gates = new WeakMap<LineFormat<unknown, unknown>, (line: Buffer) => boolean>();
+const gateOf = (format: LineFormat<unknown, unknown>): ((line: Buffer) => boolean) => {
+  let gate = gates.get(format);
+  if (gate === undefined) gates.set(format, (gate = lineGate(format.markers)));
+  return gate;
+};
+
+/** `includes` needles as bytes, so a search does not encode its string each time. */
+const needles = new Map<string, Buffer>();
+const MAX_NEEDLES = 256;
+
+/** The line `skip` sees: one object per read, pointed at each line in turn. */
+class LineView implements LineBytes {
+  bytes: Buffer = Buffer.alloc(0);
+  get length(): number {
+    return this.bytes.length;
+  }
+  includes(ascii: string): boolean {
+    let needle = needles.get(ascii);
+    if (needle === undefined) {
+      needle = Buffer.from(ascii);
+      if (needles.size < MAX_NEEDLES) needles.set(ascii, needle);
+    }
+    return this.bytes.includes(needle);
+  }
+  slice(start: number, end?: number): string {
+    return this.bytes.toString("latin1", start, end);
+  }
+}
+
+/** This thread's read windows, reused from read to read. */
+const spareWindows: Buffer[] = [];
+/**
+ * A window holds this many reads, so the unfinished line at its end moves to the front once every
+ * few reads rather than after each one.
+ */
+const WINDOW_CHUNKS = 4;
+/** A window grown past this by a long line is let go rather than kept for the next read. */
+const KEPT_WINDOW_BYTES = 4 * 1024 * 1024;
+
+const takeWindow = (bytes: number): Buffer => {
+  const window = spareWindows.pop();
+  return window !== undefined && window.length >= bytes ? window : Buffer.allocUnsafe(bytes);
+};
+const giveBack = (window: Buffer): void => {
+  if (window.length <= KEPT_WINDOW_BYTES) spareWindows.push(window);
+};
+
+/**
+ * Splits a file's bytes into lines and parses them. Bytes are read into its window after the
+ * unfinished line, which moves only when the window runs out of room.
+ */
+class LineSplitter<State, Entry> {
+  readonly records: Entry[] = [];
+  skippedLines = 0;
+  /** Where the line after the last complete one starts, in the file. */
+  offset: number;
+  readonly #format: LineFormat<State, Entry>;
+  readonly #state: State;
+  readonly #gate: (line: Buffer) => boolean;
+  readonly #maxLineBytes: number;
+  readonly #view = new LineView();
+  #window: Buffer;
+  /** Where the window's first byte is in the file. */
+  #base: number;
+  /** The unfinished line's bytes in the window. */
+  #start = 0;
+  #end = 0;
+  /** The unfinished line is past `maxLineBytes`: its bytes are dropped and it counts at its newline. */
+  #oversized = false;
+
+  constructor(
+    format: LineFormat<State, Entry>,
+    state: State,
+    start: number,
+    maxLineBytes: number,
+    chunkBytes: number,
+  ) {
+    this.#format = format;
+    this.#state = state;
+    this.#gate = gateOf(format as LineFormat<unknown, unknown>);
+    this.#maxLineBytes = maxLineBytes;
+    this.#window = takeWindow(WINDOW_CHUNKS * chunkBytes);
+    this.offset = start;
+    this.#base = start;
+  }
+
+  /** Gives the window back for the next read on this thread. */
+  close(): void {
+    giveBack(this.#window);
+  }
+
+  /**
+   * Where to read up to `bytes` more bytes, as [buffer, offset, length] with length at least 1.
+   * Moves the unfinished line to the window's front, or into a larger window, to make room.
+   */
+  room(bytes: number): [Buffer, number, number] {
+    let window = this.#window;
+    if (window.length - this.#end < bytes) {
+      const held = this.#end - this.#start;
+      if (held + bytes > window.length) {
+        const grown = Buffer.allocUnsafe(Math.max(held + bytes, 2 * window.length));
+        window.copy(grown, 0, this.#start, this.#end);
+        this.#window = window = grown;
+      } else if (held > 0) {
+        window.copyWithin(0, this.#start, this.#end);
+      }
+      this.#base += this.#start;
+      this.#start = 0;
+      this.#end = held;
+    }
+    return [window, this.#end, Math.min(bytes, window.length - this.#end)];
+  }
+
+  /** Splits the `bytes` bytes just read where `room` said. */
+  added(bytes: number): void {
+    const from = this.#end;
+    const end = (this.#end += bytes);
+    const window = this.#window.subarray(0, end);
+    let start = this.#start;
+    // The unfinished line's bytes before `from` were searched when they were read.
+    let newline = window.indexOf(NEWLINE, from);
+    if (newline !== -1) {
+      do {
+        if (this.#oversized || newline - start > this.#maxLineBytes) this.skippedLines += 1;
+        else this.#parse(window.subarray(start, newline));
+        this.#oversized = false;
+        start = newline + 1;
+        newline = window.indexOf(NEWLINE, start);
+      } while (newline !== -1);
+      this.offset = this.#base + start;
+    }
+    if (end - start > this.#maxLineBytes) this.#oversized = true;
+    this.#start = this.#oversized ? end : start;
+  }
+
+  /** Splits `chunk`, which may be reused once this returns. */
+  push(chunk: Buffer): void {
+    for (let at = 0; at < chunk.length;) {
+      const [window, offset, length] = this.room(chunk.length - at);
+      chunk.copy(window, offset, at, at + length);
+      at += length;
+      this.added(length);
+    }
+  }
+
+  /**
+   * Parses an unterminated last line into `tail`, against a copy of the state so the state
+   * returned covers complete lines only.
+   */
+  finish(): { tail: Entry[]; state: State } {
+    const tail: Entry[] = [];
+    if (this.#oversized || this.#end === this.#start) return { tail, state: this.#state };
+    const text = this.#decode(this.#window.subarray(this.#start, this.#end));
+    if (text === undefined) return { tail, state: this.#state };
+    const state = structuredClone(this.#state);
+    for (const record of this.#format.parse(text, state)) tail.push(record);
+    return { tail, state: this.#state };
+  }
+
+  /** The line's text without its carriage return, or undefined when `skip` or the gate drops it. */
+  #decode(line: Buffer): string | undefined {
+    const content =
+      line.length > 0 && line[line.length - 1] === CARRIAGE_RETURN ? line.subarray(0, -1) : line;
+    if (this.#format.skip !== undefined) {
+      this.#view.bytes = content;
+      if (this.#format.skip(this.#view, this.#state)) return undefined;
+    }
+    if (!this.#gate(content)) return undefined;
+    return content.toString("utf8");
+  }
+
+  #parse(line: Buffer): void {
+    const text = this.#decode(line);
+    if (text === undefined) return;
+    for (const record of this.#format.parse(text, this.#state)) this.records.push(record);
+  }
 }
 
 type ZstdDecompress = () => Transform & { readonly bytesWritten: number };
@@ -328,113 +519,147 @@ export async function readTranscript<State, Entry>(
 ): Promise<ReadResult<Entry> | null> {
   const maxLineBytes = options?.maxLineBytes ?? MAX_LINE_BYTES;
   const chunkBytes = options?.chunkBytes ?? CHUNK_BYTES;
-  const compressed = path.endsWith(".jsonl.zst");
-  if (compressed && createZstdDecompress === undefined) return null;
+  if (path.endsWith(".jsonl.zst")) return readCompressed(path, format, maxLineBytes, chunkBytes);
+  if (options?.sync) return readPlainSync(path, format, resumeFrom, maxLineBytes, chunkBytes);
+  return readPlain(path, format, resumeFrom, maxLineBytes, chunkBytes);
+}
 
+/** The state to start from: the resumed position's, or the format's initial one, copied either way. */
+const startState = <State>(format: LineFormat<State, unknown>, resumeFrom?: ReadPosition): State =>
+  structuredClone(resumeFrom === undefined ? format.initial() : (resumeFrom.state as State));
+
+const plainResult = <State, Entry>(
+  lines: LineSplitter<State, Entry>,
+  resumed: boolean,
+  guardHash: number,
+): ReadResult<Entry> => {
+  const { tail, state } = lines.finish();
+  const { offset } = lines;
+  return {
+    records: lines.records,
+    tail,
+    position: { offset, guardLength: Math.min(GUARD_LENGTH, offset), guardHash, state },
+    resumed,
+    skippedLines: lines.skippedLines,
+  };
+};
+
+/** Reads with blocking calls into this thread's reused windows, so nothing yields until it returns. */
+function readPlainSync<State, Entry>(
+  path: string,
+  format: LineFormat<State, Entry>,
+  resumeFrom: ReadPosition | undefined,
+  maxLineBytes: number,
+  chunkBytes: number,
+): ReadResult<Entry> | null {
+  let fd: number;
+  try {
+    fd = NodeFS.openSync(path, "r");
+  } catch {
+    return null;
+  }
+  let lines: LineSplitter<State, Entry> | undefined;
+  try {
+    const window = resumeFrom && guardWindow(resumeFrom);
+    const resumed =
+      window !== undefined &&
+      NodeFS.readSync(fd, window, 0, window.length, resumeFrom!.offset - window.length) ===
+        window.length &&
+      fnv1a(window) === resumeFrom!.guardHash;
+    const start = resumed ? resumeFrom!.offset : 0;
+    const state = startState(format, resumed ? resumeFrom : undefined);
+    lines = new LineSplitter(format, state, start, maxLineBytes, chunkBytes);
+    for (let at = start; ;) {
+      const [buffer, offset, length] = lines.room(chunkBytes);
+      const bytesRead = NodeFS.readSync(fd, buffer, offset, length, at);
+      if (bytesRead === 0) break;
+      at += bytesRead;
+      lines.added(bytesRead);
+    }
+    const guard = Buffer.alloc(Math.min(GUARD_LENGTH, lines.offset));
+    if (guard.length > 0) NodeFS.readSync(fd, guard, 0, guard.length, lines.offset - guard.length);
+    return plainResult(lines, resumed, guard.length > 0 ? fnv1a(guard) : 0);
+  } catch {
+    return null;
+  } finally {
+    lines?.close();
+    NodeFS.closeSync(fd);
+  }
+}
+
+async function readPlain<State, Entry>(
+  path: string,
+  format: LineFormat<State, Entry>,
+  resumeFrom: ReadPosition | undefined,
+  maxLineBytes: number,
+  chunkBytes: number,
+): Promise<ReadResult<Entry> | null> {
   let handle: NodeFSP.FileHandle;
   try {
     handle = await NodeFSP.open(path, "r");
   } catch {
     return null;
   }
-
+  let lines: LineSplitter<State, Entry> | undefined;
   try {
-    let state: State;
-    let start = 0;
-    let resumed = false;
-    if (!compressed && resumeFrom !== undefined && (await guardMatches(handle, resumeFrom))) {
-      state = structuredClone(resumeFrom.state) as State;
-      start = resumeFrom.offset;
-      resumed = true;
-    } else {
-      state = structuredClone(format.initial());
+    const window = resumeFrom && guardWindow(resumeFrom);
+    const resumed =
+      window !== undefined &&
+      (await handle.read(window, 0, window.length, resumeFrom!.offset - window.length))
+        .bytesRead === window.length &&
+      fnv1a(window) === resumeFrom!.guardHash;
+    const start = resumed ? resumeFrom!.offset : 0;
+    const state = startState(format, resumed ? resumeFrom : undefined);
+    lines = new LineSplitter(format, state, start, maxLineBytes, chunkBytes);
+    for (let at = start; ;) {
+      const [buffer, offset, length] = lines.room(chunkBytes);
+      const { bytesRead } = await handle.read(buffer, offset, length, at);
+      if (bytesRead === 0) break;
+      at += bytesRead;
+      lines.added(bytesRead);
     }
+    const guard = Buffer.alloc(Math.min(GUARD_LENGTH, lines.offset));
+    if (guard.length > 0) await handle.read(guard, 0, guard.length, lines.offset - guard.length);
+    return plainResult(lines, resumed, guard.length > 0 ? fnv1a(guard) : 0);
+  } catch {
+    return null;
+  } finally {
+    lines?.close();
+    await handle.close().catch(() => undefined);
+  }
+}
 
-    const passesGate = lineGate(format.markers);
-    const parseLine = (line: Buffer, lineState: State, out: Entry[]): void => {
-      if (!passesGate(line)) return;
-      const content =
-        line.length > 0 && line[line.length - 1] === CARRIAGE_RETURN ? line.subarray(0, -1) : line;
-      for (const record of format.parse(content.toString("utf8"), lineState)) out.push(record);
-    };
-
-    const records: Entry[] = [];
-    let skippedLines = 0;
-    // A line that spans chunks collects here until its newline; past the cap it is dropped and only counted.
-    let pending: Buffer[] = [];
-    let pendingBytes = 0;
-    let oversized = false;
-    let offset = start;
-    let scanned = start;
-
-    const input = handle.createReadStream({
-      start,
-      autoClose: false,
-      highWaterMark: chunkBytes,
-    });
-    const stream: AsyncIterable<Buffer> = compressed ? zstdFrames(input) : input;
-
-    for await (const chunk of stream) {
-      let lineStart = 0;
-      while (lineStart < chunk.length) {
-        const newline = chunk.indexOf(NEWLINE, lineStart);
-        const end = newline === -1 ? chunk.length : newline;
-        if (!oversized) {
-          if (pendingBytes + end - lineStart > maxLineBytes) {
-            oversized = true;
-            pending = [];
-            pendingBytes = 0;
-          } else if (newline === -1 || pendingBytes > 0) {
-            pending.push(chunk.subarray(lineStart, end));
-            pendingBytes += end - lineStart;
-          }
-        }
-        if (newline === -1) break;
-        if (oversized) skippedLines += 1;
-        else if (pendingBytes > 0) parseLine(Buffer.concat(pending, pendingBytes), state, records);
-        else parseLine(chunk.subarray(lineStart, newline), state, records);
-        pending = [];
-        pendingBytes = 0;
-        oversized = false;
-        lineStart = newline + 1;
-        offset = scanned + lineStart;
-      }
-      scanned += chunk.length;
-    }
-
-    // The tail parses against a copy so `position.state` covers committed lines only.
-    const committedState = structuredClone(state);
-    const tail: Entry[] = [];
-    if (!oversized && pendingBytes > 0) {
-      parseLine(Buffer.concat(pending, pendingBytes), structuredClone(state), tail);
-    }
-
-    if (compressed) {
-      return {
-        records,
-        tail,
-        position: { offset: 0, guardLength: 0, guardHash: 0, state: committedState },
-        resumed: false,
-        skippedLines,
-      };
-    }
-    const guardLength = Math.min(GUARD_LENGTH, offset);
-    let guardHash = 0;
-    if (guardLength > 0) {
-      const window = Buffer.alloc(guardLength);
-      await handle.read(window, 0, guardLength, offset - guardLength);
-      guardHash = fnv1a(window);
-    }
+/** Reads a `.jsonl.zst` file in full through its decoder; its position is never resumed from. */
+async function readCompressed<State, Entry>(
+  path: string,
+  format: LineFormat<State, Entry>,
+  maxLineBytes: number,
+  chunkBytes: number,
+): Promise<ReadResult<Entry> | null> {
+  if (createZstdDecompress === undefined) return null;
+  let handle: NodeFSP.FileHandle;
+  try {
+    handle = await NodeFSP.open(path, "r");
+  } catch {
+    return null;
+  }
+  let lines: LineSplitter<State, Entry> | undefined;
+  try {
+    lines = new LineSplitter(format, startState(format), 0, maxLineBytes, chunkBytes);
+    const input = handle.createReadStream({ autoClose: false, highWaterMark: chunkBytes });
+    for await (const chunk of zstdFrames(input)) lines.push(chunk);
+    const { tail, state } = lines.finish();
     return {
-      records,
+      records: lines.records,
       tail,
-      position: { offset, guardLength, guardHash, state: committedState },
-      resumed,
-      skippedLines,
+      position: { offset: 0, guardLength: 0, guardHash: 0, state },
+      resumed: false,
+      skippedLines: lines.skippedLines,
     };
   } catch {
     return null;
   } finally {
+    lines?.close();
     await handle.close().catch(() => undefined);
   }
 }

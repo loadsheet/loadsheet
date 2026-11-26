@@ -81,7 +81,7 @@ Two entries:
 - `./node` touches the disk:
   - `scanMachine` (`scan.ts`) runs a full machine scan: it finds transcript files changed in the window and reads them through the cache.
   - `cache.ts` stores a cursor and a Tally per transcript file, keyed by a salted hash. It is the only thing loadsheet writes.
-  - `reader.ts` streams JSONL lines (ported from t3code). `workers.ts` runs the reads on worker threads once there are enough files to be worth it.
+  - `reader.ts` streams JSONL lines (ported from t3code). A format's `skip` drops a line from its raw bytes, before it is decoded, when `parse` would get nothing from it. `workers.ts` runs the reads on worker threads, largest file first, once there are enough bytes to be worth it, with more threads as the bytes grow.
   - `files.ts` (`dirFiles`) and `github.ts` (`githubFiles`, from a tarball) produce `Files` for packs.
   - `reach.ts` works out what removing an Item would also remove, by walking inodes. Fixes use this to avoid deleting a folder that another Item needs.
 

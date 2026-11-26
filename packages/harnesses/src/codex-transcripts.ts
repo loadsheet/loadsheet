@@ -1,4 +1,4 @@
-import type { Fact, TranscriptFormat } from "@loadsheet/kit";
+import type { Fact, LineBytes, TranscriptFormat } from "@loadsheet/kit";
 
 /** The user instruction file's item name: Codex loads `AGENTS.md` (or `AGENTS.override.md`) from its home. */
 export const CODEX_INSTRUCTIONS = "~/.codex/AGENTS.md";
@@ -222,6 +222,168 @@ const toolText = (payload: Record<string, unknown>): string | undefined => {
   return typeof value === "string" ? value : undefined;
 };
 
+/** The line types `parse` reads; it returns nothing for any other. */
+const READ = new Set(["session_meta", "world_state", "turn_context", "event_msg", "response_item"]);
+const HEAD_BYTES = 256;
+const QUOTE = 0x22;
+const COMMA = 0x2c;
+const COLON = 0x3a;
+const BACKSLASH = 0x5c;
+const OPEN = 0x7b;
+const CLOSE = 0x7d;
+const isSpace = (code: number) => code === 0x20 || code === 0x0a || code === 0x0d || code === 0x09;
+const skipSpace = (text: string, at: number) => {
+  while (at < text.length && isSpace(text.charCodeAt(at))) at += 1;
+  return at;
+};
+/** Where the string token at `at` closes, escapes and all; -1 when it is none or does not close. */
+const stringEnd = (text: string, at: number) => {
+  if (text.charCodeAt(at) !== QUOTE) return -1;
+  for (let close = text.indexOf('"', at + 1); close !== -1; close = text.indexOf('"', close + 1)) {
+    let escapes = 0;
+    while (text.charCodeAt(close - 1 - escapes) === BACKSLASH) escapes += 1;
+    if (escapes % 2 === 0) return close;
+  }
+  return -1;
+};
+/** The string token from `at` to `close`, when it holds no escapes. */
+const plain = (text: string, at: number, close: number) => {
+  const value = text.slice(at + 1, close);
+  return value.includes("\\") ? undefined : value;
+};
+
+/**
+ * Reads the object at `open` member by member, keeping the plain string values of the `wanted`
+ * keys, until `enough` says so, a member it cannot read, or the first object or array member.
+ * Returns that member's key and where its value starts.
+ */
+const leading = (
+  text: string,
+  open: number,
+  wanted: ReadonlySet<string>,
+  into: Map<string, string>,
+  enough: (into: Map<string, string>) => boolean,
+): { key: string; at: number } | undefined => {
+  let at = open;
+  for (;;) {
+    at = skipSpace(text, at + 1);
+    const keyEnd = stringEnd(text, at);
+    const key = keyEnd === -1 ? undefined : plain(text, at, keyEnd);
+    if (key === undefined) return undefined;
+    at = skipSpace(text, keyEnd + 1);
+    if (text.charCodeAt(at) !== COLON) return undefined;
+    at = skipSpace(text, at + 1);
+    const first = text.charCodeAt(at);
+    if (first === OPEN || first === 0x5b) return { key, at };
+    if (first === QUOTE) {
+      const close = stringEnd(text, at);
+      if (close === -1) return undefined;
+      if (wanted.has(key)) {
+        const value = plain(text, at, close);
+        if (value !== undefined) into.set(key, value);
+        if (enough(into)) return undefined;
+      }
+      at = close + 1;
+    } else {
+      while (at < text.length) {
+        const code = text.charCodeAt(at);
+        if (code === COMMA || code === CLOSE || isSpace(code)) break;
+        at += 1;
+      }
+    }
+    at = skipSpace(text, at);
+    if (text.charCodeAt(at) !== COMMA) return undefined;
+  }
+};
+
+interface Head {
+  /** The line's `type`, when a plain string member before its first object. */
+  type?: string;
+  /** The payload's `type`, and its `role` or `name`, when plain string members before its first object. */
+  payload: Map<string, string>;
+}
+
+const TOP = new Set(["type"]);
+const PAYLOAD = new Set(["type", "role", "name"]);
+const never = () => false;
+/** Read until the payload's type, and a message's role or a call's name, are known. */
+const known = (payload: Map<string, string>) => {
+  const kind = payload.get("type");
+  if (kind === "message") return payload.has("role");
+  if (kind === "custom_tool_call" || kind === "function_call") return payload.has("name");
+  return kind !== undefined;
+};
+
+/** What a line's first members say: Codex writes `type` before `payload`, and a payload's `type` first. */
+const readHead = (text: string): Head => {
+  const top = new Map<string, string>();
+  const payload = new Map<string, string>();
+  const start = skipSpace(text, 0);
+  if (text.charCodeAt(start) !== OPEN) return { payload };
+  const next = leading(text, start, TOP, top, never);
+  if (next?.key === "payload" && text.charCodeAt(next.at) === OPEN) {
+    leading(text, next.at, PAYLOAD, payload, known);
+  }
+  return { type: top.get("type"), payload };
+};
+
+/** A message does something only through these fragments, each until its part of State is set. */
+const quietMessage = (line: LineBytes, state: CodexState, role: string | undefined) => {
+  const developer =
+    (state.skills || !line.includes("<skills_instructions>")) &&
+    (state.mcp || !line.includes("<tools>"));
+  if (role === "developer") return developer;
+  const user =
+    (state.instructions || !line.includes("# AGENTS.md instructions")) &&
+    (state.copying || !line.includes("<skill>"));
+  if (role === "user") return user;
+  return role !== undefined || (developer && user);
+};
+
+/** A tool call does something only when it names a listed skill's `SKILL.md` or a listed server. */
+const quietCall = (line: LineBytes, state: CodexState, name: string | undefined) =>
+  state.copying ||
+  name === "apply_patch" ||
+  ((state.listed.length === 0 || !line.includes("SKILL.md")) &&
+    (state.servers.length === 0 || !line.includes("mcp__")));
+
+/**
+ * True only when `parse` would return no Facts and leave `state` as it is. Reads the line's first
+ * members, and searches the whole line only for strings whose absence settles it. It assumes, as
+ * Codex's writer (serde_json) guarantees, no duplicate keys and no escaped printable ASCII; a line
+ * that is not JSON is a no-op either way.
+ */
+const skip = (line: LineBytes, state: CodexState): boolean => {
+  const head = readHead(line.slice(0, HEAD_BYTES));
+  const { type } = head;
+  if (type === undefined) return false;
+  if (!READ.has(type)) return true;
+  if (type === "session_meta") return state.started;
+  if (state.day === undefined || state.via === undefined) return true;
+  if (type === "turn_context") return state.turn.length === 0;
+  if (type === "world_state") {
+    return (
+      (state.skills || !line.includes('"host_skills"')) &&
+      (state.instructions || !line.includes('"agents_md"')) &&
+      (state.mcp || !line.includes('"tools"'))
+    );
+  }
+  const kind = head.payload.get("type");
+  const is = (name: string) => (kind === undefined ? line.includes(`"${name}"`) : kind === name);
+  if (type === "event_msg") {
+    return (
+      (!state.copying || !is("task_started")) &&
+      (state.tokens || state.copying || !is("token_count"))
+    );
+  }
+  const message = kind === undefined || kind === "message";
+  const call = kind === undefined || kind === "custom_tool_call" || kind === "function_call";
+  return (
+    (!message || quietMessage(line, state, head.payload.get("role"))) &&
+    (!call || quietCall(line, state, head.payload.get("name")))
+  );
+};
+
 /**
  * Codex's rollout JSONL (`~/.codex/sessions/**`). Each session opens with `session_meta`; its
  * listing is a developer message, or a `world_state` line in newer versions; a skill the user
@@ -253,6 +415,7 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
     servers: [],
     turn: [],
   }),
+  skip,
   parse(line, state) {
     let value: Record<string, unknown> | undefined;
     try {

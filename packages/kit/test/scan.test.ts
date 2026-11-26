@@ -176,17 +176,15 @@ const appendTranscript = async (home: string, sid: string, text: string, mtime: 
   await NodeFSP.utimes(path, mtime, mtime);
 };
 
-/** A cache document with the sum of what it now holds, as loadsheet would have written it. */
-const summed = (stored: Record<string, unknown>) => ({
-  ...stored,
-  sum: NodeCrypto.createHash("sha256")
-    .update(
-      JSON.stringify(
-        ["layout", "tool", "format", "salt", "strings", "files"].map((field) => stored[field]),
-      ),
-    )
-    .digest("hex"),
-});
+/** A cache file's document. */
+const readStored = async (file: string) => JSON.parse(await NodeFSP.readFile(file, "utf8")).doc;
+
+/** A cache file holding `doc`, with the sum of its text as loadsheet would write, or `sum`. */
+const writeStored = async (file: string, doc: unknown, sum?: string) => {
+  const text = JSON.stringify(doc);
+  sum ??= NodeCrypto.createHash("sha256").update(text).digest("hex");
+  await NodeFSP.writeFile(file, `{"layout":3,"sum":"${sum}","doc":${text}}`);
+};
 
 const scan = (home: string, cacheDir: string | false, tool = "loadsheet@0.0.0-test") =>
   scanMachine({
@@ -625,12 +623,13 @@ describe("the scan cache", () => {
     await scan(home, cacheDir());
     // The cached state forgets that the session was measured; resuming would measure it again.
     const file = NodePath.join(cacheDir(), "fake.json");
-    const stored = JSON.parse(await NodeFSP.readFile(file, "utf8"));
+    const { sum } = JSON.parse(await NodeFSP.readFile(file, "utf8")) as { sum: string };
+    const stored = await readStored(file);
     const state = (Object.values(stored.files)[0] as unknown[])[7] as unknown[];
     const measured = state.indexOf(stored.strings.indexOf("measured")) + 1;
     expect(state[measured]).toBe(true);
     state[measured] = false;
-    await NodeFSP.writeFile(file, JSON.stringify(stored));
+    await writeStored(file, stored, sum);
 
     const sid = SESSIONS[0]!.sid;
     await appendTranscript(home, sid, `${JSON.stringify({ t: "usage", sid, tokens: 9 })}\n`, LATER);
@@ -644,10 +643,10 @@ describe("the scan cache", () => {
     await scan(home, cacheDir());
     // The cached state's `listed` becomes null, so the next list line throws in the parser.
     const file = NodePath.join(cacheDir(), "fake.json");
-    const stored = JSON.parse(await NodeFSP.readFile(file, "utf8"));
+    const stored = await readStored(file);
     const state = (Object.values(stored.files)[0] as unknown[])[7] as unknown[];
     state[state.indexOf(stored.strings.indexOf("listed")) + 1] = null;
-    await NodeFSP.writeFile(file, JSON.stringify(summed(stored)));
+    await writeStored(file, stored);
 
     const sid = SESSIONS[0]!.sid;
     const list = { t: "list", sid, items: [{ id: "skill:alpha", chars: 30, bare: false }] };
@@ -700,11 +699,11 @@ describe("the scan cache", () => {
     const expected = await cold(home);
     await scan(home, cacheDir());
     const file = NodePath.join(cacheDir(), "fake.json");
-    const stored = JSON.parse(await NodeFSP.readFile(file, "utf8"));
+    const stored = await readStored(file);
     const keys = Object.keys(stored.files);
     expect(keys).toHaveLength(SESSIONS.length);
-    stored.files[keys[0]!][8] = [[], [0, 0, 0, [stored.strings.length, 1, 0, 0, 0, 0]], []];
-    await NodeFSP.writeFile(file, JSON.stringify(summed(stored)));
+    stored.files[keys[0]!][8] = [[], [0, 0, 0, [stored.strings.length, 1, 0, 0, 0, 0]], [], []];
+    await writeStored(file, stored);
 
     parsed = 0;
     expect(await scan(home, cacheDir())).toEqual(expected);

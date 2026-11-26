@@ -3,7 +3,7 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
-import type { Fact, TranscriptFormat } from "../src/index.ts";
+import { sumTallies, type Fact, type TranscriptFormat } from "../src/index.ts";
 import { openCache, type CachedFile } from "../src/node/cache.ts";
 
 const format: TranscriptFormat<unknown> = {
@@ -87,43 +87,36 @@ const cachedFile = (seed: number): CachedFile => ({
       cell("2026-11-23", "cli", "skill:alpha", 4),
     ],
     versions: [{ harness: "fake", day: "2026-11-22", version: "1.2.0" }],
+    windows: [{ harness: "fake", day: "2026-11-23", tokens: 200_000 + seed }],
   },
 });
 
 const cacheFile = () => NodePath.join(dir, "fake.json");
 
 interface Stored {
-  layout: number;
   tool: string;
   format: string;
   salt: string;
   strings: string[];
   files: Record<string, unknown[]>;
-  sum: string;
 }
 
-const readStored = async () => JSON.parse(await NodeFSP.readFile(cacheFile(), "utf8")) as Stored;
+/** The cache file's layout, sum and document. */
+const readFile = async () =>
+  JSON.parse(await NodeFSP.readFile(cacheFile(), "utf8")) as {
+    layout: number;
+    sum: string;
+    doc: Stored;
+  };
 
-/** Writes `stored` the way loadsheet would have, with the sum of what it now holds. */
-const writeStored = (stored: Stored) =>
-  NodeFSP.writeFile(
-    cacheFile(),
-    JSON.stringify({
-      ...stored,
-      sum: NodeCrypto.createHash("sha256")
-        .update(
-          JSON.stringify([
-            stored.layout,
-            stored.tool,
-            stored.format,
-            stored.salt,
-            stored.strings,
-            stored.files,
-          ]),
-        )
-        .digest("hex"),
-    }),
-  );
+const readStored = async () => (await readFile()).doc;
+
+/** Writes `doc` the way loadsheet would have, with the sum of its text, or with `sum` when given. */
+const writeStored = async (stored: Stored, sum?: string) => {
+  const doc = JSON.stringify(stored);
+  sum ??= NodeCrypto.createHash("sha256").update(doc).digest("hex");
+  await NodeFSP.writeFile(cacheFile(), `{"layout":3,"sum":"${sum}","doc":${doc}}`);
+};
 
 describe("the scan cache file", () => {
   it("gives back the CachedFiles it saved, state included", async () => {
@@ -228,8 +221,30 @@ describe("the scan cache file", () => {
     expect((await open()).get("one")).toEqual(cachedFile(1));
 
     // A well-formed entry with one counter changed, which no check of its shape would catch.
+    const { sum } = await readFile();
     (stored.files.one![8] as number[][])[0]![3] = 7;
-    await NodeFSP.writeFile(cacheFile(), JSON.stringify(stored));
+    await writeStored(stored, sum);
+    expect((await open()).get("one")).toBeUndefined();
+
+    // The same text spelled with other whitespace.
+    await writeStored(await readStored());
+    const text = await NodeFSP.readFile(cacheFile(), "utf8");
+    await NodeFSP.writeFile(cacheFile(), text.replace('"doc":', '"doc": '));
+    expect((await open()).get("one")).toBeUndefined();
+  });
+
+  it("opens empty a file saved in another layout", async () => {
+    await (await open()).save(new Map([["one", cachedFile(1)]]));
+    const file = await readFile();
+    expect(file.layout).toBe(3);
+    // Layout 2 kept the document's fields beside its sum.
+    await NodeFSP.writeFile(cacheFile(), JSON.stringify({ layout: 2, ...file.doc, sum: file.sum }));
+    expect((await open()).get("one")).toBeUndefined();
+
+    await writeStored(file.doc);
+    expect((await open()).get("one")).toEqual(cachedFile(1));
+    const text = await NodeFSP.readFile(cacheFile(), "utf8");
+    await NodeFSP.writeFile(cacheFile(), text.replace('"layout":3', '"layout":4'));
     expect((await open()).get("one")).toBeUndefined();
   });
 
@@ -237,19 +252,55 @@ describe("the scan cache file", () => {
     await openCache(dir, "fake", "loadsheet@0.0.0-older", format).then((cache) =>
       cache.save(new Map([["one", cachedFile(1)]])),
     );
-    await NodeFSP.writeFile(cacheFile(), JSON.stringify({ ...(await readStored()), tool: TOOL }));
+    const { sum, doc } = await readFile();
+    await writeStored({ ...doc, tool: TOOL }, sum);
     expect((await open()).get("one")).toBeUndefined();
   });
 
-  it("opens empty a file nested too deep to hash", async () => {
+  it("opens an entry nested too deep to decode as a miss", async () => {
     await (await open()).save(new Map([["one", cachedFile(1)]]));
     const depth = 20_000;
-    const text = JSON.stringify(await readStored()).replace(
+    const stored = await readStored();
+    // JSON.stringify overflows on a state this deep, so the document is spliced together.
+    const doc = JSON.stringify(stored).replace(
       '"files":{',
-      `"files":{"deep":${"[".repeat(depth)}${"]".repeat(depth)},`,
+      `"files":{"deep":${JSON.stringify(stored.files.one!.with(7, null)).replace(
+        ",null,",
+        `,${'{"a":['.repeat(depth)}${"]}".repeat(depth)},`,
+      )},`,
     );
-    await NodeFSP.writeFile(cacheFile(), text);
-    expect((await open()).get("one")).toBeUndefined();
+    const sum = NodeCrypto.createHash("sha256").update(doc).digest("hex");
+    await NodeFSP.writeFile(cacheFile(), `{"layout":3,"sum":"${sum}","doc":${doc}}`);
+    const cache = await open();
+    expect(cache.get("deep")).toBeUndefined();
+    expect(cache.get("one")).toEqual(cachedFile(1));
+  });
+
+  it("sums cached tallies as summing their Tallies would, inside a window", async () => {
+    const seeds = [1, 2, 3, 4];
+    await (await open()).save(new Map(seeds.map((seed) => [`f${seed}`, cachedFile(seed)])));
+    const cache = await open();
+    // Opened entries and one the cache file does not hold yet.
+    const files = [...seeds.map((seed) => cache.get(`f${seed}`)!), cachedFile(5)];
+    const tallies = [...seeds, 5].map((seed) => cachedFile(seed).tally);
+    for (const window of [
+      ["2026-11-01", "2026-11-30"],
+      ["2026-11-23", "2026-11-23"],
+      ["2026-12-01", "2026-12-07"],
+    ] as const) {
+      expect(cache.sum(files, window)).toEqual(sumTallies(tallies, window));
+    }
+    expect(cache.sum([], ["2026-11-01", "2026-11-30"])).toEqual(sumTallies([]));
+  });
+
+  it("opens empty a file saved for a format with another skip", async () => {
+    const skipping = { ...format, skip: () => false } as TranscriptFormat<unknown>;
+    await (await open()).save(new Map([["one", cachedFile(1)]]));
+    expect((await openCache(dir, "fake", TOOL, skipping)).get("one")).toBeUndefined();
+    await (await openCache(dir, "fake", TOOL, skipping)).save(new Map([["one", cachedFile(1)]]));
+    expect((await openCache(dir, "fake", TOOL, skipping)).get("one")).toEqual(cachedFile(1));
+    const other = { ...format, skip: () => true } as TranscriptFormat<unknown>;
+    expect((await openCache(dir, "fake", TOOL, other)).get("one")).toBeUndefined();
   });
 
   it("makes a cache directory that was already there private", async () => {

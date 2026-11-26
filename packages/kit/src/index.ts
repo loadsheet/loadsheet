@@ -79,6 +79,21 @@ export interface UsedFact extends FactOfSession {
 export type Fact = SessionFact | TokensFact | WindowFact | ListedFact | UsedFact;
 
 /**
+ * One transcript line's bytes, before they are decoded: a view the reader points at each line in
+ * turn, so it is valid only during the call it is passed to.
+ */
+export interface LineBytes {
+  /** Bytes in the line, without its newline or carriage return. */
+  readonly length: number;
+  /** The bytes themselves, to read a few of them without making a string. */
+  readonly bytes: Uint8Array;
+  /** Whether the line's bytes contain the UTF-8 bytes of `ascii`. */
+  includes(ascii: string): boolean;
+  /** Bytes `start` to `end` (default the line's end) as latin1: one character per byte. */
+  slice(start: number, end?: number): string;
+}
+
+/**
  * How a harness's transcript lines become Facts. `readTranscript` in `@loadsheet/kit/node` takes
  * it as its line format.
  */
@@ -91,6 +106,11 @@ export interface TranscriptFormat<State> {
    * holds nothing a Scan may not hold.
    */
   initial(): State;
+  /**
+   * True only when `parse` would return no Facts and leave `state` unchanged. Called before the
+   * marker test and before the line is decoded, so it saves both on lines that cannot matter.
+   */
+  skip?(line: LineBytes, state: State): boolean;
   /** May mutate `state`. A throw fails the whole read, so catch malformed lines inside. */
   parse(line: string, state: State): readonly Fact[];
 }

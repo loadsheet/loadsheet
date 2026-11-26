@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -14,7 +15,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PROMPT_DOC } from "@loadsheet/core";
-import { parseReport } from "@loadsheet/schema";
+import { defaultCacheDir } from "@loadsheet/kit/node";
+import { parseReport, parseScan } from "@loadsheet/schema";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 import pkg from "../package.json" with { type: "json" };
 
@@ -163,6 +165,34 @@ describe("loadsheet (this machine)", () => {
     expect(result.stdout).toContain("claude-code");
     expect(result.stdout).not.toContain(CANARY);
     expect(result.stdout).not.toContain(root);
+  });
+
+  it("writes only the scan cache and returns the same Scan without it", () => {
+    const scan = (cache: string, ...args: string[]) => {
+      const result = spawnSync(process.execPath, [cli, "--scan", ...args], {
+        encoding: "utf8",
+        cwd: home,
+        env: { ...env, XDG_CACHE_HOME: cache },
+      });
+      expect(result.status).toBe(0);
+      const { scannedAt: _, ...payload } = parseScan(JSON.parse(result.stdout));
+      return payload;
+    };
+    const cache = join(root, "scan-cache");
+    const dir = defaultCacheDir({ home, env: { XDG_CACHE_HOME: cache } });
+    const expected = scan(cache);
+    expect(readdirSync(dir).length).toBeGreaterThan(0);
+    expect(existsSync(join(dir, "compile"))).toBe(false);
+    expect(readdirSync(cache)).toEqual(["loadsheet"]);
+
+    const none = join(root, "no-cache");
+    expect(scan(none, "--no-cache")).toEqual(expected);
+    expect(existsSync(none)).toBe(false);
+
+    // A cache directory that cannot be made leaves the Scan as it is.
+    const blocked = join(root, "blocked");
+    writeFileSync(blocked, "");
+    expect(scan(blocked)).toEqual(expected);
   });
 
   it("a flag overrides the config file", () => {
