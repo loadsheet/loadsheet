@@ -1,6 +1,6 @@
 import { isMainThread, parentPort, Worker } from "node:worker_threads";
 import { foldFacts, type Fact, type Tally, type TranscriptFormat } from "../index.ts";
-import { readTranscript, type ReadPosition } from "./reader.ts";
+import { readTranscript, type ReadOptions, type ReadPosition } from "./reader.ts";
 
 /** One transcript file to read, from `position` when its guard still matches. */
 export interface TranscriptJob {
@@ -28,9 +28,12 @@ export interface TranscriptRead {
 export const readTranscriptTally = async (
   format: TranscriptFormat<unknown>,
   job: TranscriptJob,
+  options?: ReadOptions,
 ): Promise<TranscriptRead | null> => {
-  let read = await readTranscript<unknown, Fact>(job.path, format, job.position);
-  if (read === null && job.position) read = await readTranscript<unknown, Fact>(job.path, format);
+  let read = await readTranscript<unknown, Fact>(job.path, format, job.position, options);
+  if (read === null && job.position) {
+    read = await readTranscript<unknown, Fact>(job.path, format, undefined, options);
+  }
   if (read === null) return null;
   return {
     fresh: foldFacts(job.harness, read.records),
@@ -62,7 +65,8 @@ export const serveTranscripts = (
     try {
       const format = formatOf(job.harness);
       if (!format) throw new Error(`No transcript format for ${job.harness}`);
-      response = { id, read: await readTranscriptTally(format, job) };
+      // A worker does nothing but read, so blocking reads cost it no other work.
+      response = { id, read: await readTranscriptTally(format, job, { sync: true }) };
     } catch (error) {
       response = { id, error: error instanceof Error ? error.message : String(error) };
     }
