@@ -1,6 +1,6 @@
 {
   "name": "@loadsheet/mcp",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Checks an MCP server's tools/list against what each MCP client does with it; runs in Node, the browser and a Cloudflare Worker.",
   "homepage": "https://loadsheet.dev",
   "license": "MIT",
