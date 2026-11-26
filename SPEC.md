@@ -36,6 +36,7 @@ graph TD
   fleet["@loadsheet/fleet"]
   cli["loadsheet (CLI)"]
   resolve["@loadsheet/resolve"]
+  mcp["@loadsheet/mcp"]
   ui["@loadsheet/ui"]
   page["apps/page"]
   site["apps/site"]
@@ -64,7 +65,7 @@ graph TD
   fleetrc --> fleet
 ```
 
-`core` never imports `kit` or `harnesses`, so the rules depend only on schema types. `fleet` imports nothing from loadsheet.
+`core` never imports `kit` or `harnesses`, so the rules depend only on schema types. `fleet` and `mcp` import nothing from loadsheet.
 
 ### `@loadsheet/schema` (`packages/schema`)
 
@@ -123,6 +124,16 @@ fleetrc's whole CLI: manifests, sources, sync, agent hooks, timers and running c
 ### `@loadsheet/resolve` (`packages/resolve`)
 
 Weighs a GitHub skills source for loadsheet.dev. `parsePackSource` supports GitHub source forms from `skills add`, not local paths or other hosts. `resolvePack` downloads the GitHub tarball through `githubFiles`, builds `memoryFiles`, then runs `skills.resolveSource` on a temporary local copy to discover which skills to weigh. It inventories those skills with the Claude Code adapter and calls `packReport`. `test/parity.test.ts` checks discovery against the skills CLI.
+
+### `@loadsheet/mcp` (`packages/mcp`)
+
+Checks an MCP server's `tools/list` against what each MCP client does with it. It is the MCP checker Doctor (`techlog`) reports through its MCP Rule Pack, moved here so loadsheet.dev and Doctor's CLI report the same findings. Private until it publishes; its version moves in lockstep with the public packages.
+
+- `checkMcpToolList(list, options)` (`tool-list.ts`) returns one `McpDiagnostic` per Diagnostic Code and tool: `{ code, ruleId, severity, confidence, tool?, clients, message, fix, brief, findings }`. It covers MCP0001 to MCP0003 and MCP0005 to MCP0010. MCP0004 needs the server's source and stays in Doctor. The message, fix and brief text match Doctor's word for word, and so do its grouping and suppression rules: MCP0010 hides `/annotations` findings, ChatGPT's hint finding folds into MCP0002, and a rename of a tool in `definedTools` that MCP0003 covers is dropped.
+- `checkMcpClientLimits` (`check.ts`) returns the raw per-client `McpFinding`s, which come from the rules in `clients/`, one file per client. Each rule cites its source. `checkMcpToolResult` checks one `tools/call` result.
+- `fetchMcpToolList` (`fetch.ts`) reads `initialize` and every `tools/list` page over Streamable HTTP. It never follows redirects. `maxPages` (40), `deadline`, `maxBytes` and the per-request `timeout` bound a read to fit one Worker request's 50 subrequests.
+- It runs in Workers, which forbid `new Function`, so `src/generated/` holds Ajv's meta-schema validators compiled ahead of time with the one Ajv helper inlined. After updating ajv, run `pnpm --filter @loadsheet/mcp generate`. `test/generated.test.ts` fails when the files are stale. The package has no runtime dependencies.
+- `test/doctor-parity.test.ts` compares `checkMcpToolList` with what Doctor reported for `test/fixtures/` (`doctor-expected.json`). `test/workerd.test.ts` runs the built package in workerd without `nodejs_compat` and compares the result with Node's.
 
 ### `@loadsheet/ui` (`packages/ui`)
 
