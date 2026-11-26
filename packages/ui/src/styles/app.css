@@ -893,6 +893,9 @@
   font: 400 15px/1.2 var(--font-sans);
   letter-spacing: 0;
 }
+:where(.loadsheet) .ctx .big .dhelp {
+  vertical-align: 1px;
+}
 :where(.loadsheet) .ctx .big .unit {
   color: var(--foreground);
   font-weight: 500;
