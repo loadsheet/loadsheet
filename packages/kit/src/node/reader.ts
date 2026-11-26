@@ -212,29 +212,27 @@ class LineView implements LineBytes {
   }
 }
 
-/** A read buffer and the buffer a line that spans reads collects in, reused from read to read. */
-interface Buffers {
-  read: Buffer;
-  carry: Buffer;
-}
-const spareBuffers: Buffers[] = [];
-/** A carry grown past this by a long line is let go rather than kept for the next read. */
-const KEPT_CARRY_BYTES = 1024 * 1024;
-const MIN_CARRY_BYTES = 64 * 1024;
+/** This thread's read windows, reused from read to read. */
+const spareWindows: Buffer[] = [];
+/**
+ * A window holds this many reads, so the unfinished line at its end moves to the front once every
+ * few reads rather than after each one.
+ */
+const WINDOW_CHUNKS = 4;
+/** A window grown past this by a long line is let go rather than kept for the next read. */
+const KEPT_WINDOW_BYTES = 4 * 1024 * 1024;
 
-const takeBuffers = (chunkBytes: number): Buffers => {
-  const buffers = spareBuffers.pop() ?? { read: Buffer.alloc(0), carry: Buffer.alloc(0) };
-  if (buffers.read.length < chunkBytes) buffers.read = Buffer.allocUnsafe(chunkBytes);
-  return buffers;
+const takeWindow = (bytes: number): Buffer => {
+  const window = spareWindows.pop();
+  return window !== undefined && window.length >= bytes ? window : Buffer.allocUnsafe(bytes);
 };
-const giveBack = (buffers: Buffers): void => {
-  if (buffers.carry.length > KEPT_CARRY_BYTES) buffers.carry = Buffer.alloc(0);
-  spareBuffers.push(buffers);
+const giveBack = (window: Buffer): void => {
+  if (window.length <= KEPT_WINDOW_BYTES) spareWindows.push(window);
 };
 
 /**
- * Splits the bytes pushed into it into lines and parses them. Each chunk pushed may be reused by
- * the caller once `push` returns: a line that spans chunks is copied into the carry buffer.
+ * Splits a file's bytes into lines and parses them. Bytes are read into its window after the
+ * unfinished line, which moves only when the window runs out of room.
  */
 class LineSplitter<State, Entry> {
   readonly records: Entry[] = [];
@@ -245,13 +243,14 @@ class LineSplitter<State, Entry> {
   readonly #state: State;
   readonly #gate: (line: Buffer) => boolean;
   readonly #maxLineBytes: number;
-  readonly #buffers: Buffers;
   readonly #view = new LineView();
-  /** File bytes before the chunk being pushed. */
-  #scanned: number;
-  /** Bytes of the unfinished line held in the carry buffer. */
-  #carried = 0;
-  /** The unfinished line is past `maxLineBytes`: it is dropped and counted at its newline. */
+  #window: Buffer;
+  /** Where the window's first byte is in the file. */
+  #base: number;
+  /** The unfinished line's bytes in the window. */
+  #start = 0;
+  #end = 0;
+  /** The unfinished line is past `maxLineBytes`: its bytes are dropped and it counts at its newline. */
   #oversized = false;
 
   constructor(
@@ -259,41 +258,74 @@ class LineSplitter<State, Entry> {
     state: State,
     start: number,
     maxLineBytes: number,
-    buffers: Buffers,
+    chunkBytes: number,
   ) {
     this.#format = format;
     this.#state = state;
     this.#gate = gateOf(format as LineFormat<unknown, unknown>);
     this.#maxLineBytes = maxLineBytes;
-    this.#buffers = buffers;
+    this.#window = takeWindow(WINDOW_CHUNKS * chunkBytes);
     this.offset = start;
-    this.#scanned = start;
+    this.#base = start;
   }
 
-  push(chunk: Buffer): void {
-    const { length } = chunk;
-    let lineStart = 0;
-    while (lineStart < length) {
-      const newline = chunk.indexOf(NEWLINE, lineStart);
-      if (newline === -1) {
-        this.#hold(chunk, lineStart, length);
-        break;
+  /** Gives the window back for the next read on this thread. */
+  close(): void {
+    giveBack(this.#window);
+  }
+
+  /**
+   * Where to read up to `bytes` more bytes, as [buffer, offset, length] with length at least 1.
+   * Moves the unfinished line to the window's front, or into a larger window, to make room.
+   */
+  room(bytes: number): [Buffer, number, number] {
+    let window = this.#window;
+    if (window.length - this.#end < bytes) {
+      const held = this.#end - this.#start;
+      if (held + bytes > window.length) {
+        const grown = Buffer.allocUnsafe(Math.max(held + bytes, 2 * window.length));
+        window.copy(grown, 0, this.#start, this.#end);
+        this.#window = window = grown;
+      } else if (held > 0) {
+        window.copyWithin(0, this.#start, this.#end);
       }
-      if (this.#carried > 0 || this.#oversized) {
-        this.#hold(chunk, lineStart, newline);
-        if (this.#oversized) this.skippedLines += 1;
-        else this.#parse(this.#buffers.carry.subarray(0, this.#carried));
-        this.#carried = 0;
-        this.#oversized = false;
-      } else if (newline - lineStart > this.#maxLineBytes) {
-        this.skippedLines += 1;
-      } else {
-        this.#parse(chunk.subarray(lineStart, newline));
-      }
-      lineStart = newline + 1;
-      this.offset = this.#scanned + lineStart;
+      this.#base += this.#start;
+      this.#start = 0;
+      this.#end = held;
     }
-    this.#scanned += length;
+    return [window, this.#end, Math.min(bytes, window.length - this.#end)];
+  }
+
+  /** Splits the `bytes` bytes just read where `room` said. */
+  added(bytes: number): void {
+    const from = this.#end;
+    const end = (this.#end += bytes);
+    const window = this.#window.subarray(0, end);
+    let start = this.#start;
+    // The unfinished line's bytes before `from` were searched when they were read.
+    let newline = window.indexOf(NEWLINE, from);
+    if (newline !== -1) {
+      do {
+        if (this.#oversized || newline - start > this.#maxLineBytes) this.skippedLines += 1;
+        else this.#parse(window.subarray(start, newline));
+        this.#oversized = false;
+        start = newline + 1;
+        newline = window.indexOf(NEWLINE, start);
+      } while (newline !== -1);
+      this.offset = this.#base + start;
+    }
+    if (end - start > this.#maxLineBytes) this.#oversized = true;
+    this.#start = this.#oversized ? end : start;
+  }
+
+  /** Splits `chunk`, which may be reused once this returns. */
+  push(chunk: Buffer): void {
+    for (let at = 0; at < chunk.length;) {
+      const [window, offset, length] = this.room(chunk.length - at);
+      chunk.copy(window, offset, at, at + length);
+      at += length;
+      this.added(length);
+    }
   }
 
   /**
@@ -302,35 +334,12 @@ class LineSplitter<State, Entry> {
    */
   finish(): { tail: Entry[]; state: State } {
     const tail: Entry[] = [];
-    if (this.#oversized || this.#carried === 0) return { tail, state: this.#state };
-    const text = this.#decode(this.#buffers.carry.subarray(0, this.#carried));
+    if (this.#oversized || this.#end === this.#start) return { tail, state: this.#state };
+    const text = this.#decode(this.#window.subarray(this.#start, this.#end));
     if (text === undefined) return { tail, state: this.#state };
     const state = structuredClone(this.#state);
     for (const record of this.#format.parse(text, state)) tail.push(record);
     return { tail, state: this.#state };
-  }
-
-  /** Copies bytes of an unfinished line into the carry buffer, until it passes the cap. */
-  #hold(chunk: Buffer, from: number, to: number): void {
-    if (this.#oversized) return;
-    const carried = this.#carried + to - from;
-    if (carried > this.#maxLineBytes) {
-      this.#oversized = true;
-      this.#carried = 0;
-      return;
-    }
-    let { carry } = this.#buffers;
-    if (carry.length < carried) {
-      const size = Math.min(
-        this.#maxLineBytes,
-        Math.max(carried, 2 * carry.length, MIN_CARRY_BYTES),
-      );
-      const grown = Buffer.allocUnsafe(size);
-      carry.copy(grown, 0, 0, this.#carried);
-      this.#buffers.carry = carry = grown;
-    }
-    chunk.copy(carry, this.#carried, from, to);
-    this.#carried = carried;
   }
 
   /** The line's text without its carriage return, or undefined when `skip` or the gate drops it. */
@@ -535,7 +544,7 @@ const plainResult = <State, Entry>(
   };
 };
 
-/** Reads with blocking calls into this thread's reused buffers, so nothing yields until it returns. */
+/** Reads with blocking calls into this thread's reused windows, so nothing yields until it returns. */
 function readPlainSync<State, Entry>(
   path: string,
   format: LineFormat<State, Entry>,
@@ -549,7 +558,7 @@ function readPlainSync<State, Entry>(
   } catch {
     return null;
   }
-  const buffers = takeBuffers(chunkBytes);
+  let lines: LineSplitter<State, Entry> | undefined;
   try {
     const window = resumeFrom && guardWindow(resumeFrom);
     const resumed =
@@ -559,12 +568,13 @@ function readPlainSync<State, Entry>(
       fnv1a(window) === resumeFrom!.guardHash;
     const start = resumed ? resumeFrom!.offset : 0;
     const state = startState(format, resumed ? resumeFrom : undefined);
-    const lines = new LineSplitter(format, state, start, maxLineBytes, buffers);
+    lines = new LineSplitter(format, state, start, maxLineBytes, chunkBytes);
     for (let at = start; ;) {
-      const bytesRead = NodeFS.readSync(fd, buffers.read, 0, chunkBytes, at);
+      const [buffer, offset, length] = lines.room(chunkBytes);
+      const bytesRead = NodeFS.readSync(fd, buffer, offset, length, at);
       if (bytesRead === 0) break;
       at += bytesRead;
-      lines.push(buffers.read.subarray(0, bytesRead));
+      lines.added(bytesRead);
     }
     const guard = Buffer.alloc(Math.min(GUARD_LENGTH, lines.offset));
     if (guard.length > 0) NodeFS.readSync(fd, guard, 0, guard.length, lines.offset - guard.length);
@@ -572,7 +582,7 @@ function readPlainSync<State, Entry>(
   } catch {
     return null;
   } finally {
-    giveBack(buffers);
+    lines?.close();
     NodeFS.closeSync(fd);
   }
 }
@@ -590,7 +600,7 @@ async function readPlain<State, Entry>(
   } catch {
     return null;
   }
-  const buffers = takeBuffers(chunkBytes);
+  let lines: LineSplitter<State, Entry> | undefined;
   try {
     const window = resumeFrom && guardWindow(resumeFrom);
     const resumed =
@@ -600,12 +610,13 @@ async function readPlain<State, Entry>(
       fnv1a(window) === resumeFrom!.guardHash;
     const start = resumed ? resumeFrom!.offset : 0;
     const state = startState(format, resumed ? resumeFrom : undefined);
-    const lines = new LineSplitter(format, state, start, maxLineBytes, buffers);
+    lines = new LineSplitter(format, state, start, maxLineBytes, chunkBytes);
     for (let at = start; ;) {
-      const { bytesRead } = await handle.read(buffers.read, 0, chunkBytes, at);
+      const [buffer, offset, length] = lines.room(chunkBytes);
+      const { bytesRead } = await handle.read(buffer, offset, length, at);
       if (bytesRead === 0) break;
       at += bytesRead;
-      lines.push(buffers.read.subarray(0, bytesRead));
+      lines.added(bytesRead);
     }
     const guard = Buffer.alloc(Math.min(GUARD_LENGTH, lines.offset));
     if (guard.length > 0) await handle.read(guard, 0, guard.length, lines.offset - guard.length);
@@ -613,7 +624,7 @@ async function readPlain<State, Entry>(
   } catch {
     return null;
   } finally {
-    giveBack(buffers);
+    lines?.close();
     await handle.close().catch(() => undefined);
   }
 }
@@ -632,9 +643,9 @@ async function readCompressed<State, Entry>(
   } catch {
     return null;
   }
-  const buffers = takeBuffers(0);
+  let lines: LineSplitter<State, Entry> | undefined;
   try {
-    const lines = new LineSplitter(format, startState(format), 0, maxLineBytes, buffers);
+    lines = new LineSplitter(format, startState(format), 0, maxLineBytes, chunkBytes);
     const input = handle.createReadStream({ autoClose: false, highWaterMark: chunkBytes });
     for await (const chunk of zstdFrames(input)) lines.push(chunk);
     const { tail, state } = lines.finish();
@@ -648,7 +659,7 @@ async function readCompressed<State, Entry>(
   } catch {
     return null;
   } finally {
-    giveBack(buffers);
+    lines?.close();
     await handle.close().catch(() => undefined);
   }
 }

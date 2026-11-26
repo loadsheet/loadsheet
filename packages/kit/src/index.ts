@@ -85,6 +85,8 @@ export type Fact = SessionFact | TokensFact | WindowFact | ListedFact | UsedFact
 export interface LineBytes {
   /** Bytes in the line, without its newline or carriage return. */
   readonly length: number;
+  /** The bytes themselves, to read a few of them without making a string. */
+  readonly bytes: Uint8Array;
   /** Whether the line's bytes contain the UTF-8 bytes of `ascii`. */
   includes(ascii: string): boolean;
   /** Bytes `start` to `end` (default the line's end) as latin1: one character per byte. */
