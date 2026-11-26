@@ -17,7 +17,7 @@ export function copy(text: string, said = "Copied", key = text) {
 export const tip = reactive({ html: "", x: 0, y: 0, on: false });
 export function showTip(e: MouseEvent, html: string) {
   tip.html = html;
-  tip.x = Math.min(e.clientX + 14, innerWidth - 290);
+  tip.x = Math.min(e.clientX + 14, innerWidth - 250);
   tip.y = e.clientY + 16;
   tip.on = true;
 }

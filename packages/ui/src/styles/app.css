@@ -449,12 +449,12 @@
 :where(.loadsheet) .tip {
   position: fixed;
   z-index: 50;
-  max-width: 280px;
+  max-width: 240px;
   padding: 6px 8px;
   border-radius: 6px;
   background: var(--foreground);
   color: var(--background);
-  font-size: 12.5px;
+  font-size: 11.5px;
   line-height: 1.4;
   box-shadow: var(--shadow-popover);
   opacity: 0;
@@ -879,15 +879,37 @@
   line-height: 1.45;
 }
 :where(.loadsheet) .ctx .big {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 6px;
   width: fit-content;
+  margin: 0;
   font: 400 44px/1 var(--font-pixel);
   letter-spacing: 0.01em;
 }
 :where(.loadsheet) .ctx .big .of {
-  margin-left: 6px;
   color: var(--muted-foreground);
   font: 400 15px/1.2 var(--font-sans);
   letter-spacing: 0;
+}
+:where(.loadsheet) .ctx .big .unit {
+  color: var(--foreground);
+  font-weight: 500;
+}
+:where(.loadsheet) .ctx .lead {
+  display: grid;
+  gap: 10px;
+}
+:where(.loadsheet) .ctx .take {
+  max-width: 64ch;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+:where(.loadsheet) .ctx .take strong {
+  color: var(--foreground);
+  font-weight: 600;
 }
 :where(.loadsheet) .faint {
   color: var(--ui-text-dimmed);
@@ -934,23 +956,32 @@
 :where(.loadsheet) .cbar .s:focus-visible {
   outline-offset: -2px;
 }
-:where(.loadsheet) .cscale {
-  position: relative;
-  height: 16px;
-  margin-top: 4px;
-  color: var(--ui-text-dimmed);
+:where(.loadsheet) .ckey {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  line-height: 1.35;
+}
+:where(.loadsheet) .ckey li {
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 0;
+}
+:where(.loadsheet) .ckey .sw {
+  align-self: center;
+}
+:where(.loadsheet) .ckey small {
+  grid-column: 2;
+  color: var(--muted-foreground);
   font-size: 11px;
 }
-:where(.loadsheet) .cscale span {
-  position: absolute;
-  transform: translateX(-50%);
-  white-space: nowrap;
-}
-:where(.loadsheet) .cscale span:first-child {
-  transform: none;
-}
-:where(.loadsheet) .cscale span.end {
-  transform: translateX(-100%);
+:where(.loadsheet) .ckey .free {
+  margin-left: auto;
+  color: var(--acc);
 }
 
 /* The row above the map or table: the table's search on the left, the view switch on the right. */

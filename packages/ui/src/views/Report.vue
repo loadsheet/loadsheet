@@ -10,9 +10,9 @@ import ContextBar from "../components/ContextBar.vue";
 import ContextMap from "../components/ContextMap.vue";
 import ContextTable from "../components/ContextTable.vue";
 import NoSessions from "../components/NoSessions.vue";
-import { VIEW, contextOf, freshView, short } from "../lib/context";
+import { TOKEN_ABOUT, VIEW, contextOf, freshView, short, takeaway } from "../lib/context";
 import { useHarness } from "../lib/harness";
-import { fmt, plural } from "../lib/report";
+import { fmt, harnessName, plural } from "../lib/report";
 import { hideTip, showTip } from "../lib/ui";
 
 /** What a session started now loads before you type, against the model's window: a map, or the same as a table. */
@@ -61,14 +61,44 @@ function expandAll() {
 }
 const exact = (e: MouseEvent) =>
   showTip(e, `<b>${fmt(ctx.value!.total)} tokens</b> before you type`);
+const take = computed(() => ctx.value && takeaway(ctx.value, harnessName(h.current.value)));
+function tokenFocus(e: FocusEvent) {
+  const r = (e.target as HTMLElement).getBoundingClientRect();
+  showTip({ clientX: r.right, clientY: r.bottom } as MouseEvent, TOKEN_ABOUT);
+}
 </script>
 
 <template>
   <NoSessions v-if="!ctx" />
   <main v-else class="ctx">
-    <h1 class="big" @mouseenter="exact" @mousemove="exact" @mouseleave="hideTip">
-      {{ short(ctx.total) }}<span class="of">of {{ short(ctx.window) }} used before you type</span>
-    </h1>
+    <div class="lead">
+      <h1 class="big">
+        <span @mouseenter="exact" @mousemove="exact" @mouseleave="hideTip">{{
+          short(ctx.total)
+        }}</span
+        ><span class="of"
+          ><span class="unit">tokens</span> used before you type, out of a
+          {{ short(ctx.window) }} chat limit<button
+            type="button"
+            class="dhelp"
+            aria-label="What is a token?"
+            @mouseenter="showTip($event, TOKEN_ABOUT)"
+            @mousemove="showTip($event, TOKEN_ABOUT)"
+            @mouseleave="hideTip"
+            @focus="tokenFocus"
+            @blur="hideTip"
+          >
+            ?
+          </button></span
+        >
+      </h1>
+      <p class="take">
+        <template v-for="(p, i) in take" :key="i"
+          ><strong v-if="typeof p === 'object'">{{ p.b }}</strong
+          ><template v-else>{{ p }}</template></template
+        >
+      </p>
+    </div>
     <ContextBar />
     <div class="views">
       <RouterLink

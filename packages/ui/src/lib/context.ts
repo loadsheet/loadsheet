@@ -25,6 +25,8 @@ export interface Segment {
   label: string;
   short?: string;
   sub: string;
+  /** What this kind is, in words for someone who has never counted tokens. */
+  about: string;
   tokens: number;
   items: CItem[];
 }
@@ -40,19 +42,48 @@ export interface Context {
 /** The window a Report without `contextWindow` is drawn against. */
 export const DEFAULT_WINDOW = 200_000;
 
-const KINDS: { id: SegId; label: string; short?: string; sub: string }[] = [
-  { id: "harness", label: "Harness", sub: "system prompt and built-in tools" },
-  { id: "instructions", label: "Instructions", sub: "CLAUDE.md, AGENTS.md, memory" },
-  { id: "skill", label: "Skills", sub: "names and descriptions" },
+const SKILLS_ABOUT =
+  "Reusable instructions. The agent sees a short description of each skill in every chat and reads the rest only when needed.";
+const KINDS: { id: SegId; label: string; short?: string; sub: string; about: string }[] = [
+  {
+    id: "harness",
+    label: "Harness",
+    sub: "built-in instructions and tools",
+    about: "The agent’s own instructions and tools. They load in every chat.",
+  },
+  {
+    id: "instructions",
+    label: "Instructions",
+    sub: "CLAUDE.md, AGENTS.md, memory",
+    about: "Files like CLAUDE.md or AGENTS.md with your rules. They load in full in every chat.",
+  },
+  { id: "skill", label: "Skills", sub: "names and descriptions", about: SKILLS_ABOUT },
   {
     id: "pskill",
     label: "Project skills",
     short: "Project",
     sub: "skills that live in this project",
+    about: SKILLS_ABOUT,
   },
-  { id: "mcp", label: "MCP servers", short: "MCP", sub: "tool definitions" },
-  { id: "subagent", label: "Subagents", short: "Agents", sub: "agent descriptions" },
+  {
+    id: "mcp",
+    label: "MCP servers",
+    short: "MCP",
+    sub: "tool definitions",
+    about: "Servers that give the agent extra tools. Each tool’s description loads in every chat.",
+  },
+  {
+    id: "subagent",
+    label: "Subagents",
+    short: "Agents",
+    sub: "agent descriptions",
+    about: "Helpers the agent can hand work to. Each one’s description loads in every chat.",
+  },
 ];
+
+/** What the "?" beside the headline says. */
+export const TOKEN_ABOUT =
+  "A token is a small piece of text, about ¾ of a word. Everything in a chat uses tokens.";
 
 /** Where each harness documents its own prompt. */
 export const HDOC: Record<string, { label: string; url: string; what: string }> = {
@@ -220,11 +251,70 @@ export interface ContextView {
 }
 export const VIEW = Symbol("context-view") as InjectionKey<ContextView>;
 
-/** Axis ticks for the window, about five of them, ending on the window itself. */
-export function ticks(win: number): number[] {
-  const step = [25_000, 50_000, 100_000, 250_000, 500_000].find((s) => win / s <= 5) ?? 500_000;
-  const t: number[] = [];
-  for (let v = 0; v < win - step * 0.35; v += step) t.push(v);
-  t.push(win);
-  return t;
+/** A sentence as text runs; `b` runs are the numbers and names worth bolding. */
+export type Phrase = (string | { b: string })[];
+
+/** Above this a single part is worth naming on its own. */
+const BIG_PART = 5000;
+
+/**
+  One sentence on what this setup loads, for someone who has never counted tokens. It describes; it never tells the
+  reader what to change.
+*/
+export function takeaway(c: Context, agent: string): Phrase {
+  const used = Math.round((c.total / c.window) * 100);
+  if (used >= 50)
+    return [
+      "That’s ",
+      { b: `${used}%` },
+      ` of the limit. Long chats fill up sooner, so ${agent} summarizes earlier messages more often.`,
+    ];
+  const seg = (id: SegId) => c.segments.find((s) => s.id === id);
+  const skills = [seg("skill"), seg("pskill")].flatMap((s) => s?.items ?? []);
+  const parts: { id: SegId; tokens: number; items: CItem[] }[] = [
+    ...["instructions", "mcp", "subagent"].flatMap((id) => {
+      const s = seg(id as SegId);
+      return s ? [{ id: s.id, tokens: s.tokens, items: s.items }] : [];
+    }),
+    { id: "skill", tokens: skills.reduce((n, i) => n + i.tokens, 0), items: skills },
+  ];
+  const top = parts.sort((a, b) => b.tokens - a.tokens)[0]!;
+  const loaded = top.items.filter((i) => i.tokens > 0);
+  if (top.tokens > BIG_PART) {
+    if (top.id === "mcp") {
+      const server = [...loaded].sort((a, b) => b.tokens - a.tokens)[0]!;
+      return [
+        "Extra tools from MCP servers add the most. ",
+        { b: server.name },
+        " alone takes ",
+        { b: tok(server.tokens) },
+        " in every chat, even when you don’t use it.",
+      ];
+    }
+    if (top.id === "instructions")
+      return [
+        "Your instruction files add ",
+        { b: tok(top.tokens) },
+        `. ${agent} loads them in full in every chat.`,
+      ];
+    return [
+      "Your ",
+      { b: count(loaded.length, top.id) },
+      " add ",
+      { b: tok(top.tokens) },
+      `. ${agent} loads a short description for each one in every chat, even when you don’t use it.`,
+    ];
+  }
+  const harness = seg("harness")?.tokens ?? 0;
+  const free = [{ b: `${100 - used}%` }, " free for your chat."];
+  return harness
+    ? [
+        `Your setup is light. ${agent} itself takes `,
+        { b: tok(harness) },
+        ", and you added ",
+        { b: tok(c.setup) },
+        ". That leaves ",
+        ...free,
+      ]
+    : ["Your setup is light. It adds ", { b: tok(c.setup) }, ", which leaves ", ...free];
 }

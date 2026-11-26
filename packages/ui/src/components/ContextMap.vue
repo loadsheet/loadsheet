@@ -66,7 +66,8 @@ type Node = { value: number; item?: CItem; rest?: CItem[]; name?: string; group?
 
 const harness = computed(() => view.ctx().segments.find((s) => s.id === "harness"));
 const doc = computed(() => HDOC[view.harness()]);
-const segTip = (s: Segment) => `${esc(s.label)} · <b>${tok(s.tokens)}</b><br>${s.sub}`;
+const segTip = (s: Segment) =>
+  `${esc(s.label)} · <b>${tok(s.tokens)}</b><br><span class="dim">${s.about}</span>`;
 
 function title(s: Segment, w: number) {
   const room = w - 26;
@@ -352,7 +353,7 @@ watch(
       @mouseleave="hideTip"
     >
       <span class="sw" /><b>{{ harness.label }}</b><span class="num">{{ tok(harness.tokens) }}</span
-      ><span class="fxs">{{ harness.sub }}, fixed</span>
+      ><span class="fxs">{{ harness.sub }}, can’t be trimmed</span>
       <a v-if="doc" class="doc" :href="doc.url" target="_blank" rel="noopener" @click.stop
         >{{ doc.label }} ↗</a
       >
