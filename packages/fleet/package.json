@@ -1,6 +1,6 @@
 {
   "name": "@loadsheet/fleet",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "The same skills on every agent and every machine, synced when an agent session starts: the fleetrc CLI, run under any program name.",
   "keywords": [
     "agent-skills",

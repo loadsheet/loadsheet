@@ -1,6 +1,6 @@
 {
   "name": "@loadsheet/core",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Turns Scans into a weighed sheet, findings and a Report; runs in Node and the browser.",
   "homepage": "https://loadsheet.dev",
   "license": "MIT",
