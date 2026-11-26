@@ -9,12 +9,12 @@ import type {
 
 export const CHECKED = "2026-11-25";
 
-export function docs(url: string, quote: string): McpSource {
-  return { url, checked: CHECKED, quote, kind: "docs" };
+export function docs(url: string, quote: string, checked = CHECKED): McpSource {
+  return { url, checked, quote, kind: "docs" };
 }
 
-export function source(url: string, quote: string): McpSource {
-  return { url, checked: CHECKED, quote, kind: "source" };
+export function source(url: string, quote: string, checked = CHECKED): McpSource {
+  return { url, checked, quote, kind: "source" };
 }
 
 export function forum(url: string, quote: string): McpSource {

@@ -120,7 +120,6 @@ export interface McpListContext {
 export interface McpResultContext {
   /** The called tool's `tools/list` entry, for limits a tool declares, such as `_meta["anthropic/maxResultSizeChars"]`. */
   tool?: McpTool;
-  countTokens?: (text: string) => number;
 }
 
 interface McpRuleBase {

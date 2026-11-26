@@ -5,8 +5,6 @@ import type { McpClient, McpFinding, McpResultContext, McpTool } from "./types.t
 export interface CheckMcpToolResultOptions {
   /** Clients to check against. Defaults to every client. */
   clients?: readonly McpClient[];
-  /** Counts tokens the way the client does. Token limits are skipped without it, never estimated. */
-  countTokens?: (text: string) => number;
   /** The called tool's `tools/list` entry, for limits it declares in `_meta`. */
   tool?: McpTool;
 }
@@ -20,7 +18,7 @@ export function checkMcpToolResult(
   options: CheckMcpToolResultOptions = {},
 ): McpFinding[] {
   const result = normalizeToolResult(input);
-  const context: McpResultContext = { tool: options.tool, countTokens: options.countTokens };
+  const context: McpResultContext = { tool: options.tool };
   const findings: McpFinding[] = [];
   for (const rule of rulesFor(options.clients))
     if (rule.scope === "result")

@@ -1,5 +1,5 @@
 {
-  "doctor": "loadsheet/techlog@4fd44002",
+  "doctor": "loadsheet/vite-doctor@9656f66e",
   "url": "https://mcp.example.com/mcp",
   "runs": {
     "context7:context7": [
@@ -10,7 +10,7 @@
         "confidence": "high",
         "tool": "resolve-library-id",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"resolve-library-id\" of MCP server \"context7\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Resolve Context7 Library ID\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"resolve-library-id\" of MCP server \"context7\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Resolve Context7 Library ID\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `resolve-library-id`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Resolve Context7 Library ID\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Resolve Context7 Library ID\"",
         "findings": [
@@ -19,15 +19,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "resolve-library-id",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `resolve-library-id` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `resolve-library-id` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Resolve Context7 Library ID\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -40,7 +40,7 @@
         "confidence": "high",
         "tool": "query-docs",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"query-docs\" of MCP server \"context7\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Query Documentation\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"query-docs\" of MCP server \"context7\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Query Documentation\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `query-docs`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Query Documentation\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Query Documentation\"",
         "findings": [
@@ -49,15 +49,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "query-docs",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `query-docs` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `query-docs` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Query Documentation\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -132,7 +132,7 @@
         "confidence": "high",
         "tool": "resolve-library-id",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"resolve-library-id\" of MCP server \"Context7\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Resolve Context7 Library ID\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"resolve-library-id\" of MCP server \"Context7\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Resolve Context7 Library ID\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `resolve-library-id`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Resolve Context7 Library ID\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Resolve Context7 Library ID\"",
         "findings": [
@@ -141,15 +141,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "resolve-library-id",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `resolve-library-id` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `resolve-library-id` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Resolve Context7 Library ID\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -162,7 +162,7 @@
         "confidence": "high",
         "tool": "query-docs",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"query-docs\" of MCP server \"Context7\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Query Documentation\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"query-docs\" of MCP server \"Context7\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Query Documentation\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `query-docs`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Query Documentation\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Query Documentation\"",
         "findings": [
@@ -171,15 +171,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "query-docs",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `query-docs` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `query-docs` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Query Documentation\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -254,7 +254,7 @@
         "confidence": "high",
         "tool": "ask_wiki_question",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"ask_wiki_question\" of MCP server \"deepwiki\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Ask Wiki Question\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"ask_wiki_question\" of MCP server \"deepwiki\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Ask Wiki Question\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `ask_wiki_question`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Ask Wiki Question\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Ask Wiki Question\"",
         "findings": [
@@ -263,15 +263,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "ask_wiki_question",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `ask_wiki_question` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `ask_wiki_question` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Ask Wiki Question\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -284,7 +284,7 @@
         "confidence": "high",
         "tool": "read_wiki_contents",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"read_wiki_contents\" of MCP server \"deepwiki\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Read Wiki Contents\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"read_wiki_contents\" of MCP server \"deepwiki\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Read Wiki Contents\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `read_wiki_contents`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Read Wiki Contents\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Read Wiki Contents\"",
         "findings": [
@@ -293,15 +293,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "read_wiki_contents",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `read_wiki_contents` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `read_wiki_contents` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Read Wiki Contents\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -314,7 +314,7 @@
         "confidence": "high",
         "tool": "read_wiki_structure",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"read_wiki_structure\" of MCP server \"deepwiki\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Read Wiki Structure\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"read_wiki_structure\" of MCP server \"deepwiki\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Read Wiki Structure\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `read_wiki_structure`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Read Wiki Structure\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Read Wiki Structure\"",
         "findings": [
@@ -323,15 +323,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "read_wiki_structure",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `read_wiki_structure` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `read_wiki_structure` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Read Wiki Structure\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -344,7 +344,7 @@
         "confidence": "high",
         "tool": "ask_wiki_question",
         "clients": ["claude-directory", "chatgpt"],
-        "message": "MCP tool \"ask_wiki_question\" of MCP server \"deepwiki\" sets neither `readOnlyHint` nor `destructiveHint` to true in its tools/list entry. Anthropic's Connectors Directory requires `readOnlyHint: true` for read-only tools or `destructiveHint: true` for tools that modify or delete data. ChatGPT also treats it as a write action that needs the user's confirmation by default, because it has no `readOnlyHint`.",
+        "message": "MCP tool \"ask_wiki_question\" of MCP server \"deepwiki\" sets neither `readOnlyHint` nor `destructiveHint` to true in its tools/list entry. Anthropic's Connectors Directory requires `readOnlyHint: true` for read-only tools or `destructiveHint: true` for tools that modify or delete data. ChatGPT doesn't treat it as read-only because it has no `readOnlyHint`, so users who set the plugin's permissions to \"Allow read-only tools\" must confirm every call.",
         "fix": "Add `readOnlyHint: true` to the annotations if the tool only reads, or `destructiveHint: true` if it changes or deletes data. Only you can tell which one is true.",
         "brief": "neither readOnlyHint nor destructiveHint is true",
         "findings": [
@@ -369,15 +369,15 @@
             "client": "chatgpt",
             "rule": "chatgpt/missing-read-only-hint",
             "effect": "review",
-            "severity": "warn",
-            "confidence": "high",
+            "severity": "info",
+            "confidence": "medium",
             "tool": "ask_wiki_question",
             "pointer": "/annotations/readOnlyHint",
-            "message": "ChatGPT treats `ask_wiki_question` as a write action that needs the user's confirmation by default, because it has no `readOnlyHint`.",
+            "message": "ChatGPT doesn't treat `ask_wiki_question` as read-only because it has no `readOnlyHint`, so users who set the plugin's permissions to \"Allow read-only tools\" must confirm every call.",
             "fix": "Set `annotations.readOnlyHint` to `true` on tools that only read, and to `false` on the rest.",
             "source": {
               "url": "https://developers.openai.com/api/docs/guides/developer-mode",
-              "checked": "2026-11-25",
+              "checked": "2026-11-26",
               "quote": "Read-only detection: We respect the `readOnlyHint` tool annotation (see MCP tool annotations). Tools without this hint are treated as write actions.",
               "kind": "docs"
             }
@@ -391,7 +391,7 @@
         "confidence": "high",
         "tool": "read_wiki_contents",
         "clients": ["claude-directory", "chatgpt"],
-        "message": "MCP tool \"read_wiki_contents\" of MCP server \"deepwiki\" sets neither `readOnlyHint` nor `destructiveHint` to true in its tools/list entry. Anthropic's Connectors Directory requires `readOnlyHint: true` for read-only tools or `destructiveHint: true` for tools that modify or delete data. ChatGPT also treats it as a write action that needs the user's confirmation by default, because it has no `readOnlyHint`.",
+        "message": "MCP tool \"read_wiki_contents\" of MCP server \"deepwiki\" sets neither `readOnlyHint` nor `destructiveHint` to true in its tools/list entry. Anthropic's Connectors Directory requires `readOnlyHint: true` for read-only tools or `destructiveHint: true` for tools that modify or delete data. ChatGPT doesn't treat it as read-only because it has no `readOnlyHint`, so users who set the plugin's permissions to \"Allow read-only tools\" must confirm every call.",
         "fix": "Add `readOnlyHint: true` to the annotations if the tool only reads, or `destructiveHint: true` if it changes or deletes data. Only you can tell which one is true.",
         "brief": "neither readOnlyHint nor destructiveHint is true",
         "findings": [
@@ -416,15 +416,15 @@
             "client": "chatgpt",
             "rule": "chatgpt/missing-read-only-hint",
             "effect": "review",
-            "severity": "warn",
-            "confidence": "high",
+            "severity": "info",
+            "confidence": "medium",
             "tool": "read_wiki_contents",
             "pointer": "/annotations/readOnlyHint",
-            "message": "ChatGPT treats `read_wiki_contents` as a write action that needs the user's confirmation by default, because it has no `readOnlyHint`.",
+            "message": "ChatGPT doesn't treat `read_wiki_contents` as read-only because it has no `readOnlyHint`, so users who set the plugin's permissions to \"Allow read-only tools\" must confirm every call.",
             "fix": "Set `annotations.readOnlyHint` to `true` on tools that only read, and to `false` on the rest.",
             "source": {
               "url": "https://developers.openai.com/api/docs/guides/developer-mode",
-              "checked": "2026-11-25",
+              "checked": "2026-11-26",
               "quote": "Read-only detection: We respect the `readOnlyHint` tool annotation (see MCP tool annotations). Tools without this hint are treated as write actions.",
               "kind": "docs"
             }
@@ -438,7 +438,7 @@
         "confidence": "high",
         "tool": "read_wiki_structure",
         "clients": ["claude-directory", "chatgpt"],
-        "message": "MCP tool \"read_wiki_structure\" of MCP server \"deepwiki\" sets neither `readOnlyHint` nor `destructiveHint` to true in its tools/list entry. Anthropic's Connectors Directory requires `readOnlyHint: true` for read-only tools or `destructiveHint: true` for tools that modify or delete data. ChatGPT also treats it as a write action that needs the user's confirmation by default, because it has no `readOnlyHint`.",
+        "message": "MCP tool \"read_wiki_structure\" of MCP server \"deepwiki\" sets neither `readOnlyHint` nor `destructiveHint` to true in its tools/list entry. Anthropic's Connectors Directory requires `readOnlyHint: true` for read-only tools or `destructiveHint: true` for tools that modify or delete data. ChatGPT doesn't treat it as read-only because it has no `readOnlyHint`, so users who set the plugin's permissions to \"Allow read-only tools\" must confirm every call.",
         "fix": "Add `readOnlyHint: true` to the annotations if the tool only reads, or `destructiveHint: true` if it changes or deletes data. Only you can tell which one is true.",
         "brief": "neither readOnlyHint nor destructiveHint is true",
         "findings": [
@@ -463,15 +463,15 @@
             "client": "chatgpt",
             "rule": "chatgpt/missing-read-only-hint",
             "effect": "review",
-            "severity": "warn",
-            "confidence": "high",
+            "severity": "info",
+            "confidence": "medium",
             "tool": "read_wiki_structure",
             "pointer": "/annotations/readOnlyHint",
-            "message": "ChatGPT treats `read_wiki_structure` as a write action that needs the user's confirmation by default, because it has no `readOnlyHint`.",
+            "message": "ChatGPT doesn't treat `read_wiki_structure` as read-only because it has no `readOnlyHint`, so users who set the plugin's permissions to \"Allow read-only tools\" must confirm every call.",
             "fix": "Set `annotations.readOnlyHint` to `true` on tools that only read, and to `false` on the rest.",
             "source": {
               "url": "https://developers.openai.com/api/docs/guides/developer-mode",
-              "checked": "2026-11-25",
+              "checked": "2026-11-26",
               "quote": "Read-only detection: We respect the `readOnlyHint` tool annotation (see MCP tool annotations). Tools without this hint are treated as write actions.",
               "kind": "docs"
             }
@@ -487,7 +487,7 @@
         "confidence": "high",
         "tool": "ask_wiki_question",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"ask_wiki_question\" of MCP server \"DeepWiki\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Ask Wiki Question\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"ask_wiki_question\" of MCP server \"DeepWiki\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Ask Wiki Question\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `ask_wiki_question`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Ask Wiki Question\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Ask Wiki Question\"",
         "findings": [
@@ -496,15 +496,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "ask_wiki_question",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `ask_wiki_question` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `ask_wiki_question` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Ask Wiki Question\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -517,7 +517,7 @@
         "confidence": "high",
         "tool": "read_wiki_contents",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"read_wiki_contents\" of MCP server \"DeepWiki\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Read Wiki Contents\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"read_wiki_contents\" of MCP server \"DeepWiki\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Read Wiki Contents\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `read_wiki_contents`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Read Wiki Contents\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Read Wiki Contents\"",
         "findings": [
@@ -526,15 +526,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "read_wiki_contents",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `read_wiki_contents` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `read_wiki_contents` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Read Wiki Contents\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -547,7 +547,7 @@
         "confidence": "high",
         "tool": "read_wiki_structure",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"read_wiki_structure\" of MCP server \"DeepWiki\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Read Wiki Structure\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"read_wiki_structure\" of MCP server \"DeepWiki\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Read Wiki Structure\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `read_wiki_structure`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Read Wiki Structure\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Read Wiki Structure\"",
         "findings": [
@@ -556,15 +556,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "read_wiki_structure",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `read_wiki_structure` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `read_wiki_structure` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Read Wiki Structure\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -577,7 +577,7 @@
         "confidence": "high",
         "tool": "ask_wiki_question",
         "clients": ["claude-directory", "chatgpt"],
-        "message": "MCP tool \"ask_wiki_question\" of MCP server \"DeepWiki\" sets neither `readOnlyHint` nor `destructiveHint` to true in its tools/list entry. Anthropic's Connectors Directory requires `readOnlyHint: true` for read-only tools or `destructiveHint: true` for tools that modify or delete data. ChatGPT also treats it as a write action that needs the user's confirmation by default, because it has no `readOnlyHint`.",
+        "message": "MCP tool \"ask_wiki_question\" of MCP server \"DeepWiki\" sets neither `readOnlyHint` nor `destructiveHint` to true in its tools/list entry. Anthropic's Connectors Directory requires `readOnlyHint: true` for read-only tools or `destructiveHint: true` for tools that modify or delete data. ChatGPT doesn't treat it as read-only because it has no `readOnlyHint`, so users who set the plugin's permissions to \"Allow read-only tools\" must confirm every call.",
         "fix": "Add `readOnlyHint: true` to the annotations if the tool only reads, or `destructiveHint: true` if it changes or deletes data. Only you can tell which one is true.",
         "brief": "neither readOnlyHint nor destructiveHint is true",
         "findings": [
@@ -602,15 +602,15 @@
             "client": "chatgpt",
             "rule": "chatgpt/missing-read-only-hint",
             "effect": "review",
-            "severity": "warn",
-            "confidence": "high",
+            "severity": "info",
+            "confidence": "medium",
             "tool": "ask_wiki_question",
             "pointer": "/annotations/readOnlyHint",
-            "message": "ChatGPT treats `ask_wiki_question` as a write action that needs the user's confirmation by default, because it has no `readOnlyHint`.",
+            "message": "ChatGPT doesn't treat `ask_wiki_question` as read-only because it has no `readOnlyHint`, so users who set the plugin's permissions to \"Allow read-only tools\" must confirm every call.",
             "fix": "Set `annotations.readOnlyHint` to `true` on tools that only read, and to `false` on the rest.",
             "source": {
               "url": "https://developers.openai.com/api/docs/guides/developer-mode",
-              "checked": "2026-11-25",
+              "checked": "2026-11-26",
               "quote": "Read-only detection: We respect the `readOnlyHint` tool annotation (see MCP tool annotations). Tools without this hint are treated as write actions.",
               "kind": "docs"
             }
@@ -624,7 +624,7 @@
         "confidence": "high",
         "tool": "read_wiki_contents",
         "clients": ["claude-directory", "chatgpt"],
-        "message": "MCP tool \"read_wiki_contents\" of MCP server \"DeepWiki\" sets neither `readOnlyHint` nor `destructiveHint` to true in its tools/list entry. Anthropic's Connectors Directory requires `readOnlyHint: true` for read-only tools or `destructiveHint: true` for tools that modify or delete data. ChatGPT also treats it as a write action that needs the user's confirmation by default, because it has no `readOnlyHint`.",
+        "message": "MCP tool \"read_wiki_contents\" of MCP server \"DeepWiki\" sets neither `readOnlyHint` nor `destructiveHint` to true in its tools/list entry. Anthropic's Connectors Directory requires `readOnlyHint: true` for read-only tools or `destructiveHint: true` for tools that modify or delete data. ChatGPT doesn't treat it as read-only because it has no `readOnlyHint`, so users who set the plugin's permissions to \"Allow read-only tools\" must confirm every call.",
         "fix": "Add `readOnlyHint: true` to the annotations if the tool only reads, or `destructiveHint: true` if it changes or deletes data. Only you can tell which one is true.",
         "brief": "neither readOnlyHint nor destructiveHint is true",
         "findings": [
@@ -649,15 +649,15 @@
             "client": "chatgpt",
             "rule": "chatgpt/missing-read-only-hint",
             "effect": "review",
-            "severity": "warn",
-            "confidence": "high",
+            "severity": "info",
+            "confidence": "medium",
             "tool": "read_wiki_contents",
             "pointer": "/annotations/readOnlyHint",
-            "message": "ChatGPT treats `read_wiki_contents` as a write action that needs the user's confirmation by default, because it has no `readOnlyHint`.",
+            "message": "ChatGPT doesn't treat `read_wiki_contents` as read-only because it has no `readOnlyHint`, so users who set the plugin's permissions to \"Allow read-only tools\" must confirm every call.",
             "fix": "Set `annotations.readOnlyHint` to `true` on tools that only read, and to `false` on the rest.",
             "source": {
               "url": "https://developers.openai.com/api/docs/guides/developer-mode",
-              "checked": "2026-11-25",
+              "checked": "2026-11-26",
               "quote": "Read-only detection: We respect the `readOnlyHint` tool annotation (see MCP tool annotations). Tools without this hint are treated as write actions.",
               "kind": "docs"
             }
@@ -671,7 +671,7 @@
         "confidence": "high",
         "tool": "read_wiki_structure",
         "clients": ["claude-directory", "chatgpt"],
-        "message": "MCP tool \"read_wiki_structure\" of MCP server \"DeepWiki\" sets neither `readOnlyHint` nor `destructiveHint` to true in its tools/list entry. Anthropic's Connectors Directory requires `readOnlyHint: true` for read-only tools or `destructiveHint: true` for tools that modify or delete data. ChatGPT also treats it as a write action that needs the user's confirmation by default, because it has no `readOnlyHint`.",
+        "message": "MCP tool \"read_wiki_structure\" of MCP server \"DeepWiki\" sets neither `readOnlyHint` nor `destructiveHint` to true in its tools/list entry. Anthropic's Connectors Directory requires `readOnlyHint: true` for read-only tools or `destructiveHint: true` for tools that modify or delete data. ChatGPT doesn't treat it as read-only because it has no `readOnlyHint`, so users who set the plugin's permissions to \"Allow read-only tools\" must confirm every call.",
         "fix": "Add `readOnlyHint: true` to the annotations if the tool only reads, or `destructiveHint: true` if it changes or deletes data. Only you can tell which one is true.",
         "brief": "neither readOnlyHint nor destructiveHint is true",
         "findings": [
@@ -696,15 +696,15 @@
             "client": "chatgpt",
             "rule": "chatgpt/missing-read-only-hint",
             "effect": "review",
-            "severity": "warn",
-            "confidence": "high",
+            "severity": "info",
+            "confidence": "medium",
             "tool": "read_wiki_structure",
             "pointer": "/annotations/readOnlyHint",
-            "message": "ChatGPT treats `read_wiki_structure` as a write action that needs the user's confirmation by default, because it has no `readOnlyHint`.",
+            "message": "ChatGPT doesn't treat `read_wiki_structure` as read-only because it has no `readOnlyHint`, so users who set the plugin's permissions to \"Allow read-only tools\" must confirm every call.",
             "fix": "Set `annotations.readOnlyHint` to `true` on tools that only read, and to `false` on the rest.",
             "source": {
               "url": "https://developers.openai.com/api/docs/guides/developer-mode",
-              "checked": "2026-11-25",
+              "checked": "2026-11-26",
               "quote": "Read-only detection: We respect the `readOnlyHint` tool annotation (see MCP tool annotations). Tools without this hint are treated as write actions.",
               "kind": "docs"
             }
@@ -720,7 +720,7 @@
         "confidence": "high",
         "tool": "get-blog-post",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"get-blog-post\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Blog Post\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"get-blog-post\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Blog Post\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `get-blog-post`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Get Blog Post\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Get Blog Post\"",
         "findings": [
@@ -729,15 +729,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "get-blog-post",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `get-blog-post` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `get-blog-post` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Get Blog Post\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -750,7 +750,7 @@
         "confidence": "high",
         "tool": "list-blog-posts",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"list-blog-posts\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"List Blog Posts\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"list-blog-posts\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"List Blog Posts\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `list-blog-posts`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"List Blog Posts\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"List Blog Posts\"",
         "findings": [
@@ -759,15 +759,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "list-blog-posts",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `list-blog-posts` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `list-blog-posts` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"List Blog Posts\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -780,7 +780,7 @@
         "confidence": "high",
         "tool": "get-deploy-provider",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"get-deploy-provider\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Deploy Provider\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"get-deploy-provider\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Deploy Provider\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `get-deploy-provider`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Get Deploy Provider\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Get Deploy Provider\"",
         "findings": [
@@ -789,15 +789,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "get-deploy-provider",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `get-deploy-provider` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `get-deploy-provider` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Get Deploy Provider\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -810,7 +810,7 @@
         "confidence": "high",
         "tool": "list-deploy-providers",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"list-deploy-providers\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"List Deploy Providers\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"list-deploy-providers\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"List Deploy Providers\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `list-deploy-providers`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"List Deploy Providers\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"List Deploy Providers\"",
         "findings": [
@@ -819,15 +819,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "list-deploy-providers",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `list-deploy-providers` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `list-deploy-providers` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"List Deploy Providers\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -840,7 +840,7 @@
         "confidence": "high",
         "tool": "get-changelog",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"get-changelog\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Changelog\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"get-changelog\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Changelog\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `get-changelog`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Get Changelog\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Get Changelog\"",
         "findings": [
@@ -849,15 +849,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "get-changelog",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `get-changelog` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `get-changelog` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Get Changelog\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -870,7 +870,7 @@
         "confidence": "high",
         "tool": "get-documentation-page",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"get-documentation-page\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Documentation Page\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"get-documentation-page\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Documentation Page\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `get-documentation-page`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Get Documentation Page\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Get Documentation Page\"",
         "findings": [
@@ -879,15 +879,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "get-documentation-page",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `get-documentation-page` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `get-documentation-page` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Get Documentation Page\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -900,7 +900,7 @@
         "confidence": "high",
         "tool": "get-getting-started-guide",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"get-getting-started-guide\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Getting Started Guide\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"get-getting-started-guide\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Getting Started Guide\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `get-getting-started-guide`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Get Getting Started Guide\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Get Getting Started Guide\"",
         "findings": [
@@ -909,15 +909,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "get-getting-started-guide",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `get-getting-started-guide` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `get-getting-started-guide` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Get Getting Started Guide\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -930,7 +930,7 @@
         "confidence": "high",
         "tool": "list-documentation-pages",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"list-documentation-pages\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"List Documentation Pages\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"list-documentation-pages\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"List Documentation Pages\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `list-documentation-pages`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"List Documentation Pages\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"List Documentation Pages\"",
         "findings": [
@@ -939,15 +939,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "list-documentation-pages",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `list-documentation-pages` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `list-documentation-pages` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"List Documentation Pages\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -960,7 +960,7 @@
         "confidence": "high",
         "tool": "search-documentation",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"search-documentation\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Search Documentation\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"search-documentation\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Search Documentation\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `search-documentation`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Search Documentation\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Search Documentation\"",
         "findings": [
@@ -969,15 +969,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "search-documentation",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `search-documentation` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `search-documentation` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Search Documentation\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -990,7 +990,7 @@
         "confidence": "high",
         "tool": "get-module",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"get-module\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Module\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"get-module\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Module\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `get-module`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Get Module\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Get Module\"",
         "findings": [
@@ -999,15 +999,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "get-module",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `get-module` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `get-module` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Get Module\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -1020,7 +1020,7 @@
         "confidence": "high",
         "tool": "list-modules",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"list-modules\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"List Modules\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"list-modules\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"List Modules\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `list-modules`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"List Modules\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"List Modules\"",
         "findings": [
@@ -1029,15 +1029,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "list-modules",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `list-modules` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `list-modules` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"List Modules\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -1050,7 +1050,7 @@
         "confidence": "high",
         "tool": "get-nuxter",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"get-nuxter\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Nuxter\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"get-nuxter\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Nuxter\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `get-nuxter`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Get Nuxter\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Get Nuxter\"",
         "findings": [
@@ -1059,15 +1059,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "get-nuxter",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `get-nuxter` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `get-nuxter` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Get Nuxter\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -1080,7 +1080,7 @@
         "confidence": "high",
         "tool": "list-nuxters",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"list-nuxters\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"List Nuxters\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"list-nuxters\" of MCP server \"nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"List Nuxters\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `list-nuxters`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"List Nuxters\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"List Nuxters\"",
         "findings": [
@@ -1089,15 +1089,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "list-nuxters",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `list-nuxters` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `list-nuxters` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"List Nuxters\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -1946,7 +1946,7 @@
         "confidence": "high",
         "tool": "get-blog-post",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"get-blog-post\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Blog Post\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"get-blog-post\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Blog Post\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `get-blog-post`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Get Blog Post\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Get Blog Post\"",
         "findings": [
@@ -1955,15 +1955,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "get-blog-post",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `get-blog-post` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `get-blog-post` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Get Blog Post\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -1976,7 +1976,7 @@
         "confidence": "high",
         "tool": "list-blog-posts",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"list-blog-posts\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"List Blog Posts\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"list-blog-posts\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"List Blog Posts\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `list-blog-posts`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"List Blog Posts\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"List Blog Posts\"",
         "findings": [
@@ -1985,15 +1985,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "list-blog-posts",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `list-blog-posts` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `list-blog-posts` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"List Blog Posts\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -2006,7 +2006,7 @@
         "confidence": "high",
         "tool": "get-deploy-provider",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"get-deploy-provider\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Deploy Provider\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"get-deploy-provider\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Deploy Provider\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `get-deploy-provider`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Get Deploy Provider\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Get Deploy Provider\"",
         "findings": [
@@ -2015,15 +2015,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "get-deploy-provider",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `get-deploy-provider` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `get-deploy-provider` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Get Deploy Provider\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -2036,7 +2036,7 @@
         "confidence": "high",
         "tool": "list-deploy-providers",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"list-deploy-providers\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"List Deploy Providers\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"list-deploy-providers\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"List Deploy Providers\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `list-deploy-providers`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"List Deploy Providers\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"List Deploy Providers\"",
         "findings": [
@@ -2045,15 +2045,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "list-deploy-providers",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `list-deploy-providers` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `list-deploy-providers` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"List Deploy Providers\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -2066,7 +2066,7 @@
         "confidence": "high",
         "tool": "get-changelog",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"get-changelog\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Changelog\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"get-changelog\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Changelog\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `get-changelog`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Get Changelog\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Get Changelog\"",
         "findings": [
@@ -2075,15 +2075,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "get-changelog",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `get-changelog` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `get-changelog` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Get Changelog\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -2096,7 +2096,7 @@
         "confidence": "high",
         "tool": "get-documentation-page",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"get-documentation-page\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Documentation Page\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"get-documentation-page\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Documentation Page\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `get-documentation-page`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Get Documentation Page\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Get Documentation Page\"",
         "findings": [
@@ -2105,15 +2105,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "get-documentation-page",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `get-documentation-page` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `get-documentation-page` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Get Documentation Page\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -2126,7 +2126,7 @@
         "confidence": "high",
         "tool": "get-getting-started-guide",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"get-getting-started-guide\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Getting Started Guide\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"get-getting-started-guide\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Getting Started Guide\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `get-getting-started-guide`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Get Getting Started Guide\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Get Getting Started Guide\"",
         "findings": [
@@ -2135,15 +2135,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "get-getting-started-guide",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `get-getting-started-guide` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `get-getting-started-guide` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Get Getting Started Guide\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -2156,7 +2156,7 @@
         "confidence": "high",
         "tool": "list-documentation-pages",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"list-documentation-pages\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"List Documentation Pages\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"list-documentation-pages\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"List Documentation Pages\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `list-documentation-pages`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"List Documentation Pages\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"List Documentation Pages\"",
         "findings": [
@@ -2165,15 +2165,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "list-documentation-pages",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `list-documentation-pages` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `list-documentation-pages` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"List Documentation Pages\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -2186,7 +2186,7 @@
         "confidence": "high",
         "tool": "search-documentation",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"search-documentation\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Search Documentation\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"search-documentation\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Search Documentation\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `search-documentation`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Search Documentation\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Search Documentation\"",
         "findings": [
@@ -2195,15 +2195,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "search-documentation",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `search-documentation` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `search-documentation` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Search Documentation\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -2216,7 +2216,7 @@
         "confidence": "high",
         "tool": "get-module",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"get-module\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Module\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"get-module\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Module\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `get-module`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Get Module\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Get Module\"",
         "findings": [
@@ -2225,15 +2225,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "get-module",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `get-module` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `get-module` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Get Module\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -2246,7 +2246,7 @@
         "confidence": "high",
         "tool": "list-modules",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"list-modules\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"List Modules\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"list-modules\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"List Modules\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `list-modules`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"List Modules\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"List Modules\"",
         "findings": [
@@ -2255,15 +2255,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "list-modules",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `list-modules` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `list-modules` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"List Modules\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -2276,7 +2276,7 @@
         "confidence": "high",
         "tool": "get-nuxter",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"get-nuxter\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Nuxter\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"get-nuxter\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"Get Nuxter\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `get-nuxter`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"Get Nuxter\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"Get Nuxter\"",
         "findings": [
@@ -2285,15 +2285,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "get-nuxter",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `get-nuxter` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `get-nuxter` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"Get Nuxter\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -2306,7 +2306,7 @@
         "confidence": "high",
         "tool": "list-nuxters",
         "clients": ["claude-directory"],
-        "message": "MCP tool \"list-nuxters\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"List Nuxters\", which clients that read only `annotations.title` never show. Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.",
+        "message": "MCP tool \"list-nuxters\" of MCP server \"Nuxt\" has no non-empty string in `annotations.title` in its tools/list entry. It has a top-level title \"List Nuxters\", which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name `list-nuxters`, and clients on the 2025-03-26 revision know only `annotations.title`. Anthropic's Connectors Directory review asks every tool for a `title` and hint annotations, and its portal flags tools missing them; it has flagged tools that set only the top-level `title`.",
         "fix": "Add `title: \"List Nuxters\"` to the tool's annotations.",
         "brief": "no annotations.title; add title: \"List Nuxters\"",
         "findings": [
@@ -2315,15 +2315,15 @@
             "rule": "claude-directory/missing-title",
             "effect": "review",
             "severity": "warn",
-            "confidence": "high",
+            "confidence": "medium",
             "tool": "list-nuxters",
             "pointer": "/annotations/title",
-            "message": "Directory review requires a title on every tool and reads it from `annotations.title`; `list-nuxters` has none there.",
+            "message": "Directory review asks every tool for a `title`, and its portal has flagged tools that set only the top-level `title`, as `list-nuxters` does.",
             "fix": "Set `annotations.title` to a human-readable name, such as the top-level title \"List Nuxters\".",
             "source": {
-              "url": "https://claude.com/docs/connectors/building/review-criteria#provide-tool-annotations",
-              "checked": "2026-11-25",
-              "quote": "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.",
+              "url": "https://claude.com/docs/connectors/building/submission#pre-submission-checklist-for-connectors",
+              "checked": "2026-11-26",
+              "quote": "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
               "kind": "docs"
             }
           }
@@ -3322,16 +3322,16 @@
             "confidence": "high",
             "tool": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "pointer": "/name",
-            "message": "Codex cuts the name of `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` and appends a 12-character hash: `<server>__aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` is 136 bytes, over 128.",
-            "fix": "Shorten the tool name.",
+            "message": "Codex cuts the name of `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` to 128 characters, ending in a 12-character hash: `mcp__<server>__aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` is 141 characters.",
+            "fix": "Shorten the tool name so `mcp__<server>__<tool>` stays within 128 characters.",
             "source": {
-              "url": "https://github.com/openai/codex/blob/ebd0765aafa255d63ebf690ebdffe0164dc14a0c/codex-rs/codex-mcp/src/tools.rs#L267-L268",
-              "checked": "2026-11-25",
-              "quote": "const MAX_TOOL_NAME_LENGTH: usize = 128;\nconst CALLABLE_NAME_HASH_LEN: usize = 12;",
+              "url": "https://github.com/openai/codex/blob/3d86e43b075adeba2193ec5c22ac92f55afd82e6/codex-rs/codex-mcp/src/tools.rs#L267-L273",
+              "checked": "2026-11-26",
+              "quote": "const MAX_TOOL_NAME_LENGTH: usize = 128;\nconst CALLABLE_NAME_HASH_LEN: usize = 12;\nfn callable_namespace_with_prefix(namespace: &str, prefix_mcp_tool_names: bool) -> String {\n    if !prefix_mcp_tool_names || namespace.starts_with(LEGACY_MCP_TOOL_NAME_PREFIX) {\n        namespace.to_string()\n    } else {\n        format!(\"{LEGACY_MCP_TOOL_NAME_PREFIX}{namespace}\")",
               "kind": "source"
             },
             "measured": {
-              "value": 136,
+              "value": 141,
               "limit": 128,
               "unit": "characters"
             }
@@ -3606,11 +3606,11 @@
       {
         "code": "MCP0007",
         "ruleId": "mcp/clients/no-rewritten-schema",
-        "severity": "warn",
+        "severity": "info",
         "confidence": "high",
         "tool": "combinator",
         "clients": ["claude-code"],
-        "message": "Tool `combinator` of MCP server \"edge\" is rewritten in Claude Code. Claude Code flattens the root `anyOf` of `combinator` into one object and describes the branches in prose, or skips the tool when it can't.",
+        "message": "Tool `combinator` of MCP server \"edge\" is rewritten in Claude Code. Claude Code flattens the root `anyOf` of `combinator` into the schema's properties and adds an \"Input constraint: …\" line to its description that states the branches in prose.",
         "fix": "Declare one root object schema and keep combinators inside `properties`.",
         "brief": "inputSchema.anyOf rewritten in Claude Code",
         "findings": [
@@ -3618,16 +3618,16 @@
             "client": "claude-code",
             "rule": "claude-code/root-combinator",
             "effect": "rewritten",
-            "severity": "warn",
+            "severity": "info",
             "confidence": "high",
             "tool": "combinator",
             "pointer": "/inputSchema/anyOf",
             "affectedPointers": ["/inputSchema/anyOf"],
-            "message": "Claude Code flattens the root `anyOf` of `combinator` into one object and describes the branches in prose, or skips the tool when it can't.",
+            "message": "Claude Code flattens the root `anyOf` of `combinator` into the schema's properties and adds an \"Input constraint: …\" line to its description that states the branches in prose.",
             "fix": "Declare one root object schema and keep combinators inside `properties`.",
             "source": {
               "url": "https://code.claude.com/docs/en/mcp#tool-input-schemas-with-a-root-level-combinator",
-              "checked": "2026-11-25",
+              "checked": "2026-11-26",
               "quote": "Before sending the tool to the API, Claude Code flattens the schema into a single object and prepends a sentence to the tool's description that tells Claude which parameter groups belong together",
               "kind": "docs"
             }
@@ -3705,8 +3705,8 @@
         "confidence": "medium",
         "tool": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "clients": ["codex", "cursor", "vscode", "gemini-cli"],
-        "message": "Tool `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` of MCP server \"edge\" is rewritten in Codex, Cursor, VS Code, and Gemini CLI. Codex cuts the name of `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` and appends a 12-character hash: `<server>__aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` is 136 bytes, over 128. Measured: 136 characters, limit 128. Cursor warns about `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` and cuts its name, adding a hash suffix: server name plus tool name is 134 characters, over 60. Measured: 134 characters, limit 60. VS Code cuts the tool id `mcp_edge_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` to its first 64 characters, `mcp_edge_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`. Measured: 139 characters, limit 64. Gemini CLI replaces the middle of `mcp_<server>_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` (139 characters) with `...`, keeping the first and last 30 characters (`mcp_edge_aaaaaaaaaaaaaaaaaaaaa...aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`), and warns that the tool may require user approval. Measured: 139 characters, limit 63.",
-        "fix": "Shorten the tool name. Shorten the tool name so server name plus tool name stays within 60 characters. Shorten the tool name so `mcp_<server>_<tool>` stays within 64 characters. Shorten the tool name so `mcp_<server>_<tool>` stays within 63 characters.",
+        "message": "Tool `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` of MCP server \"edge\" is rewritten in Codex, Cursor, VS Code, and Gemini CLI. Codex cuts the name of `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` to 128 characters, ending in a 12-character hash: `mcp__<server>__aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` is 141 characters. Measured: 141 characters, limit 128. Cursor warns about `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` and cuts its name, adding a hash suffix: server name plus tool name is 134 characters, over 60. Measured: 134 characters, limit 60. VS Code cuts the tool id `mcp_edge_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` to its first 64 characters, `mcp_edge_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`. Measured: 139 characters, limit 64. Gemini CLI replaces the middle of `mcp_<server>_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` (139 characters) with `...`, keeping the first and last 30 characters (`mcp_edge_aaaaaaaaaaaaaaaaaaaaa...aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`), and warns that the tool may require user approval. Measured: 139 characters, limit 63.",
+        "fix": "Shorten the tool name so `mcp__<server>__<tool>` stays within 128 characters. Shorten the tool name so server name plus tool name stays within 60 characters. Shorten the tool name so `mcp_<server>_<tool>` stays within 64 characters. Shorten the tool name so `mcp_<server>_<tool>` stays within 63 characters.",
         "brief": "name rewritten in Codex, Cursor, Gemini CLI, and VS Code",
         "findings": [
           {
@@ -3717,16 +3717,16 @@
             "confidence": "high",
             "tool": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "pointer": "/name",
-            "message": "Codex cuts the name of `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` and appends a 12-character hash: `<server>__aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` is 136 bytes, over 128.",
-            "fix": "Shorten the tool name.",
+            "message": "Codex cuts the name of `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` to 128 characters, ending in a 12-character hash: `mcp__<server>__aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` is 141 characters.",
+            "fix": "Shorten the tool name so `mcp__<server>__<tool>` stays within 128 characters.",
             "source": {
-              "url": "https://github.com/openai/codex/blob/ebd0765aafa255d63ebf690ebdffe0164dc14a0c/codex-rs/codex-mcp/src/tools.rs#L267-L268",
-              "checked": "2026-11-25",
-              "quote": "const MAX_TOOL_NAME_LENGTH: usize = 128;\nconst CALLABLE_NAME_HASH_LEN: usize = 12;",
+              "url": "https://github.com/openai/codex/blob/3d86e43b075adeba2193ec5c22ac92f55afd82e6/codex-rs/codex-mcp/src/tools.rs#L267-L273",
+              "checked": "2026-11-26",
+              "quote": "const MAX_TOOL_NAME_LENGTH: usize = 128;\nconst CALLABLE_NAME_HASH_LEN: usize = 12;\nfn callable_namespace_with_prefix(namespace: &str, prefix_mcp_tool_names: bool) -> String {\n    if !prefix_mcp_tool_names || namespace.starts_with(LEGACY_MCP_TOOL_NAME_PREFIX) {\n        namespace.to_string()\n    } else {\n        format!(\"{LEGACY_MCP_TOOL_NAME_PREFIX}{namespace}\")",
               "kind": "source"
             },
             "measured": {
-              "value": 136,
+              "value": 141,
               "limit": 128,
               "unit": "characters"
             }
@@ -4035,16 +4035,16 @@
             "confidence": "high",
             "tool": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "pointer": "/name",
-            "message": "Codex cuts the name of `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` and appends a 12-character hash: `<server>__aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` is 133 bytes even with a one-character server name, over 128.",
-            "fix": "Shorten the tool name.",
+            "message": "Codex cuts the name of `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` to 128 characters, ending in a 12-character hash: `mcp__<server>__aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` is 138 characters even with a one-character server name.",
+            "fix": "Shorten the tool name so `mcp__<server>__<tool>` stays within 128 characters.",
             "source": {
-              "url": "https://github.com/openai/codex/blob/ebd0765aafa255d63ebf690ebdffe0164dc14a0c/codex-rs/codex-mcp/src/tools.rs#L267-L268",
-              "checked": "2026-11-25",
-              "quote": "const MAX_TOOL_NAME_LENGTH: usize = 128;\nconst CALLABLE_NAME_HASH_LEN: usize = 12;",
+              "url": "https://github.com/openai/codex/blob/3d86e43b075adeba2193ec5c22ac92f55afd82e6/codex-rs/codex-mcp/src/tools.rs#L267-L273",
+              "checked": "2026-11-26",
+              "quote": "const MAX_TOOL_NAME_LENGTH: usize = 128;\nconst CALLABLE_NAME_HASH_LEN: usize = 12;\nfn callable_namespace_with_prefix(namespace: &str, prefix_mcp_tool_names: bool) -> String {\n    if !prefix_mcp_tool_names || namespace.starts_with(LEGACY_MCP_TOOL_NAME_PREFIX) {\n        namespace.to_string()\n    } else {\n        format!(\"{LEGACY_MCP_TOOL_NAME_PREFIX}{namespace}\")",
               "kind": "source"
             },
             "measured": {
-              "value": 133,
+              "value": 138,
               "limit": 128,
               "unit": "characters"
             }
@@ -4319,11 +4319,11 @@
       {
         "code": "MCP0007",
         "ruleId": "mcp/clients/no-rewritten-schema",
-        "severity": "warn",
+        "severity": "info",
         "confidence": "high",
         "tool": "combinator",
         "clients": ["claude-code"],
-        "message": "Tool `combinator` of MCP server \"Edge\" is rewritten in Claude Code. Claude Code flattens the root `anyOf` of `combinator` into one object and describes the branches in prose, or skips the tool when it can't.",
+        "message": "Tool `combinator` of MCP server \"Edge\" is rewritten in Claude Code. Claude Code flattens the root `anyOf` of `combinator` into the schema's properties and adds an \"Input constraint: …\" line to its description that states the branches in prose.",
         "fix": "Declare one root object schema and keep combinators inside `properties`.",
         "brief": "inputSchema.anyOf rewritten in Claude Code",
         "findings": [
@@ -4331,16 +4331,16 @@
             "client": "claude-code",
             "rule": "claude-code/root-combinator",
             "effect": "rewritten",
-            "severity": "warn",
+            "severity": "info",
             "confidence": "high",
             "tool": "combinator",
             "pointer": "/inputSchema/anyOf",
             "affectedPointers": ["/inputSchema/anyOf"],
-            "message": "Claude Code flattens the root `anyOf` of `combinator` into one object and describes the branches in prose, or skips the tool when it can't.",
+            "message": "Claude Code flattens the root `anyOf` of `combinator` into the schema's properties and adds an \"Input constraint: …\" line to its description that states the branches in prose.",
             "fix": "Declare one root object schema and keep combinators inside `properties`.",
             "source": {
               "url": "https://code.claude.com/docs/en/mcp#tool-input-schemas-with-a-root-level-combinator",
-              "checked": "2026-11-25",
+              "checked": "2026-11-26",
               "quote": "Before sending the tool to the API, Claude Code flattens the schema into a single object and prepends a sentence to the tool's description that tells Claude which parameter groups belong together",
               "kind": "docs"
             }
@@ -4418,8 +4418,8 @@
         "confidence": "medium",
         "tool": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "clients": ["codex", "cursor", "vscode", "gemini-cli"],
-        "message": "Tool `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` of MCP server \"Edge\" is rewritten in Codex, Cursor, VS Code, and Gemini CLI. Codex cuts the name of `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` and appends a 12-character hash: `<server>__aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` is 133 bytes even with a one-character server name, over 128. Measured: 133 characters, limit 128. Cursor warns about `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` and cuts its name, adding a hash suffix: server name plus tool name is 131 characters even with a one-character server name, over 60. Measured: 131 characters, limit 60. VS Code cuts the tool id `mcp_edge_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` to its first 64 characters, `mcp_edge_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`. Measured: 139 characters, limit 64. Gemini CLI replaces the middle of `mcp_<server>_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` (136 characters even with a one-character server name) with `...`, keeping the first and last 30 characters (`mcp_s_aaaaaaaaaaaaaaaaaaaaaaaa...aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`), and warns that the tool may require user approval. Measured: 136 characters, limit 63.",
-        "fix": "Shorten the tool name. Shorten the tool name so server name plus tool name stays within 60 characters. Shorten the tool name so `mcp_<server>_<tool>` stays within 64 characters. Shorten the tool name so `mcp_<server>_<tool>` stays within 63 characters.",
+        "message": "Tool `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` of MCP server \"Edge\" is rewritten in Codex, Cursor, VS Code, and Gemini CLI. Codex cuts the name of `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` to 128 characters, ending in a 12-character hash: `mcp__<server>__aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` is 138 characters even with a one-character server name. Measured: 138 characters, limit 128. Cursor warns about `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` and cuts its name, adding a hash suffix: server name plus tool name is 131 characters even with a one-character server name, over 60. Measured: 131 characters, limit 60. VS Code cuts the tool id `mcp_edge_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` to its first 64 characters, `mcp_edge_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`. Measured: 139 characters, limit 64. Gemini CLI replaces the middle of `mcp_<server>_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` (136 characters even with a one-character server name) with `...`, keeping the first and last 30 characters (`mcp_s_aaaaaaaaaaaaaaaaaaaaaaaa...aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`), and warns that the tool may require user approval. Measured: 136 characters, limit 63.",
+        "fix": "Shorten the tool name so `mcp__<server>__<tool>` stays within 128 characters. Shorten the tool name so server name plus tool name stays within 60 characters. Shorten the tool name so `mcp_<server>_<tool>` stays within 64 characters. Shorten the tool name so `mcp_<server>_<tool>` stays within 63 characters.",
         "brief": "name rewritten in Codex, Cursor, Gemini CLI, and VS Code",
         "findings": [
           {
@@ -4430,16 +4430,16 @@
             "confidence": "high",
             "tool": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "pointer": "/name",
-            "message": "Codex cuts the name of `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` and appends a 12-character hash: `<server>__aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` is 133 bytes even with a one-character server name, over 128.",
-            "fix": "Shorten the tool name.",
+            "message": "Codex cuts the name of `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` to 128 characters, ending in a 12-character hash: `mcp__<server>__aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` is 138 characters even with a one-character server name.",
+            "fix": "Shorten the tool name so `mcp__<server>__<tool>` stays within 128 characters.",
             "source": {
-              "url": "https://github.com/openai/codex/blob/ebd0765aafa255d63ebf690ebdffe0164dc14a0c/codex-rs/codex-mcp/src/tools.rs#L267-L268",
-              "checked": "2026-11-25",
-              "quote": "const MAX_TOOL_NAME_LENGTH: usize = 128;\nconst CALLABLE_NAME_HASH_LEN: usize = 12;",
+              "url": "https://github.com/openai/codex/blob/3d86e43b075adeba2193ec5c22ac92f55afd82e6/codex-rs/codex-mcp/src/tools.rs#L267-L273",
+              "checked": "2026-11-26",
+              "quote": "const MAX_TOOL_NAME_LENGTH: usize = 128;\nconst CALLABLE_NAME_HASH_LEN: usize = 12;\nfn callable_namespace_with_prefix(namespace: &str, prefix_mcp_tool_names: bool) -> String {\n    if !prefix_mcp_tool_names || namespace.starts_with(LEGACY_MCP_TOOL_NAME_PREFIX) {\n        namespace.to_string()\n    } else {\n        format!(\"{LEGACY_MCP_TOOL_NAME_PREFIX}{namespace}\")",
               "kind": "source"
             },
             "measured": {
-              "value": 133,
+              "value": 138,
               "limit": 128,
               "unit": "characters"
             }

@@ -21,6 +21,16 @@ describe("checkMcpToolList", () => {
     expect(checkMcpToolList([{ name: "search" }])[0]?.message).toContain('"an MCP server"');
   });
 
+  test("names where a top-level title goes unseen instead of saying no client shows it", () => {
+    const [title] = checkMcpToolList([
+      { name: "search", title: "Search docs", annotations: { readOnlyHint: true } },
+    ]);
+    expect(title?.message).toContain(
+      "Claude Code's transcript, for example, shows the bare name `search`",
+    );
+    expect(title?.message).not.toContain("never show");
+  });
+
   test("reports only the given codes", () => {
     const codes = checkMcpToolList(edge, { codes: ["MCP0003", "MCP0005"] }).map((d) => d.code);
     expect(new Set(codes)).toEqual(new Set(["MCP0003", "MCP0005"]));

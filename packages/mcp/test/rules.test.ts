@@ -39,6 +39,10 @@ const cases: Record<string, Case> = {
     fail: schema(object({ pair: { type: "array", items: [{ type: "string" }] } })),
     pass: schema(object({ pair: { type: "array", prefixItems: [{ type: "string" }] } })),
   },
+  "claude-code/root-combinator-without-type": {
+    fail: schema({ oneOf: [object({ a: { type: "string" } }), object({ b: { type: "number" } })] }),
+    pass: schema(object({}, { anyOf: [{ required: ["a"] }, { required: ["b"] }] })),
+  },
   "claude-code/root-combinator": {
     fail: schema(object({}, { anyOf: [{ required: ["a"] }, { required: ["b"] }] })),
     pass: schema(object({ a: { anyOf: [{ type: "string" }, { type: "number" }] } })),
@@ -89,7 +93,7 @@ const cases: Record<string, Case> = {
     fail: tool({ name: "search.docs" }),
     pass: tool({ name: "search_docs" }),
   },
-  "codex/name-length": { fail: named(126), pass: named(125) },
+  "codex/name-length": { fail: named(121), pass: named(120) },
   "cursor/name-length": { fail: named(60), pass: named(59) },
   "vscode/schema-draft-07": {
     fail: schema(object({}, { required: "query" })),
@@ -218,6 +222,21 @@ describe("rule details", () => {
     expect(hits("claude-code/tool-name-length", named(121))[0]?.message).toContain(
       "even with a one-character server name",
     );
+  });
+
+  test('Claude Code reports a root combinator without `type: "object"` only as a failed list', () => {
+    const untyped = schema({ anyOf: [object({ a: {} }), object({ b: {} })] });
+    expect(hits("claude-code/root-combinator", untyped)).toEqual([]);
+    const [finding] = hits("claude-code/root-combinator-without-type", untyped);
+    expect(finding?.message).toContain("none of them load");
+    expect(finding?.affectedPointers).toEqual(["/inputSchema/anyOf"]);
+  });
+
+  test("Codex measures `mcp__<server>__<tool>`", () => {
+    expect(hits("codex/name-length", named(100), { serverName: "s".repeat(21) })).toEqual([]);
+    const [finding] = hits("codex/name-length", named(100), { serverName: "s".repeat(22) });
+    expect(finding?.measured).toEqual({ value: 129, limit: 128, unit: "characters" });
+    expect(finding?.message).toContain("is 129 characters");
   });
 
   test("Claude Code skips the 2020-12 check for schemas declaring another dialect", () => {
@@ -611,6 +630,21 @@ test("the Directory title check reads annotations.title, not the top-level title
   );
 });
 
+test("a top-level title alone lowers the Directory title finding to medium confidence", () => {
+  const finding = (fields: Partial<McpTool>) =>
+    checkMcpClientLimits({ tools: [tool(fields)] }).find(
+      (item) => item.rule === "claude-directory/missing-title",
+    );
+  expect(finding({ title: "Search docs" })).toMatchObject({
+    confidence: "medium",
+    message: expect.stringContaining("set only the top-level `title`"),
+  });
+  expect(finding({})).toMatchObject({
+    confidence: "high",
+    message: expect.stringContaining("has none"),
+  });
+});
+
 test("ChatGPT's readOnlyHint check skips a tool that declares itself destructive", () => {
   const rules = (fields: Partial<McpTool>) =>
     checkMcpClientLimits({ tools: [tool(fields)] }).map((finding) => finding.rule);
@@ -618,6 +652,18 @@ test("ChatGPT's readOnlyHint check skips a tool that declares itself destructive
     "chatgpt/missing-read-only-hint",
   );
   expect(rules({ annotations: {} })).toContain("chatgpt/missing-read-only-hint");
+});
+
+test("ChatGPT's readOnlyHint finding names the setting that prompts", () => {
+  const [finding] = checkMcpClientLimits(
+    { tools: [tool({ annotations: {} })] },
+    {
+      clients: ["chatgpt"],
+    },
+  );
+  expect(finding).toMatchObject({ severity: "info", confidence: "medium" });
+  expect(finding?.message).toContain('"Allow read-only tools"');
+  expect(finding?.message).not.toContain("by default");
 });
 
 test("the Directory hint fix follows the hints a tool declares", () => {

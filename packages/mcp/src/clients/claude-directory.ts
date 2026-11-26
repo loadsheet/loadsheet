@@ -2,6 +2,7 @@ import type { McpClientRule } from "../types.ts";
 import { docs } from "./shared.ts";
 
 const REVIEW = "https://claude.com/docs/connectors/building/review-criteria";
+const SUBMISSION = "https://claude.com/docs/connectors/building/submission";
 const ANNOTATIONS_QUOTE =
   "Every tool must include a `title` and the applicable hint: `readOnlyHint: true` for read-only tools, and `destructiveHint: true` for tools that modify or delete data.";
 
@@ -31,16 +32,25 @@ export const missingTitle: McpClientRule = {
   effect: "review",
   severity: "warn",
   confidence: "high",
-  source: docs(`${REVIEW}#provide-tool-annotations`, ANNOTATIONS_QUOTE),
-  // The Directory's portal flags a tool whose annotations have no title even when the top-level
-  // `title` is set, so only `annotations.title` counts.
+  source: docs(
+    `${SUBMISSION}#pre-submission-checklist-for-connectors`,
+    "Every tool has a `title` and a `readOnlyHint` or `destructiveHint` annotation: the portal flags tools that are missing them",
+    "2026-11-26",
+  ),
+  // The docs don't say where the title must be, but on 2026-11-06 the portal flagged a server's tools
+  // that sent a top-level `title` without `annotations.title`. That is one observation, so a tool with
+  // only a top-level title gets medium confidence.
   check(tool) {
     const title = tool.annotations?.title;
     if (typeof title === "string" && title.trim()) return;
+    const topLevel = typeof tool.title === "string" && tool.title.trim();
     return {
-      message: `Directory review requires a title on every tool and reads it from \`annotations.title\`; \`${tool.name}\` has none there.`,
-      fix: `Set \`annotations.title\` to a human-readable name${typeof tool.title === "string" && tool.title.trim() ? `, such as the top-level title ${JSON.stringify(tool.title)}` : ""}.`,
+      message: topLevel
+        ? `Directory review asks every tool for a \`title\`, and its portal has flagged tools that set only the top-level \`title\`, as \`${tool.name}\` does.`
+        : `Directory review asks every tool for a \`title\`, and its portal flags tools missing one; \`${tool.name}\` has none.`,
+      fix: `Set \`annotations.title\` to a human-readable name${topLevel ? `, such as the top-level title ${JSON.stringify(tool.title)}` : ""}.`,
       pointer: "/annotations/title",
+      ...(topLevel ? { confidence: "medium" as const } : {}),
     };
   },
 };

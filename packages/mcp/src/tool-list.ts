@@ -174,7 +174,7 @@ function toolDiagnostics(tool: McpTool, wire: McpFinding[], label: string): McpD
     const suggested = topLevel ? (tool.title as string) : "<Human-readable name>";
     diagnostics.push(
       toolDiagnostic("MCP0001", "mcp/tools/require-annotation-title", tool, titles, {
-        message: `MCP tool ${label} has no non-empty string in \`annotations.title\` in its tools/list entry.${topLevel ? ` It has a top-level title ${JSON.stringify(tool.title)}, which clients that read only \`annotations.title\` never show.` : ""} Anthropic's Connectors Directory flags tools without one, and clients on the 2025-03-26 revision show only the bare name.`,
+        message: `MCP tool ${label} has no non-empty string in \`annotations.title\` in its tools/list entry.${topLevel ? ` It has a top-level title ${JSON.stringify(tool.title)}, which some client surfaces ignore: Claude Code's transcript, for example, shows the bare name \`${tool.name}\`, and clients on the 2025-03-26 revision know only \`annotations.title\`.` : ` Clients show only the bare name \`${tool.name}\`.`} Anthropic's Connectors Directory review asks every tool for a \`title\` and hint annotations, and its portal flags tools missing them${topLevel ? "; it has flagged tools that set only the top-level `title`" : ""}.`,
         fix: `Add \`title: ${JSON.stringify(suggested)}\` to the tool's annotations.`,
         brief: `no annotations.title; add title: ${JSON.stringify(suggested)}`,
       }),
@@ -191,7 +191,7 @@ function toolDiagnostics(tool: McpTool, wire: McpFinding[], label: string): McpD
     const chatgpt = hints.some((finding) => finding.client === "chatgpt");
     diagnostics.push(
       toolDiagnostic("MCP0002", "mcp/tools/require-safety-hint", tool, hints, {
-        message: `MCP tool ${label} sets neither \`readOnlyHint\` nor \`destructiveHint\` to true in its tools/list entry. Anthropic's Connectors Directory requires \`readOnlyHint: true\` for read-only tools or \`destructiveHint: true\` for tools that modify or delete data.${chatgpt ? " ChatGPT also treats it as a write action that needs the user's confirmation by default, because it has no `readOnlyHint`." : ""}`,
+        message: `MCP tool ${label} sets neither \`readOnlyHint\` nor \`destructiveHint\` to true in its tools/list entry. Anthropic's Connectors Directory requires \`readOnlyHint: true\` for read-only tools or \`destructiveHint: true\` for tools that modify or delete data.${chatgpt ? " ChatGPT doesn't treat it as read-only because it has no `readOnlyHint`, so users who set the plugin's permissions to \"Allow read-only tools\" must confirm every call." : ""}`,
         fix: declaredHintFix(tool.annotations ?? {}) ?? UNDECLARED_FIX,
         brief: SAFETY_BRIEF,
       }),

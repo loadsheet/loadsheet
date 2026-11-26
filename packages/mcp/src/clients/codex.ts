@@ -11,8 +11,11 @@ import {
 
 const CODEX =
   "https://github.com/openai/codex/blob/ebd0765aafa255d63ebf690ebdffe0164dc14a0c/codex-rs";
+// Codex 0.172.0, where the name-length and structured-content claims were measured.
+const CODEX_0_172 =
+  "https://github.com/openai/codex/blob/3d86e43b075adeba2193ec5c22ac92f55afd82e6/codex-rs";
+const OBSERVED = "2026-11-26";
 const NAME_LIMIT = 128;
-const DELIMITER = "__";
 
 // Keywords outside the JsonSchema struct (types.rs) that constrain a value; Codex drops them all.
 const DROPPED_CONSTRAINTS = new Set([
@@ -136,17 +139,18 @@ export const nameLength: McpClientRule = {
   severity: "info",
   confidence: "high",
   source: source(
-    `${CODEX}/codex-mcp/src/tools.rs#L267-L268`,
-    "const MAX_TOOL_NAME_LENGTH: usize = 128;\nconst CALLABLE_NAME_HASH_LEN: usize = 12;",
+    `${CODEX_0_172}/codex-mcp/src/tools.rs#L267-L273`,
+    'const MAX_TOOL_NAME_LENGTH: usize = 128;\nconst CALLABLE_NAME_HASH_LEN: usize = 12;\nfn callable_namespace_with_prefix(namespace: &str, prefix_mcp_tool_names: bool) -> String {\n    if !prefix_mcp_tool_names || namespace.starts_with(LEGACY_MCP_TOOL_NAME_PREFIX) {\n        namespace.to_string()\n    } else {\n        format!("{LEGACY_MCP_TOOL_NAME_PREFIX}{namespace}")',
+    OBSERVED,
   ),
   check(tool, context) {
     const server = serverName(context);
-    // Without the default `mcp__` namespace prefix, the shortest name Codex can build.
-    const length = server.name.length + DELIMITER.length + tool.name.length;
+    // Codex replaces each disallowed character with one `_`, so sanitizing keeps the length.
+    const length = Array.from(`mcp__${server.name}__${tool.name}`).length;
     if (length <= NAME_LIMIT) return;
     return {
-      message: `Codex cuts the name of \`${tool.name}\` and appends a 12-character hash: \`<server>__${tool.name}\` is ${length} bytes${assumedNote(server)}, over 128.`,
-      fix: "Shorten the tool name.",
+      message: `Codex cuts the name of \`${tool.name}\` to 128 characters, ending in a 12-character hash: \`mcp__<server>__${tool.name}\` is ${length} characters${assumedNote(server)}.`,
+      fix: "Shorten the tool name so `mcp__<server>__<tool>` stays within 128 characters.",
       pointer: "/name",
       measured: { value: length, limit: NAME_LIMIT, unit: "characters" },
     };
@@ -159,17 +163,19 @@ export const structuredContentOnly: McpClientRule = {
   scope: "result",
   effect: "stripped",
   severity: "warn",
-  confidence: "high",
+  // Only direct tool calls lose the text; code mode, the default for newer models, keeps both.
+  confidence: "medium",
   source: source(
-    `${CODEX}/protocol/src/models.rs#L2500-L2508`,
+    `${CODEX_0_172}/protocol/src/models.rs#L2500-L2506`,
     "if let Some(structured_content) = &self.structured_content\n            && !structured_content.is_null()\n        {\n            match serde_json::to_string(structured_content) {\n                Ok(serialized_structured_content) => {\n                    return FunctionCallOutputPayload {\n                        body: FunctionCallOutputBody::Text(serialized_structured_content),",
+    OBSERVED,
   ),
   check(result) {
     if (result.structuredContent === null || result.structuredContent === undefined) return;
     if (!structuredContentHidesText(result)) return;
     return {
       message:
-        "Codex sends the model only `structuredContent` as JSON, so the text in `content`, which says something else, never reaches it.",
+        "When Codex calls MCP tools directly (models without code mode, such as gpt-5.5), it sends the model only `structuredContent` as JSON, so the text in `content`, which says something else, never reaches it. In code mode, the default for gpt-5.6 and gpt-6 models, the script gets both.",
       fix: "Put everything the model needs in `structuredContent`, or make the text content the same JSON.",
       pointer: "/structuredContent",
     };

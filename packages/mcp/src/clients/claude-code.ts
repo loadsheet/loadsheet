@@ -1,16 +1,22 @@
 import { isSchema } from "../schema.ts";
-import type { McpClientRule } from "../types.ts";
+import type { McpClientRule, McpToolResult } from "../types.ts";
 import { declaresDraft2020OrNothing, draft2020Errors } from "../validate.ts";
-import { assumedNote, docs, hasImage, resultText, serverName, textLength } from "./shared.ts";
+import { assumedNote, docs, hasImage, serverName, source, textLength } from "./shared.ts";
 
 const DOCS = "https://code.claude.com/docs/en/mcp";
+// Claude Code ships minified; these claims were measured against this release.
+const RELEASE = "https://www.npmjs.com/package/@anthropic-ai/claude-code/v/2.1.332";
+const MCP_SDK =
+  "https://github.com/modelcontextprotocol/typescript-sdk/blob/3b73021a0a2272c0c04c3917bcdb03398b3ec63f/src/types.ts";
+const OBSERVED = "2026-11-26";
 const DESCRIPTION_LIMIT = 4_096;
 const DEFERRED_DESCRIPTION_LIMIT = 16_384;
 const RESULT_CHARS = 50_000;
 const RESULT_CHARS_CEILING = 500_000;
-const ERROR_CHARS = 11_000;
+const ERROR_CHARS = 11_024;
+const ERROR_KEPT = 5_000;
 const TOKEN_WARNING = 10_000;
-const TOKEN_LIMIT = 25_000;
+const IMAGE_TOKENS = 1_600;
 const PROPERTY_NAME = /^[A-Za-z0-9_.-]{1,64}$/;
 
 export const toolNameLength: McpClientRule = {
@@ -85,24 +91,57 @@ export const schemaDraft2020: McpClientRule = {
   },
 };
 
+const ROOT_COMBINATORS = ["anyOf", "oneOf", "allOf"];
+
+function rootCombinators(schema: Record<string, unknown>): string[] {
+  return ROOT_COMBINATORS.filter((keyword) => keyword in schema);
+}
+
+export const rootCombinatorWithoutType: McpClientRule = {
+  client: "claude-code",
+  rule: "claude-code/root-combinator-without-type",
+  scope: "tool",
+  effect: "excluded",
+  severity: "error",
+  confidence: "high",
+  source: source(
+    `${MCP_SDK}#L1389-L1393`,
+    "* Must have type: 'object' at the root level per MCP spec.\n     */\n    inputSchema: z\n        .object({\n            type: z.literal('object'),",
+    OBSERVED,
+  ),
+  check(tool) {
+    const schema = tool.inputSchema;
+    if (!isSchema(schema) || schema.type === "object") return;
+    const keywords = rootCombinators(schema);
+    if (!keywords.length) return;
+    return {
+      message: `Claude Code fails to list this server's tools, so none of them load: the input schema of \`${tool.name}\` has a root \`${keywords.join("`, `")}\` without \`type: "object"\`, and the MCP SDK rejects the whole \`tools/list\` result.`,
+      fix: 'Add `type: "object"` at the root of the input schema.',
+      pointer: "/inputSchema",
+      affectedPointers: keywords.map((keyword) => `/inputSchema/${keyword}`),
+    };
+  },
+};
+
 export const rootCombinator: McpClientRule = {
   client: "claude-code",
   rule: "claude-code/root-combinator",
   scope: "tool",
   effect: "rewritten",
-  severity: "warn",
+  severity: "info",
   confidence: "high",
   source: docs(
     `${DOCS}#tool-input-schemas-with-a-root-level-combinator`,
     "Before sending the tool to the API, Claude Code flattens the schema into a single object and prepends a sentence to the tool's description that tells Claude which parameter groups belong together",
+    OBSERVED,
   ),
   check(tool) {
     const schema = tool.inputSchema;
-    if (!isSchema(schema)) return;
-    const keywords = ["anyOf", "oneOf", "allOf"].filter((keyword) => keyword in schema);
+    if (!isSchema(schema) || schema.type !== "object") return;
+    const keywords = rootCombinators(schema);
     if (!keywords.length) return;
     return {
-      message: `Claude Code flattens the root \`${keywords.join("`, `")}\` of \`${tool.name}\` into one object and describes the branches in prose, or skips the tool when it can't.`,
+      message: `Claude Code flattens the root \`${keywords.join("`, `")}\` of \`${tool.name}\` into the schema's properties and adds an "Input constraint: …" line to its description that states the branches in prose.`,
       fix: "Declare one root object schema and keep combinators inside `properties`.",
       pointer: `/inputSchema/${keywords[0]}`,
       affectedPointers: keywords.map((keyword) => `/inputSchema/${keyword}`),
@@ -189,24 +228,27 @@ export const resultSavedToFile: McpClientRule = {
   effect: "context",
   severity: "warn",
   confidence: "high",
-  source: docs(
-    `${DOCS}#mcp-output-limits-and-warnings`,
-    "Claude Code saves a successful result with no image content to a file once it's longer than 50,000 characters, whatever its token count.",
+  // A declared limit below 50,000 lowers the threshold too: a declared 20,000 saved a 30,000-character result.
+  source: source(
+    RELEASE,
+    "function l3(e,n,r=mw,o=!1){if(!Number.isFinite(n))return n;if(o)return Math.min(n,r);",
+    OBSERVED,
   ),
   check(result, context) {
     if (result.isError || hasImage(result)) return;
     const declared = context.tool?._meta?.["anthropic/maxResultSizeChars"];
-    const limit =
-      typeof declared === "number" && declared > RESULT_CHARS
-        ? Math.min(declared, RESULT_CHARS_CEILING)
-        : RESULT_CHARS;
+    const honored = typeof declared === "number" && Number.isFinite(declared) && declared > 0;
+    const limit = honored ? Math.min(declared, RESULT_CHARS_CEILING) : RESULT_CHARS;
     const length = textLength(result);
     if (length <= limit) return;
+    const over = honored
+      ? `the tool's \`anthropic/maxResultSizeChars\` of ${limit.toLocaleString("en-US")}`
+      : `${limit.toLocaleString("en-US")} characters`;
     return {
-      message: `Claude Code saves this ${length}-character result to a file and gives Claude only the path, since it is over ${limit.toLocaleString("en-US")} characters.`,
+      message: `Claude Code saves this ${length}-character result to a file and gives Claude only the path, since it is over ${over}.`,
       fix:
         limit < RESULT_CHARS_CEILING
-          ? 'Return less text, paginate, or set `_meta["anthropic/maxResultSizeChars"]` on the tool (up to 500,000).'
+          ? `Return less text, paginate, or ${honored ? "raise" : "set"} \`_meta["anthropic/maxResultSizeChars"]\` on the tool (up to 500,000).`
           : "Return less text or paginate.",
       pointer: "/content",
       measured: { value: length, limit, unit: "characters" },
@@ -224,46 +266,31 @@ export const errorResultTruncated: McpClientRule = {
   source: docs(
     `${DOCS}#mcp-output-limits-and-warnings`,
     "Error text longer than about 11,000 characters keeps only its first 5,000 and last 5,000 characters, with a marker between them that says how many characters were removed",
+    OBSERVED,
   ),
   check(result) {
     if (!result.isError) return;
     const length = textLength(result);
     if (length <= ERROR_CHARS) return;
     return {
-      message: `Claude Code keeps only the first and last 5,000 characters of this ${length}-character error.`,
+      message: `Claude Code keeps the first 5,000 and last 5,000 characters of this ${length}-character error, with a \`... [${length - 2 * ERROR_KEPT} characters truncated] ...\` marker between them.`,
       fix: "Put the cause and the next step in the first 5,000 characters of the error text.",
       pointer: "/content",
       measured: { value: length, limit: ERROR_CHARS, unit: "characters" },
-      // "About 11,000": close to the threshold the cut is likely, not certain.
-      confidence: length > ERROR_CHARS * 1.1 ? "high" : "medium",
     };
   },
 };
 
-export const resultTokenLimit: McpClientRule = {
-  client: "claude-code",
-  rule: "claude-code/result-token-limit",
-  scope: "result",
-  effect: "context",
-  severity: "warn",
-  confidence: "high",
-  source: docs(
-    `${DOCS}#mcp-output-limits-and-warnings`,
-    "Over the limit: when a successful result with no image content exceeds the token limit, Claude Code saves it to a file and replaces it in the conversation with a message that names the file path",
-  ),
-  check(result, context) {
-    if (!context.countTokens || result.isError || hasImage(result)) return;
-    if (typeof context.tool?._meta?.["anthropic/maxResultSizeChars"] === "number") return;
-    const tokens = context.countTokens(resultText(result));
-    if (tokens <= TOKEN_LIMIT) return;
-    return {
-      message: `Claude Code saves this ${tokens}-token result to a file, since it is over the default 25,000-token MAX_MCP_OUTPUT_TOKENS.`,
-      fix: "Return less text or paginate.",
-      pointer: "/content",
-      measured: { value: tokens, limit: TOKEN_LIMIT, unit: "tokens" },
-    };
-  },
-};
+/** Claude Code's estimate: a quarter of each text item's length, rounded, and 1,600 per image. */
+function estimatedTokens(result: McpToolResult): number {
+  let tokens = 0;
+  for (const item of result.content ?? []) {
+    if (item?.type === "text" && typeof item.text === "string")
+      tokens += Math.round(item.text.length / 4);
+    else if (item?.type === "image") tokens += IMAGE_TOKENS;
+  }
+  return tokens;
+}
 
 export const resultTokenWarning: McpClientRule = {
   client: "claude-code",
@@ -272,16 +299,12 @@ export const resultTokenWarning: McpClientRule = {
   effect: "context",
   severity: "info",
   confidence: "high",
-  source: docs(
-    `${DOCS}#mcp-output-limits-and-warnings`,
-    "the transcript viewer displays a warning when any MCP tool output exceeds a fixed 10,000 tokens",
-  ),
-  check(result, context) {
-    if (!context.countTokens) return;
-    const tokens = context.countTokens(resultText(result));
+  source: source(RELEASE, "var y=0.5,B=4,h=1600,E=25000;", OBSERVED),
+  check(result) {
+    const tokens = estimatedTokens(result);
     if (tokens <= TOKEN_WARNING) return;
     return {
-      message: `Claude Code warns in the transcript that this ${tokens}-token result is over 10,000 tokens.`,
+      message: `Claude Code estimates this result at ${tokens} tokens (characters ÷ 4, plus 1,600 per image) and, since that is over 10,000, shows a warning in its transcript UI. Claude doesn't see the warning.`,
       fix: "Return less text or paginate.",
       pointer: "/content",
       measured: { value: tokens, limit: TOKEN_WARNING, unit: "tokens" },
@@ -293,12 +316,12 @@ export const claudeCodeRules: McpClientRule[] = [
   toolNameLength,
   propertyName,
   schemaDraft2020,
+  rootCombinatorWithoutType,
   rootCombinator,
   descriptionLength,
   instructionsLength,
   missingInstructions,
   resultSavedToFile,
   errorResultTruncated,
-  resultTokenLimit,
   resultTokenWarning,
 ];
