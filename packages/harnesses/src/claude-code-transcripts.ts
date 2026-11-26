@@ -1,7 +1,7 @@
 // How Claude Code's JSONL transcript lines become Facts. Line shapes were read from Claude Code
 // 2.1 transcripts: `attachment` lines carry what a session listed, `assistant` lines the model's
 // tool calls and usage, `user` lines slash commands.
-import type { Fact, TranscriptFormat } from "@loadsheet/kit";
+import type { Fact, LineBytes, TranscriptFormat } from "@loadsheet/kit";
 import type { Day, Id } from "@loadsheet/schema";
 import { MCP_NAME, mcpToolName, NAME } from "./claude-code-machine.ts";
 import { SKILL_NAME } from "./skill-md.ts";
@@ -122,10 +122,160 @@ const userText = (message: unknown) => {
   return isRecord(first) && typeof first.text === "string" ? first.text : undefined;
 };
 
+/** The line types `parse` reads; it returns nothing for any other. */
+const READ = ["user", "assistant", "attachment", "system"];
+/** The attachment types `parse` reads; any other attachment is a no-op. */
+const LISTINGS = [
+  "skill_listing",
+  "agent_listing_delta",
+  "mcp_instructions_delta",
+  "deferred_tools_delta",
+  "instructions",
+];
+/** Tool names a tool_use block counts under, as they start in the line's bytes. */
+const COUNTED_TOOLS = ['"Skill"', '"Agent"', '"Task"', '"mcp__'];
+const HEAD_BYTES = 512;
+const TAIL_BYTES = 1024;
+const WHITESPACE = " \t\n\r";
+const SCALAR = String.raw`(?:null|true|false|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|"(?:[^"\\]|\\.)*")`;
+/**
+ * The top-level `type` when only scalar members follow it to the line's closing brace. A quote
+ * after `{` or `,` cannot be an escaped one, so the match starts at a key at the depth of that brace.
+ */
+const TAIL_TYPE = new RegExp(
+  String.raw`(?<=[{,][ \t\n\r]*)"type"[ \t\n\r]*:[ \t\n\r]*"([^"\\]*)"(?:[ \t\n\r]*,[ \t\n\r]*"(?!type")[^"\\]*"[ \t\n\r]*:[ \t\n\r]*${SCALAR})*[ \t\n\r]*\}[ \t\n\r]*$`,
+  "u",
+);
+
+interface Head {
+  /** The top-level `type`, when a string. */
+  type?: string;
+  /** Whether `isSidechain` is `true`. */
+  side?: boolean;
+  /** The attachment's `type`, when the attachment starts with it. */
+  attachment?: string;
+}
+
+/**
+ * What the top-level members at the start of a line say, read up to the first object or array
+ * member, or the end of `text`. Anything it cannot read for sure stays undefined.
+ */
+const readHead = (text: string): Head => {
+  const head: Head = {};
+  let at = 0;
+  const space = () => {
+    while (at < text.length && WHITESPACE.includes(text[at]!)) at += 1;
+  };
+  /** A string token without escapes. */
+  const plain = () => {
+    if (text[at] !== '"') return undefined;
+    const end = text.indexOf('"', at + 1);
+    if (end === -1) return undefined;
+    const value = text.slice(at + 1, end);
+    if (value.includes("\\")) return undefined;
+    at = end + 1;
+    return value;
+  };
+  /** Moves past a string token, escapes and all; false when it does not end in `text`. */
+  const string = () => {
+    for (at += 1; at < text.length; at += 1) {
+      if (text[at] === "\\") at += 1;
+      else if (text[at] === '"') {
+        at += 1;
+        return true;
+      }
+    }
+    return false;
+  };
+  space();
+  if (text[at] !== "{") return head;
+  at += 1;
+  for (;;) {
+    space();
+    const key = plain();
+    if (key === undefined) return head;
+    space();
+    if (text[at] !== ":") return head;
+    at += 1;
+    space();
+    const first = text[at];
+    if (first === "{") {
+      if (key !== "attachment") return head;
+      at += 1;
+      space();
+      if (plain() !== "type") return head;
+      space();
+      if (text[at] !== ":") return head;
+      at += 1;
+      space();
+      const type = plain();
+      if (type !== undefined) head.attachment = type;
+      return head;
+    }
+    if (first === undefined || first === "[") return head;
+    if (first === '"') {
+      if (key === "type") {
+        const type = plain();
+        if (type === undefined) return head;
+        head.type = type;
+      } else if (!string()) return head;
+    } else {
+      const start = at;
+      while (at < text.length && !",}".includes(text[at]!) && !WHITESPACE.includes(text[at]!)) {
+        at += 1;
+      }
+      if (at === text.length) return head;
+      if (key === "isSidechain") head.side = text.slice(start, at) === "true";
+    }
+    space();
+    if (text[at] !== ",") return head;
+    at += 1;
+  }
+};
+
+const isEmpty = (record: Record<string, unknown>) => Object.keys(record).length === 0;
+
+/**
+ * True only when `parse` would return no Facts and leave `state` as it is. Reads the line's head and
+ * tail, and searches the whole line only for strings whose absence settles it. It assumes, as
+ * Claude Code's writer guarantees, no duplicate keys and no escaped ASCII letters; a line that is
+ * not JSON is a no-op either way.
+ */
+const skip = (line: LineBytes, state: ClaudeState): boolean => {
+  const head = readHead(line.slice(0, HEAD_BYTES));
+  const type = head.type ?? TAIL_TYPE.exec(line.slice(Math.max(0, line.length - TAIL_BYTES)))?.[1];
+  if (type !== undefined && !READ.includes(type)) return true;
+  if (state.day === undefined) return false;
+  // Unknown counts as the main chain: every line that is a no-op there is one in a subagent's too.
+  const side = head.side === true;
+  if (!side && !state.started) return false;
+  const quiet = state.command === undefined && isEmpty(state.mcp) && isEmpty(state.project);
+  const noop = (as: string) => {
+    if (as === "attachment") {
+      if (side) return true;
+      return head.attachment === undefined
+        ? !LISTINGS.some((listing) => line.includes(`"${listing}"`))
+        : !LISTINGS.includes(head.attachment);
+    }
+    if (!quiet) return false;
+    if (as === "user") return !line.includes("command-message");
+    if (as === "assistant") {
+      if (!state.tokens && !side) return false;
+      return !line.includes("tool_use") || !COUNTED_TOOLS.some((name) => line.includes(name));
+    }
+    return true;
+  };
+  // A type the line's ends do not show must be a no-op as each one its bytes could hold.
+  return type === undefined
+    ? READ.every((as) => !line.includes(`"${as}"`) || noop(as))
+    : noop(type);
+};
+
 export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
   // Every line loadsheet reads carries its entrypoint; request logs and titles do not.
   markers: ['"entrypoint"'],
   initial: () => ({ started: false, tokens: false, listed: {}, builtIn: {}, mcp: {}, project: {} }),
+  skip,
   parse(line, state) {
     let record: unknown;
     try {
