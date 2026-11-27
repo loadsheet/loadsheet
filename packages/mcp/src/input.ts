@@ -10,9 +10,8 @@ export function normalizeToolList(input: unknown): McpToolList {
   if (isSchema(input)) {
     rejectJsonRpcError(input, "tools/list");
     if (Array.isArray(input.tools)) {
-      const initialize = isSchema(input.initialize)
-        ? (input.initialize as McpInitializeResult)
-        : undefined;
+      const initialize =
+        input.initialize === undefined ? undefined : validateInitialize(input.initialize);
       return { ...(initialize ? { initialize } : {}), tools: validateTools(input.tools) };
     }
     if ("jsonrpc" in input && isSchema(input.result) && Array.isArray(input.result.tools))
@@ -21,6 +20,23 @@ export function normalizeToolList(input: unknown): McpToolList {
   throw new TypeError(
     "Expected a tools array, `{ tools }`, `{ initialize, tools }`, or a JSON-RPC tools/list response.",
   );
+}
+
+export function validateInitialize(value: unknown): McpInitializeResult {
+  if (!isSchema(value)) throw new TypeError("`initialize` must be an object.");
+  for (const field of ["instructions", "protocolVersion"] as const) {
+    if (value[field] !== undefined && typeof value[field] !== "string")
+      throw new TypeError(`\`initialize.${field}\` must be a string.`);
+  }
+  const { serverInfo } = value;
+  if (serverInfo !== undefined) {
+    if (!isSchema(serverInfo)) throw new TypeError("`initialize.serverInfo` must be an object.");
+    for (const field of ["name", "title", "version"] as const) {
+      if (serverInfo[field] !== undefined && typeof serverInfo[field] !== "string")
+        throw new TypeError(`\`initialize.serverInfo.${field}\` must be a string.`);
+    }
+  }
+  return value as McpInitializeResult;
 }
 
 /** Accepts a `tools/call` result or the raw JSON-RPC response that carries it. */

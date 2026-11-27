@@ -159,7 +159,7 @@ describe("the MCP check page on a server", () => {
       html.indexOf("Tools have no display title"),
     );
     expect(html).toContain('href="https://loadsheet.dev/docs/reference/mcp#mcp0005"');
-    expect(html).toContain("1 note: clients rewrite something, nothing to fix");
+    expect(html).toContain("1 note on client behavior");
     expect(html).toContain("Run this check in CI");
   });
 

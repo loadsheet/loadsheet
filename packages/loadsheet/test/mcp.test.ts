@@ -1,7 +1,10 @@
 import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkMcpToolList } from "@loadsheet/mcp";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
@@ -27,11 +30,14 @@ const run = (...args: string[]) =>
   });
 
 const TOKEN = "s3cret-token-value";
+const search = { name: "search", description: "Search docs", inputSchema: { type: "object" } };
 let server: Server;
 let base: string;
+let scratch: string;
 const seen: (string | undefined)[] = [];
 
 beforeAll(async () => {
+  scratch = await mkdtemp(join(tmpdir(), "loadsheet-mcp-"));
   server = createServer((req, res) => {
     let body = "";
     req.on("data", (chunk) => (body += chunk));
@@ -51,7 +57,11 @@ beforeAll(async () => {
         return;
       }
       const result =
-        message.method === "initialize" ? deepwiki.initialize : { tools: deepwiki.tools };
+        message.method === "initialize"
+          ? req.url === "/invalid-initialize"
+            ? { instructions: 42 }
+            : deepwiki.initialize
+          : { tools: deepwiki.tools };
       res
         .writeHead(200, { "content-type": "application/json" })
         .end(JSON.stringify({ jsonrpc: "2.0", id: message.id, result }));
@@ -61,7 +71,16 @@ beforeAll(async () => {
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
 
-afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
+afterAll(async () => {
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  await rm(scratch, { recursive: true, force: true });
+});
+
+async function writeList(name: string, input: unknown): Promise<string> {
+  const path = join(scratch, `${name}.json`);
+  await writeFile(path, JSON.stringify(input));
+  return path;
+}
 
 describe("loadsheet mcp", () => {
   it("--json on a tools/list file gives checkMcpToolList's diagnostics with the matrix", async () => {
@@ -92,6 +111,29 @@ describe("loadsheet mcp", () => {
     expect(report.clients).toEqual([{ id: "codex", label: "Codex" }]);
   });
 
+  it("reports ChatGPT confirmation as info without failing the warning gate", async () => {
+    const file = await writeList("chatgpt", [search]);
+    const args = [file, "--client", "chatgpt", "--max-warnings", "0"];
+    const json = await run(...args, "--json");
+    expect(json.status).toBe(0);
+    expect(JSON.parse(json.stdout).diagnostics).toMatchObject([
+      { code: "MCP0002", severity: "info", tool: "search", clients: ["chatgpt"] },
+    ]);
+    const text = await run(...args);
+    expect(text.stdout).toContain("MCP0002 search: ChatGPT asks for confirmation");
+  });
+
+  it("does not fail on warning-level compatibility problems unless a limit is set", async () => {
+    const file = await writeList("vscode", [
+      { ...search, inputSchema: { type: "object", properties: { query: { type: "array" } } } },
+    ]);
+    const args = [file, "--client", "vscode"];
+    const result = await run(...args);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("warn MCP0005 search");
+    expect((await run(...args, "--max-warnings", "0")).status).toBe(1);
+  });
+
   it("reads a running server and names only its origin", async () => {
     const result = await run(`${base}/mcp?key=abc`, "--json");
     expect(result.status).toBe(0);
@@ -106,6 +148,38 @@ describe("loadsheet mcp", () => {
     expect(result.status).toBe(0);
     expect(seen).toContain(`Bearer ${TOKEN}`);
     expect(result.stdout + result.stderr).not.toContain(TOKEN);
+  });
+
+  it.each([TOKEN, `${TOKEN} invalid: value`])(
+    "does not print a rejected header",
+    async (header) => {
+      const result = await run(`${base}/mcp`, "--header", header);
+      expect(result.status).toBe(2);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toContain('--header takes "Name: value"');
+      expect(result.stderr).not.toContain(TOKEN);
+    },
+  );
+
+  it("rejects malformed initialize metadata in a saved list with exit 2", async () => {
+    const file = await writeList("invalid-initialize", {
+      initialize: { instructions: 42 },
+      tools: [search],
+    });
+    const result = await run(file, "--json");
+    expect(result.status).toBe(2);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("`initialize.instructions` must be a string");
+    expect(result.stderr).not.toMatch(/\n\s+at /u);
+  });
+
+  it("rejects malformed initialize metadata from a live server with exit 3", async () => {
+    const result = await run(`${base}/invalid-initialize`, "--json");
+    expect(result.status).toBe(3);
+    expect(result.stdout).toBe("");
+    expect(result.stderr.trim()).toBe(
+      `Cannot read the MCP server at ${base}: \`initialize.instructions\` must be a string.`,
+    );
   });
 
   it("exits 3 with the --header hint when the server wants a token", async () => {

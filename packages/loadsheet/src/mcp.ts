@@ -37,8 +37,9 @@ Options:
   --json                  Print the result as JSON: the shape loadsheet.dev's POST /api/mcp answers
   -h, --help              Print this help
 
-Exit codes: 0 when no client breaks, 1 on an error (a client leaves a tool out or the request
-fails) or more warnings than --max-warnings, 2 on a usage error, 3 when the server can't be read.
+Exit codes: 0 with no error diagnostics and within any --max-warnings limit, 1 on an error
+diagnostic or when that limit is exceeded, 2 on invalid usage or file input, 3 when the server
+can't be read. Warnings alone pass by default; use --max-warnings 0 to fail on any warning.
 Each code is explained at https://loadsheet.dev/docs/reference/mcp.
 `;
 
@@ -88,11 +89,7 @@ export async function run(argv: string[]): Promise<void> {
   for (const header of values.header ?? []) {
     const colon = header.indexOf(":");
     const name = colon === -1 ? "" : header.slice(0, colon).trim();
-    // Only the name: the value is usually a token.
-    if (!isMcpHeaderName(name))
-      fail(
-        `--header takes "Name: value", got one named ${JSON.stringify(name || header.split(/\s/u)[0])}`,
-      );
+    if (!isMcpHeaderName(name)) fail('--header takes "Name: value" with a valid header name');
     headers[name] = header.slice(colon + 1).trim();
   }
 
@@ -174,12 +171,11 @@ function renderMcpText(report: ReturnType<typeof mcpReport>, where: string): str
       `  docs: ${mcpDocsUrl(d.code)}`,
     );
   }
-  // A client rewrites something and nothing is lost, so one line each; --json has the rest.
   const notes = sorted.filter((d) => d.severity === "info");
   if (notes.length) {
-    lines.push("", `info: nothing to fix, but clients rewrite something (--json has each in full)`);
+    lines.push("", "info: client behavior notes (--json has each in full)");
     for (const d of notes) lines.push(`  ${d.code} ${subject(d)}: ${d.brief}`);
   }
-  if (!sorted.length) lines.push("", "No client leaves out, cuts or rewrites anything.");
+  if (!sorted.length) lines.push("", "No diagnostics for the selected clients.");
   return `${lines.join("\n")}\n`;
 }

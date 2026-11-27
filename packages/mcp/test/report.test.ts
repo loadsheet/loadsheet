@@ -28,6 +28,19 @@ test("mcpReport checks only the clients it is given", () => {
   expect(report.diagnostics).toEqual(checkMcpToolList(list, { clients: ["codex"] }));
 });
 
+test("mcpReport combines the Directory warning and ChatGPT info in MCP0002", () => {
+  const report = mcpReport(
+    { tools: [{ name: "search" }] },
+    {
+      clients: ["claude-directory", "chatgpt"],
+    },
+  );
+  expect(report.diagnostics.filter(({ code }) => code === "MCP0002")).toMatchObject([
+    { severity: "warn", clients: ["claude-directory", "chatgpt"] },
+  ]);
+  expect(report.matrix.tools[0]?.clients.chatgpt).toEqual({ status: "info", codes: ["MCP0002"] });
+});
+
 test("mcpDocsUrl points at the code's anchor on loadsheet.dev", () => {
   expect(mcpDocsUrl("MCP0005")).toBe("https://loadsheet.dev/docs/reference/mcp#mcp0005");
 });

@@ -180,6 +180,7 @@ function toolDiagnostics(tool: McpTool, wire: McpFinding[], label: string): McpD
       }),
     );
   }
+  const chatgpt = wire.find((finding) => finding.rule === "chatgpt/missing-read-only-hint");
   if (wire.some((finding) => finding.rule === "claude-directory/missing-hint")) {
     // ChatGPT's confirmation prompt is the same condition seen from a client, so its source backs
     // this finding instead of becoming a second one.
@@ -188,7 +189,6 @@ function toolDiagnostics(tool: McpTool, wire: McpFinding[], label: string): McpD
         finding.rule === "claude-directory/missing-hint" ||
         finding.rule === "chatgpt/missing-read-only-hint",
     );
-    const chatgpt = hints.some((finding) => finding.client === "chatgpt");
     diagnostics.push(
       toolDiagnostic("MCP0002", "mcp/tools/require-safety-hint", tool, hints, {
         message: `MCP tool ${label} sets neither \`readOnlyHint\` nor \`destructiveHint\` to true in its tools/list entry. Anthropic's Connectors Directory requires \`readOnlyHint: true\` for read-only tools or \`destructiveHint: true\` for tools that modify or delete data.${chatgpt ? " ChatGPT doesn't treat it as read-only because it has no `readOnlyHint`, so users who set the plugin's permissions to \"Allow read-only tools\" must confirm every call." : ""}`,
@@ -196,6 +196,16 @@ function toolDiagnostics(tool: McpTool, wire: McpFinding[], label: string): McpD
         brief: SAFETY_BRIEF,
       }),
     );
+  } else if (chatgpt) {
+    diagnostics.push({
+      ...toolDiagnostic("MCP0002", "mcp/tools/require-safety-hint", tool, [chatgpt], {
+        message: chatgpt.message,
+        fix: chatgpt.fix,
+        brief: "ChatGPT asks for confirmation under Allow read-only tools",
+      }),
+      severity: chatgpt.severity,
+      confidence: chatgpt.confidence,
+    });
   }
   const problems = nameProblems(tool.name);
   if (problems.length)

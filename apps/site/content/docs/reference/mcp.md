@@ -38,11 +38,11 @@ Use the final endpoint URL: loadsheet does not follow redirects. The output name
 
 The client ids are `claude-code`, `claude`, `claude-directory`, `chatgpt`, `codex`, `cursor`, `vscode`, `gemini-cli` and `copilot-studio`.
 
-The text output prints each error and warning with its message, its fix and a link to its code below. Info findings get one line each, because nothing is lost: a client only rewrites something. `--json` has every finding in full, with the client findings behind it, the client's source, and a client-by-tool matrix.
+The text output prints each error and warning with its message, its fix and a link to its code below. Info findings, such as client rewrites or confirmation prompts, get one line each. `--json` has every finding in full, with the client findings behind it, the client's source, and a client-by-tool matrix.
 
 ## Diagnostic Codes
 
-Severity is the worst of the clients' effects: `error` when a client leaves the tool out, `warn` when content is lost, `info` when it is rewritten.
+Severity reflects how serious and certain the reported problem is, not just what a client does. Tool exclusion or request failure can be a `warn` rather than an `error` when the failure is inferred. Use `--max-warnings 0` if you want either severity to fail CI.
 
 ### MCP0001
 
@@ -50,7 +50,7 @@ Severity is the worst of the clients' effects: `error` when a client leaves the 
 
 ### MCP0002
 
-**Tools don't say whether they only read.** The tool sets neither `readOnlyHint` nor `destructiveHint` to `true`. Clients treat it as destructive. The Connectors Directory requires `readOnlyHint: true` for a tool that only reads and `destructiveHint: true` for one that changes or deletes data. ChatGPT asks users who allow only read-only tools to confirm every call. `false`, a missing value and values of the wrong type don't count. A tool that sets both hints to `false`, which MCP uses for tools that only add data, is still flagged by the Directory review.
+**Tools don't say whether they only read.** The Connectors Directory expects `readOnlyHint: true` for tools that only read or `destructiveHint: true` for tools that change or delete data. It warns if neither is `true`, including when both are `false`. ChatGPT separately asks users who select “Allow read-only tools” to confirm calls to tools without a boolean `readOnlyHint`. If the tool already declares `destructiveHint: true`, that prompt is expected. The ChatGPT finding alone is informational.
 
 ### MCP0003
 
@@ -86,8 +86,8 @@ MCP0004, indented JSON in tool output, needs the server's source, so `loadsheet 
 
 | Code | Meaning                                                                                        |
 | ---- | ---------------------------------------------------------------------------------------------- |
-| `0`  | No client leaves a tool out, and there are no more warnings than `--max-warnings`.             |
-| `1`  | An `error`, such as a client leaving out a tool, or more warnings than `--max-warnings`.       |
+| `0`  | No `error` diagnostics, and the warning count is within any `--max-warnings` limit.            |
+| `1`  | At least one `error` diagnostic, or more warnings than `--max-warnings` allows.                |
 | `2`  | A bad flag, a file that can't be read, or a file that isn't a `tools/list`.                    |
 | `3`  | loadsheet can't read the server: the connection fails, it answers 401, or it returns an error. |
 
@@ -129,7 +129,12 @@ import { sampleArguments } from "./mcp-arguments";
 test("every client gets every tool intact", async () => {
   const client = new Client({ name: "e2e", version: "1.0.0" });
   await client.connect(new StreamableHTTPClientTransport(new URL("http://localhost:3000/mcp")));
-  const { tools } = await client.listTools();
+  let page = await client.listTools();
+  const tools = [...page.tools];
+  while (page.nextCursor !== undefined) {
+    page = await client.listTools({ cursor: page.nextCursor });
+    tools.push(...page.tools);
+  }
   const lost = (finding: { severity: string }) => finding.severity !== "info";
 
   expect(checkMcpClientLimits({ tools }, { serverName: "portal" }).filter(lost)).toEqual([]);
