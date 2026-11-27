@@ -13,7 +13,7 @@ export {
   claudeCodeDescription,
   claudeCodeListedChars,
 } from "./claude-code.ts";
-export { claudeConfigDir } from "./claude-code-machine.ts";
+export { CLAUDE_CODE_RETENTION_DAYS, claudeConfigDir } from "./claude-code-machine.ts";
 export { claudeTranscripts, instructionName, type ClaudeState } from "./claude-code-transcripts.ts";
 export {
   FLEETRC_MANIFEST,

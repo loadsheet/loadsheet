@@ -4,7 +4,9 @@ import {
   claudeConfigDir,
   claudeContextWindow,
   claudeInventory,
+  claudeProjects,
   claudeRoots,
+  claudeSettings,
   claudeSources,
 } from "./claude-code-machine.ts";
 import { claudeTranscripts } from "./claude-code-transcripts.ts";
@@ -48,6 +50,8 @@ export const claudeCode = defineHarness({
     sources: claudeSources,
     inventory: claudeInventory,
     contextWindow: claudeContextWindow,
+    settings: claudeSettings,
+    projects: claudeProjects,
     roots: claudeRoots,
     transcripts: claudeTranscripts,
   },

@@ -1,9 +1,9 @@
 // How Claude Code's JSONL transcript lines become Facts. Line shapes were read from Claude Code
 // 2.1 transcripts: `attachment` lines carry what a session listed, `assistant` lines the model's
-// tool calls and usage, `user` lines slash commands.
+// tool calls and usage, `user` lines slash commands, `system` lines compactions.
 import type { Fact, LineBytes, TranscriptFormat } from "@loadsheet/kit";
-import type { Day, Id } from "@loadsheet/schema";
-import { MCP_NAME, mcpToolName, NAME } from "./claude-code-machine.ts";
+import type { Day, Id, Thread } from "@loadsheet/schema";
+import { folderKey, MCP_NAME, mcpToolName, NAME } from "./claude-code-machine.ts";
 import { SKILL_NAME } from "./skill-md.ts";
 
 /**
@@ -28,6 +28,20 @@ export interface ClaudeState {
   project: Record<Id, number>;
   /** A slash command whose expansion the next line should carry. */
   command?: string;
+  /**
+   * The folder the transcript started in, keyed as the Files keys paths (`~/...` under the home),
+   * or `unknown`. Set with `day`.
+   */
+  folder?: string;
+  /**
+   * A hash of the message id of the last request counted. Claude Code writes one line per content
+   * block, each with the message's usage, so a line with the same id repeats a request.
+   */
+  last?: string;
+  /** The UTC minute, since the epoch, of the last request counted. */
+  minute?: number;
+  /** The conversation compacted at least once. */
+  compacted?: boolean;
 }
 
 /**
@@ -55,6 +69,37 @@ const strings = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 const count = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+
+/**
+ * A message id's hash, two 32-bit FNV-1a hashes in hex: enough to tell a request from the one
+ * before it, and nothing that names it. It hashes UTF-16 code units, which for the ASCII ids
+ * Claude Code writes are the line's bytes, so `bytesHash` gives the same without decoding.
+ */
+const idHash = (text: string) => {
+  let a = 0x811c9dc5;
+  let b = 0x050c5d1f;
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    a = Math.imul(a ^ code, 0x01000193);
+    b = Math.imul(b ^ code, 0x01000193);
+  }
+  return (a >>> 0).toString(16) + (b >>> 0).toString(16).padStart(8, "0");
+};
+/** `idHash` of the bytes from `start` to `end`. */
+const bytesHash = (bytes: Uint8Array, start: number, end: number) => {
+  let a = 0x811c9dc5;
+  let b = 0x050c5d1f;
+  for (let index = start; index < end; index += 1) {
+    const code = bytes[index]!;
+    a = Math.imul(a ^ code, 0x01000193);
+    b = Math.imul(b ^ code, 0x01000193);
+  }
+  return (a >>> 0).toString(16) + (b >>> 0).toString(16).padStart(8, "0");
+};
+
+const MINUTE_MS = 60_000;
+/** A request this many minutes after the one before it found a 5-minute cache gone, and a 1-hour one not. */
+const REWRITE_MINUTES = [5, 60] as const;
 
 /** The server in a tool name `mcp__<server>__<tool>`. */
 const mcpServer = (tool: string) => /^mcp__([A-Za-z0-9_-]{1,128}?)__./u.exec(tool)?.[1];
@@ -156,6 +201,10 @@ const SUBAGENT_TOOLS = ['"Agent"', '"Task"'];
 const SUBAGENT_TYPE = '_type"';
 /** What a slash command's text starts with. It starts with `<`, a byte JSON lines seldom hold. */
 const COMMAND_MESSAGE = "<command-message>";
+/** The subtype of the system line Claude Code writes where it compacted the conversation. */
+const COMPACT_BOUNDARY = "compact_boundary";
+const COMPACT_TOKEN = quoted(COMPACT_BOUNDARY);
+const USAGE = '"usage"';
 const HEAD_BYTES = 512;
 const TAIL_BYTES = 1024;
 
@@ -229,7 +278,34 @@ interface Head {
   side?: boolean;
   /** The attachment's `type`, when the attachment starts with it: one of LISTINGS, or OTHER. */
   attachment?: string;
+  /** Where the message's `id` string sits, its quotes left out, when the message starts with it. */
+  id?: readonly [start: number, end: number];
 }
+
+/** How many of a message's first members are read for its id: Claude Code writes `model`, then `id`. */
+const MESSAGE_MEMBERS = 4;
+
+/**
+ * Where the `id` of the object that opens at `at` sits, when it is among its first plain string
+ * members; undefined otherwise.
+ */
+const readId = (bytes: Uint8Array, at: number): Head["id"] => {
+  for (let member = 0; member < MESSAGE_MEMBERS; member += 1) {
+    at = skipSpace(bytes, at + 1);
+    const keyEnd = plainEnd(bytes, at);
+    if (keyEnd === -1) return undefined;
+    const key = at;
+    at = skipSpace(bytes, keyEnd + 1);
+    if (bytes[at] !== COLON) return undefined;
+    at = skipSpace(bytes, at + 1);
+    const close = plainEnd(bytes, at);
+    if (close === -1) return undefined;
+    if (isToken(bytes, key, keyEnd, "id")) return [at + 1, close];
+    at = skipSpace(bytes, close + 1);
+    if (bytes[at] !== COMMA) return undefined;
+  }
+  return undefined;
+};
 
 /**
  * What the top-level members at the start of a line say, read up to the first object or array
@@ -249,6 +325,11 @@ const readHead = (bytes: Uint8Array): Head => {
     at = skipSpace(bytes, at + 1);
     const first = bytes[at];
     if (first === OPEN) {
+      if (isToken(bytes, key, keyEnd, "message")) {
+        const id = readId(bytes, at);
+        if (id !== undefined) head.id = id;
+        return head;
+      }
       if (!isToken(bytes, key, keyEnd, "attachment")) return head;
       at = skipSpace(bytes, at + 1);
       const typeEnd = plainEnd(bytes, at);
@@ -350,6 +431,10 @@ const skip = (line: LineBytes, state: ClaudeState): boolean => {
   const side = head.side === true;
   if (!side && !state.started) return false;
   const quiet = state.command === undefined && isEmpty(state.mcp) && isEmpty(state.project);
+  const repeats =
+    head.id !== undefined &&
+    state.last !== undefined &&
+    bytesHash(bytes, head.id[0], head.id[1]) === state.last;
   const noop = (as: string) => {
     if (as === "attachment") {
       if (side) return true;
@@ -361,11 +446,13 @@ const skip = (line: LineBytes, state: ClaudeState): boolean => {
     if (as === "user") return !line.includes(COMMAND_MESSAGE);
     if (as === "assistant") {
       if (!state.tokens && !side) return false;
+      // A request is counted once, at its first line; a line with its id repeats it.
+      if (!repeats && line.includes(USAGE)) return false;
       if (!holds(line, TOOL_USE)) return true;
       if (holds(line, SKILL) || holds(line, MCP)) return false;
       return !line.includes(SUBAGENT_TYPE) || !SUBAGENT_TOOLS.some((name) => line.includes(name));
     }
-    return true;
+    return !line.includes(COMPACT_TOKEN);
   };
   // A type the line's ends do not show must be a no-op as each one its bytes could hold.
   return type === undefined
@@ -373,12 +460,55 @@ const skip = (line: LineBytes, state: ClaudeState): boolean => {
     : noop(type);
 };
 
+/**
+ * One request's tokens, from an assistant message's usage, dated by its line's time. Moves the
+ * state's last request minute to it.
+ */
+const usageTokens = (
+  usage: Json,
+  model: unknown,
+  time: number,
+  state: ClaudeState,
+  thread: Thread,
+): Fact => {
+  const cacheWrite = count(usage.cache_creation_input_tokens);
+  const split = isRecord(usage.cache_creation) ? usage.cache_creation : {};
+  const details = isRecord(usage.output_tokens_details) ? usage.output_tokens_details : {};
+  let day = state.day!;
+  let cacheRewrite = 0;
+  if (!Number.isNaN(time)) {
+    day = new Date(time).toISOString().slice(0, 10);
+    const minute = Math.floor(time / MINUTE_MS);
+    if (state.minute !== undefined) {
+      const gap = minute - state.minute;
+      if (gap >= REWRITE_MINUTES[0] && gap < REWRITE_MINUTES[1]) cacheRewrite = cacheWrite;
+    }
+    state.minute = minute;
+  }
+  return {
+    type: "usage-tokens",
+    day,
+    via: state.via ?? "unknown",
+    project: state.folder ?? "unknown",
+    thread,
+    model: typeof model === "string" && NAME.test(model) ? model : "unknown",
+    input: count(usage.input_tokens),
+    output: count(usage.output_tokens),
+    reasoning: count(details.thinking_tokens),
+    cacheRead: count(usage.cache_read_input_tokens),
+    cacheWrite,
+    cacheWrite5m: count(split.ephemeral_5m_input_tokens),
+    cacheWrite1h: count(split.ephemeral_1h_input_tokens),
+    cacheRewrite,
+  };
+};
+
 export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
   // Every line loadsheet reads carries its entrypoint; request logs and titles do not.
   markers: ['"entrypoint"'],
   initial: () => ({ started: false, tokens: false, listed: {}, builtIn: {}, mcp: {}, project: {} }),
   skip,
-  parse(line, state) {
+  parse(line, state, place) {
     let record: unknown;
     try {
       record = JSON.parse(line);
@@ -391,8 +521,12 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
       return [];
     }
 
+    const time = typeof record.timestamp === "string" ? Date.parse(record.timestamp) : NaN;
+    const facts: Fact[] = [];
+    // A subagent's lines, in its own transcript or (in older versions) its parent's.
+    const side = record.isSidechain === true;
+    const thread: Thread = side ? "subagent" : "main";
     if (state.day === undefined) {
-      const time = typeof record.timestamp === "string" ? Date.parse(record.timestamp) : NaN;
       if (Number.isNaN(time)) return [];
       state.day = new Date(time).toISOString().slice(0, 10);
       state.via =
@@ -401,12 +535,19 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
           : "unknown";
       if (typeof record.version === "string" && NAME.test(record.version))
         state.version = record.version;
+      state.folder = typeof record.cwd === "string" ? folderKey(record.cwd, place) : "unknown";
+      // Each file is one conversation: a session's main one, or one subagent's in a file of its own.
+      facts.push({
+        type: "usage-session",
+        day: state.day,
+        via: state.via,
+        project: state.folder,
+        thread,
+      });
     }
     const day = state.day;
     const via = state.via ?? "unknown";
-    // A subagent's lines, in its own transcript or (in older versions) its parent's.
-    const side = record.isSidechain === true;
-    const facts: Fact[] = [];
+    const project = state.folder ?? "unknown";
 
     if (!side && !state.started) {
       state.started = true;
@@ -523,6 +664,23 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
     }
     delete state.command;
 
+    if (type === "system") {
+      if (record.subtype === COMPACT_BOUNDARY) {
+        const metadata = isRecord(record.compactMetadata) ? record.compactMetadata : {};
+        facts.push({
+          type: "compaction",
+          day,
+          via,
+          project,
+          thread,
+          manual: metadata.trigger === "manual",
+          first: state.compacted !== true,
+        });
+        state.compacted = true;
+      }
+      return facts;
+    }
+
     if (type === "assistant" && isRecord(record.message)) {
       const { message } = record;
       if (!side && !state.tokens && isRecord(message.usage) && message.model !== SYNTHETIC_MODEL) {
@@ -533,6 +691,15 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
           count(usage.cache_creation_input_tokens) +
           count(usage.cache_read_input_tokens);
         facts.push({ type: "tokens", day, via, tokens });
+      }
+      if (isRecord(message.usage) && message.model !== SYNTHETIC_MODEL) {
+        const id = typeof message.id === "string" ? idHash(message.id) : undefined;
+        // Claude Code writes a message once per content block, each line with the same usage.
+        if (id === undefined || id !== state.last) {
+          if (id === undefined) delete state.last;
+          else state.last = id;
+          facts.push(usageTokens(message.usage, message.model, time, state, thread));
+        }
       }
       for (const block of Array.isArray(message.content) ? message.content : []) {
         if (!isRecord(block) || block.type !== "tool_use" || typeof block.name !== "string")

@@ -5,7 +5,7 @@ import type { LineBytes } from "@loadsheet/kit";
 import { describe, expect, it } from "vite-plus/test";
 import { claudeTranscripts, type ClaudeState } from "../src/index.ts";
 
-const FIXTURE = NodePath.join(import.meta.dirname, "fixtures/claude-code/session.jsonl");
+const FIXTURES = NodePath.join(import.meta.dirname, "fixtures/claude-code");
 
 const bytes = (buffer: Buffer): LineBytes => ({
   length: buffer.length,
@@ -48,19 +48,64 @@ const state = (fields: Partial<ClaudeState> = {}): ClaudeState => ({
   ...fields,
 });
 const day = "2026-11-10";
+/** The id every crafted assistant line's message has, as the state holds it once counted. */
+const ID = "msg_01ABCdef";
+const last = (() => {
+  const counted = claudeTranscripts.initial();
+  claudeTranscripts.parse(
+    JSON.stringify({
+      type: "assistant",
+      timestamp: "2026-11-10T10:00:00.000Z",
+      message: { model: "m", id: ID, usage: {} },
+    }),
+    counted,
+  );
+  return counted.last!;
+})();
+const usage = { folder: "~/app", last, minute: 29_380_000 };
 const STATES: Record<string, ClaudeState> = {
   "first line of a file": state(),
-  "not started": state({ day, via: "cli" }),
-  "started, no tokens": state({ day, via: "cli", started: true }),
-  settled: state({ day, via: "cli", started: true, tokens: true, listed: { "skill:a": true } }),
-  "pending command": state({ day, via: "cli", started: true, tokens: true, command: "a" }),
-  "pending mcp": state({ day, via: "cli", started: true, tokens: true, mcp: { srv: 12 } }),
+  "not started": state({ day, via: "cli", ...usage }),
+  "started, no tokens": state({ day, via: "cli", started: true, ...usage }),
+  settled: state({
+    day,
+    via: "cli",
+    started: true,
+    tokens: true,
+    listed: { "skill:a": true },
+    ...usage,
+  }),
+  "settled, before the request": state({
+    day,
+    via: "cli",
+    started: true,
+    tokens: true,
+    folder: "~/app",
+    compacted: true,
+  }),
+  "pending command": state({
+    day,
+    via: "cli",
+    started: true,
+    tokens: true,
+    command: "a",
+    ...usage,
+  }),
+  "pending mcp": state({
+    day,
+    via: "cli",
+    started: true,
+    tokens: true,
+    mcp: { srv: 12 },
+    ...usage,
+  }),
   "pending project": state({
     day,
     via: "cli",
     started: true,
     tokens: true,
     project: { "instructions:project/CLAUDE.md": 3 },
+    ...usage,
   }),
 };
 
@@ -86,12 +131,20 @@ const user = (side: boolean, content: unknown, extra: object = {}) =>
     uuid: "u",
     ...at,
   });
-const assistant = (side: boolean, content: unknown[], model = "claude-opus-5-5", after = {}) =>
+const assistant = (
+  side: boolean,
+  content: unknown[],
+  model = "claude-opus-5-5",
+  after = {},
+  id: string | undefined = ID,
+) =>
   JSON.stringify({
     parentUuid: "4f1c2d3e-0000-4000-8000-000000000000",
     isSidechain: side,
+    ...(side ? { agentId: "a0780ba1b25e12d91" } : {}),
     message: {
       model,
+      ...(id === undefined ? {} : { id }),
       type: "message",
       role: "assistant",
       content,
@@ -259,6 +312,42 @@ const CRAFTED = [
     }),
   ]),
   JSON.stringify({ type: "system" }),
+  ...[false, true].flatMap((side) => [
+    // Compactions, by hand and on their own.
+    JSON.stringify({
+      parentUuid: null,
+      logicalParentUuid: "x",
+      isSidechain: side,
+      type: "system",
+      subtype: "compact_boundary",
+      content: "Conversation compacted",
+      compactMetadata: { trigger: side ? "auto" : "manual", preTokens: 1 },
+      ...at,
+    }),
+    // A message's next request, one without an id, one without usage, and ids that only start or
+    // end like the counted one.
+    assistant(side, [{ type: "text", text: "x" }], undefined, {}, "msg_02"),
+    assistant(side, [{ type: "text", text: "x" }], undefined, {}, undefined),
+    assistant(side, [{ type: "text", text: "x" }], undefined, {}, `${ID}x`),
+    assistant(side, [{ type: "text", text: "x" }], undefined, {}, ID.slice(0, -1)),
+    JSON.stringify({
+      parentUuid: null,
+      isSidechain: side,
+      message: { model: "m", id: "msg_03", role: "assistant", content: [] },
+      type: "assistant",
+      ...at,
+    }),
+    // An id past the first members of the message.
+    JSON.stringify({
+      parentUuid: null,
+      isSidechain: side,
+      message: { a: 1, b: "", c: "", d: "", id: ID, usage: { input_tokens: 1 } },
+      type: "assistant",
+      ...at,
+    }),
+  ]),
+  // An id written with an escape.
+  assistant(false, [], undefined, {}, "msg_01ABCdef").replace("msg_01", "msg\\u005f01"),
   // Key orders Claude Code does not write: isSidechain after an object, or as a string.
   JSON.stringify({
     message: { role: "user", content: "hi" },
@@ -293,15 +382,19 @@ describe("claudeTranscripts.skip", () => {
       }
     }
     // The property holds without being vacuous.
-    expect(yes).toBeGreaterThan(all / 4);
+    expect(yes).toBeGreaterThan(all / 5);
   });
 
-  it("keeps every line of the fixture that does something, read in order", async () => {
-    const lines = (await NodeFSP.readFile(FIXTURE, "utf8")).split("\n").filter(Boolean);
-    // The fixture's keys are sanitized; restore the first one so its lines have Claude Code's head.
+  it("keeps every line of the fixtures that does something, read in order", async () => {
+    const read = async (name: string) =>
+      (await NodeFSP.readFile(NodePath.join(FIXTURES, name), "utf8")).split("\n").filter(Boolean);
+    const lines = await read("session.jsonl");
+    // session.jsonl's keys are sanitized; restore the first one so its lines have Claude Code's head.
     for (const file of [
       lines,
       lines.map((line) => line.replace(/^\{"key-2":/u, '{"parentUuid":')),
+      await read("usage.jsonl"),
+      await read("usage-agent.jsonl"),
     ]) {
       for (const variant of [(line: string) => line, (line: string) => `${line}\r`, spaced]) {
         const current = claudeTranscripts.initial();
@@ -324,6 +417,9 @@ describe("claudeTranscripts.skip", () => {
       skipped(user(true, [{ type: "tool_result", content: NESTED }]), STATES["not started"]!),
     ).toBe(true);
     expect(skipped(assistant(true, [tool("Bash")]), STATES["not started"]!)).toBe(true);
+    // Each content block of a counted request repeats its usage.
+    expect(skipped(assistant(false, [{ type: "text", text: "x" }]), settled)).toBe(true);
+    expect(skipped(assistant(true, [{ type: "thinking", thinking: NESTED }]), settled)).toBe(true);
     expect(skipped(attachment(false, ATTACHMENTS[6]!), settled)).toBe(true);
 
     expect(
@@ -334,6 +430,15 @@ describe("claudeTranscripts.skip", () => {
     ).toBe(false);
     expect(skipped(assistant(false, [tool("Bash")]), STATES["started, no tokens"]!)).toBe(false);
     expect(skipped(assistant(false, [tool("mcp__srv__go")]), settled)).toBe(false);
+    const next = STATES["settled, before the request"]!;
+    expect(skipped(assistant(false, [{ type: "text", text: "x" }]), next)).toBe(false);
+    expect(skipped(assistant(true, [{ type: "text", text: "x" }]), next)).toBe(false);
+    expect(
+      skipped(
+        CRAFTED.find((line) => line.includes("compact_boundary"))!,
+        settled,
+      ),
+    ).toBe(false);
     for (const body of ATTACHMENTS.slice(0, 5))
       expect(skipped(attachment(false, body), settled)).toBe(false);
   });
