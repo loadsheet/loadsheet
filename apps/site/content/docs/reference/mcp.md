@@ -119,6 +119,8 @@ To check a deployed server, pass its token from a secret:
 
 The checks come from `@loadsheet/mcp`, so an end-to-end test can run them on what the server returns, including each `tools/call` result, which `loadsheet mcp` never calls. `checkMcpToolList` returns the diagnostics above. `checkMcpClientLimits` and `checkMcpToolResult` return the client findings, each with the client, the rule, a message, a fix and its source:
 
+Call each page's tools before listing the next page: `listTools` replaces the SDK's cached `outputSchema` validators. Keep the full list for checks that depend on the total tool count.
+
 ```ts [tests/e2e/mcp.spec.ts]
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -129,22 +131,24 @@ import { sampleArguments } from "./mcp-arguments";
 test("every client gets every tool intact", async () => {
   const client = new Client({ name: "e2e", version: "1.0.0" });
   await client.connect(new StreamableHTTPClientTransport(new URL("http://localhost:3000/mcp")));
-  let page = await client.listTools();
-  const tools = [...page.tools];
-  while (page.nextCursor !== undefined) {
-    page = await client.listTools({ cursor: page.nextCursor });
-    tools.push(...page.tools);
-  }
   const lost = (finding: { severity: string }) => finding.severity !== "info";
+  const tools = [];
+  let cursor: string | undefined;
+
+  do {
+    const page = await client.listTools(cursor === undefined ? undefined : { cursor });
+    tools.push(...page.tools);
+    for (const tool of page.tools) {
+      const result = await client.callTool({
+        name: tool.name,
+        arguments: sampleArguments[tool.name],
+      });
+      expect(checkMcpToolResult(result, { tool }).filter(lost)).toEqual([]);
+    }
+    cursor = page.nextCursor;
+  } while (cursor !== undefined);
 
   expect(checkMcpClientLimits({ tools }, { serverName: "portal" }).filter(lost)).toEqual([]);
-  for (const tool of tools) {
-    const result = await client.callTool({
-      name: tool.name,
-      arguments: sampleArguments[tool.name],
-    });
-    expect(checkMcpToolResult(result, { tool }).filter(lost)).toEqual([]);
-  }
 });
 ```
 
