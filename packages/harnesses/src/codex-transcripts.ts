@@ -1,9 +1,16 @@
-import type { Fact, LineBytes, TranscriptFormat } from "@loadsheet/kit";
+import {
+  repoOfRemote,
+  type Fact,
+  type LineBytes,
+  type Place,
+  type TranscriptFormat,
+} from "@loadsheet/kit";
+import { projectOfCwd } from "./path.ts";
 
 /** The user instruction file's item name: Codex loads `AGENTS.md` (or `AGENTS.override.md`) from its home. */
 export const CODEX_INSTRUCTIONS = "~/.codex/AGENTS.md";
 
-/** What the Codex reader remembers within one transcript: names, flags and hashes only. */
+/** What the Codex reader remembers within one transcript: names, flags, counters and hashes only. */
 export interface CodexState {
   day?: string;
   via?: string;
@@ -27,6 +34,19 @@ export interface CodexState {
   servers: string[];
   /** Skills used in the current turn, by either side. */
   turn: string[];
+  /** Whether the session is a subagent's conversation. */
+  thread?: "main" | "subagent";
+  /** The project, as a usage Fact names it: `owner/repo`, `~/...`, an absolute path outside the home, or `unknown`. */
+  project?: string;
+  /** The model the latest `turn_context` named. */
+  model?: string;
+  /**
+   * The thread's running token totals the latest `token_count` gave, as input, cached input, cache
+   * write, output and reasoning: each request's tokens are the step from one to the next.
+   */
+  totals?: number[];
+  /** The session compacted its context at least once. */
+  compacted?: boolean;
 }
 
 const LOCATOR_KINDS = "file|executor package|cloud package|custom resource";
@@ -46,6 +66,8 @@ const CODE_TOOL = "exec";
 /** An originator or source such as `codex_cli_rs` or `T3 Code`; anything else is not kept. */
 const CLIENT = /^(?=.{1,64}$)[A-Za-z0-9_.-]+(?: [A-Za-z0-9_.-]+)*$/u;
 const VERSION = /^[A-Za-z0-9_.+-]{1,32}$/u;
+/** A model name such as `gpt-6.1-sol`; anything else counts as `unknown`. */
+const MODEL = /^[A-Za-z0-9_.:@+/-]{1,64}$/u;
 const PROJECT_DOC = "\n\n--- project-doc ---\n\n";
 const INSTRUCTIONS_OPEN = "<INSTRUCTIONS>\n";
 const INSTRUCTIONS_CLOSE = "\n</INSTRUCTIONS>";
@@ -223,7 +245,14 @@ const toolText = (payload: Record<string, unknown>): string | undefined => {
 };
 
 /** The line types `parse` reads; it returns nothing for any other. */
-const READ = new Set(["session_meta", "world_state", "turn_context", "event_msg", "response_item"]);
+const READ = new Set([
+  "session_meta",
+  "world_state",
+  "turn_context",
+  "event_msg",
+  "response_item",
+  "compacted",
+]);
 const HEAD_BYTES = 256;
 const QUOTE = 0x22;
 const COMMA = 0x2c;
@@ -360,7 +389,9 @@ const skip = (line: LineBytes, state: CodexState): boolean => {
   if (!READ.has(type)) return true;
   if (type === "session_meta") return state.started;
   if (state.day === undefined || state.via === undefined) return true;
-  if (type === "turn_context") return state.turn.length === 0;
+  // A copied compaction is the parent's; a `turn_context` may name a new model.
+  if (type === "compacted") return state.copying;
+  if (type === "turn_context") return false;
   if (type === "world_state") {
     return (
       (state.skills || !line.includes('"host_skills"')) &&
@@ -371,10 +402,8 @@ const skip = (line: LineBytes, state: CodexState): boolean => {
   const kind = head.payload.get("type");
   const is = (name: string) => (kind === undefined ? line.includes(`"${name}"`) : kind === name);
   if (type === "event_msg") {
-    return (
-      (!state.copying || !is("task_started")) &&
-      (state.tokens || state.copying || !is("token_count"))
-    );
+    // Every `token_count` moves the running totals, a copied one too.
+    return (!state.copying || !is("task_started")) && !is("token_count");
   }
   const message = kind === undefined || kind === "message";
   const call = kind === undefined || kind === "custom_tool_call" || kind === "function_call";
@@ -385,10 +414,84 @@ const skip = (line: LineBytes, state: CodexState): boolean => {
 };
 
 /**
+ * The project a session ran in: the `owner/repo` of the git remote Codex recorded, else its
+ * working directory keyed as the Files keys paths (`~/...` under the home, absolute elsewhere).
+ */
+const projectOf = (payload: Record<string, unknown>, place: Place | undefined): string => {
+  const url = record(payload.git)?.repository_url;
+  const repo = typeof url === "string" ? repoOfRemote(url) : undefined;
+  return repo ?? projectOfCwd(payload.cwd, place);
+};
+
+/** A count Codex wrote: a whole number of 0 or more. */
+const counted = (value: unknown): number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
+
+/** A usage object as `totals` keeps it: input, cached input, cache write, output, reasoning. */
+const usageOf = (value: unknown): number[] | undefined => {
+  const usage = record(value);
+  if (usage === undefined) return undefined;
+  return [
+    counted(usage.input_tokens),
+    counted(usage.cached_input_tokens),
+    counted(usage.cache_write_input_tokens),
+    counted(usage.output_tokens),
+    counted(usage.reasoning_output_tokens),
+  ];
+};
+
+/**
+ * The tokens of the requests since the last `token_count`: the step of the running totals. Totals
+ * that went back (a thread that started counting again) count as they are, by the event's own
+ * `last_token_usage` when it has one, as ccusage counts them. An event without totals counts its
+ * `last_token_usage`; one whose totals did not move counts nothing.
+ */
+const stepOf = (info: Record<string, unknown>, state: CodexState): number[] | undefined => {
+  const total = usageOf(info.total_token_usage);
+  const last = usageOf(info.last_token_usage);
+  if (total === undefined) return last;
+  const previous = state.totals ?? [0, 0, 0, 0, 0];
+  state.totals = total;
+  if (total.every((count, index) => count === previous[index])) return undefined;
+  if (total.some((count, index) => count < previous[index]!)) return last ?? total;
+  return total.map((count, index) => count - previous[index]!);
+};
+
+/**
+ * A `compacted` line: the session's own compaction, not one a fork copied from its parent. Codex
+ * writes no trigger, and a `/compact` leaves the same line as an automatic compaction, so none
+ * counts as the user's.
+ */
+const compaction = (state: CodexState): Fact[] => {
+  const { day, via } = state;
+  if (day === undefined || via === undefined || state.copying) return [];
+  const first = !state.compacted;
+  state.compacted = true;
+  return [
+    {
+      type: "compaction",
+      day,
+      via,
+      project: state.project ?? "unknown",
+      thread: state.thread ?? "main",
+      manual: false,
+      first,
+    },
+  ];
+};
+
+/**
  * Codex's rollout JSONL (`~/.codex/sessions/**`). Each session opens with `session_meta`; its
  * listing is a developer message, or a `world_state` line in newer versions; a skill the user
  * mentions with `$name` comes in as a `<skill>` message; the model opens a skill by reading its
  * `SKILL.md` through a tool, since Codex has no Skill tool.
+ *
+ * Usage: each rollout is one conversation, a subagent's when its source says so. Its tokens are the
+ * steps of `token_count`'s running totals, one Fact per step, by the model of the latest
+ * `turn_context`. `token_usage_record` lines are not read: they repeat those steps, and are missing
+ * from older rollouts. A fork or subagent first copies its parent's history, totals and
+ * compactions included; none of the copy counts, only the steps after its own first task, as
+ * ccusage skips a fork's replay.
  */
 export const codexTranscripts: TranscriptFormat<CodexState> = {
   markers: [
@@ -403,6 +506,7 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
     '"function_call"',
     "<skill>",
     '"turn_context"',
+    '"compacted"',
   ],
   initial: () => ({
     started: false,
@@ -416,13 +520,16 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
     turn: [],
   }),
   skip,
-  parse(line, state) {
+  parse(line, state, place) {
+    // A compaction's line holds the whole history it replaced, megabytes of it: only its type is read.
+    if (readHead(line.slice(0, HEAD_BYTES)).type === "compacted") return compaction(state);
     let value: Record<string, unknown> | undefined;
     try {
       value = record(JSON.parse(line));
     } catch {
       return [];
     }
+    if (value?.type === "compacted") return compaction(state);
     const payload = record(value?.payload);
     if (!value || !payload) return [];
     const facts: Fact[] = [];
@@ -445,6 +552,13 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
       state.copying =
         typeof payload.forked_from_id === "string" || record(source)?.subagent !== undefined;
       state.since = Math.floor(Date.parse(stamp as string) / 1000);
+      const thread =
+        record(source)?.subagent !== undefined || payload.thread_source === "subagent"
+          ? "subagent"
+          : "main";
+      const project = projectOf(payload, place);
+      state.thread = thread;
+      state.project = project;
       const version = payload.cli_version;
       return [
         {
@@ -453,6 +567,7 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
           via,
           ...(typeof version === "string" && VERSION.test(version) ? { version } : {}),
         },
+        { type: "usage-session", day, via, project, thread },
       ];
     }
     if (state.day === undefined || state.via === undefined) return [];
@@ -521,6 +636,8 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
 
     if (value.type === "turn_context") {
       state.turn = [];
+      const model = payload.model;
+      if (typeof model === "string" && MODEL.test(model)) state.model = model;
       return [];
     }
 
@@ -534,8 +651,35 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
       ) {
         state.copying = false;
       }
-      if (payload.type !== "token_count" || state.tokens || state.copying) return [];
+      if (payload.type !== "token_count") return [];
       const info = record(payload.info);
+      // A copy's totals are the parent's: the fork's own steps start from them.
+      const step = info === undefined ? undefined : stepOf(info, state);
+      const requestDay = isoDay(value.timestamp);
+      if (step !== undefined && !state.copying && requestDay !== undefined) {
+        const [input = 0, cached = 0, write = 0, output = 0, reasoning = 0] = step;
+        const cacheRead = Math.min(cached, input);
+        const cacheWrite = Math.min(write, input - cacheRead);
+        if (input + output > 0) {
+          facts.push({
+            type: "usage-tokens",
+            day: requestDay,
+            via,
+            project: state.project ?? "unknown",
+            thread: state.thread ?? "main",
+            model: state.model ?? "unknown",
+            input: input - cacheRead - cacheWrite,
+            output,
+            reasoning: Math.min(reasoning, output),
+            cacheRead,
+            cacheWrite,
+            cacheWrite5m: 0,
+            cacheWrite1h: 0,
+            cacheRewrite: 0,
+          });
+        }
+      }
+      if (state.tokens || state.copying) return facts;
       const tokens = record(info?.last_token_usage)?.input_tokens;
       if (typeof tokens === "number" && tokens > 0) {
         state.tokens = true;

@@ -4,10 +4,10 @@
 
 ## What we never compromise on
 
-1. **Private by construction.** A Scan or Report holds counters and names, plus each skill's and subagent's description. Descriptions travel only between the user's own machines (`--fleet` uses the user's ssh). A Report shared through loadsheet.dev goes through `shareableReport`, which drops them. Transcript text, tool input and output, file bodies, session ids, environment variables and absolute home paths never reach any output or the cache.
+1. **Private by construction.** A Scan or Report holds counters and names, plus each skill's and subagent's description. Descriptions and usage's project names (`owner/repo` from a git remote, or a folder key such as `~/work/site`) travel only between the user's own machines (`--fleet` uses the user's ssh). A Report shared through loadsheet.dev goes through `shareableReport`, which drops the descriptions and the whole `usage`. Transcript text, tool input and output, file bodies, session ids, environment variables and absolute home paths never reach any output or the cache.
 2. **Read-only on the user's machine.** loadsheet writes only to its own cache. Fixes go to the user's agent as commands. `loadsheet build` writes where the user says, and only over files it wrote before.
 3. **Works on a stock install.** Someone with a plain Claude Code or Codex setup must get a useful report. Group and name things by what every install has: personal skills, plugins, project files. Maxi's fleetrc manifest (`packages/harnesses/src/managed.ts`) is an extra, never what a view depends on.
-4. **Now, before history.** The main question is what a session started now loads before you type. Usage history serves as evidence behind a fix; it is not a view of its own yet.
+4. **Now, before history.** The default view and the report page answer what a session started now loads. Usage history has one view of its own, `loadsheet usage` and `/report/usage`; elsewhere it only backs a fix.
 
 ## Where each package runs
 

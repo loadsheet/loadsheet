@@ -7,13 +7,13 @@
 import { createHash, randomBytes } from "node:crypto";
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Cell, Day } from "@loadsheet/schema";
+import type { Cell, Day, Thread } from "@loadsheet/schema";
 import type { Tally, TranscriptFormat } from "../index.ts";
 import { Accumulator } from "../sum.ts";
 import type { ReadPosition } from "./reader.ts";
 
 /** The layout of a cache file; a change here starts every cache cold. */
-const CACHE_LAYOUT = 3;
+const CACHE_LAYOUT = 5;
 
 /** What the cache keeps for one transcript file. */
 export interface CachedFile {
@@ -54,7 +54,7 @@ export const defaultCacheDir = (place: {
 
 const sha256 = (text: string | Uint8Array) => createHash("sha256").update(text).digest("hex");
 
-// A cache file is `{"layout":3,"sum":"<sha256 of the document's text>","doc":<document>}`, so one
+// A cache file is `{"layout":5,"sum":"<sha256 of the document's text>","doc":<document>}`, so one
 // cut short or changed by anything else opens empty, and checking it hashes the bytes as read.
 const HEAD = `{"layout":${CACHE_LAYOUT},"sum":"`;
 const DOC = '","doc":';
@@ -158,6 +158,13 @@ class Decoder {
     return text;
   }
 
+  /** A usage cell's thread, `main` or `subagent`. */
+  thread(value: unknown): Thread {
+    const text = this.text(value);
+    if (text !== "main" && text !== "subagent") throw new Malformed();
+    return text;
+  }
+
   count(value: unknown): number {
     if (!isCount(value)) throw new Malformed();
     return value;
@@ -239,15 +246,24 @@ const retable = (raw: unknown, from: readonly string[], to: StringTable): unknow
   return raw;
 };
 
-// A Tally encodes as [sessions, cells, versions, windows]:
-//   sessions: day, harness, via, sessions, fixedTokens, measured, ...
-//   cells:    day, harness, via, [item, sessions, bare, chars, byModel, byUser, ...], ...
-//   versions: harness, day, version, ...
-//   windows:  harness, day, tokens, ...
+// A Tally encodes as [sessions, cells, versions, windows, usageSessions, usageTokens]:
+//   sessions:      day, harness, via, sessions, fixedTokens, measured, ...
+//   cells:         day, harness, via, [item, sessions, bare, chars, byModel, byUser, ...], ...
+//   versions:      harness, day, version, ...
+//   windows:       harness, day, tokens, ...
+//   usageSessions: day, harness, via, project, thread, sessions, compacted, compactions,
+//                  manualCompactions, ...
+//   usageTokens:   day, harness, via, project, thread, model, requests, input, output, reasoning,
+//                  cacheRead, cacheWrite, cacheWrite5m, cacheWrite1h, cacheRewrite, ...
 // Within each tuple the strings come first: `refs` is how many.
 
 /** An encoded tally, as `checkTally` accepted it. */
-type EncodedTally = [number[], (number | number[])[], number[], number[]];
+type EncodedTally = [number[], (number | number[])[], number[], number[], number[], number[]];
+
+const USAGE_SESSION_STRIDE = 9;
+const USAGE_SESSION_REFS = 5;
+const USAGE_TOKEN_STRIDE = 15;
+const USAGE_TOKEN_REFS = 6;
 
 const encodeTally = (tally: Tally, table: StringTable): unknown => {
   const sessions: number[] = [];
@@ -281,13 +297,47 @@ const encodeTally = (tally: Tally, table: StringTable): unknown => {
   for (const seen of tally.windows ?? []) {
     windows.push(table.ref(seen.harness), table.ref(seen.day), seen.tokens);
   }
-  return [sessions, cells, versions, windows];
+  const usageSessions: number[] = [];
+  for (const cell of tally.usage?.sessions ?? []) {
+    usageSessions.push(
+      table.ref(cell.day),
+      table.ref(cell.harness),
+      table.ref(cell.via),
+      table.ref(cell.project),
+      table.ref(cell.thread),
+      cell.sessions,
+      cell.compacted,
+      cell.compactions,
+      cell.manualCompactions,
+    );
+  }
+  const usageTokens: number[] = [];
+  for (const cell of tally.usage?.tokens ?? []) {
+    usageTokens.push(
+      table.ref(cell.day),
+      table.ref(cell.harness),
+      table.ref(cell.via),
+      table.ref(cell.project),
+      table.ref(cell.thread),
+      table.ref(cell.model),
+      cell.requests,
+      cell.input,
+      cell.output,
+      cell.reasoning,
+      cell.cacheRead,
+      cell.cacheWrite,
+      cell.cacheWrite5m,
+      cell.cacheWrite1h,
+      cell.cacheRewrite,
+    );
+  }
+  return [sessions, cells, versions, windows, usageSessions, usageTokens];
 };
 
 /** Throws Malformed unless `raw` is an encoded tally. */
 const checkTally = (raw: unknown, decoder: Decoder): EncodedTally => {
-  if (!Array.isArray(raw) || raw.length !== 4) throw new Malformed();
-  const [sessions, groups, versions, windows] = raw as unknown[];
+  if (!Array.isArray(raw) || raw.length !== 6) throw new Malformed();
+  const [sessions, groups, versions, windows, usageSessions, usageTokens] = raw as unknown[];
   const flatSessions = decoder.tuples(sessions, 6);
   for (let index = 0; index < flatSessions.length; index += 6) {
     decoder.day(flatSessions[index]);
@@ -318,12 +368,31 @@ const checkTally = (raw: unknown, decoder: Decoder): EncodedTally => {
     decoder.day(flatWindows[index + 1]);
     decoder.count(flatWindows[index + 2]);
   }
+  const flatUsageSessions = decoder.tuples(usageSessions, USAGE_SESSION_STRIDE);
+  for (let index = 0; index < flatUsageSessions.length; index += USAGE_SESSION_STRIDE) {
+    decoder.day(flatUsageSessions[index]);
+    for (let at = 1; at < USAGE_SESSION_REFS - 1; at += 1)
+      decoder.text(flatUsageSessions[index + at]);
+    decoder.thread(flatUsageSessions[index + USAGE_SESSION_REFS - 1]);
+    for (let at = USAGE_SESSION_REFS; at < USAGE_SESSION_STRIDE; at += 1)
+      decoder.count(flatUsageSessions[index + at]);
+  }
+  const flatUsageTokens = decoder.tuples(usageTokens, USAGE_TOKEN_STRIDE);
+  for (let index = 0; index < flatUsageTokens.length; index += USAGE_TOKEN_STRIDE) {
+    decoder.day(flatUsageTokens[index]);
+    for (let at = 1; at < USAGE_TOKEN_REFS; at += 1) {
+      if (at === 4) decoder.thread(flatUsageTokens[index + at]);
+      else decoder.text(flatUsageTokens[index + at]);
+    }
+    for (let at = USAGE_TOKEN_REFS; at < USAGE_TOKEN_STRIDE; at += 1)
+      decoder.count(flatUsageTokens[index + at]);
+  }
   return raw as EncodedTally;
 };
 
 /** Adds an encoded tally's counters inside the sum's window to it, building no Tally. */
 const addTally = (sum: Accumulator, raw: EncodedTally, strings: readonly string[]): void => {
-  const [sessions, groups, versions, windows] = raw;
+  const [sessions, groups, versions, windows, usageSessions, usageTokens] = raw;
   for (let index = 0; index < sessions.length; index += 6) {
     const day = strings[sessions[index]!]!;
     if (!sum.keep(day)) continue;
@@ -358,6 +427,44 @@ const addTally = (sum: Accumulator, raw: EncodedTally, strings: readonly string[
     if (sum.keep(day))
       sum.window({ harness: strings[windows[index]!]!, day, tokens: windows[index + 2]! });
   }
+  for (let index = 0; index < usageSessions.length; index += USAGE_SESSION_STRIDE) {
+    const day = strings[usageSessions[index]!]!;
+    if (!sum.keep(day)) continue;
+    const at = (offset: number) => usageSessions[index + offset]!;
+    const cell = sum.usageSession({
+      day,
+      harness: strings[at(1)]!,
+      via: strings[at(2)]!,
+      project: strings[at(3)]!,
+      thread: strings[at(4)] as Thread,
+    });
+    cell.sessions += at(5);
+    cell.compacted += at(6);
+    cell.compactions += at(7);
+    cell.manualCompactions += at(8);
+  }
+  for (let index = 0; index < usageTokens.length; index += USAGE_TOKEN_STRIDE) {
+    const day = strings[usageTokens[index]!]!;
+    if (!sum.keep(day)) continue;
+    const at = (offset: number) => usageTokens[index + offset]!;
+    const cell = sum.usageTokens({
+      day,
+      harness: strings[at(1)]!,
+      via: strings[at(2)]!,
+      project: strings[at(3)]!,
+      thread: strings[at(4)] as Thread,
+      model: strings[at(5)]!,
+    });
+    cell.requests += at(6);
+    cell.input += at(7);
+    cell.output += at(8);
+    cell.reasoning += at(9);
+    cell.cacheRead += at(10);
+    cell.cacheWrite += at(11);
+    cell.cacheWrite5m += at(12);
+    cell.cacheWrite1h += at(13);
+    cell.cacheRewrite += at(14);
+  }
 };
 
 /** The Tally of an encoded tally. */
@@ -382,7 +489,7 @@ const retableTally = (
   from: readonly string[],
   to: StringTable,
 ): EncodedTally => {
-  const [sessions, groups, versions, windows] = raw;
+  const [sessions, groups, versions, windows, usageSessions, usageTokens] = raw;
   return [
     retableTuples(sessions, 6, 3, from, to),
     groups.map((value, index) =>
@@ -392,6 +499,8 @@ const retableTally = (
     ),
     retableTuples(versions, 3, 3, from, to),
     retableTuples(windows, 3, 2, from, to),
+    retableTuples(usageSessions, USAGE_SESSION_STRIDE, USAGE_SESSION_REFS, from, to),
+    retableTuples(usageTokens, USAGE_TOKEN_STRIDE, USAGE_TOKEN_REFS, from, to),
   ];
 };
 

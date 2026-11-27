@@ -14,8 +14,9 @@ Change nothing until I accept a fix.
 2. If the Report's `schema` is not 1, tell me this prompt is for schema 1 and stop.
 3. Read `findings`. Before changing anything, present them to me in plain words, grouped by
    `rule` and ranked by `savesTokens.value` (tokens every session would save; findings without
-   it last). For each: the item, what its `evidence` numbers mean, what it saves, and what its
-   fixes would change. Say in one line which rules did not run (`skipped`). Ask which to apply.
+   it last). For each: the item (or, when it has none, the harness and the `via` entrypoint),
+   what its `evidence` numbers mean, what it saves, and what its fixes would change. Say in
+   one line which rules did not run (`skipped`). Ask which to apply.
 4. Apply only the fixes I accept, one at a time. Each finding lists its fixes in `fixes`.
    - `machine`: act only when it names the machine you run on. The Report's `machines` lists
      the machines read; a local Report holds one, this machine. In a fleet Report, yours is the
@@ -28,7 +29,7 @@ Change nothing until I accept a fix.
      string "24000" stays a string). `key` is a dotted path in the file's own format:
      - `settings.json` (JSON): `skillOverrides.<name>` is the `<name>` entry of the
        `skillOverrides` object; `env.NAME`, such as `env.SLASH_COMMAND_TOOL_CHAR_BUDGET`, is a
-       key of the `env` object.
+       key of the `env` object; `promptCacheTtl` and `cleanupPeriodDays` are top-level keys.
      - `config.toml` (TOML): `skills.config[path="~/x/SKILL.md"].enabled` is `enabled` in the
        `[[skills.config]]` entry whose `path` is exactly that value. Add the entry, with that
        `path`, when there is none. The last entry that matches a skill wins, so put it after

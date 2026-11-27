@@ -462,3 +462,255 @@ describe("loadsheet on fixtures/home", () => {
     expect(result.stdout.trimEnd().endsWith(PROMPT_DOC)).toBe(true);
   });
 });
+
+// A home made up for `loadsheet usage`: Claude Code sessions in two repositories, one of them in a
+// subfolder, and a folder that is no repository; a subagent; a Codex session whose transcript
+// names its remote. Counted by hand below. The repositories exist only as `.git/config` files.
+describe("loadsheet usage", () => {
+  let root: string;
+  let home: string;
+  let env: Record<string, string>;
+  const inUsage = (...args: string[]) =>
+    spawnSync(process.execPath, [cli, ...args], { encoding: "utf8", cwd: home, env });
+  const write = (path: string, text: string) => {
+    mkdirSync(join(path, ".."), { recursive: true });
+    writeFileSync(path, text);
+  };
+  const jsonl = (lines: unknown[]) => lines.map((line) => `${JSON.stringify(line)}\n`).join("");
+  /** One Claude Code conversation in `folder`: a prompt, each request's usage, then a compaction. */
+  const claude = (
+    file: string,
+    folder: string,
+    day: string,
+    requests: { id: string; input: number; output: number; read?: number; write5m?: number }[],
+    { side = false, compact }: { side?: boolean; compact?: "auto" | "manual" } = {},
+  ) => {
+    const at = {
+      isSidechain: side,
+      entrypoint: "cli",
+      version: "2.1.300",
+      sessionId: "s",
+      cwd: join(home, folder),
+    };
+    const lines: unknown[] = [
+      { ...at, timestamp: `${day}T09:00:00.000Z`, type: "user", message: { content: "hi" } },
+    ];
+    requests.forEach((request, index) => {
+      const usage = {
+        input_tokens: request.input,
+        output_tokens: request.output,
+        cache_read_input_tokens: request.read ?? 0,
+        cache_creation_input_tokens: request.write5m ?? 0,
+        cache_creation: { ephemeral_5m_input_tokens: request.write5m ?? 0 },
+      };
+      const line = {
+        ...at,
+        timestamp: `${day}T09:0${index + 1}:00.000Z`,
+        type: "assistant",
+        message: { id: request.id, model: "claude-fixture", content: [], usage },
+      };
+      // Claude Code writes a message once per content block, with the same usage.
+      lines.push(line, line);
+    });
+    if (compact)
+      lines.push({
+        ...at,
+        timestamp: `${day}T09:30:00.000Z`,
+        type: "system",
+        subtype: "compact_boundary",
+        compactMetadata: { trigger: compact },
+      });
+    write(join(home, ".claude", "projects", "-usage", file), jsonl(lines));
+  };
+
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), "loadsheet-usage-"));
+    home = join(root, "home");
+    env = {
+      PATH: process.env.PATH ?? "",
+      HOME: home,
+      XDG_CACHE_HOME: join(root, "cache"),
+      XDG_CONFIG_HOME: join(root, "config"),
+    };
+    const remote = (folder: string, url: string) =>
+      write(join(home, folder, ".git", "config"), `[remote "origin"]\n\turl = ${url}\n`);
+    remote("work/harbour", "git@github.com:Harbour-Co/harbour.git");
+    remote("work/quay", "https://github.com/harbour-co/quay.git");
+    mkdirSync(join(home, "work", "harbour", "src", "deep"), { recursive: true });
+    mkdirSync(join(home, "notes"), { recursive: true });
+
+    // harbour-co/harbour: 1,060 + 1,245 tokens, compacted on its own; 200 from a subfolder; a
+    // subagent's 10. harbour-co/quay: 1,000, compacted by hand. ~/notes: 100.
+    claude(
+      "a.jsonl",
+      "work/harbour",
+      "2026-11-20",
+      [
+        { id: "m1", input: 10, output: 50, write5m: 1000 },
+        { id: "m2", input: 5, output: 40, read: 1000, write5m: 200 },
+      ],
+      { compact: "auto" },
+    );
+    claude(
+      "a/subagents/agent-1.jsonl",
+      "work/harbour",
+      "2026-11-20",
+      [{ id: "m4", input: 1, output: 9 }],
+      { side: true },
+    );
+    claude("b.jsonl", "work/harbour/src/deep", "2026-11-21", [
+      { id: "m3", input: 100, output: 100 },
+    ]);
+    claude("c.jsonl", "work/quay", "2026-11-22", [{ id: "m5", input: 300, output: 700 }], {
+      compact: "manual",
+    });
+    claude("d.jsonl", "notes", "2026-11-22", [{ id: "m6", input: 50, output: 50 }]);
+    write(
+      join(home, ".claude", "settings.json"),
+      JSON.stringify({ promptCacheTtl: "1h", cleanupPeriodDays: 90 }),
+    );
+
+    // tideworks/tides on Codex: 1,500 uncached input, 500 cached, 300 output; compacted.
+    const stamp = "2026-11-23T10:00:00.000Z";
+    write(
+      join(home, ".codex", "sessions", "2026", "11", "23", "rollout-2026-11-23T10-00-00-e.jsonl"),
+      jsonl([
+        {
+          timestamp: stamp,
+          type: "session_meta",
+          payload: {
+            id: "e",
+            timestamp: stamp,
+            cwd: join(home, "elsewhere"),
+            originator: "codex_cli_rs",
+            cli_version: "0.171.0",
+            source: "cli",
+            git: { repository_url: "https://github.com/Tideworks/Tides.git" },
+          },
+        },
+        { timestamp: stamp, type: "turn_context", payload: { cwd: home, model: "gpt-fixture" } },
+        {
+          timestamp: "2026-11-23T10:00:05.000Z",
+          type: "event_msg",
+          payload: {
+            type: "token_count",
+            info: {
+              total_token_usage: {
+                input_tokens: 2000,
+                cached_input_tokens: 500,
+                output_tokens: 300,
+                reasoning_output_tokens: 50,
+                total_tokens: 2300,
+              },
+            },
+          },
+        },
+        { timestamp: "2026-11-23T10:10:00.000Z", type: "compacted", payload: { message: "x" } },
+      ]),
+    );
+    write(join(home, ".codex", "config.toml"), "model_auto_compact_token_limit = 180000\n");
+  });
+  afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+  /** A table's rows as [name, sessions, compacted, compacted %, tokens, share %], as printed. */
+  const table = (text: string, title: string) => {
+    const lines = text.split("\n");
+    const start = lines.findIndex((line) => line.startsWith(`${title} `));
+    expect(start).toBeGreaterThan(-1);
+    const rows: string[][] = [];
+    for (const line of lines.slice(start + 1)) {
+      const match = /^ {2}(\S.*?) {2,}([\d,]+) +([\d,]+) +(\d+)% +(\S+) +(\d+)%$/u.exec(line);
+      if (!match) break;
+      rows.push(match.slice(1));
+    }
+    return rows;
+  };
+
+  it("counts sessions, compactions and tokens per project and org, as --json's cells sum", () => {
+    const report = parseReport(JSON.parse(inUsage("usage", "--json", "--days", "3650").stdout));
+    const usage = report.usage!;
+    const tokensOf = (keep: (project: string) => boolean) =>
+      usage.tokens
+        .filter((cell) => keep(cell.project))
+        .reduce((n, c) => n + c.input + c.output + c.cacheRead + c.cacheWrite, 0);
+    const main = usage.sessions.filter((cell) => cell.thread === "main");
+    const count = (key: "sessions" | "compacted") => main.reduce((n, cell) => n + cell[key], 0);
+    // By hand: the cells hold what the transcripts say.
+    expect(tokensOf((p) => p === "harbour-co/harbour")).toBe(1060 + 1245 + 200 + 10);
+    expect(tokensOf((p) => p === "harbour-co/quay")).toBe(1000);
+    expect(tokensOf((p) => p === "tideworks/tides")).toBe(2300);
+    expect(tokensOf((p) => p === "~/notes")).toBe(100);
+    expect([count("sessions"), count("compacted")]).toEqual([5, 3]);
+    expect(
+      usage.sessions.filter((c) => c.thread === "subagent").reduce((n, c) => n + c.sessions, 0),
+    ).toBe(1);
+    expect(tokensOf(() => true)).toBe(5915);
+
+    const result = inUsage("usage", "--days", "3650");
+    expect(result.stderr).toBe("");
+    expect(result.status).toBe(0);
+    const text = result.stdout;
+    expect(text).toContain("Sessions, compactions and tokens by project, last 3,650 days");
+    expect(text).toContain("plus 1 subagent session");
+    // The printed totals are the cells' sums; shares by largest remainder sum to 100.
+    expect(table(text, "Totals")).toEqual([
+      ["Claude Code", "4", "2", "50", "3.6k", "61"],
+      ["Codex", "1", "1", "100", "2.3k", "39"],
+      ["all", String(count("sessions")), String(count("compacted")), "60", "5.9k", "100"],
+    ]);
+    const orgs = table(text, "Orgs");
+    expect(orgs).toEqual([
+      ["harbour-co", "3", "2", "67", "3.5k", "59"],
+      ["tideworks", "1", "1", "100", "2.3k", "39"],
+      ["no repository", "1", "0", "0", "0.1k", "2"],
+    ]);
+    expect(orgs.reduce((n, row) => n + Number(row[5]), 0)).toBe(100);
+    const projects = table(text, "Projects");
+    expect(projects.map((row) => row[0])).toEqual([
+      "harbour-co/harbour",
+      "tideworks/tides",
+      "harbour-co/quay",
+      "no repository",
+    ]);
+    expect(projects.reduce((n, row) => n + Number(row[1]), 0)).toBe(count("sessions"));
+    expect(projects.reduce((n, row) => n + Number(row[5]), 0)).toBe(100);
+    expect(text).toMatch(/Claude Code {2}prompt cache {6}1 hour, from settings\.promptCacheTtl\n/u);
+    expect(text).toContain("transcripts kept  90 days");
+    expect(text).toMatch(/Codex {8}auto-compact {6}at 180\.0k tokens\n/u);
+    expect(text).not.toContain(root);
+    for (const line of text.split("\n")) expect(line.length, line).toBeLessThanOrEqual(80);
+  });
+
+  it("--json prints the Report --json prints, and --scan carries the usage", () => {
+    const strip = (stdout: string) => {
+      const { generatedAt: _, machines: __, ...rest } = JSON.parse(stdout);
+      return rest;
+    };
+    expect(strip(inUsage("usage", "--json", "--days", "3650").stdout)).toEqual(
+      strip(inUsage("--json", "--days", "3650").stdout),
+    );
+    const scan = parseScan(JSON.parse(inUsage("--scan", "--days", "3650").stdout));
+    expect(scan.usage?.tokens.length).toBeGreaterThan(0);
+  });
+
+  it("is not read as a pack, unless it comes after --", () => {
+    mkdirSync(join(home, "usage"), { recursive: true });
+    try {
+      expect(inUsage("usage", "--days", "3650").stdout).toContain("Orgs");
+      const asPack = inUsage("--json", "--", "usage");
+      expect(asPack.status).toBe(0);
+      expect(parseReport(JSON.parse(asPack.stdout)).mode).toBe("pack");
+    } finally {
+      rmSync(join(home, "usage"), { recursive: true });
+    }
+    const extra = inUsage("usage", "claude");
+    expect(extra.status).toBe(2);
+    expect(extra.stderr).toContain("loadsheet usage takes no pack");
+  });
+
+  it("says so when no session counted any usage", () => {
+    const result = inUsage("usage", "--days", "1");
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("nothing to count yet");
+  });
+});

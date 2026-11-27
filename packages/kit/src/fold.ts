@@ -8,7 +8,9 @@ import type {
   Item,
   Scan,
   SessionCell,
+  Settings,
   Signal,
+  Usage,
 } from "@loadsheet/schema";
 import type { Fact } from "./index.ts";
 import { Accumulator, byKey, SEP } from "./sum.ts";
@@ -37,9 +39,14 @@ export interface Tally {
   readonly versions: VersionSeen[];
   /** Absent in a Tally cached before context windows were read. */
   readonly windows?: WindowSeen[];
+  /** Sessions and tokens per project; absent when no Fact said any. */
+  readonly usage?: Usage;
 }
 
-/** Folds one harness's Facts into counters: `session` and `tokens` into SessionCells, `listed` and `used` into Cells. */
+/**
+ * Folds one harness's Facts into counters: `session` and `tokens` into SessionCells, `listed` and
+ * `used` into Cells, the usage Facts into the usage part.
+ */
 export const foldFacts = (harness: string, facts: Iterable<Fact>): Tally => {
   const accumulator = new Accumulator();
   for (const fact of facts) accumulator.fact(harness, fact);
@@ -63,6 +70,8 @@ export const coverageOf = (
     signals: Record<Signal, Grade>;
     /** The window the harness's settings give, used when no session reported one. */
     contextWindow?: number;
+    settings?: Settings;
+    unread?: readonly string[];
   },
 ): Coverage => {
   const sessions = tally.sessions.filter(
@@ -91,6 +100,8 @@ export const coverageOf = (
     ...(days.length ? { firstDay: days[0]!, lastDay: days.at(-1)! } : {}),
     signals: { ...base.signals },
     ...(contextWindow === undefined ? {} : { contextWindow }),
+    ...(base.settings === undefined ? {} : { settings: { ...base.settings } }),
+    ...(base.unread?.length ? { unread: [...new Set(base.unread)].sort() } : {}),
   };
 };
 
@@ -124,6 +135,10 @@ export interface HarnessScan {
   readonly tally: Tally;
   /** The context window the harness's settings give, for when no session reported one. */
   readonly contextWindow?: number;
+  /** What the harness's settings set, as derived values. */
+  readonly settings?: Settings;
+  /** The harness's session stores that could not be read, by name. */
+  readonly unread?: readonly string[];
 }
 
 /** A machine's Scan from each harness's part, keeping only the counters inside `window`. */
@@ -163,6 +178,7 @@ export const buildScan = (input: {
     ),
     sessions: total.sessions,
     cells: total.cells.filter((cell) => named.has(cell.item)),
+    ...(total.usage ? { usage: total.usage } : {}),
   };
 };
 
@@ -203,7 +219,12 @@ export const mergeScans = (first: Scan, ...rest: Scan[]): Scan => {
 
   const counters = new Accumulator();
   for (const scan of ordered) {
-    counters.tally({ sessions: scan.sessions, cells: scan.cells, versions: [] });
+    counters.tally({
+      sessions: scan.sessions,
+      cells: scan.cells,
+      versions: [],
+      ...(scan.usage ? { usage: scan.usage } : {}),
+    });
   }
   const total = counters.result();
 
@@ -230,6 +251,13 @@ export const mergeScans = (first: Scan, ...rest: Scan[]): Scan => {
         ...((next.contextWindow ?? known.contextWindow) === undefined
           ? {}
           : { contextWindow: (next.contextWindow ?? known.contextWindow)! }),
+        // The later Scan's, as it read the settings as they are now.
+        ...((next.settings ?? known.settings) === undefined
+          ? {}
+          : { settings: { ...(next.settings ?? known.settings)! } }),
+        ...(known.unread?.length || next.unread?.length
+          ? { unread: [...new Set([...(known.unread ?? []), ...(next.unread ?? [])])].sort() }
+          : {}),
       });
     }
   }
@@ -265,5 +293,6 @@ export const mergeScans = (first: Scan, ...rest: Scan[]): Scan => {
     ).map(asOf),
     sessions: total.sessions,
     cells: total.cells,
+    ...(total.usage ? { usage: total.usage } : {}),
   };
 };

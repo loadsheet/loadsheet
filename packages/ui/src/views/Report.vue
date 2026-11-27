@@ -13,10 +13,12 @@ import NoSessions from "../components/NoSessions.vue";
 import { TOKEN_ABOUT, VIEW, contextOf, freshView, short, takeaway } from "../lib/context";
 import { useHarness } from "../lib/harness";
 import { fmt, harnessName, plural } from "../lib/report";
+import { useLoadsheet } from "../lib/state";
 import { hideTip, showTip } from "../lib/ui";
 
 /** What a session started now loads before you type, against the model's window: a map, or the same as a table. */
 const h = useHarness();
+const { report } = useLoadsheet();
 const route = useRoute();
 const router = useRouter();
 const ctx = computed(() => (h.sheet.value ? contextOf(h.sheet.value) : undefined));
@@ -111,6 +113,12 @@ function tokenFocus(e: FocusEvent) {
         class="fixl"
         :to="{ name: 'fixes', query: { h: route.query.h, r: route.query.r }, hash: route.hash }"
         >{{ plural(h.fixes.value.length, "fix", "fixes") }}</RouterLink
+      >
+      <RouterLink
+        v-if="report.usage"
+        class="fixl"
+        :to="{ name: 'usage', query: { h: route.query.h, r: route.query.r }, hash: route.hash }"
+        >Usage</RouterLink
       >
       <div v-if="table" class="ctools">
         <input

@@ -31,6 +31,7 @@ describe("the page's routes", () => {
   });
 
   it("name every route the views link to", () => {
-    for (const name of ["home", "report", "fixes", "pack"]) expect(r.hasRoute(name)).toBe(true);
+    for (const name of ["home", "report", "fixes", "usage", "pack"])
+      expect(r.hasRoute(name)).toBe(true);
   });
 });

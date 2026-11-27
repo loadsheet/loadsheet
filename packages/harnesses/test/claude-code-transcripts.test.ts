@@ -9,15 +9,22 @@ import { claudeTranscripts, instructionName, type ClaudeState } from "../src/ind
 
 const FIXTURE = NodePath.join(import.meta.dirname, "fixtures/claude-code/session.jsonl");
 
-/** Facts from every line, the way readTranscript feeds them: only lines carrying a marker. */
+/** The Facts that fill sessions and items; usage Facts are tested in claude-code-usage.test.ts. */
+const isItemFact = (fact: Fact) =>
+  fact.type !== "usage-session" && fact.type !== "compaction" && fact.type !== "usage-tokens";
+
+/**
+ * Facts from every line, the way readTranscript feeds them: only lines carrying a marker. `facts`
+ * leaves the usage Facts out, `all` keeps them.
+ */
 const parseAll = (lines: readonly string[], state = claudeTranscripts.initial()) => {
-  const facts: Fact[] = [];
+  const all: Fact[] = [];
   for (const line of lines) {
     if (claudeTranscripts.markers.some((marker) => line.includes(marker))) {
-      facts.push(...claudeTranscripts.parse(line, state));
+      all.push(...claudeTranscripts.parse(line, state));
     }
   }
-  return { facts, state };
+  return { facts: all.filter(isItemFact), all, state };
 };
 
 const fixtureLines = async () =>
@@ -91,8 +98,8 @@ describe("a sanitized Claude Code session", () => {
   });
 
   it("lets no fixture text into its Facts or its State", async () => {
-    const { facts, state } = parseAll(await fixtureLines());
-    expect(findCanary(facts)).toEqual([]);
+    const { all, state } = parseAll(await fixtureLines());
+    expect(findCanary(all)).toEqual([]);
     expect(findCanary(JSON.parse(JSON.stringify(state)))).toEqual([]);
   });
 
@@ -119,7 +126,7 @@ describe("a sanitized Claude Code session", () => {
     it("gives the same Facts in two reads, resumed from the saved position, as in one", async () => {
       const text = await NodeFSP.readFile(FIXTURE, "utf8");
       const whole = await readTranscript(FIXTURE, claudeTranscripts);
-      expect(whole?.records).toHaveLength(121);
+      expect(whole?.records.filter(isItemFact)).toHaveLength(121);
 
       const lines = text.split("\n");
       // Split after the skill listing and before the turn that flushes the MCP servers.

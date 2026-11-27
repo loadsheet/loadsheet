@@ -19,8 +19,11 @@ import { useLoadsheet } from "../lib/state";
 import { copied, copy } from "../lib/ui";
 
 const h = useHarness();
-const shown = computed(() => h.all.value.filter((x) => x.hasReport || x.id === h.current.value));
 const route = useRoute();
+// The usage page counts every harness at once, so the switch would change nothing there.
+const shown = computed(() =>
+  route.name === "usage" ? [] : h.all.value.filter((x) => x.hasReport || x.id === h.current.value),
+);
 const pickReport = usePickReport();
 const { report, linkError, shareBase, shareForm } = useLoadsheet();
 async function share() {
@@ -74,10 +77,20 @@ async function share() {
       </template>
     </StateBox>
   </main>
-  <main v-else-if="h.empty.value" class="pg-body">
-    <StateBox title="No sessions found">
-      loadsheet found no agent sessions to read. Run your agent once, then run this again.
+  <main v-else-if="h.empty.value && route.name !== 'usage'" class="pg-body">
+    <StateBox :title="report.usage ? 'No setup data' : 'No sessions found'">
+      <template v-if="report.usage">No startup-context data was recorded for this report.</template>
+      <template v-else
+        >loadsheet found no agent sessions to read. Run your agent once, then run this
+        again.</template
+      >
       <template #actions>
+        <RouterLink
+          v-if="report.usage || report.coverage.some((row) => row.unread?.length)"
+          data-slot="button"
+          :to="{ name: 'usage', query: route.query, hash: route.hash }"
+          >Usage by project</RouterLink
+        >
         <div class="cmd">
           <code><span class="pr" aria-hidden="true">$</span>npx loadsheet --ui</code>
           <CopyButton text="npx loadsheet --ui" label="Copy command" />

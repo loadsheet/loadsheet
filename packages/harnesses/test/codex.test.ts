@@ -288,6 +288,13 @@ describe("codex sessions", () => {
     ]);
     expect(facts).toEqual([
       { type: "session", day: "2026-11-09", via: "codex_cli_rs", version: "0.171.0" },
+      {
+        type: "usage-session",
+        day: "2026-11-09",
+        via: "codex_cli_rs",
+        project: "unknown",
+        thread: "main",
+      },
     ]);
   });
 
@@ -371,7 +378,7 @@ describe("codex sessions", () => {
         turn,
         fragment(` for ${folder}`, both),
       ]).facts;
-      expect(count(facts)).toEqual({ session: 1, listed: 2 });
+      expect(count(facts)).toEqual({ session: 1, "usage-session": 1, listed: 2 });
     });
 
     it("keeps the header's folder out of every Fact", () => {
@@ -401,7 +408,9 @@ describe("codex sessions", () => {
       },
       exec("tools.mcp__unlisted__x()"),
     ]);
-    expect(facts.filter((fact) => fact.type !== "session")).toEqual([
+    expect(
+      facts.filter((fact) => fact.type !== "session" && fact.type !== "usage-session"),
+    ).toEqual([
       {
         type: "listed",
         day: "2026-11-09",
@@ -452,7 +461,13 @@ describe("codex sessions", () => {
       exec("cat /s/a/SKILL.md"),
       tokenCount(1000),
     ]);
-    expect(count(facts)).toEqual({ session: 1, listed: 1, "used:model": 1, tokens: 1 });
+    expect(count(facts)).toEqual({
+      session: 1,
+      "usage-session": 1,
+      listed: 1,
+      "used:model": 1,
+      tokens: 1,
+    });
     expect(facts.find((fact) => fact.type === "tokens")).toMatchObject({ tokens: 1000 });
   });
 
@@ -478,7 +493,13 @@ describe("codex sessions", () => {
       exec("cat /s/a/SKILL.md"),
       tokenCount(1000),
     ]);
-    expect(count(facts)).toEqual({ session: 1, listed: 1, "used:model": 1, tokens: 1 });
+    expect(count(facts)).toEqual({
+      session: 1,
+      "usage-session": 1,
+      listed: 1,
+      "used:model": 1,
+      tokens: 1,
+    });
     expect(facts.find((fact) => fact.type === "tokens")).toMatchObject({ tokens: 1000 });
   });
   it("reads the model's context window from the first token count", () => {
@@ -533,7 +554,30 @@ describe("codex fixture", () => {
     const skills = listed.filter((fact) => fact.item.startsWith("skill:"));
     expect(skippedLines).toBe(0);
     expect(records[0]).toEqual(hand.session);
-    expect(count(records)).toEqual({ session: 1, listed: 138, tokens: 1, "used:model": 4 });
+    expect(count(records)).toEqual({
+      session: 1,
+      "usage-session": 1,
+      listed: 138,
+      tokens: 1,
+      "usage-tokens": 5,
+      "used:model": 4,
+    });
+    // Five requests whose steps add up to the last running totals: 127,613 input tokens, 79,488
+    // of them cached, 521 output, 72 of them reasoning. The fixture's model and folder are canary text.
+    const usage = records.flatMap((fact) => (fact.type === "usage-tokens" ? [fact] : []));
+    const total = (key: "input" | "cacheRead" | "cacheWrite" | "output" | "reasoning") =>
+      usage.reduce((sum, fact) => sum + fact[key], 0);
+    expect([total("input"), total("cacheRead"), total("cacheWrite")]).toEqual([
+      127_613 - 79_488,
+      79_488,
+      0,
+    ]);
+    expect([total("output"), total("reasoning")]).toEqual([521, 72]);
+    expect(
+      usage.every(
+        (fact) => fact.model === "unknown" && fact.project === "unknown" && fact.thread === "main",
+      ),
+    ).toBe(true);
     expect(skills).toHaveLength(hand.skills);
     expect(skills.reduce((sum, fact) => sum + fact.chars, 0)).toBe(hand.skillChars);
     expect(skills.every((fact) => !fact.bare)).toBe(true);

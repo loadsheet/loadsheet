@@ -8,6 +8,8 @@ import {
   sumTallies,
   type Fact,
   type HarnessScan,
+  type Tally,
+  type UsageTokensFact,
 } from "../src/index.ts";
 
 const signals = {
@@ -17,6 +19,8 @@ const signals = {
   instructions: "exact",
   mcp: "inferred",
   tokens: "exact",
+  usage: "exact",
+  cacheTtl: "none",
 } as const;
 
 // Two sessions on the 20th through cli, one on the 21st through an app.
@@ -37,6 +41,40 @@ const facts: Fact[] = [
   { type: "listed", day: "2026-11-21", via: "app", item: "skill:a", chars: 40, bare: false },
   { type: "used", day: "2026-11-21", via: "app", item: "mcp:m", by: "model" },
 ];
+
+const web = { via: "cli", project: "acme/web" } as const;
+const tokens = (day: string, thread: "main" | "subagent", n: number): UsageTokensFact => ({
+  type: "usage-tokens",
+  day,
+  ...web,
+  thread,
+  model: "model-a",
+  input: n,
+  output: 10 * n,
+  reasoning: 2 * n,
+  cacheRead: 100 * n,
+  cacheWrite: 30 * n,
+  cacheWrite5m: 20 * n,
+  cacheWrite1h: 10 * n,
+  cacheRewrite: 5 * n,
+});
+
+// One session on the 20th in acme/web with a subagent; its main thread compacts twice, once by
+// hand, and keeps making requests past midnight. A session in ~/notes on the 21st.
+const usage: Fact[] = [
+  { type: "usage-session", day: "2026-11-20", ...web, thread: "main" },
+  tokens("2026-11-20", "main", 1),
+  { type: "usage-session", day: "2026-11-20", ...web, thread: "subagent" },
+  tokens("2026-11-20", "subagent", 2),
+  { type: "compaction", day: "2026-11-20", ...web, thread: "main", manual: false, first: true },
+  tokens("2026-11-20", "main", 3),
+  { type: "compaction", day: "2026-11-20", ...web, thread: "main", manual: true, first: false },
+  tokens("2026-11-21", "main", 4),
+  { type: "usage-session", day: "2026-11-21", via: "app", project: "~/notes", thread: "main" },
+  { ...tokens("2026-11-21", "main", 1), via: "app", project: "~/notes", model: "model-b" },
+];
+
+const all = [...facts, ...usage];
 
 describe("foldFacts", () => {
   it("sums Facts into SessionCells and Cells that match a hand count", () => {
@@ -116,19 +154,132 @@ describe("foldFacts", () => {
     });
   });
 
+  it("sums usage Facts into usage cells that match a hand count", () => {
+    const tally = foldFacts("h", usage);
+    const cell = { harness: "h", ...web };
+    expect(tally.usage!.sessions).toEqual([
+      {
+        day: "2026-11-20",
+        ...cell,
+        thread: "main",
+        sessions: 1,
+        compacted: 1,
+        compactions: 2,
+        manualCompactions: 1,
+      },
+      {
+        day: "2026-11-20",
+        ...cell,
+        thread: "subagent",
+        sessions: 1,
+        compacted: 0,
+        compactions: 0,
+        manualCompactions: 0,
+      },
+      {
+        day: "2026-11-21",
+        harness: "h",
+        via: "app",
+        project: "~/notes",
+        thread: "main",
+        sessions: 1,
+        compacted: 0,
+        compactions: 0,
+        manualCompactions: 0,
+      },
+    ]);
+    const counts = (n: number, requests: number) => ({
+      requests,
+      input: n,
+      output: 10 * n,
+      reasoning: 2 * n,
+      cacheRead: 100 * n,
+      cacheWrite: 30 * n,
+      cacheWrite5m: 20 * n,
+      cacheWrite1h: 10 * n,
+      cacheRewrite: 5 * n,
+    });
+    expect(tally.usage!.tokens).toEqual([
+      { day: "2026-11-20", ...cell, thread: "main", model: "model-a", ...counts(4, 2) },
+      { day: "2026-11-20", ...cell, thread: "subagent", model: "model-a", ...counts(2, 1) },
+      {
+        day: "2026-11-21",
+        harness: "h",
+        via: "app",
+        project: "~/notes",
+        thread: "main",
+        model: "model-b",
+        ...counts(1, 1),
+      },
+      { day: "2026-11-21", ...cell, thread: "main", model: "model-a", ...counts(4, 1) },
+    ]);
+    expect(foldFacts("h", facts).usage).toBeUndefined();
+  });
+
+  it("holds each token split to its whole, so a cell stays inside the schema's bounds", () => {
+    const tally = foldFacts("h", [
+      {
+        ...tokens("2026-11-20", "main", 1),
+        requests: 3,
+        reasoning: 50,
+        cacheWrite5m: 25,
+        cacheWrite1h: 25,
+        cacheRewrite: 40,
+      },
+    ]);
+    expect(tally.usage!.tokens[0]).toMatchObject({
+      requests: 3,
+      output: 10,
+      reasoning: 10,
+      cacheWrite: 30,
+      cacheWrite5m: 25,
+      cacheWrite1h: 5,
+      cacheRewrite: 30,
+    });
+  });
+
   it("is additive: folding in pieces and summing equals folding at once", () => {
-    for (let cut = 0; cut <= facts.length; cut += 1) {
+    for (let cut = 0; cut <= all.length; cut += 1) {
       const pieces = sumTallies([
-        foldFacts("h", facts.slice(0, cut)),
-        foldFacts("h", facts.slice(cut)),
+        foldFacts("h", all.slice(0, cut)),
+        foldFacts("h", all.slice(cut)),
       ]);
-      expect(pieces).toEqual(foldFacts("h", facts));
+      expect(pieces).toEqual(foldFacts("h", all));
     }
   });
 
+  it("sums tallies in any grouping and order to the same Tally", () => {
+    const [a, b, c] = [all.slice(0, 7), all.slice(7, 19), all.slice(19)].map((part) =>
+      foldFacts("h", part),
+    ) as [Tally, Tally, Tally];
+    const flat = sumTallies([a, b, c]);
+    expect(sumTallies([sumTallies([a, b]), c])).toEqual(flat);
+    expect(sumTallies([a, sumTallies([b, c])])).toEqual(flat);
+    expect(sumTallies([c, b, a])).toEqual(flat);
+    expect(sumTallies([sumTallies([c, a]), b], ["2026-11-21", "2026-11-21"])).toEqual(
+      sumTallies([flat], ["2026-11-21", "2026-11-21"]),
+    );
+  });
+
+  it("carries settings and unread stores into the coverage", () => {
+    const coverage = coverageOf(foldFacts("h", all), {
+      machine: "m",
+      harness: "h",
+      installed: true,
+      signals,
+      settings: { cacheTtl: "5m", cacheTtlFrom: "default" },
+      unread: ["opencode.db", "grok", "opencode.db"],
+    });
+    expect(coverage.settings).toEqual({ cacheTtl: "5m", cacheTtlFrom: "default" });
+    expect(coverage.unread).toEqual(["grok", "opencode.db"]);
+  });
+
   it("keeps only the days inside a window", () => {
-    const tally = sumTallies([foldFacts("h", facts)], ["2026-11-21", "2026-11-30"]);
+    const tally = sumTallies([foldFacts("h", all)], ["2026-11-21", "2026-11-30"]);
     expect(tally.sessions.map((cell) => cell.day)).toEqual(["2026-11-21"]);
+    expect(tally.usage!.sessions.map((cell) => cell.day)).toEqual(["2026-11-21"]);
+    // A request on the 21st of a session that started on the 20th counts on its own day.
+    expect(tally.usage!.tokens.map((cell) => cell.day)).toEqual(["2026-11-21", "2026-11-21"]);
     expect(tally.cells.every((cell) => cell.day === "2026-11-21")).toBe(true);
     expect(tally.versions).toEqual([]);
   });
@@ -236,17 +387,40 @@ describe("mergeScans", () => {
 
   it("of the Scans of two sets of sessions equals the Scan of both", () => {
     const a = scanOf([
-      { harness: "h", facts },
+      { harness: "h", facts: all },
       { harness: "g", facts: other },
     ]);
-    const b = scanOf([{ harness: "h", facts: other }]);
+    const b = scanOf([{ harness: "h", facts: [...other, ...usage] }]);
     const both = scanOf([
-      { harness: "h", facts: [...facts, ...other] },
+      { harness: "h", facts: [...all, ...other, ...usage] },
       { harness: "g", facts: other },
     ]);
+    expect(both.usage!.sessions.length).toBeGreaterThan(0);
     expect(mergeScans(a, b)).toEqual(both);
     expect(mergeScans(b, a)).toEqual(both);
     expect(parseScan(mergeScans(a, b))).toEqual(both);
+  });
+
+  it("keeps the later Scan's settings and every unread store", () => {
+    const at = (scan: Scan, scannedAt: string, coverage: Partial<Scan["coverage"][number]>) => ({
+      ...scan,
+      scannedAt,
+      coverage: scan.coverage.map((row) => ({ ...row, ...coverage })),
+    });
+    const base = scanOf([{ harness: "h", facts: usage }]);
+    const older = at(base, "2026-11-23T00:00:00.000Z", {
+      settings: { cacheTtl: "5m" },
+      unread: ["opencode.db"],
+    });
+    const newer = at(base, "2026-11-24T00:00:00.000Z", {
+      settings: { cacheTtl: "1h", cacheTtlFrom: "settings.promptCacheTtl" },
+      unread: ["grok"],
+    });
+    const plain = at(base, "2026-11-25T00:00:00.000Z", {});
+    const [merged] = mergeScans(newer, older, plain).coverage;
+    expect(merged!.settings).toEqual({ cacheTtl: "1h", cacheTtlFrom: "settings.promptCacheTtl" });
+    expect(merged!.unread).toEqual(["grok", "opencode.db"]);
+    expect(mergeScans(plain, plain).coverage[0]).not.toHaveProperty("settings");
   });
 
   it("refuses Scans of different machines", () => {

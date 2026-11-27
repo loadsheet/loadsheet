@@ -27,6 +27,8 @@ const EXACT: Record<Signal, Grade> = {
   instructions: "exact",
   mcp: "exact",
   tokens: "exact",
+  usage: "exact",
+  cacheTtl: "none",
 };
 const NOW = new Date("2026-11-24T12:00:00.000Z");
 const LAST = "2026-11-24";
@@ -1903,6 +1905,81 @@ describe("fixes", () => {
 });
 
 describe("buildReport", () => {
+  const sessionsIn = (day: string, harness: string, via: string, project: string, n: number) => ({
+    day,
+    harness,
+    via,
+    project,
+    thread: "main" as const,
+    sessions: n,
+    compacted: 1,
+    compactions: n,
+    manualCompactions: 0,
+  });
+  const tokensIn = (day: string, harness: string, via: string, project: string, n: number) => ({
+    day,
+    harness,
+    via,
+    project,
+    thread: "main" as const,
+    model: "model-a",
+    requests: n,
+    input: n,
+    output: 10 * n,
+    reasoning: 0,
+    cacheRead: 100 * n,
+    cacheWrite: 30 * n,
+    cacheWrite5m: 30 * n,
+    cacheWrite1h: 0,
+    cacheRewrite: n,
+  });
+
+  it("sums usage over machines, inside the window, the harnesses and the entrypoints kept", () => {
+    const usageOf = (n: number): Scan["usage"] => ({
+      sessions: [
+        sessionsIn("2026-11-20", "claude-code", "cli", "acme/web", n),
+        sessionsIn("2026-11-20", "claude-code", "sdk-ts", "acme/web", n),
+        sessionsIn("2026-11-20", "codex", "cli", "acme/web", n),
+        sessionsIn("2026-09-01", "claude-code", "cli", "acme/web", n),
+      ],
+      tokens: [
+        tokensIn("2026-11-20", "claude-code", "cli", "acme/web", n),
+        tokensIn("2026-11-21", "claude-code", "cli", "~/notes", n),
+        tokensIn("2026-11-20", "codex", "cli", "acme/web", n),
+      ],
+    });
+    const scans = [
+      scan("laptop", { usage: usageOf(2) }),
+      scan("server", { usage: usageOf(3) }),
+      scan("desk"),
+    ];
+    const both = report(scans);
+    expect(both.usage!.sessions).toEqual(
+      [
+        sessionsIn("2026-11-20", "claude-code", "cli", "acme/web", 5),
+        sessionsIn("2026-11-20", "claude-code", "sdk-ts", "acme/web", 5),
+        sessionsIn("2026-11-20", "codex", "cli", "acme/web", 5),
+      ].map((cell) => ({ ...cell, compacted: 2 })),
+    );
+    expect(both.usage!.tokens).toEqual([
+      tokensIn("2026-11-20", "claude-code", "cli", "acme/web", 5),
+      tokensIn("2026-11-20", "codex", "cli", "acme/web", 5),
+      tokensIn("2026-11-21", "claude-code", "cli", "~/notes", 5),
+    ]);
+
+    const filtered = report(scans, { harnesses: ["claude-code"], via: { exclude: ["sdk-ts"] } });
+    expect(filtered.usage!.sessions).toEqual([
+      { ...sessionsIn("2026-11-20", "claude-code", "cli", "acme/web", 5), compacted: 2 },
+    ]);
+    expect(filtered.usage!.tokens.map((cell) => [cell.harness, cell.project])).toEqual([
+      ["claude-code", "acme/web"],
+      ["claude-code", "~/notes"],
+    ]);
+
+    expect(report(scans, { harnesses: ["opencode"] })).not.toHaveProperty("usage");
+    expect(report([scan("laptop")])).not.toHaveProperty("usage");
+  });
+
   it("throws on two Scans of the same machine", () => {
     expect(() => report([scan("laptop"), scan("laptop")])).toThrow(/laptop/u);
     expect(() =>

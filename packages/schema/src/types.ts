@@ -5,7 +5,15 @@
 export type Day = string;
 
 /** A kind of evidence a harness's transcripts can provide. */
-export type Signal = "listing" | "modelUse" | "userUse" | "instructions" | "mcp" | "tokens";
+export type Signal =
+  | "listing"
+  | "modelUse"
+  | "userUse"
+  | "instructions"
+  | "mcp"
+  | "tokens"
+  | "usage"
+  | "cacheTtl";
 
 /** How well a harness provides a signal: read directly, inferred from indirect evidence, or not at all. */
 export type Grade = "exact" | "inferred" | "none";
@@ -132,6 +140,101 @@ export interface Coverage {
   signals: Record<Signal, Grade>;
   /** The model's context window in tokens, as the harness reports it in its latest session or, failing that, its settings; absent when unknown. */
   contextWindow?: number;
+  /** What the harness's settings and environment set, as derived values, never their text; absent when the harness reads none. */
+  settings?: Settings;
+  /** The session stores of this harness that could not be read, by name, such as `opencode.db`; absent when every store was read. */
+  unread?: string[];
+}
+
+/** What a harness's settings and environment set, as derived values: never a setting's text or an environment variable's value. */
+export interface Settings {
+  /** The active settings.json, only when it can be named relative to home. */
+  settingsPath?: string;
+  /** How long the main conversation's prompt cache lives, as the settings set it. */
+  cacheTtl?: "5m" | "1h";
+  /** Which knob set cacheTtl, such as `settings.promptCacheTtl`, `env.FORCE_PROMPT_CACHING_5M` or `default`. */
+  cacheTtlFrom?: string;
+  /** How long a subagent's prompt cache lives, as the settings set it. */
+  subagentCacheTtl?: "5m" | "1h";
+  /** Whether prompt caching is on or turned off. */
+  caching?: "on" | "off";
+  /** Which variable turned caching off, such as `settings.env.DISABLE_PROMPT_CACHING`; absent when it is on. */
+  cachingFrom?: string;
+  /** Days the harness keeps a transcript before it deletes it. */
+  retentionDays?: number;
+  /** The most bytes of an instruction file the harness reads. */
+  docMaxBytes?: number;
+  /** Whether the harness compacts a conversation on its own when its context fills. */
+  autoCompact?: boolean;
+  /** The context size in tokens at which the harness compacts on its own. */
+  autoCompactWindow?: number;
+}
+
+/** Which conversation of a session a usage counter is about: the main one, or a subagent's. */
+export type Thread = "main" | "subagent";
+
+/** Additive session counters for one project, harness, day, entrypoint and thread. */
+export interface UsageSessionCell {
+  /** The day the sessions started. */
+  day: Day;
+  /** The harness id. */
+  harness: string;
+  /** The entrypoint or originator that started the sessions. */
+  via: string;
+  /** The project the sessions ran in: `owner/repo`, a folder under the home directory (`~/...`), an absolute path outside it, or `unknown`. */
+  project: string;
+  /** Whether these are main conversations or subagents' conversations. */
+  thread: Thread;
+  /** Sessions started; a subagent's conversation counts as one. */
+  sessions: number;
+  /** Of those sessions, how many compacted their context at least once. */
+  compacted: number;
+  /** Compactions in those sessions, automatic and manual. */
+  compactions: number;
+  /** Of those compactions, how many the user asked for. */
+  manualCompactions: number;
+}
+
+/** Additive token counters for one project, harness, day, entrypoint, thread and model. */
+export interface UsageTokenCell {
+  /** The day the requests were made. */
+  day: Day;
+  /** The harness id. */
+  harness: string;
+  /** The entrypoint or originator that started the sessions. */
+  via: string;
+  /** The project the sessions ran in: `owner/repo`, a folder under the home directory (`~/...`), an absolute path outside it, or `unknown`. */
+  project: string;
+  /** Whether the requests came from main conversations or subagents' conversations. */
+  thread: Thread;
+  /** The model the requests went to, as the harness names it. */
+  model: string;
+  /** Model requests counted. */
+  requests: number;
+  /** Input tokens sent without the prompt cache: neither read from it nor written to it. */
+  input: number;
+  /** Output tokens, reasoning included. */
+  output: number;
+  /** Of the output tokens, how many were reasoning. */
+  reasoning: number;
+  /** Input tokens read from the prompt cache. */
+  cacheRead: number;
+  /** Input tokens written to the prompt cache. */
+  cacheWrite: number;
+  /** Of the cache writes, the tokens written to a cache that lives 5 minutes. */
+  cacheWrite5m: number;
+  /** Of the cache writes, the tokens written to a cache that lives 1 hour; with cacheWrite5m at most cacheWrite, and the rest unsplit. */
+  cacheWrite1h: number;
+  /** Five-minute cache writes 5 to 60 minutes after a request to the same model in the conversation: possible reuse with a longer cache, not guaranteed hits. */
+  cacheRewrite: number;
+}
+
+/** A machine's or a Report's usage history: sessions and tokens per project, as additive counters with no text. */
+export interface Usage {
+  /** Session counters. */
+  sessions: UsageSessionCell[];
+  /** Token counters. */
+  tokens: UsageTokenCell[];
 }
 
 /** One machine's counters for a window: what is installed and how it was used, with no text. Scans of the same machine merge by summing their counters; Scans of different machines stay separate, and a Report is built from the list. */
@@ -154,6 +257,8 @@ export interface Scan {
   sessions: SessionCell[];
   /** Usage counters. */
   cells: Cell[];
+  /** Sessions and tokens per project; absent when no harness read reports them. */
+  usage?: Usage;
 }
 
 /** A rule's id. */
@@ -168,7 +273,9 @@ export type RuleId =
   | "idle-mcp"
   | "harness-mismatch"
   | "drift"
-  | "short-history";
+  | "short-history"
+  | "cache-ttl"
+  | "cache-off";
 
 /** How strongly a finding asks for action: cut it, fix it, or know it. */
 export type Level = "cut" | "fix" | "info";
@@ -249,6 +356,10 @@ export interface RuleOptions {
     /** Least days of history, default 30. */
     minDays: number;
   };
+  /** Claude Code's prompt cache kept 5 minutes on recent days. */
+  "cache-ttl": {};
+  /** No request read the prompt cache. */
+  "cache-off": {};
 }
 
 /** Config with every default applied; this is what a Report carries. */
@@ -358,7 +469,7 @@ export interface Fix {
 
 /** Something a rule found. */
 export interface Finding {
-  /** A stable id, `${rule}:${item ?? pack ?? harness}`. */
+  /** A stable id, `${rule}:${item ?? pack ?? harness}`, then `:${via}` for a finding about one entrypoint. */
   id: string;
   /** The rule that found it: a RuleId, or the id of a rule a newer loadsheet added. */
   rule: string;
@@ -368,6 +479,8 @@ export interface Finding {
   item?: Id;
   /** The pack it is about, for dead-pack. */
   pack?: string;
+  /** The entrypoint it is about, for cache-ttl. */
+  via?: string;
   /** Where it applies; empty in pack mode. */
   where: Where[];
   /** The numbers the rule judged on. */
@@ -436,4 +549,6 @@ export interface Report {
   findings: Finding[];
   /** Rules that did not run, per harness. */
   skipped: Skipped[];
+  /** Sessions and tokens per project, summed over machines and filtered as the sheets are; absent when no machine reports them, and from a Report shared through loadsheet.dev. */
+  usage?: Usage;
 }

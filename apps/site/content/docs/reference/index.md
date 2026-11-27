@@ -6,6 +6,7 @@ navigation.title: Command line
 
 ```sh
 npx loadsheet [options]                         # report this machine
+npx loadsheet usage [options]                   # sessions, compactions and tokens per project
 npx loadsheet <folder | GitHub URL> [options]   # weigh a skill pack
 npx loadsheet --ui [--port <n>] [options]       # serve the report on 127.0.0.1
 npx loadsheet build [--out <folder>] [options]  # write the report as a web page
@@ -14,6 +15,8 @@ npx loadsheet mcp <url | file> [options]        # check an MCP server's tools
 ```
 
 `npx loadsheet --help` prints the same list. `loadsheet mcp` has its own options and exit codes, on [MCP servers](/docs/reference/mcp).
+
+`loadsheet usage` reads the same transcripts and takes the same options, except `--all` and `--full`. `--json` and `--scan` print the same Report and Scan as without it. A folder named `usage` is weighed as a pack with `./usage`.
 
 ## Options
 

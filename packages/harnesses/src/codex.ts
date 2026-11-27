@@ -1,5 +1,5 @@
 import { defineHarness, sha256, type Files, type Place } from "@loadsheet/kit";
-import type { Item } from "@loadsheet/schema";
+import type { Item, Settings } from "@loadsheet/schema";
 import { parse } from "tinyaml";
 import { readCodexConfig, type SkillRule } from "./codex-toml.ts";
 import { CODEX_INSTRUCTIONS, codexTranscripts } from "./codex-transcripts.ts";
@@ -345,6 +345,23 @@ const machineInventory = async (files: Files, place?: Place): Promise<Item[]> =>
   return items;
 };
 
+/** Codex reads 32 KiB of AGENTS.md files when `project_doc_max_bytes` is unset. */
+const DOC_MAX_BYTES = 32_768;
+
+/**
+ * What `config.toml` sets: how many bytes of AGENTS.md Codex reads, and the tokens at which it
+ * compacts on its own when the file names a limit. Only those two numbers are read.
+ */
+const machineSettings = async (files: Files): Promise<Settings> => {
+  const configPath = topFile(files, "config.toml")[0];
+  const configText = configPath === undefined ? undefined : await files.text(configPath);
+  const config = readCodexConfig(configText ?? "");
+  return {
+    docMaxBytes: config.projectDocMaxBytes ?? DOC_MAX_BYTES,
+    ...(config.autoCompactTokenLimit ? { autoCompactWindow: config.autoCompactTokenLimit } : {}),
+  };
+};
+
 /** The name a server's tools go under, `mcp__<name>`: characters a tool name cannot hold become `_`. */
 export const codexMcpName = (server: string) => server.replace(/[^A-Za-z0-9_-]/gu, "_");
 
@@ -373,6 +390,10 @@ export const codex = defineHarness({
     mcp: "inferred",
     // `token_count` events carry each request's input tokens.
     tokens: "exact",
+    // `token_count` events carry the thread's running totals, and `turn_context` its model.
+    usage: "exact",
+    // Codex has no prompt cache lifetime to set.
+    cacheTtl: "none",
   },
   inventory: packInventory,
   machine: {
@@ -390,6 +411,7 @@ export const codex = defineHarness({
       ];
     },
     inventory: machineInventory,
+    settings: machineSettings,
     roots: (place) => [`${codexHome(place)}/sessions`, `${codexHome(place)}/archived_sessions`],
     transcripts: codexTranscripts,
   },

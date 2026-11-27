@@ -2,7 +2,9 @@
 // pnpm --filter @loadsheet/fixtures sanitize <in.jsonl> session.jsonl --policy policy.ts
 // It keeps the line types, timestamps, entrypoint, version, token counts and the shape of every
 // listing, renames skills, plugins, subagents, MCP servers and paths, and replaces all text with
-// canary text of its length.
+// canary text of its length. usage.jsonl and usage-agent.jsonl came from one session and one of its
+// subagents, sanitized as one file so they share pseudonyms; session.jsonl predates the rules for
+// usage (cache splits, message ids, cwd, compactions), so it has those under `key-N` names.
 import {
   CANARY,
   canaryText,
@@ -157,6 +159,15 @@ const command = (value: unknown, { pseudonym }: SanitizeContext) => {
   return `<command-message>${name}</command-message>\n<command-name>/${name}</command-name>`;
 };
 
+const folder = pathPseudonym() as (value: unknown, context: SanitizeContext) => unknown;
+/** The working directory, renamed folder by folder under a home that names no one. */
+const cwd = (value: unknown, context: SanitizeContext) => {
+  const renamed = folder(value, context);
+  return typeof renamed === "string" && renamed.startsWith("~")
+    ? `/home/user${renamed.slice(1)}`
+    : CANARY;
+};
+
 const toolInput = (value: unknown, { pseudonym }: SanitizeContext) => {
   if (!isRecord(value)) return CANARY;
   return {
@@ -190,8 +201,15 @@ const policy: Policy = {
     "message.usage.cache_creation_input_tokens": "keep",
     "message.usage.cache_read_input_tokens": "keep",
     "message.usage.output_tokens": "keep",
+    "message.usage.output_tokens_details.thinking_tokens": "keep",
+    "message.usage.cache_creation.ephemeral_5m_input_tokens": "keep",
+    "message.usage.cache_creation.ephemeral_1h_input_tokens": "keep",
+    "message.id": { pseudonym: "msg" },
+    cwd,
+    subtype: "keep",
+    "compactMetadata.trigger": "keep",
   },
-  keys: ["isSidechain", "isMeta", "content"],
+  keys: ["parentUuid", "logicalParentUuid", "isSidechain", "isMeta", "content"],
 };
 
 export default policy;

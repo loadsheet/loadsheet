@@ -194,16 +194,18 @@ const sheetLegend = (report: Report) =>
 // Coverage
 
 const GRADE: Record<Grade, string> = { exact: "exact", inferred: "inferred", none: "-" };
+/** The signals behind the sheets and rules; usage history and its settings have a view of their own. */
+const SHEET_SIGNALS = SIGNALS.filter((signal) => signal !== "usage" && signal !== "cacheTtl");
 
 const coverageBlock = (report: Report): string[] => {
   if (!report.coverage.length) return [];
   const rows = [
-    ["machine", "harness", "sessions", ...SIGNALS],
+    ["machine", "harness", "sessions", ...SHEET_SIGNALS],
     ...report.coverage.map((entry) => [
       entry.machine,
       entry.harness,
       entry.installed ? num(entry.sessions) : "-",
-      ...SIGNALS.map((signal) => GRADE[entry.signals[signal]]),
+      ...SHEET_SIGNALS.map((signal) => GRADE[entry.signals[signal]]),
     ]),
   ];
   const absent = report.coverage.some((entry) => !entry.installed);
@@ -227,6 +229,8 @@ const RULE_TITLE: Record<string, string> = {
   "harness-mismatch": "installed for a harness you do not use",
   drift: "differs between machines",
   "short-history": "too little history to judge",
+  "cache-ttl": "the prompt cache lasted 5 minutes",
+  "cache-off": "no request read the prompt cache",
 };
 
 const LEVEL_RANK: Record<string, number> = { cut: 0, fix: 1, info: 2 };
@@ -290,8 +294,18 @@ const evidenceOf = (finding: Finding): string => {
     case "short-history":
       if (has("days", "sessions")) {
         const head = `${plural(e.days!, "day")} of history, ${plural(e.sessions!, "session")}`;
+        if (has("retentionDays"))
+          return `${head}; Claude Code deletes transcripts after ${plural(e.retentionDays!, "day")}`;
         return has("minDays") ? `${head}; the usage rules want ${num(e.minDays!)}` : head;
       }
+      break;
+    case "cache-ttl":
+      if (has("days", "cacheWrite", "cacheWrite5m", "cacheRewrite") && e.cacheWrite! > 0)
+        return `${Math.round((e.cacheWrite5m! / e.cacheWrite!) * 100)}% 5-min writes in ${plural(e.days!, "day")}; ${num(e.cacheRewrite!)} tokens might be reused`;
+      break;
+    case "cache-off":
+      if (has("sessions", "tokens"))
+        return `${plural(e.sessions!, "session")}, ${num(e.tokens!)} tokens sent, none read from the cache`;
       break;
   }
   return Object.entries(e)
@@ -342,15 +356,47 @@ const INSTALLER: Record<string, string> = { skills: "the skills CLI", fleetrc: "
 /** Why a finding has no fix, from what the Report holds about its line. */
 const noFixReason = (report: Report, finding: Finding): string => {
   const harnesses = new Set(finding.where.map((where) => where.harness));
+  const settings = report.coverage
+    .filter((row) =>
+      finding.where.some((where) => where.machine === row.machine && where.harness === row.harness),
+    )
+    .map((row) => row.settings);
   switch (finding.rule) {
     case "drift": {
       const machines = [...new Set(finding.where.map((where) => where.machine))].sort(compare);
       return `its copies on ${machines.join(", ")} differ; bring them to one version with the tool that installed them.`;
     }
-    case "short-history":
+    case "short-history": {
+      if (finding.evidence.retentionDays !== undefined)
+        return "ask your agent to locate the active Claude Code settings.json before raising cleanupPeriodDays.";
+      if (
+        settings.length &&
+        settings.every((row) => (row?.retentionDays ?? 0) > report.config.window)
+      )
+        return "the harness keeps transcripts longer than the window; the usage rules judge once it holds more days.";
+      if (settings.some((row) => row?.retentionDays !== undefined))
+        return "the usage rules need more observed history; the reported history does not show it reached the retention limit.";
       return harnesses.has("claude-code")
         ? "Claude Code deletes transcripts older than its `cleanupPeriodDays` setting (default 30); to judge more history, raise it in settings.json, never lower it."
         : "the harness kept too little history for the usage rules to judge.";
+    }
+    case "cache-ttl": {
+      if (!finding.evidence.cacheRewrite)
+        return "no reuse opportunity was observed; longer-lived writes can cost more.";
+      if (!settings.length || settings.some((row) => row?.cacheTtl !== "1h"))
+        return "ask your agent to locate the active Claude Code settings.json and weigh possible reuse against higher write costs.";
+      const from = report.coverage.find(
+        (row) =>
+          harnesses.has(row.harness) &&
+          finding.where.some((where) => where.machine === row.machine) &&
+          row.settings?.cacheTtlFrom !== undefined,
+      )?.settings?.cacheTtlFrom;
+      return `the settings already ask for 1 hour${from ? ` (${from})` : ""}, so Claude Code itself wrote these 5-minute caches for ${finding.via ?? "these"} sessions; anthropics/claude-code#101685 tracks it.`;
+    }
+    case "cache-off":
+      if (settings.some((row) => row?.caching === "off"))
+        return "ask your agent to locate the active Claude Code settings.json and check which setting turned caching off.";
+      return "no setting loadsheet reads turns caching off. A gateway or proxy between the harness and the API may drop it; ask its provider whether it passes prompt caching through.";
     case "heavy-instructions":
       return "every session that loads the file pays for all of it; trim what the agent does not need.";
     case "idle-mcp":
@@ -388,7 +434,11 @@ const findingRows = (findings: Finding[]) =>
   table(
     findings.map((finding) => [
       finding.savesTokens ? tokens(finding.savesTokens.value) : "",
-      finding.item ?? finding.pack ?? finding.where[0]?.harness ?? finding.id,
+      finding.item ??
+        finding.pack ??
+        (finding.where[0]
+          ? `${finding.where[0].harness}${finding.via ? ` via ${finding.via}` : ""}`
+          : finding.id),
       evidenceOf(finding),
     ]),
     [0],

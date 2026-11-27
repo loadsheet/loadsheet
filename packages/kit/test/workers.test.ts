@@ -26,6 +26,8 @@ const harness = (id: string): Harness =>
       instructions: "none",
       mcp: "none",
       tokens: "none",
+      usage: "none",
+      cacheTtl: "none",
     },
     inventory: async () => [],
     machine: {

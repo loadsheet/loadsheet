@@ -15,6 +15,7 @@ import type {
 import { parseId, SIGNALS } from "@loadsheet/schema";
 import { NO_SIGNALS, runRules } from "./engine.ts";
 import { estimateTokens, type Install, type RuleSheet, type Unfiltered } from "./rules/rule.ts";
+import { sumUsage } from "./usage.ts";
 
 /** Input for buildReport. */
 export interface BuildReportInput {
@@ -151,6 +152,7 @@ const buildSheet = (
 
   let sessions = 0;
   const perMachine = new Map<string, number>();
+  const firstOn = new Map<string, Day>();
   let fixedTokens = 0;
   let measured = 0;
   let recentTokens = 0;
@@ -165,6 +167,8 @@ const buildSheet = (
     for (const cell of scan.sessions) {
       if (cell.harness !== harness || !keep(cell)) continue;
       if (cell.sessions > 0) {
+        const first = firstOn.get(scan.machine);
+        if (!first || cell.day < first) firstOn.set(scan.machine, cell.day);
         if (!firstDay || cell.day < firstDay) firstDay = cell.day;
         if (!lastDay || cell.day > lastDay) lastDay = cell.day;
       }
@@ -270,10 +274,20 @@ const buildSheet = (
       history: firstDay ? daysBetween(firstDay, last) : 0,
       machines: [...machines].sort(compare),
       sessionsOn: (machine) => perMachine.get(machine) ?? 0,
+      historyOn: (machine) => {
+        const first = firstOn.get(machine);
+        return first ? daysBetween(first, last) : 0;
+      },
       signals: worstSignals(active.length ? active : coverage),
       lines,
       installs: (item) => installs.get(item) ?? [],
       itemsOn: (machine) => itemsOn.get(machine) ?? [],
+      usageOn: (machine) =>
+        sumUsage(
+          scans.filter((scan) => scan.machine === machine).map((scan) => scan.usage),
+          (cell) => cell.harness === harness && keep(cell),
+        ),
+      settingsOn: (machine) => coverage.find((row) => row.machine === machine)?.settings,
     },
   };
 };
@@ -323,6 +337,9 @@ export const buildReport = ({
     for (const cell of scan.sessions) harnesses.add(cell.harness);
   }
   const wanted = config.harnesses ? new Set(config.harnesses) : undefined;
+  const t3SuppliesSelected = config.harnesses?.some(
+    (id) => !["claude-code", "codex", "grok", "opencode"].includes(id),
+  );
   const built = [...harnesses]
     .filter((harness) => !wanted || wanted.has(harness))
     .sort(compare)
@@ -338,6 +355,11 @@ export const buildReport = ({
     unfiltered: unfilteredOf(scans, wholeFleet, inWindow),
   });
 
+  const usage = sumUsage(
+    scans.map((scan) => scan.usage),
+    (cell) => (!wanted || wanted.has(cell.harness)) && keep(cell),
+  );
+
   return {
     schema: 1,
     tool,
@@ -352,12 +374,18 @@ export const buildReport = ({
     coverage: scans
       .flatMap((scan) =>
         scan.coverage
-          .filter((row) => !wanted || wanted.has(row.harness))
+          .filter(
+            (row) =>
+              !wanted ||
+              wanted.has(row.harness) ||
+              (t3SuppliesSelected && row.harness === "t3-code" && row.unread?.length),
+          )
           .map((row) => keptCoverage(row, scan, keep)),
       )
       .sort((a, b) => compare(a.machine, b.machine) || compare(a.harness, b.harness)),
     sheet: built.map(({ sheet }) => sheet),
     findings,
     skipped,
+    ...(usage ? { usage } : {}),
   };
 };

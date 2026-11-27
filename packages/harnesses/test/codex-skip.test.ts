@@ -101,7 +101,11 @@ const call = (type: string, name: string, input: string, extra: object = {}) =>
 const tokenCount = (tokens: number) =>
   line("event_msg", {
     type: "token_count",
-    info: { last_token_usage: { input_tokens: tokens }, model_context_window: 1000 },
+    info: {
+      total_token_usage: { input_tokens: tokens, cached_input_tokens: 1, output_tokens: 2 },
+      last_token_usage: { input_tokens: tokens },
+      model_context_window: 1000,
+    },
     rate_limits: {},
   });
 const taskStarted = (started_at: number) =>
@@ -275,13 +279,19 @@ describe("codexTranscripts.skip", () => {
 
   it("decides the lines the scan spends its time on", () => {
     const settled = STATES.settled!;
-    for (const each of [OUTPUT, REASONING, ITEM, COMPACTED, tokenCount(5), META])
-      expect(skipped(each, settled)).toBe(true);
+    for (const each of [OUTPUT, REASONING, ITEM, META]) expect(skipped(each, settled)).toBe(true);
     expect(skipped(call("custom_tool_call", "exec", "ls"), settled)).toBe(true);
     expect(skipped(OUTPUT, STATES["first line of a file"]!)).toBe(true);
+    // A fork's copied compaction is its parent's.
+    expect(skipped(COMPACTED, STATES["copying a fork"]!)).toBe(true);
 
     expect(skipped(META, STATES["first line of a file"]!)).toBe(false);
     expect(skipped(tokenCount(5), STATES.started!)).toBe(false);
+    // Every token count moves the usage totals, and every compaction counts.
+    expect(skipped(tokenCount(5), settled)).toBe(false);
+    expect(skipped(tokenCount(5), STATES["copying a fork"]!)).toBe(false);
+    expect(skipped(COMPACTED, settled)).toBe(false);
+    expect(skipped(line("turn_context", { model: "gpt-6" }), settled)).toBe(false);
     expect(skipped(taskStarted(SINCE + 1), STATES["copying a fork"]!)).toBe(false);
     expect(skipped(call("custom_tool_call", "exec", `cat ${SKILL_PATH}`), settled)).toBe(false);
     expect(skipped(call("function_call", "go", "{}", { namespace: "mcp__srv" }), settled)).toBe(

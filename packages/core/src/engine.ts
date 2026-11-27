@@ -26,6 +26,8 @@ export const NO_SIGNALS: Record<Signal, Grade> = {
   instructions: "none",
   mcp: "none",
   tokens: "none",
+  usage: "none",
+  cacheTtl: "none",
 };
 
 /** Input for one run of the rules over a Report's sheets. */

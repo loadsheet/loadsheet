@@ -2003,6 +2003,53 @@
   }
 }
 
+/* ─── Usage: the table's org rows open onto their projects ─── */
+:where(.loadsheet) .ctable.ut tr.grp:not([aria-expanded]) {
+  cursor: default;
+}
+:where(.loadsheet) .ctable.ut tr.grp .nm {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+:where(.loadsheet) .ctable.ut tr.grp.all td {
+  font-weight: 600;
+}
+:where(.loadsheet) .ctable.ut :is(tr.grp.all, tr.it.h, tr.grp.nr) .nm {
+  font-family: var(--font-sans);
+}
+:where(.loadsheet) .ctable.ut tr.grp.nr .nm {
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+:where(.loadsheet) .ctable.ut td.num {
+  white-space: nowrap;
+}
+:where(.loadsheet) .ctable.ut .pc {
+  display: inline-block;
+  min-width: 4ch;
+  margin-left: 8px;
+}
+@media (max-width: 640px) {
+  :where(.loadsheet) .ctable.ut :is(th, td):nth-child(3) {
+    display: table-cell;
+  }
+}
+@media (max-width: 560px) {
+  :where(.loadsheet) .ctable.ut :is(th, td) {
+    padding-right: 6px;
+    padding-left: 6px;
+  }
+  :where(.loadsheet) .ctable.ut tr.it td:first-child {
+    padding-left: 28px;
+  }
+  :where(.loadsheet) .ctable.ut .cn {
+    display: none;
+  }
+  :where(.loadsheet) .ctable.ut .pc {
+    margin-left: 0;
+  }
+}
+
 /* ─── Fixes ─── */
 :where(.loadsheet) .fxg {
   margin-top: 30px;

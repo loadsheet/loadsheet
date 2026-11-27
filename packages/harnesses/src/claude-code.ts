@@ -4,7 +4,9 @@ import {
   claudeConfigDir,
   claudeContextWindow,
   claudeInventory,
+  claudeProjects,
   claudeRoots,
+  claudeSettings,
   claudeSources,
 } from "./claude-code-machine.ts";
 import { claudeTranscripts } from "./claude-code-transcripts.ts";
@@ -32,6 +34,10 @@ export const claudeCode = defineHarness({
     instructions: "exact",
     mcp: "inferred",
     tokens: "exact",
+    // Every assistant message carries its usage, cache writes split by lifetime.
+    usage: "exact",
+    // settings.json and the environment set the prompt cache's lifetime.
+    cacheTtl: "exact",
   },
   inventory: (files) =>
     packInventory(files, {
@@ -44,6 +50,8 @@ export const claudeCode = defineHarness({
     sources: claudeSources,
     inventory: claudeInventory,
     contextWindow: claudeContextWindow,
+    settings: claudeSettings,
+    projects: claudeProjects,
     roots: claudeRoots,
     transcripts: claudeTranscripts,
   },

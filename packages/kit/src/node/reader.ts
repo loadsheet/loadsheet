@@ -27,7 +27,7 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import type { Transform } from "node:stream";
 import * as NodeZlib from "node:zlib";
-import type { LineBytes } from "../index.ts";
+import type { LineBytes, Place } from "../index.ts";
 
 export interface TranscriptFile {
   readonly path: string;
@@ -48,8 +48,11 @@ export interface LineFormat<State, Entry> {
    * marker test and before the line is decoded; the line counts as read either way.
    */
   skip?(line: LineBytes, state: State): boolean;
-  /** May mutate `state`. A throw fails the whole read (null), so catch malformed lines inside. */
-  parse(line: string, state: State): readonly Entry[];
+  /**
+   * May mutate `state`. A throw fails the whole read (null), so catch malformed lines inside.
+   * `place` is the one the read was given.
+   */
+  parse(line: string, state: State, place?: Place): readonly Entry[];
 }
 
 /** Resume only if the bytes before `offset` still hash to `guardHash`; a rewritten file is read in full. */
@@ -81,6 +84,8 @@ export interface ReadOptions {
    * event loop. A `.jsonl.zst` file is read through its stream either way. Default false.
    */
   readonly sync?: boolean;
+  /** The machine the transcript is on, passed to every `parse`. */
+  readonly place?: Place;
 }
 
 export const GUARD_LENGTH = 64;
@@ -519,10 +524,22 @@ export async function readTranscript<State, Entry>(
 ): Promise<ReadResult<Entry> | null> {
   const maxLineBytes = options?.maxLineBytes ?? MAX_LINE_BYTES;
   const chunkBytes = options?.chunkBytes ?? CHUNK_BYTES;
-  if (path.endsWith(".jsonl.zst")) return readCompressed(path, format, maxLineBytes, chunkBytes);
-  if (options?.sync) return readPlainSync(path, format, resumeFrom, maxLineBytes, chunkBytes);
-  return readPlain(path, format, resumeFrom, maxLineBytes, chunkBytes);
+  const lines = options?.place ? placed(format, options.place) : format;
+  if (path.endsWith(".jsonl.zst")) return readCompressed(path, lines, maxLineBytes, chunkBytes);
+  if (options?.sync) return readPlainSync(path, lines, resumeFrom, maxLineBytes, chunkBytes);
+  return readPlain(path, lines, resumeFrom, maxLineBytes, chunkBytes);
 }
+
+/** `format` with `place` passed to each `parse`. */
+const placed = <State, Entry>(
+  format: LineFormat<State, Entry>,
+  place: Place,
+): LineFormat<State, Entry> => ({
+  markers: format.markers,
+  initial: () => format.initial(),
+  ...(format.skip ? { skip: (line: LineBytes, state: State) => format.skip!(line, state) } : {}),
+  parse: (line, state) => format.parse(line, state, place),
+});
 
 /** The state to start from: the resumed position's, or the format's initial one, copied either way. */
 const startState = <State>(format: LineFormat<State, unknown>, resumeFrom?: ReadPosition): State =>

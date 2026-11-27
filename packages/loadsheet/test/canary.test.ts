@@ -355,16 +355,19 @@ describe("no canary leaves the machine", () => {
     );
   });
 
-  it.each([{ args: [] as string[] }, { args: ["claude-code", "--all"] }, { args: ["--full"] }])(
-    "the text report, $args",
-    ({ args }) => {
-      const result = run(...args);
-      expect(result.status).toBe(0);
-      if (args.length) expect(result.stdout).toContain("brew-notes");
-      expect(leaks(result.stdout + result.stderr)).toEqual([]);
-      expect(result.stdout).not.toContain(root);
-    },
-  );
+  it.each([
+    { args: [] as string[], shows: "Claude Code" },
+    { args: ["claude-code", "--all"], shows: "brew-notes" },
+    { args: ["--full"], shows: "brew-notes" },
+    // Sessions in the home itself count under no repository.
+    { args: ["usage", "--days", "3650"], shows: "no repository" },
+  ])("the text report, $args", ({ args, shows }) => {
+    const result = run(...args);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain(shows);
+    expect(leaks(result.stdout + result.stderr)).toEqual([]);
+    expect(result.stdout).not.toContain(root);
+  });
 
   it("--json", () => {
     const result = run("--json");

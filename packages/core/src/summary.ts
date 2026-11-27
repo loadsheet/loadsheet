@@ -33,6 +33,9 @@ const NAMES: Record<string, string> = {
   gemini: "Gemini CLI",
   grok: "Grok",
   opencode: "OpenCode",
+  antigravity: "Antigravity",
+  kiro: "Kiro",
+  pi: "Pi",
 };
 
 /** A harness's name as people write it. */
@@ -191,6 +194,9 @@ const NOUN: Record<string, (n: number, report: Report, brief?: boolean) => strin
   duplicate: (n) => plural(n, "duplicate copy", "duplicate copies"),
   "harness-mismatch": (n) => `${plural(n, "item")} for a harness you do not use`,
   "invisible-skill": (n) => `${plural(n, "skill")} listed without a description`,
+  "cache-ttl": () => "the prompt cache 1 hour",
+  "cache-off": () => "prompt caching",
+  "short-history": () => "transcripts a year",
 };
 
 const VERB: Record<string, string> = {
@@ -203,6 +209,9 @@ const VERB: Record<string, string> = {
   duplicate: "remove",
   "harness-mismatch": "remove",
   "invisible-skill": "make room for",
+  "cache-ttl": "keep",
+  "cache-off": "turn on",
+  "short-history": "keep",
 };
 
 /** What a person calls each fix action. */
@@ -218,7 +227,10 @@ const ACTION: Record<Fix["action"], string> = {
 const REMOVES = new Set(["dead-skill", "dead-pack", "manual-only", "idle-mcp", "harness-mismatch"]);
 
 /** Rules that say nothing to change. */
-const SILENT = new Set(["drift", "short-history"]);
+const SILENT = new Set(["drift"]);
+
+/** Rules about a harness's settings, not its context: they show only with a change to make. */
+const SETTINGS = new Set(["cache-ttl", "cache-off", "short-history"]);
 
 /** The lines still installed on the harness that a finding is about. */
 const linesOf = (finding: Finding, sheet: Sheet) =>
@@ -231,6 +243,7 @@ const linesOf = (finding: Finding, sheet: Sheet) =>
 /** Whether a finding asks for a change to the harness's context as it is now. */
 const concerns = (finding: Finding, sheet: Sheet) =>
   !SILENT.has(finding.rule) &&
+  (!SETTINGS.has(finding.rule) || finding.fixes.length > 0) &&
   finding.level !== "info" &&
   finding.where.some((where) => where.harness === sheet.harness) &&
   (finding.item === undefined && finding.pack === undefined

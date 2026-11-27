@@ -1,8 +1,8 @@
 // Where Claude Code keeps what is installed for the user, and the Items in it. Pure string work on
 // the Files kit reads: nothing here touches the filesystem.
-import type { Files, Place } from "@loadsheet/kit";
+import type { Files, Place, ProjectHint } from "@loadsheet/kit";
 import { sha256 } from "@loadsheet/kit";
-import type { Item, Kind } from "@loadsheet/schema";
+import { isRepositoryKey, type Item, type Kind, type Settings } from "@loadsheet/schema";
 import {
   claudeCodeAgentChars,
   claudeCodeBareChars,
@@ -12,7 +12,7 @@ import {
 } from "./claude-code-listing.ts";
 import { readManagers, skillsLockPath, type Manager } from "./managed.ts";
 import { packInventory } from "./pack.ts";
-import { isAbsolute, normalPath } from "./path.ts";
+import { filesKey, isAbsolute, normalPath } from "./path.ts";
 import { readSkillMd, SKILL_NAME } from "./skill-md.ts";
 
 const HARNESS = "claude-code";
@@ -72,6 +72,8 @@ const findConfigDir = (paths: readonly string[]): string | undefined => {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+const strings = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 
 const readJson = async (files: Files, path: string): Promise<Record<string, unknown>> => {
   const text = await files.text(path);
@@ -335,6 +337,114 @@ export const claudeInventory = async (files: Files): Promise<Item[]> => {
     items.push(...(await mcpItems(mcp.mcpServers, mcpPath, "user", { managedBy: "hand" })));
   }
   return items;
+};
+
+/** Days Claude Code keeps a transcript when `cleanupPeriodDays` is unset. */
+export const CLAUDE_CODE_RETENTION_DAYS = 30;
+
+const TTLS = ["5m", "1h"] as const;
+type Ttl = (typeof TTLS)[number];
+const ttl = (value: unknown): Ttl | undefined =>
+  typeof value === "string" ? TTLS.find((each) => each === value.trim().toLowerCase()) : undefined;
+/** Claude Code's reading of a flag variable: `1`, `true`, `yes` or `on`, in any case. */
+const truthy = (value: unknown) =>
+  typeof value === "string" && ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+const positive = (value: unknown) => {
+  const number = typeof value === "string" && /^\s*\d+\s*$/u.test(value) ? Number(value) : value;
+  return typeof number === "number" && Number.isSafeInteger(number) && number > 0
+    ? number
+    : undefined;
+};
+/** The variables that turn prompt caching off, for every model or one family. */
+const CACHING_OFF = /^DISABLE_PROMPT_CACHING(?:_[A-Z0-9]+)?$/u;
+
+/**
+ * What Claude Code's settings.json and the environment set for the prompt cache, compaction and
+ * transcript retention. A variable counts from the settings' `env` block, which Claude Code applies
+ * over the environment it starts in, or else from `place.env`; only the names below are read, and
+ * only what they mean is kept. Precedence for the cache's lifetime, as Claude Code documents it:
+ * FORCE_PROMPT_CACHING_5M, then CLAUDE_CODE_PROMPT_CACHE_TTL, then `promptCacheTtl`, then
+ * ENABLE_PROMPT_CACHING_1H; with none set the lifetime is the default and left out. Retention is
+ * `cleanupPeriodDays`, or Claude Code's 30 days when that is unset.
+ */
+export const claudeSettings = async (files: Files, place: Place): Promise<Settings | undefined> => {
+  const settingsPath = `${filesKey(claudeConfigDir(place), place.home)}/settings.json`;
+  const present = files.paths.includes(settingsPath);
+  const settings = present ? await readJson(files, settingsPath) : {};
+  const block = isRecord(settings.env) ? settings.env : {};
+  /** A variable's value and the knob it came from. */
+  const variable = (name: string): { value: unknown; from: string } | undefined => {
+    if (typeof block[name] === "string")
+      return { value: block[name], from: `settings.env.${name}` };
+    if (typeof place.env[name] === "string") return { value: place.env[name], from: `env.${name}` };
+    return undefined;
+  };
+  const names = new Set([...Object.keys(block), ...Object.keys(place.env)]);
+  const out: Settings = {};
+  if (settingsPath.startsWith("~/") && !/\p{C}/u.test(settingsPath))
+    out.settingsPath = settingsPath;
+
+  const lifetime = (envName: string, settingName: string) => {
+    const force = variable("FORCE_PROMPT_CACHING_5M");
+    if (force && truthy(force.value)) return { ttl: "5m" as const, from: force.from };
+    const env = variable(envName);
+    const fromEnv = env && ttl(env.value);
+    if (env && fromEnv) return { ttl: fromEnv, from: env.from };
+    const fromSettings = ttl(settings[settingName]);
+    if (fromSettings) return { ttl: fromSettings, from: `settings.${settingName}` };
+    const long = variable("ENABLE_PROMPT_CACHING_1H");
+    if (long && truthy(long.value)) return { ttl: "1h" as const, from: long.from };
+    return undefined;
+  };
+  const main = lifetime("CLAUDE_CODE_PROMPT_CACHE_TTL", "promptCacheTtl");
+  if (main) {
+    out.cacheTtl = main.ttl;
+    out.cacheTtlFrom = main.from;
+  }
+  const subagent = lifetime("CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL", "subagentPromptCacheTtl");
+  if (subagent) out.subagentCacheTtl = subagent.ttl;
+  const off = [...names]
+    .sort()
+    .find((name) => CACHING_OFF.test(name) && truthy(variable(name)?.value));
+  if (off !== undefined) {
+    out.caching = "off";
+    out.cachingFrom = variable(off)!.from;
+  }
+
+  out.retentionDays = positive(settings.cleanupPeriodDays) ?? CLAUDE_CODE_RETENTION_DAYS;
+
+  if (
+    settings.autoCompactEnabled === false ||
+    truthy(variable("DISABLE_AUTO_COMPACT")?.value) ||
+    truthy(variable("DISABLE_COMPACT")?.value)
+  ) {
+    out.autoCompact = false;
+  } else if (settings.autoCompactEnabled === true) {
+    out.autoCompact = true;
+  }
+  const window =
+    positive(variable("CLAUDE_CODE_AUTO_COMPACT_WINDOW")?.value) ??
+    positive(settings.autoCompactWindow);
+  if (window !== undefined) out.autoCompactWindow = window;
+
+  return out;
+};
+
+/**
+ * The repositories `~/.claude.json` remembers folders for, in `githubRepoPaths`: each folder,
+ * keyed as the Files keys paths, belongs to its `owner/repo`, folders since deleted included.
+ */
+export const claudeProjects = async (files: Files, place: Place): Promise<ProjectHint[]> => {
+  const { githubRepoPaths } = await readJson(files, filesKey(mcpConfigPath(place), place.home));
+  if (!isRecord(githubRepoPaths)) return [];
+  const hints: ProjectHint[] = [];
+  for (const [project, paths] of Object.entries(githubRepoPaths)) {
+    if (!isRepositoryKey(project)) continue;
+    for (const path of strings(paths)) {
+      if (isAbsolute(path)) hints.push({ prefix: filesKey(path, place.home), project });
+    }
+  }
+  return hints;
 };
 
 /**

@@ -16,6 +16,8 @@ export const NO_USAGE: Record<Signal, Grade> = {
   instructions: "none",
   mcp: "none",
   tokens: "none",
+  usage: "none",
+  cacheTtl: "none",
 };
 
 export const trimSlash = (path: string) => (path.length > 1 ? path.replace(/\/+$/u, "") : path);

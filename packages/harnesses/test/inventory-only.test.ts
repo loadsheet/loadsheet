@@ -88,9 +88,15 @@ const inventoryOf = (harness: Harness, record: Record<string, string>, place?: P
 
 describe("the inventory-only harnesses", () => {
   it("declares every usage signal none and reads no transcripts", () => {
-    for (const harness of [grok, pi, opencode, cursor, gemini, kiro] as Harness[]) {
+    for (const harness of [pi, cursor, gemini, kiro] as Harness[]) {
       expect(harness.signals).toEqual(NO_USAGE);
       expect(Object.values(harness.signals).every((grade) => grade === "none")).toBe(true);
+      expect(harness.machine && "stores" in harness.machine).toBe(false);
+    }
+    // Grok and OpenCode tell their usage from their session stores, and nothing else.
+    expect(grok.signals).toEqual({ ...NO_USAGE, usage: "exact" });
+    expect(opencode.signals).toEqual({ ...NO_USAGE, usage: "inferred" });
+    for (const harness of [grok, pi, opencode, cursor, gemini, kiro] as Harness[]) {
       expect(harness.machine?.transcripts).toBeUndefined();
       expect(harness.machine && "roots" in harness.machine).toBe(false);
     }

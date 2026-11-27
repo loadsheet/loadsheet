@@ -1,5 +1,5 @@
 // What a harness adapter is written against. This entry is isomorphic: the Node readers live in `@loadsheet/kit/node`.
-import type { Day, Grade, Id, Item, Signal } from "@loadsheet/schema";
+import type { Day, Grade, Id, Item, Settings, Signal, Thread } from "@loadsheet/schema";
 
 /** A read-only set of text files, keyed by POSIX path relative to their root. */
 export interface Files {
@@ -71,12 +71,72 @@ export interface UsedFact extends FactOfSession {
   readonly by: "model" | "user";
 }
 
+/** What a usage Fact carries besides its session: the project and the conversation it is about. */
+interface FactOfThread extends FactOfSession {
+  /**
+   * The project: `owner/repo` when the transcript says, else the working directory as the Files
+   * keys paths (`~/...` under the home directory, absolute elsewhere), or `unknown`. kit resolves a
+   * folder to its repository when it builds the Scan.
+   */
+  readonly project: string;
+  /** Whether the main conversation or a subagent's said it. */
+  readonly thread: Thread;
+}
+
+/** A conversation started: a session's main one, or one subagent's. Once per conversation. */
+export interface UsageSessionFact extends FactOfThread {
+  readonly type: "usage-session";
+}
+
+/**
+ * A conversation compacted its context. Once per compaction, keyed by the day its session
+ * started; `first` is true on the conversation's first compaction only.
+ */
+export interface CompactionFact extends FactOfThread {
+  readonly type: "compaction";
+  /** Whether the user asked for it. */
+  readonly manual: boolean;
+  readonly first: boolean;
+}
+
+/**
+ * Tokens of model requests. `day` is the UTC day of the requests, not of the session's start. Once
+ * per request, or once per several requests summed (`requests`, default 1). The splits are parts:
+ * `reasoning` of `output`, `cacheWrite5m`, `cacheWrite1h` and `cacheRewrite` of `cacheWrite`.
+ */
+export interface UsageTokensFact extends FactOfThread {
+  readonly type: "usage-tokens";
+  /** The model, as the harness names it. */
+  readonly model: string;
+  readonly requests?: number;
+  /** Input tokens neither read from nor written to the prompt cache. */
+  readonly input: number;
+  readonly output: number;
+  readonly reasoning: number;
+  readonly cacheRead: number;
+  readonly cacheWrite: number;
+  readonly cacheWrite5m: number;
+  readonly cacheWrite1h: number;
+  /** Cache-write tokens of a request 5 to 60 minutes after the previous one of its conversation. */
+  readonly cacheRewrite: number;
+}
+
 /**
  * What one transcript line says, in names, days and counters only: no text, no session id, no
  * path. A Scan is a sum over Facts: `session` and `tokens` fill a SessionCell and the Coverage,
- * `window` the Coverage's context window, `listed` and `used` fill the Cell of their item.
+ * `window` the Coverage's context window, `listed` and `used` fill the Cell of their item, and
+ * `usage-session`, `compaction` and `usage-tokens` fill the Scan's usage. Every one is counted
+ * where it is read, so a transcript read in two parts sums to the same as one read whole.
  */
-export type Fact = SessionFact | TokensFact | WindowFact | ListedFact | UsedFact;
+export type Fact =
+  | SessionFact
+  | TokensFact
+  | WindowFact
+  | ListedFact
+  | UsedFact
+  | UsageSessionFact
+  | CompactionFact
+  | UsageTokensFact;
 
 /**
  * One transcript line's bytes, before they are decoded: a view the reader points at each line in
@@ -111,8 +171,12 @@ export interface TranscriptFormat<State> {
    * marker test and before the line is decoded, so it saves both on lines that cannot matter.
    */
   skip?(line: LineBytes, state: State): boolean;
-  /** May mutate `state`. A throw fails the whole read, so catch malformed lines inside. */
-  parse(line: string, state: State): readonly Fact[];
+  /**
+   * May mutate `state`. A throw fails the whole read, so catch malformed lines inside. `place` is
+   * the machine's, for writing a working directory the way the Files keys paths; nothing of it
+   * goes into `state`. kit's readers always pass it; a test may leave it out.
+   */
+  parse(line: string, state: State, place?: Place): readonly Fact[];
 }
 
 /** Where things are on one machine. A harness derives its own paths from it and reads nothing. */
@@ -123,6 +187,77 @@ export interface Place {
   readonly env: Readonly<Record<string, string | undefined>>;
   /** The working directory, absolute, for a harness that takes a relative variable under it; home when absent. */
   readonly cwd?: string;
+}
+
+/**
+ * A usage Fact a session store read. It is about the store's harness, or, with `harness`, about
+ * another one, as when T3 Code's database holds the sessions of an agent it drives. A store says
+ * only usage: its sessions never count as a harness's SessionCells.
+ */
+export type StoreFact = (UsageSessionFact | CompactionFact | UsageTokensFact) & {
+  readonly harness?: string;
+};
+
+/** One row of a store's SELECT, by column name. */
+export type StoreRow = Readonly<Record<string, number | bigint | string | null | Uint8Array>>;
+
+/**
+ * A SQLite database a harness keeps its sessions in. kit opens it read-only, creating no file
+ * beside it, runs `query` once and passes the rows to `facts`. A database it cannot open or
+ * query is listed in the Coverage's `unread`; one that does not exist is not.
+ */
+export interface SqliteStore {
+  readonly kind: "sqlite";
+  /** Its name in `Coverage.unread`, such as `opencode.db`: never a path. */
+  readonly name: string;
+  /** The database file, absolute. */
+  path(place: Place): string;
+  /**
+   * One SELECT. `$since` is bound to the window's first instant, as epoch milliseconds or as an ISO
+   * 8601 timestamp (`since`). It selects numbers, model names and folders only: a title, message
+   * or payload stays in SQLite, so `json_extract` the one field needed.
+   */
+  readonly query: string;
+  readonly since: "ms" | "iso";
+  /** The rows as Facts; a project is keyed as the Files keys paths, through `place`. */
+  facts(rows: readonly StoreRow[], place: Place): StoreFact[];
+}
+
+/** One session's folder in a FolderStore: the JSON files kit read from it. */
+export interface StoreFolder {
+  /** The folder's path below the store's root, as it is spelled on the disk. */
+  readonly folder: string;
+  /** Each of the store's `files` by name; undefined when missing, unreadable or too large. */
+  readonly files: Readonly<Record<string, string | undefined>>;
+}
+
+/**
+ * A folder holding one folder per session, of small JSON files. kit reads the `files` of each
+ * session folder whose first file changed in the window and passes them to `facts`.
+ */
+export interface FolderStore {
+  readonly kind: "folder";
+  /** Its name in `Coverage.unread`, such as `grok-sessions`: never a path. */
+  readonly name: string;
+  /** The folder the session folders are under, absolute. */
+  root(place: Place): string;
+  /** How many folders below the root a session's folder is: 1 for `<root>/<id>`. */
+  readonly depth: number;
+  /** The files to read in each session folder; the first one's mtime says whether it changed. */
+  readonly files: readonly [string, ...string[]];
+  facts(session: StoreFolder, place: Place): StoreFact[];
+}
+
+/** Where a harness keeps sessions other than JSONL transcripts. */
+export type SessionStore = SqliteStore | FolderStore;
+
+/**
+ * A folder's repository as a harness remembers it: a project under `prefix`, a path keyed as the
+ * Files keys paths, is `project`, an `owner/repo`. The longest matching prefix wins.
+ */
+export interface ProjectHint {
+  readonly prefix: string;
+  readonly project: string;
 }
 
 /** What a harness keeps on a machine. Paths are absolute and joined with `/`. */
@@ -145,12 +280,24 @@ export interface MachineReader<State> {
    */
   contextWindow?(files: Files): Promise<number | undefined>;
   /**
+   * What the harness's settings in those files and `place.env` set, as derived values: never a
+   * setting's text or a variable's value. Undefined when it reads none.
+   */
+  settings?(files: Files, place: Place): Promise<Settings | undefined>;
+  /**
+   * Which repository a project folder belongs to, as the harness's own files remember it, for a
+   * folder that is gone from the disk, such as a deleted worktree.
+   */
+  projects?(files: Files, place: Place): Promise<ProjectHint[]>;
+  /**
    * The directories its session transcripts are under; absent, with `transcripts`, for a harness
    * loadsheet reads the inventory of only. Such a harness has no sessions in a Scan.
    */
   roots?(place: Place): string[];
   /** How its transcript lines become Facts; absent, with `roots`, for an inventory-only harness. */
   readonly transcripts?: TranscriptFormat<State>;
+  /** Its session stores that are not JSONL transcripts, read for usage only. */
+  stores?(place: Place): SessionStore[];
 }
 
 /** One coding agent loadsheet can read. */
@@ -169,3 +316,4 @@ export interface Harness<State = unknown> {
 export const defineHarness = <H extends Harness>(harness: H): H => harness;
 
 export * from "./fold.ts";
+export * from "./project.ts";

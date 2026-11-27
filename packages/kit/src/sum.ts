@@ -1,6 +1,14 @@
 // Counters summed by key: what folding Facts, summing tallies and merging Scans share. Kept out of
 // kit's exports; the scan cache sums its encoded tallies into it without building a Tally first.
-import type { Cell, Day, SessionCell } from "@loadsheet/schema";
+import type {
+  Cell,
+  Day,
+  SessionCell,
+  Thread,
+  Usage,
+  UsageSessionCell,
+  UsageTokenCell,
+} from "@loadsheet/schema";
 import type { Fact } from "./index.ts";
 import type { Tally, VersionSeen, WindowSeen } from "./fold.ts";
 
@@ -9,6 +17,10 @@ const sessionKey = (cell: { day: Day; harness: string; via: string }) =>
   [cell.day, cell.harness, cell.via].join(SEP);
 const cellKey = (cell: { day: Day; harness: string; via: string; item: string }) =>
   [cell.day, cell.harness, cell.via, cell.item].join(SEP);
+const usageSessionKey = (cell: UsageSessionCell) =>
+  [cell.day, cell.harness, cell.via, cell.project, cell.thread].join(SEP);
+const usageTokenKey = (cell: UsageTokenCell) =>
+  [cell.day, cell.harness, cell.via, cell.project, cell.thread, cell.model].join(SEP);
 const versionKey = (seen: VersionSeen) => [seen.harness, seen.day, seen.version].join(SEP);
 const windowKey = (seen: WindowSeen) =>
   [seen.harness, seen.day, String(seen.tokens).padStart(12, "0")].join(SEP);
@@ -37,6 +49,8 @@ export class Accumulator {
   #last: { day: Day; harness: string; via: string; cells: Map<string, Cell> } | undefined;
   readonly #versions = new Map<string, VersionSeen>();
   readonly #windows = new Map<string, WindowSeen>();
+  readonly #usageSessions = new Map<string, UsageSessionCell>();
+  readonly #usageTokens = new Map<string, UsageTokenCell>();
 
   constructor(window?: readonly [Day, Day]) {
     this.keep = window ? (day) => day >= window[0] && day <= window[1] : () => true;
@@ -70,6 +84,94 @@ export class Accumulator {
       last.cells.set(item, cell);
     }
     return cell;
+  }
+
+  usageSession(key: {
+    day: Day;
+    harness: string;
+    via: string;
+    project: string;
+    thread: Thread;
+  }): UsageSessionCell {
+    const { day, harness, via, project, thread } = key;
+    const blank: UsageSessionCell = {
+      day,
+      harness,
+      via,
+      project,
+      thread,
+      sessions: 0,
+      compacted: 0,
+      compactions: 0,
+      manualCompactions: 0,
+    };
+    const id = usageSessionKey(blank);
+    let cell = this.#usageSessions.get(id);
+    if (!cell) {
+      cell = blank;
+      this.#usageSessions.set(id, cell);
+    }
+    return cell;
+  }
+
+  usageTokens(key: {
+    day: Day;
+    harness: string;
+    via: string;
+    project: string;
+    thread: Thread;
+    model: string;
+  }): UsageTokenCell {
+    const { day, harness, via, project, thread, model } = key;
+    const blank: UsageTokenCell = {
+      day,
+      harness,
+      via,
+      project,
+      thread,
+      model,
+      requests: 0,
+      input: 0,
+      output: 0,
+      reasoning: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      cacheWrite5m: 0,
+      cacheWrite1h: 0,
+      cacheRewrite: 0,
+    };
+    const id = usageTokenKey(blank);
+    let cell = this.#usageTokens.get(id);
+    if (!cell) {
+      cell = blank;
+      this.#usageTokens.set(id, cell);
+    }
+    return cell;
+  }
+
+  /** Adds a Usage's cells inside the window. */
+  usage(usage: Usage): void {
+    for (const from of usage.sessions) {
+      if (!this.keep(from.day)) continue;
+      const cell = this.usageSession(from);
+      cell.sessions += from.sessions;
+      cell.compacted += from.compacted;
+      cell.compactions += from.compactions;
+      cell.manualCompactions += from.manualCompactions;
+    }
+    for (const from of usage.tokens) {
+      if (!this.keep(from.day)) continue;
+      const cell = this.usageTokens(from);
+      cell.requests += from.requests;
+      cell.input += from.input;
+      cell.output += from.output;
+      cell.reasoning += from.reasoning;
+      cell.cacheRead += from.cacheRead;
+      cell.cacheWrite += from.cacheWrite;
+      cell.cacheWrite5m += from.cacheWrite5m;
+      cell.cacheWrite1h += from.cacheWrite1h;
+      cell.cacheRewrite += from.cacheRewrite;
+    }
   }
 
   version(seen: VersionSeen): void {
@@ -110,6 +212,31 @@ export class Accumulator {
         const cell = this.cell(fact.day, harness, fact.via, fact.item);
         if (fact.by === "model") cell.byModel += 1;
         else cell.byUser += 1;
+        return;
+      }
+      case "usage-session":
+        this.usageSession({ ...fact, harness }).sessions += 1;
+        return;
+      case "compaction": {
+        const cell = this.usageSession({ ...fact, harness });
+        cell.compactions += 1;
+        if (fact.first) cell.compacted += 1;
+        if (fact.manual) cell.manualCompactions += 1;
+        return;
+      }
+      case "usage-tokens": {
+        const cell = this.usageTokens({ ...fact, harness });
+        // Each part is held to its whole here, so every cell keeps the schema's bounds.
+        const write5m = Math.min(fact.cacheWrite5m, fact.cacheWrite);
+        cell.requests += fact.requests ?? 1;
+        cell.input += fact.input;
+        cell.output += fact.output;
+        cell.reasoning += Math.min(fact.reasoning, fact.output);
+        cell.cacheRead += fact.cacheRead;
+        cell.cacheWrite += fact.cacheWrite;
+        cell.cacheWrite5m += write5m;
+        cell.cacheWrite1h += Math.min(fact.cacheWrite1h, fact.cacheWrite - write5m);
+        cell.cacheRewrite += Math.min(fact.cacheRewrite, fact.cacheWrite);
       }
     }
   }
@@ -134,6 +261,7 @@ export class Accumulator {
     }
     for (const seen of tally.versions) if (keep(seen.day)) this.version(seen);
     for (const seen of tally.windows ?? []) if (keep(seen.day)) this.window(seen);
+    if (tally.usage) this.usage(tally.usage);
   }
 
   result(): Tally {
@@ -144,7 +272,20 @@ export class Accumulator {
       cells: sortedBy(cells, cellKey),
       versions: sortedBy(this.#versions.values(), versionKey),
     };
-    if (this.#windows.size === 0) return tally;
-    return { ...tally, windows: sortedBy(this.#windows.values(), windowKey) };
+    const usage = this.usageResult();
+    return {
+      ...tally,
+      ...(this.#windows.size === 0 ? {} : { windows: sortedBy(this.#windows.values(), windowKey) }),
+      ...(usage ? { usage } : {}),
+    };
+  }
+
+  /** The usage cells summed so far, sorted; undefined when there are none. */
+  usageResult(): Usage | undefined {
+    if (this.#usageSessions.size === 0 && this.#usageTokens.size === 0) return undefined;
+    return {
+      sessions: sortedBy(this.#usageSessions.values(), usageSessionKey),
+      tokens: sortedBy(this.#usageTokens.values(), usageTokenKey),
+    };
   }
 }

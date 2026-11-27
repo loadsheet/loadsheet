@@ -13,17 +13,30 @@ transcript line ──parse──▶ Fact ──fold──▶ Tally ──window
 installed files ──inventory──▶ Items ────────────────────────┘
 ```
 
-| Type     | Defined in            | What it is                                                                                                                                                  |
-| -------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Fact`   | `kit/src/index.ts`    | What one transcript line says: a session started, its first tokens, its context window, an item listed or used. Names, days and counters only.              |
-| `Tally`  | `kit/src/fold.ts`     | Facts summed, keyed by day. Folding is a sum, so the cache can store one Tally per transcript file and add them later.                                      |
-| `Scan`   | `schema/src/types.ts` | One machine: per harness, its coverage, installed `Item`s and the `Cell` counters for the window. This is what a fleet machine sends over ssh.              |
-| `Report` | `schema/src/types.ts` | One `Sheet` per harness (a `Line` per item, summed over machines), the `Finding`s the rules made, each with its `Fix`es, and the rules that were `Skipped`. |
-| `Config` | `schema/src/types.ts` | The user's config file. `resolveConfig` fills in the defaults and returns a `ResolvedConfig`.                                                               |
+| Type     | Defined in            | What it is                                                                                                                                                                                                               |
+| -------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Fact`   | `kit/src/index.ts`    | What one transcript line says: a session started, its first tokens, its context window, an item listed or used, and for usage a conversation started, a compaction or a request's tokens. Names, days and counters only. |
+| `Tally`  | `kit/src/fold.ts`     | Facts summed, keyed by day. Folding is a sum, so the cache can store one Tally per transcript file and add them later.                                                                                                   |
+| `Scan`   | `schema/src/types.ts` | One machine: per harness, its coverage, installed `Item`s and the `Cell` counters for the window, and the machine's `usage`. This is what a fleet machine sends over ssh.                                                |
+| `Report` | `schema/src/types.ts` | One `Sheet` per harness (a `Line` per item, summed over machines), the `Finding`s the rules made, each with its `Fix`es, the rules that were `Skipped`, and `usage` summed over machines.                                |
+| `Config` | `schema/src/types.ts` | The user's config file. `resolveConfig` fills in the defaults and returns a `ResolvedConfig`.                                                                                                                            |
 
 `Scan`, `Report` and `Config` are the public contract, at schema version 1. `@loadsheet/schema` holds both the valibot schemas and the TypeScript types. The JSON Schemas in `schema/schema/*.json` are generated from them and served at `loadsheet.dev/schema/`. The prompt in `docs/agent-prompt.md` is written against the Report's fields, so a field change has to update it too.
 
 A pack (a skills folder or repository, read without any sessions) skips transcript processing and the Scan. `Files` go into `harness.inventory`, and `packReport` turns the resulting `Item`s into a Report. Only the rules that need no usage data run on it.
+
+### The usage dataset
+
+Sessions, compactions and tokens per project, as additive counters with no per-session record. It follows the same path as the rest:
+
+- **Facts.** `usage-session` (a conversation started: a session's main one, or one subagent's), `compaction` (`manual`, and `first` for the conversation's first) and `usage-tokens` (one request, or several summed, with its model and its input, output, reasoning, cache read and cache write tokens, the write split into 5-minute, 1-hour and `cacheRewrite`). Each carries its `via`, `thread` (`main` or `subagent`) and `project`. Sessions and compactions count on the UTC day the conversation started, tokens on the UTC day of the request.
+- **Tally.** `foldFacts` sums them into the Tally's optional `usage` part, which the cache stores with the rest (cache layout 5). A parser's state carries what resuming a file needs: a hash of the last message id, the minute and model of the last request, whether it compacted, and Codex's last cumulative totals. No session id or absolute home path.
+- **Scan.** `Scan.usage` holds `sessions` cells keyed by day, harness, via, project and thread, and `tokens` cells keyed by the same and the model. Session stores (`stores.ts`) add their usage here, with no SessionCell.
+- **Report.** `buildReport` sums the machines' usage into `Report.usage`, filtered by `--harness`, `--via` and `--exclude-via` as the sheets are. `shareableReport` drops it whole.
+
+A parser writes the project as the transcript has it: the cwd as a Files key (`~/…` under the home, absolute elsewhere), or `owner/repo` when the transcript names its repository (Codex's `git.repository_url`). `scanMachine` resolves the keys once, at Scan time, through `kit/node/projects.ts`: the git remote of the folder or its nearest ancestor, then the harness's `ProjectHint`s for folders that no longer exist (Claude Code's `githubRepoPaths` in `~/.claude.json`, longest prefix), then a deleted worktree's repository, else the key itself, with worktree and scratch folders folded to their parent. `orgOf` (schema) names a project's organisation: the owner of `owner/repo`, else the first folder of the key. `loadsheet usage` counts every project that is not a repository under one "no repository" row.
+
+`MachineReader.settings?(files, place)` returns a harness's `Settings`: derived values such as the prompt cache's lifetime and the knob that set it, whether caching is off, how many days transcripts are kept, and the auto-compact limit. Never a setting's text or a variable's value. They go to `Coverage.settings`. A store that exists and can't be read goes to `Coverage.unread`.
 
 ## Packages
 
@@ -73,15 +86,18 @@ graph TD
 
 - Owns the public types and their validation. `parseScan`, `parseReport` and `parseConfig` throw a `SchemaError` that lists each issue with its JSON path.
 - `RULES` and `SIGNALS` list every rule id and every signal. The default rule thresholds live in `DEFAULT_RULES` in `src/index.ts`.
-- `shareableReport` drops descriptions before a Report goes into a share link.
+- `shareableReport` drops descriptions, `usage`, and custom settings paths and their exact edits before a Report goes into a share link.
+- `orgOf` names the organisation of a usage project, for core and the web alike.
 
 ### `@loadsheet/kit` (`packages/kit`)
 
 Two entries:
 
-- `.` is the contract a harness adapter is written against: `Files`, `Fact`, `TranscriptFormat`, `MachineReader`, `Harness` and `defineHarness`. It also holds `fold.ts`, which turns Facts into a Tally, Tallies into a Scan, and merges Scans and Items.
+- `.` is the contract a harness adapter is written against: `Files`, `Fact`, `TranscriptFormat`, `SessionStore` (a `SqliteStore` or a `FolderStore` of per-session JSON files that turns rows into usage Facts), `MachineReader`, `Harness` and `defineHarness`. It also holds `fold.ts`, which turns Facts into a Tally, Tallies into a Scan, and merges Scans and Items.
 - `./node` touches the disk:
-  - `scanMachine` (`scan.ts`) runs a full machine scan: it finds transcript files changed in the window and reads them through the cache.
+  - `scanMachine` (`scan.ts`) runs a full machine scan: it finds transcript files changed in the window and reads them through the cache. It also runs each harness's session stores, and the unowned ones in `ScanMachineOptions.stores`, and adds their usage to the Scan without sessions.
+  - `stores.ts` (`readStore`) reads a store: SQLite through a dynamic `node:sqlite` import, opened read-only so no file appears beside the database, with one SELECT bound to the window's start, or a folder of session files changed in the window. Nothing is cached. A store that exists but cannot be read goes to the coverage's `unread`.
+  - `projects.ts` resolves each usage project to `owner/repo` when the Scan is built (see [The usage dataset](#the-usage-dataset)). It reads git metadata and folder listings, and never the home's own `.git`.
   - `cache.ts` stores a cursor and a Tally per transcript file, keyed by a salted hash. It is the only thing loadsheet writes.
   - `reader.ts` streams JSONL lines (ported from t3code). A format's `skip` drops a line from its raw bytes, before it is decoded, when `parse` would get nothing from it. `workers.ts` runs the reads on worker threads, largest file first, once there are enough bytes to be worth it, with more threads as the bytes grow.
   - `files.ts` (`dirFiles`) and `github.ts` (`githubFiles`, from a tarball) produce `Files` for packs.
@@ -91,8 +107,9 @@ Two entries:
 
 One adapter per coding agent, listed in `harnesses` in `src/index.ts`. An adapter is a `Harness`: its `signals` grades, `inventory(files)` for packs, and an optional `machine` reader.
 
-- `claude-code` and `codex` read transcripts. Each has a `*-transcripts.ts` file with its `TranscriptFormat`, and a listing file that knows how the harness turns an entry into characters in the context.
-- `grok`, `pi`, `opencode`, `cursor`, `gemini` and `kiro` only read what is installed (`NO_USAGE` grades, helpers in `inventory.ts`). Their sheets have no sessions.
+- `claude-code` and `codex` read transcripts. Each has a `*-transcripts.ts` file with its `TranscriptFormat`, and a listing file that knows how the harness turns an entry into characters in the context. Both emit usage Facts: Claude Code dedups a message id against the line before it in the same file and counts each subagent file as its own conversation; Codex takes the deltas of its cumulative totals and skips a fork's copied history. Their machine readers also return `settings` (`settings.json` and the environment; `config.toml`), and Claude Code's returns `projects` hints.
+- `grok` and `opencode` read usage from session stores (`grok-sessions.ts`, a folder per session; `opencode-db.ts`, SQLite). `t3-code.ts` reads T3 Code's database for the providers no other adapter reads; `loadsheet` passes it to `scanMachine` as an unowned store (`sessionStores`). Helpers for all three are in `store-facts.ts`.
+- `pi`, `cursor`, `gemini` and `kiro` only read what is installed (`NO_USAGE` grades, helpers in `inventory.ts`). Their sheets, and grok's and opencode's, have no sessions.
 - `managed.ts` reads fleetrc's manifest and the skills CLI's lock to tell who installed a skill folder. It only reads files and never runs either tool.
 - `pack.ts` (`packInventory`) finds every `SKILL.md`, plus a plugin's commands and agents, in a pack.
 
@@ -103,9 +120,9 @@ Adapters work on the `Files` and `Place` kit gives them, and never read the disk
 - `buildReport` (`report.ts`) takes one Scan per machine and the resolved config. It filters by harness and entrypoint, sums lines over machines, and runs the rules. The `ignore` list filters the lines the rules see, not the lines or costs in the Report.
 - `packReport` (`pack.ts`) does the same for a pack, with `NO_SIGNALS`.
 - `engine.ts` (`runRules`) runs each enabled rule on the sheets that can answer it. A sheet without a required signal is skipped as `missing-signal`, and one with too little history as `not-enough-data`. It also drops a fix that a cut finding already covers.
-- `rules/` has one file per rule. A rule declares the signals it needs and returns findings.
+- `rules/` has one file per rule. A rule declares the signals it needs and returns findings. `cache-ttl` and `cache-off` read a machine's usage and settings through `sheet.usageOn` and `sheet.settingsOn`; `prompt-cache.ts` turns usage into the cache's lifetime day by day, for the rule and for the views. `short-history` also offers a fix when Claude Code's `cleanupPeriodDays` deletes transcripts the window needs.
 - `fixes.ts` writes the commands and settings edits for each harness and installer. loadsheet itself never runs them.
-- `summary.ts` writes the default terminal output (the context bar per harness, and the item-by-item breakdown for `loadsheet <harness>`). `text.ts` writes `--full`. `setup.ts` holds the token figures that both the text and the web page show.
+- `summary.ts` writes the default terminal output (the context bar per harness, and the item-by-item breakdown for `loadsheet <harness>`). `text.ts` writes `--full`. `usage-view.ts` (`renderUsage`) writes `loadsheet usage`: totals per harness, organisations and the top projects by share of tokens, each harness's settings, and the findings about usage. `setup.ts` holds the token figures that both the text and the web page show.
 
 ### `loadsheet` (`packages/loadsheet`)
 
@@ -114,7 +131,7 @@ The npm bin. `cli.ts` routes to one of four places:
 - `fleet …` goes to `@loadsheet/fleet`'s `run`.
 - `mcp …` goes to `mcp.ts`. It reads a server over Streamable HTTP with `fetchMcpToolList` (100 pages, since no Worker budget applies) or a `tools/list` JSON file, and prints `mcpReport` as text or `--json`. `--header` values are sent and never printed, and output names only the endpoint's origin. It exits 1 on an error or more warnings than `--max-warnings`, 2 on a usage error and 3 when the server can't be read.
 - `build` and `--ui` go to `ui.ts`. It inlines the Report into the `apps/page` build (copied into `dist/web` by `scripts/copy-web.ts`) and writes it to a folder or serves it on 127.0.0.1.
-- Everything else goes to `main.ts`, which parses flags and config. It then either scans and builds a Report, prints `--scan`, or weighs a pack.
+- Everything else goes to `main.ts`, which parses flags and config. It then either scans and builds a Report, prints `--scan`, or weighs a pack. `usage`, as the first word, prints the same Report through `renderUsage`; `--json` and `--scan` print what they always do.
 
 `scan-worker.ts` is the worker module `scanMachine` starts. `fleet.ts` (`fleetScans`) checks the Scans other machines send back and strips any key the schema doesn't name. A host that fails becomes one of the fixed `Unread` phrases.
 
@@ -141,7 +158,7 @@ Checks an MCP server's `tools/list` against what each MCP client does with it. l
 
 ### `@loadsheet/ui` (`packages/ui`)
 
-The Vue views (`Landing`, `ReportShell`, `Report`, `Fixes`, `Pack`) and their components. `createLoadsheet()` (`lib/state.ts`) holds the Report on screen and provides it to the views. `lib/share.ts` packs a Report into the URL fragment. Views link by route name (`home`, `report`, `fixes`, `pack`), so each host registers routes under those names. `Mcp` is the MCP check: it emits `check` with a URL and renders the `url`, `pending`, `result` and `error` its host passes back (`lib/mcp.ts` reads the answer). Only a host that serves `POST /api/mcp` registers it, as `mcp`, and the site header links to it only when that route exists.
+The Vue views (`Landing`, `ReportShell`, `Report`, `Fixes`, `Pack`) and their components. `createLoadsheet()` (`lib/state.ts`) holds the Report on screen and provides it to the views. `lib/share.ts` packs a Report into the URL fragment. Views link by route name (`home`, `report`, `fixes`, `pack`), so each host registers routes under those names. `Mcp` is the MCP check: it emits `check` with a URL and renders the `url`, `pending`, `result` and `error` its host passes back (`lib/mcp.ts` reads the answer). Only a host that serves `POST /api/mcp` registers it, as `mcp`, and the site header links to it only when that route exists. `Usage` (route `usage`, `/report/usage`) shows `Report.usage` by organisation and project. A shared Report has no usage, so the view says it stays on the user's machines.
 
 ### Apps
 
@@ -156,7 +173,7 @@ The Vue views (`Landing`, `ReportShell`, `Report`, `Fixes`, `Pack`) and their co
 
 ## Adding a harness
 
-1. Write `packages/harnesses/src/<id>.ts` with `defineHarness`. Use the helpers in `inventory.ts` if it only reads what is installed. If it reads transcripts, add a `TranscriptFormat`, and a fixture made with `pnpm --filter @loadsheet/fixtures sanitize`.
+1. Write `packages/harnesses/src/<id>.ts` with `defineHarness`. Use the helpers in `inventory.ts` if it only reads what is installed. If it reads transcripts, add a `TranscriptFormat`, and a fixture made with `pnpm --filter @loadsheet/fixtures sanitize`. If it keeps usage in a database or a folder per session, add a `SessionStore` and build its Facts with the helpers in `store-facts.ts`.
 2. Add it to `harnesses` and the exports in `src/index.ts`. Update the ordered list of built-in IDs in `packages/harnesses/test/inventory-only.test.ts`.
 3. Give it a display name in `core/src/summary.ts` (`NAMES`, plus its folders for grouping fixes) and in `ui/src/lib/report.ts` (`HARNESS`); without one, its id shows. If it can hide a skill from its model, add that fix in `core/src/fixes.ts`.
 4. List it in `apps/site/content/docs/guide/index.md` and `reference/index.md`.

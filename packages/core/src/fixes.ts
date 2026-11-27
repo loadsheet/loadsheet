@@ -1,6 +1,6 @@
 // What the user's agent should change, per harness and per installer. loadsheet never runs any of
 // it: a Fix names the machine, the path and, when one exists, the exact command.
-import type { Fix, Item, Line } from "@loadsheet/schema";
+import type { Fix, Item, Line, Settings } from "@loadsheet/schema";
 import type { Install, RuleSheet, Unfiltered } from "./rules/rule.ts";
 
 /** A word the shell reads as itself, or the text in single quotes. */
@@ -413,4 +413,59 @@ export const listingBudgetFixes = (sheet: RuleSheet, line: Line, unfiltered: Unf
       ];
     }),
   );
+};
+
+/** The variable a knob such as `settings.env.NAME` or `env.NAME` names; undefined for a setting. */
+const variableOf = (knob: string | undefined) =>
+  /^(?:settings\.)?env\.(\w+)$/u.exec(knob ?? "")?.[1];
+
+/** A Fix that sets one key in Claude Code's user settings on a machine. */
+const settingFix = (
+  path: string,
+  machine: string,
+  set: { key: string; value: string | number },
+): Fix => ({ machine, action: "set", path, set });
+
+/**
+ * The settings change that keeps Claude Code's main prompt cache 1 hour on a machine. A variable
+ * goes in settings.json's `env`, which Claude Code applies over the environment it starts in, so it
+ * outranks one a shell profile sets: FORCE_PROMPT_CACHING_5M is turned off there, and
+ * CLAUDE_CODE_PROMPT_CACHE_TTL set to 1h. Otherwise `promptCacheTtl` is set.
+ */
+export const promptCacheFixes = (machine: string, settings: Settings): Fix[] => {
+  const path = settings.settingsPath;
+  if (!path) return [];
+  const name = variableOf(settings.cacheTtlFrom);
+  const lifetime = settingFix(path, machine, { key: "promptCacheTtl", value: "1h" });
+  if (name === "FORCE_PROMPT_CACHING_5M")
+    return [settingFix(path, machine, { key: `env.${name}`, value: "0" }), lifetime];
+  if (name === "CLAUDE_CODE_PROMPT_CACHE_TTL")
+    return [settingFix(path, machine, { key: `env.${name}`, value: "1h" })];
+  return [lifetime];
+};
+
+/** The settings change that turns Claude Code's prompt caching back on, when a variable turned it off. */
+export const cachingOnFixes = (machine: string, settings: Settings): Fix[] => {
+  const name = settings.caching === "off" ? variableOf(settings.cachingFrom) : undefined;
+  return name && settings.settingsPath
+    ? [settingFix(settings.settingsPath, machine, { key: `env.${name}`, value: "0" })]
+    : [];
+};
+
+/** Days of transcripts a retention fix keeps. */
+export const RETENTION_DAYS = 365;
+
+/**
+ * The settings change that keeps Claude Code's transcripts a year on a machine whose retention is
+ * no longer than the window, so its own deletion cut the history short; never one that lowers it.
+ */
+export const retentionFixes = (sheet: RuleSheet, machine: string, window: number): Fix[] => {
+  if (sheet.harness !== "claude-code") return [];
+  const settings = sheet.settingsOn(machine);
+  const days = settings?.retentionDays;
+  if (!settings?.settingsPath || days === undefined || days > window || days >= RETENTION_DAYS)
+    return [];
+  return [
+    settingFix(settings.settingsPath, machine, { key: "cleanupPeriodDays", value: RETENTION_DAYS }),
+  ];
 };

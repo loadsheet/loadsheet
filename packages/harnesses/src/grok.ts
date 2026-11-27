@@ -1,5 +1,6 @@
-// Grok (xAI's coding agent CLI, `grok`): what is installed for the user. loadsheet reads none of
-// its transcripts, so it declares every usage signal `none`.
+// Grok (xAI's coding agent CLI, `grok`): what is installed for the user, and from its session
+// folders (`grok-sessions.ts`) its sessions, compactions and tokens per project. loadsheet reads
+// none of its transcripts' listings or uses, so every other signal is `none`.
 //
 // Source: the user guide the Grok CLI installs with itself (1.0.92), in `~/.grok/docs/user-guide/`:
 // `08-skills.md` (skill and command folders, their order, `[skills]`, bundled skills),
@@ -15,8 +16,8 @@
 import { defineHarness, sha256, type Files, type Place } from "@loadsheet/kit";
 import type { Item } from "@loadsheet/schema";
 import { readCodexConfig, readTomlFlags } from "./codex-toml.ts";
+import { grokHome, grokSessions } from "./grok-sessions.ts";
 import {
-  envDir,
   envFlag,
   findSkills,
   instructionItem,
@@ -52,9 +53,6 @@ const NAMED_FILES = [
 
 /** Cursor's own default skills, which Grok always filters out. The guide names these three. */
 const CURSOR_DEFAULTS = new Set(["shell", "canvas", "statusline"]);
-
-/** Grok's home: `GROK_HOME`, else `~/.grok`. */
-const grokHome = (place: Place) => envDir(place, "GROK_HOME") ?? `${trimSlash(place.home)}/.grok`;
 
 type Vendor = "claude" | "cursor";
 type Cell = "agents" | "rules" | "skills" | "mcps";
@@ -214,10 +212,10 @@ const machineInventory = async (files: Files, given?: Place): Promise<Item[]> =>
   return items;
 };
 
-/** Grok: what it has installed for the user; inventory only. */
+/** Grok: what it has installed for the user, and its usage per project. */
 export const grok = defineHarness({
   id: HARNESS,
-  signals: NO_USAGE,
+  signals: { ...NO_USAGE, usage: "exact" },
   inventory: (files: Files) =>
     packInventory(files, {
       harness: HARNESS,
@@ -249,5 +247,6 @@ export const grok = defineHarness({
       ];
     },
     inventory: machineInventory,
+    stores: () => [grokSessions],
   },
 });

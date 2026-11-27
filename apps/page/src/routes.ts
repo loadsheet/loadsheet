@@ -1,4 +1,4 @@
-import { Fixes, Landing, NotFound, Pack, Report, ReportShell } from "@loadsheet/ui";
+import { Fixes, Landing, NotFound, Pack, Report, ReportShell, Usage } from "@loadsheet/ui";
 import type { RouteLocation, RouteLocationRaw, RouteRecordRaw } from "vue-router";
 
 /**
@@ -16,6 +16,7 @@ export function routes(home?: RouteLocationRaw): RouteRecordRaw[] {
       children: [
         { path: "", name: "report", component: Report },
         { path: "fixes", name: "fixes", component: Fixes },
+        { path: "usage", name: "usage", component: Usage },
         // Links from older pages: Overview and Map are the Report, the List and Skills its table.
         { path: "overview", redirect: (to) => ({ name: "report", query: to.query }) },
         { path: "map", redirect: (to) => ({ name: "report", query: to.query }) },

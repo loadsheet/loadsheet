@@ -73,6 +73,12 @@
       "short-history": {
         "enabled": true,
         "minDays": 30
+      },
+      "cache-ttl": {
+        "enabled": true
+      },
+      "cache-off": {
+        "enabled": true
       }
     }
   },
@@ -91,9 +97,18 @@
         "userUse": "exact",
         "instructions": "exact",
         "mcp": "exact",
-        "tokens": "exact"
+        "tokens": "exact",
+        "usage": "exact",
+        "cacheTtl": "exact"
       },
-      "contextWindow": 200000
+      "contextWindow": 200000,
+      "settings": {
+        "cacheTtl": "5m",
+        "cacheTtlFrom": "default",
+        "caching": "on",
+        "retentionDays": 30,
+        "autoCompact": true
+      }
     },
     {
       "machine": "laptop",
@@ -109,9 +124,16 @@
         "userUse": "none",
         "instructions": "exact",
         "mcp": "exact",
-        "tokens": "exact"
+        "tokens": "exact",
+        "usage": "exact",
+        "cacheTtl": "none"
       },
-      "contextWindow": 258400
+      "contextWindow": 258400,
+      "settings": {
+        "caching": "on",
+        "docMaxBytes": 32768,
+        "autoCompact": true
+      }
     },
     {
       "machine": "laptop",
@@ -125,7 +147,9 @@
         "userUse": "none",
         "instructions": "none",
         "mcp": "none",
-        "tokens": "none"
+        "tokens": "none",
+        "usage": "none",
+        "cacheTtl": "none"
       }
     },
     {
@@ -142,7 +166,9 @@
         "userUse": "exact",
         "instructions": "exact",
         "mcp": "exact",
-        "tokens": "exact"
+        "tokens": "exact",
+        "usage": "exact",
+        "cacheTtl": "exact"
       },
       "contextWindow": 200000
     },
@@ -160,7 +186,9 @@
         "userUse": "none",
         "instructions": "exact",
         "mcp": "exact",
-        "tokens": "exact"
+        "tokens": "exact",
+        "usage": "exact",
+        "cacheTtl": "none"
       },
       "contextWindow": 258400
     },
@@ -176,7 +204,9 @@
         "userUse": "none",
         "instructions": "none",
         "mcp": "none",
-        "tokens": "none"
+        "tokens": "none",
+        "usage": "none",
+        "cacheTtl": "none"
       }
     }
   ],
@@ -1670,6 +1700,51 @@
       "fixes": []
     },
     {
+      "id": "cache-ttl:claude-code:cli",
+      "rule": "cache-ttl",
+      "level": "fix",
+      "via": "cli",
+      "where": [
+        {
+          "machine": "laptop",
+          "harness": "claude-code"
+        }
+      ],
+      "evidence": {
+        "days": 3,
+        "cacheWrite": 11640000,
+        "cacheWrite5m": 8700000,
+        "cacheRewrite": 3630000
+      },
+      "fixes": [
+        {
+          "machine": "laptop",
+          "action": "set",
+          "path": "~/.claude/settings.json",
+          "set": {
+            "key": "promptCacheTtl",
+            "value": "1h"
+          }
+        }
+      ]
+    },
+    {
+      "id": "cache-off:claude-code",
+      "rule": "cache-off",
+      "level": "fix",
+      "where": [
+        {
+          "machine": "server",
+          "harness": "claude-code"
+        }
+      ],
+      "evidence": {
+        "sessions": 38,
+        "tokens": 2400000
+      },
+      "fixes": []
+    },
+    {
       "id": "short-history:codex",
       "rule": "short-history",
       "level": "info",
@@ -1716,5 +1791,123 @@
       "harness": "opencode",
       "reason": "not-enough-data"
     }
-  ]
+  ],
+  "usage": {
+    "sessions": [
+      {
+        "day": "2026-11-20",
+        "harness": "claude-code",
+        "via": "cli",
+        "project": "acme/web",
+        "thread": "main",
+        "sessions": 14,
+        "compacted": 3,
+        "compactions": 5,
+        "manualCompactions": 1
+      },
+      {
+        "day": "2026-11-20",
+        "harness": "claude-code",
+        "via": "cli",
+        "project": "acme/web",
+        "thread": "subagent",
+        "sessions": 22,
+        "compacted": 1,
+        "compactions": 1,
+        "manualCompactions": 0
+      },
+      {
+        "day": "2026-11-21",
+        "harness": "codex",
+        "via": "cli",
+        "project": "acme/api",
+        "thread": "main",
+        "sessions": 5,
+        "compacted": 1,
+        "compactions": 1,
+        "manualCompactions": 0
+      },
+      {
+        "day": "2026-11-22",
+        "harness": "claude-code",
+        "via": "sdk-ts",
+        "project": "unknown",
+        "thread": "main",
+        "sessions": 3,
+        "compacted": 0,
+        "compactions": 0,
+        "manualCompactions": 0
+      }
+    ],
+    "tokens": [
+      {
+        "day": "2026-11-20",
+        "harness": "claude-code",
+        "via": "cli",
+        "project": "acme/web",
+        "thread": "main",
+        "model": "claude-opus-4-5",
+        "requests": 540,
+        "input": 4100,
+        "output": 251000,
+        "reasoning": 0,
+        "cacheRead": 47200000,
+        "cacheWrite": 3880000,
+        "cacheWrite5m": 2900000,
+        "cacheWrite1h": 980000,
+        "cacheRewrite": 1210000
+      },
+      {
+        "day": "2026-11-20",
+        "harness": "claude-code",
+        "via": "cli",
+        "project": "acme/web",
+        "thread": "subagent",
+        "model": "claude-haiku-4-5",
+        "requests": 301,
+        "input": 2200,
+        "output": 68300,
+        "reasoning": 0,
+        "cacheRead": 9100000,
+        "cacheWrite": 1020000,
+        "cacheWrite5m": 1020000,
+        "cacheWrite1h": 0,
+        "cacheRewrite": 0
+      },
+      {
+        "day": "2026-11-21",
+        "harness": "codex",
+        "via": "cli",
+        "project": "acme/api",
+        "thread": "main",
+        "model": "gpt-5.1-codex",
+        "requests": 77,
+        "input": 991000,
+        "output": 52800,
+        "reasoning": 26100,
+        "cacheRead": 6050000,
+        "cacheWrite": 0,
+        "cacheWrite5m": 0,
+        "cacheWrite1h": 0,
+        "cacheRewrite": 0
+      },
+      {
+        "day": "2026-11-22",
+        "harness": "claude-code",
+        "via": "sdk-ts",
+        "project": "unknown",
+        "thread": "main",
+        "model": "claude-sonnet-4-5",
+        "requests": 12,
+        "input": 300,
+        "output": 9100,
+        "reasoning": 0,
+        "cacheRead": 410000,
+        "cacheWrite": 88000,
+        "cacheWrite5m": 88000,
+        "cacheWrite1h": 0,
+        "cacheRewrite": 20000
+      }
+    ]
+  }
 }

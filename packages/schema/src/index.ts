@@ -4,6 +4,7 @@ import type { Config, Id, Kind, Ref, Report, ResolvedConfig, Scan } from "./type
 
 export type * from "./types.ts";
 export { ConfigSchema, ReportSchema, RULES, SIGNALS, ScanSchema };
+export { isProjectKey, isRepositoryKey } from "./schemas.ts";
 
 /** One reason a document did not validate, at a JSON path such as `$.sheet[0].lines[3].path`. */
 export interface SchemaIssue {
@@ -93,6 +94,16 @@ export const parseId = (id: Id): Ref => {
   return { kind: kind as Kind, name };
 };
 
+/** The organisation a usage project belongs to: the owner of `owner/repo`, else the first folder of its key. */
+export const orgOf = (project: string): string => {
+  if (project.startsWith("/")) return `/${project.split("/")[1] ?? ""}`;
+  if (project === "~" || project.startsWith("~/")) {
+    const first = project.split("/")[1];
+    return first ? `~/${first}` : "~";
+  }
+  return project.split("/")[0]!;
+};
+
 const DEFAULT_RULES: ResolvedConfig["rules"] = {
   "invisible-skill": { enabled: true, minSessions: 5, bareShare: 0.5 },
   "dead-skill": { enabled: true, minSessions: 20, minDays: 14 },
@@ -105,6 +116,8 @@ const DEFAULT_RULES: ResolvedConfig["rules"] = {
   "harness-mismatch": { enabled: true, minSessions: 1 },
   drift: { enabled: true },
   "short-history": { enabled: true, minDays: 30 },
+  "cache-ttl": { enabled: true },
+  "cache-off": { enabled: true },
 };
 
 /** Applies every default to a config. The result shares no objects with its input or the defaults. */
@@ -132,14 +145,32 @@ export const resolveConfig = (config: Config = {}): ResolvedConfig => {
 /** Every default: what an empty config resolves to. */
 export const defaultConfig: ResolvedConfig = resolveConfig();
 
+const DEFAULT_CLAUDE_SETTINGS_PATH = "~/.claude/settings.json";
+const isCustomSettingsPath = (path: string) =>
+  path !== DEFAULT_CLAUDE_SETTINGS_PATH && /(?:^|\/)settings\.json$/u.test(path);
+
 /**
  * The Report as it may leave the user's machines in a link through loadsheet.dev: a copy without
- * any line's description, which is the user's own text. Everything else is counters and names.
+ * any line's description, usage project names, or custom settings paths and their exact edits.
  */
-export const shareableReport = (report: Report): Report => ({
-  ...report,
-  sheet: report.sheet.map((sheet) => ({
-    ...sheet,
-    lines: sheet.lines.map(({ description: _description, ...line }) => line),
-  })),
-});
+export const shareableReport = (report: Report): Report => {
+  const { usage: _usage, ...rest } = report;
+  return {
+    ...rest,
+    coverage: report.coverage.map((row) => {
+      if (!row.settings || row.settings.settingsPath === DEFAULT_CLAUDE_SETTINGS_PATH) return row;
+      const { settingsPath: _settingsPath, ...settings } = row.settings;
+      return { ...row, settings };
+    }),
+    sheet: report.sheet.map((sheet) => ({
+      ...sheet,
+      lines: sheet.lines.map(({ description: _description, ...line }) => line),
+    })),
+    findings: report.findings.map((finding) => {
+      const fixes = finding.fixes.filter((fix) => !isCustomSettingsPath(fix.path));
+      return fixes.length === finding.fixes.length
+        ? finding
+        : { ...finding, level: fixes.length ? finding.level : "info", fixes };
+    }),
+  };
+};
