@@ -31,13 +31,15 @@ Usage: loadsheet [options]                     Scan this machine's sessions: how
        loadsheet <dir | GitHub URL> [options]  Weigh a skill pack, with no usage data
        loadsheet fleet [command] [options]     Run fleetrc, which keeps a fleet's skills in sync;
                                                \`loadsheet fleet --help\` lists its commands
+       loadsheet mcp <url | file> [options]    Check an MCP server's tools/list against what each
+                                               client does with it; \`loadsheet mcp --help\`
        loadsheet build [--out <dir>] [options] Write the report as a web page to <dir>
                                                (default ./loadsheet-report)
        loadsheet --ui [--port <n>] [options]   Serve the report as a web page on 127.0.0.1
 
   <harness>           A harness id, or the part before its dash, such as claude for claude-code.
   <dir | GitHub URL>  A URL is https://github.com/<owner>/<repo>[/tree/<ref>[/<folder>]].
-                      A pack in a folder named fleet, build or a harness is ./<folder>.
+                      A pack in a folder named fleet, build, mcp or a harness is ./<folder>.
 
 Options:
   --fleet               Also ask every other machine of this machine's fleet for its Scan, over

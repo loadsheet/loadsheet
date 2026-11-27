@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { esc } from "../lib/ui";
-import { MCP_DOCS, type McpProblem, plural, problemTitle } from "../lib/mcp";
+import { mcpDocs, type McpProblem, plural, problemTitle } from "../lib/mcp";
 
 /** One problem: its title and Diagnostic Code, the clients it hits, the fix, and what each client does. */
 const props = defineProps<{ problem: McpProblem; labels: Record<string, string> }>();
@@ -25,7 +25,7 @@ const label = (id: string) => props.labels[id] ?? id;
     <div class="mc-pt">
       <i class="mc-dot" :class="`s-${problem.severity}`" />
       <b>{{ problemTitle(problem.code) }}</b>
-      <a class="mc-code" :href="MCP_DOCS + problem.code" target="_blank" rel="noopener">{{
+      <a class="mc-code" :href="mcpDocs(problem.code)" target="_blank" rel="noopener">{{
         problem.code
       }}</a>
     </div>

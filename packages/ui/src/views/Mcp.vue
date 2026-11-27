@@ -34,7 +34,7 @@ const emit = defineEmits<{ check: [url: string] }>();
 
 const SAYS: Record<string, string> = {
   ok: "no problems",
-  info: "rewrites something, harmless",
+  info: "has a note",
   warn: "has a problem",
   error: "leaves a tool out or fails",
 };
@@ -156,7 +156,7 @@ const ask = computed(
             <span><i class="mc-dot" />No problems</span>
             <span><i class="mc-dot s-warn" />Has a problem</span>
             <span><i class="mc-dot s-error" />Leaves a tool out</span>
-            <span v-if="anyInfo"><i class="mc-dot s-info" />Rewrites, harmless</span>
+            <span v-if="anyInfo"><i class="mc-dot s-info" />Has a note</span>
           </p>
           <template v-if="real.length">
             <h3 class="mc-sec">{{ plural(real.length, "problem") }}, worst first</h3>
@@ -165,9 +165,7 @@ const ask = computed(
             </ol>
           </template>
           <details v-if="notes.length" class="mc-fold">
-            <summary>
-              {{ plural(notes.length, "note") }}: clients rewrite something, nothing to fix
-            </summary>
+            <summary>{{ plural(notes.length, "note") }} on client behavior</summary>
             <ol class="mc-probs">
               <McpProblem v-for="p in notes" :key="p.code" :problem="p" :labels="labels" />
             </ol>
@@ -175,7 +173,8 @@ const ask = computed(
           <details v-if="r.ci" class="mc-fold">
             <summary>Run this check in CI</summary>
             <p class="mc-small">
-              Doctor exits with an error when a client breaks. Add it to your server's CI:
+              It fails on error diagnostics. Use <code>--max-warnings 0</code> to fail on warnings
+              too.
             </p>
             <Cmd :fix="{ type: 'cmd', text: r.ci }" />
           </details>

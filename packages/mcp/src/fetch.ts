@@ -1,6 +1,6 @@
 import pkg from "../package.json" with { type: "json" };
 import { parseMcpEndpoint } from "./endpoint.ts";
-import { validateTools } from "./input.ts";
+import { validateInitialize, validateTools } from "./input.ts";
 import type { McpInitializeResult, McpTool, McpToolList } from "./types.ts";
 
 const PROTOCOL_VERSION = "2025-11-25";
@@ -176,8 +176,14 @@ function createRequester(url: URL, options: FetchMcpToolListOptions) {
         throw new McpFetchError(`${method} returned JSON-RPC error${code}.`, "invalid-response");
       }
       if (method === "initialize") {
-        const version = (message.result as McpInitializeResult | undefined)?.protocolVersion;
-        if (typeof version === "string") protocolVersion = version;
+        try {
+          const initialize = validateInitialize(message.result);
+          protocolVersion = initialize.protocolVersion;
+          return initialize;
+        } catch (error) {
+          if (!(error instanceof TypeError)) throw error;
+          throw new McpFetchError(error.message, "invalid-response");
+        }
       }
       return message.result;
     } catch (error) {

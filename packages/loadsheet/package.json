@@ -33,6 +33,7 @@
     "@loadsheet/fleet": "workspace:*",
     "@loadsheet/harnesses": "workspace:*",
     "@loadsheet/kit": "workspace:*",
+    "@loadsheet/mcp": "workspace:*",
     "@loadsheet/schema": "workspace:*"
   },
   "devDependencies": {

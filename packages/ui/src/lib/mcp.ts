@@ -41,7 +41,9 @@ export interface McpCheckError {
   command?: string;
 }
 
-export const MCP_DOCS = "https://vite-doctor.onmax.me/diagnostics/";
+/** Where a Diagnostic Code is documented, as `mcpDocsUrl` in `@loadsheet/mcp` gives it. */
+export const mcpDocs = (code: string) =>
+  `https://loadsheet.dev/docs/reference/mcp#${code.toLowerCase()}`;
 
 const RANK: Record<McpStatus, number> = { ok: 0, info: 1, warn: 2, error: 3 };
 
@@ -64,7 +66,7 @@ export const andList = (xs: string[]) =>
   xs.length < 3 ? xs.join(" and ") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`;
 export const shortUrl = (url: string) => url.replace(/^https?:\/\//, "").replace(/\/$/, "");
 export const hostOf = (url: string) => shortUrl(url).split("/")[0]!;
-export const localCommand = (url: string) => `npx vite-doctor --mcp-url ${url}`;
+export const localCommand = (url: string) => `npx loadsheet mcp ${url}`;
 
 /** What someone typed, as the URL to check: a bare host gets `https://`. */
 export function mcpUrl(input: string): string {
@@ -158,7 +160,7 @@ export function mcpFixPrompt(r: McpCheck, url: string, problems = mcpProblems(r)
         : "every client";
       const what = d.tool ? `tool \`${d.tool}\`` : "server";
       lines.push(
-        `${++n}. ${d.code} (${d.severity}) ${what} in ${who}: ${d.fix} Docs: ${MCP_DOCS}${d.code}`,
+        `${++n}. ${d.code} (${d.severity}) ${what} in ${who}: ${d.fix} Docs: ${mcpDocs(d.code)}`,
       );
     }
   lines.push(
@@ -170,7 +172,7 @@ export function mcpFixPrompt(r: McpCheck, url: string, problems = mcpProblems(r)
 }
 
 /**
-  A failed check in plain words: `local` when running Doctor on your machine gets past it, and `said`, what the API
+  A failed check in plain words: `local` when running loadsheet on your machine gets past it, and `said`, what the API
   answered, when it tells the reader more than the line does.
 */
 export function mcpFailure(e: McpCheckError): {

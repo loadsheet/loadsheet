@@ -11,6 +11,7 @@ npx loadsheet --fleet    # this machine and every machine of its fleetrc fleet, 
 npx loadsheet ./skills   # weigh a skill pack, with no usage data
 npx loadsheet build      # the report as a web page in ./loadsheet-report
 npx loadsheet --ui       # the same page, served on 127.0.0.1
+npx loadsheet mcp <url>  # what each MCP client does with a server's tools
 ```
 
 `npx loadsheet --help` lists every option. To have your agent apply the fixes you accept, paste it the prompt in [`docs/agent-prompt.md`](https://github.com/loadsheet/loadsheet/blob/main/docs/agent-prompt.md).
