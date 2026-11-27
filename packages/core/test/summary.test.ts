@@ -154,8 +154,57 @@ describe("renderSummary", () => {
 
   it("closes on the commands for more detail, the web page and applying fixes", () => {
     expect(text).toMatch(
-      /\nMore detail {4}npx loadsheet claude {3}npx loadsheet codex\nAs a web page {2}npx loadsheet --ui\nApply fixes {4}ask your agent to run npx loadsheet --json; it gets the exact edits\n$/u,
+      /\nMore detail {4}npx loadsheet claude --fleet {3}npx loadsheet codex --fleet\nAs a web page {2}npx loadsheet --ui --fleet\nApply fixes {4}ask your agent to run npx loadsheet --json --fleet; it gets the exact edits\n$/u,
     );
+  });
+
+  it("keeps over-budget usage visible without reporting negative free space", () => {
+    const report = stock();
+    report.sheet[0]!.fixedTokens!.value = 225_000;
+    expect(renderSummary(report)).toContain("225.0k tokens · 113% context window");
+    expect(renderSummary(report)).toContain(" 0% free (0)\n");
+  });
+
+  it("does not guess the free space when built-ins were not measured", () => {
+    const report = stock();
+    const sheet = report.sheet[0]!;
+    delete sheet.fixedTokens;
+    sheet.lines.push(line("custom", 500, 1));
+    expect(renderSummary(report)).toContain(" free space unknown\n");
+    sheet.lines[0]!.tokens.value = 200_000;
+    expect(renderSummary(report)).toContain(" 0% free (0)\n");
+  });
+
+  it("offers exact edits even when there are no estimated savings", () => {
+    const report = local();
+    const [finding] = report.findings;
+    const edit: Report["findings"][number] = { ...finding!, rule: "invisible-skill", level: "fix" };
+    delete edit.savesTokens;
+    report.findings = [edit];
+    const summary = renderSummary(report);
+    expect(summary).not.toContain("Nothing to cut");
+    expect(summary).toContain("Apply fixes");
+  });
+
+  it("shows manual findings without promising exact edits", () => {
+    const report = local();
+    report.findings.forEach((finding) => (finding.fixes = []));
+    const summary = renderSummary(report);
+    expect(summary).toContain("Needs your OK");
+    expect(summary).not.toContain("Apply fixes");
+    const detail = renderSummary(report, { harness: "claude-code" });
+    expect(detail).toContain("  ask");
+    expect(detail).not.toContain("Apply fixes");
+  });
+
+  it("does not call an installed zero-token skill a stock setup", () => {
+    const report = stock();
+    report.sheet[0]!.lines.push(line("manual", 0, 0));
+    for (const options of [{}, { harness: "claude-code" }]) {
+      const summary = renderSummary(report, options);
+      expect(summary).not.toContain("show up here once you add them");
+      expect(summary).toContain("Nothing to cut");
+    }
   });
 
   it("on a stock install, says what will show up and offers no fixes", () => {
@@ -208,7 +257,7 @@ describe("renderSummary", () => {
       style: (format, part) => `<${[format].flat().join(",")}>${part}</>`,
     });
     expect(styled).toContain("<bold>Claude Code</>");
-    expect(styled).toContain("<cyan>npx loadsheet codex</>");
+    expect(styled).toContain("<cyan>npx loadsheet codex --fleet</>");
     expect(styled).toContain("<green,bold>−0.3k</>");
     expect(styled).toContain("<yellow>Needs your OK</> data-toolkit");
   });
@@ -257,6 +306,12 @@ describe("renderSummary for one harness", () => {
         '          ~/.claude/settings.json  skillOverrides.<name> = "user-invocable-only"\n',
     );
     expect(text).toMatch(/\nApply fixes {4}ask your agent to run npx loadsheet --json/u);
+  });
+
+  it("keeps fleet scope in the commands within the harness breakdown", () => {
+    const detail = renderSummary({ ...local(), mode: "fleet" }, { harness: "claude-code" });
+    expect(detail).toContain("npx loadsheet claude --all --fleet\n");
+    expect(detail).toContain("npx loadsheet --json --fleet;");
   });
 
   it("offers no fixes when there is nothing to cut", () => {

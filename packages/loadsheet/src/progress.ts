@@ -22,6 +22,7 @@ export function scanProgress(
   const started = clock();
   const tty = stderr.isTTY === true;
   const label = "Reading your agents' past chats, on this machine only";
+  const shortLabel = "Reading chats locally";
   const count = (n: number) => n.toLocaleString("en-US");
   let latest: ScanProgress | undefined;
   // Where reads from disk began: the bytes the cache holds count as read at once.
@@ -29,7 +30,8 @@ export function scanProgress(
   let printed = 0;
   let shown = false;
   const line = () => {
-    if (!latest) return label;
+    const limit = Math.max(0, (stderr.columns ?? 80) - 1);
+    if (!latest) return !tty || label.length <= limit ? label : shortLabel.slice(0, limit);
     const { done, total, doneBytes, totalBytes } = latest;
     const share = totalBytes > 0 ? doneBytes / totalBytes : total > 0 ? done / total : 1;
     const percent = `${Math.floor(share * 100)}%`;
@@ -42,8 +44,16 @@ export function scanProgress(
     if (!tty)
       return `${label}: ${count(done)} of ${count(total)} files, ${[percent, ...left].join(", ")}`;
     const status = [percent, ...left].join("  ");
-    const width = Math.min(30, (stderr.columns ?? 80) - label.length - status.length - 4);
-    if (width < 10) return `${label}: ${status}`;
+    const width = Math.min(30, limit - label.length - status.length - 4);
+    if (width < 10) {
+      const fallbacks = [
+        `${label}: ${status}`,
+        `${shortLabel}: ${status}`,
+        `${shortLabel}: ${percent}`,
+        status,
+      ];
+      return fallbacks.find((candidate) => candidate.length <= limit) ?? percent.slice(0, limit);
+    }
     const filled = Math.round(share * width);
     return `${label}  ${"█".repeat(filled)}${"░".repeat(width - filled)}  ${status}`;
   };

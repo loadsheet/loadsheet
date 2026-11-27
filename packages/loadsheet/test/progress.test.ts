@@ -4,9 +4,9 @@ import { scanProgress } from "../src/progress.ts";
 const MB = 1024 * 1024;
 
 /** A stderr that keeps what is written, and a clock the test moves. */
-const setup = (tty: boolean) => {
+const setup = (tty: boolean, columns = 120) => {
   const written: string[] = [];
-  const stderr = { isTTY: tty, columns: 120, write: (text: string) => written.push(text) > 0 };
+  const stderr = { isTTY: tty, columns, write: (text: string) => written.push(text) > 0 };
   let now = 0;
   const progress = scanProgress(stderr, () => now);
   return { written, progress, at: (ms: number) => (now = ms) };
@@ -44,6 +44,19 @@ describe("scan progress", () => {
     progress.update({ done: 95, total: 100, doneBytes: 92 * MB, totalBytes: 100 * MB });
     // 2 MB in 4 s, 8 MB to go.
     expect(written.at(-1)).toContain("  92%  ~16s left");
+  });
+
+  it.each([64, 40, 12])("stays on one row at %i columns", (columns) => {
+    const { written, progress, at } = setup(true, columns);
+    vi.advanceTimersByTime(2000);
+    progress.update({ done: 0, total: 10, doneBytes: 0, totalBytes: 100 * MB });
+    at(2500);
+    progress.update({ done: 1, total: 10, doneBytes: 75 * MB, totalBytes: 100 * MB });
+    expect(written.at(-1)).toContain("75%");
+    if (columns === 64) expect(written.at(-1)).toContain("~1s left");
+    progress.stop();
+    expect(written.at(-1)).toBe("\r\u001b[2K");
+    for (const row of written) expect(row.slice("\r\u001b[2K".length).length).toBeLessThan(columns);
   });
 
   it("prints a line every 5 s off a terminal, with files and the share of bytes", () => {

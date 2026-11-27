@@ -19,7 +19,7 @@ Claude Code  17.3k tokens · 9% context window
 ■ agents 0.1k
 ```
 
-For each harness with chats in the window: how many tokens every chat sends before you type, and what share of the model's context window that is. The bar splits them by part. `built-in` is the harness's own system prompt and built-in tools; the rest is your setup: instruction files, skills, MCP servers and agents. The skill count leaves out skills that cost no tokens. The heaviest harness fills two thirds of its bar and the others are drawn on the same scale, so a lighter harness has a shorter bar; the percentages give the real share.
+For each harness with chats in the window: how many tokens every chat sends before you type, and what share of the model's context window that is. The bar splits them by part. `built-in` is the harness's own system prompt and built-in tools; the rest is your setup: instruction files, skills, MCP servers and agents. The skill count leaves out skills that cost no tokens. The heaviest harness fills two thirds of its bar and the others are drawn on the same scale, so a lighter harness has a shorter bar; the percentages give the real share. When no chat reports the built-in cost, the free space is unknown unless your setup already fills the window.
 
 ## Breakdown
 
@@ -34,7 +34,7 @@ Each row is one kind of change, with the tokens every chat would save once it is
 
 On a stock install with nothing added, the summary says that skills, MCP servers and instruction files show up once you add them.
 
-The summary ends with the command for each harness's breakdown and for the web page, `npx loadsheet --ui`. loadsheet changes none of your files: when there is something to change, it tells you how to apply it. See [Apply fixes with your agent](/docs/guide/fixes).
+The summary ends with the command for each harness's breakdown and for the web page, `npx loadsheet --ui`. Fleet reports include `--fleet` in these commands. loadsheet changes none of your files: when it has exact edits, it tells you how to apply them, even if they don't save tokens. See [Apply fixes with your agent](/docs/guide/fixes).
 
 ## One harness
 

@@ -42,7 +42,8 @@ export const harnessName = (harness: string) => NAMES[harness] ?? harness;
 const shortId = (harness: string) => harness.split("-")[0]!;
 
 /** `npx loadsheet` with arguments, as a command to copy. */
-const command = (args: string) => `npx loadsheet ${args}`;
+const command = (report: Report, args: string) =>
+  `npx loadsheet ${args}${report.mode === "fleet" ? " --fleet" : ""}`;
 
 /** Names as a person lists them: `A`, `A and B`, `A, B and C`. */
 const listOf = (names: string[]) =>
@@ -356,6 +357,11 @@ const harnessBlock = (style: Style, sheet: Sheet, scale: number) => {
   const name = cell(style, "bold", harnessName(sheet.harness), NAME);
   const known = sheet.fixedTokens !== undefined;
   const used = Math.round((total / window) * 100);
+  const remaining = Math.max(0, window - total);
+  const free =
+    known || remaining === 0
+      ? `${Math.round((remaining / window) * 100)}% free (${k(remaining)})`
+      : "free space unknown";
   const title = `${name}${k(total)} tokens · ${used}% context window${known ? "" : style("dim", "; the harness's own is unknown")}`;
   const loaded = Math.max(1, Math.round((total / scale) * LOADED));
   const cells = cellsOf(
@@ -367,7 +373,7 @@ const harnessBlock = (style: Style, sheet: Sheet, scale: number) => {
     parts.map((part, index) => style(part.format, "█".repeat(cells[index]!))).join("") +
     style("dim", "░".repeat(BAR - filled)) +
     " " +
-    style("dim", `${100 - used}% free (${k(Math.max(0, window - total))})`);
+    style("dim", free);
   const legend: string[] = [];
   let lineText = "";
   let line = "";
@@ -412,10 +418,14 @@ const overview = (report: Report, sheets: Sheet[], style: Style) => {
     rows: bySaves(fixRows(report, sheet)).filter((row) => row.saves > 0),
   }));
   const ask = bySaves(sheets.flatMap((sheet) => askRows(report, sheet)))[0];
-  const fixes = rows.some(({ rows }) => rows.length) || ask !== undefined;
+  const hasEdits = report.findings.some((finding) => finding.fixes.length > 0);
   out.push("");
-  if (!fixes) {
-    out.push(nothingToCut(sheets));
+  if (!rows.some(({ rows }) => rows.length) && !ask) {
+    out.push(
+      hasEdits
+        ? "Exact fixes are available, with no estimated token savings here."
+        : nothingToCut(sheets),
+    );
   } else {
     const title = "Breakdown";
     const unit = "saved per chat";
@@ -443,20 +453,22 @@ const overview = (report: Report, sheets: Sheet[], style: Style) => {
 
   out.push("");
   const commands = sheets
-    .map((sheet) => style("cyan", command(shortId(sheet.harness))))
+    .map((sheet) => style("cyan", command(report, shortId(sheet.harness))))
     .join("   ");
   out.push(`${cell(style, "dim", "More detail", NAME + 2)}${commands}`);
-  out.push(`${cell(style, "dim", "As a web page", NAME + 2)}${style("cyan", command("--ui"))}`);
-  if (fixes) out.push(applyLine(style));
+  out.push(
+    `${cell(style, "dim", "As a web page", NAME + 2)}${style("cyan", command(report, "--ui"))}`,
+  );
+  if (hasEdits) out.push(applyLine(report, style));
   return out;
 };
 
-const applyLine = (style: Style) =>
-  `${cell(style, "dim", "Apply fixes", NAME + 2)}ask your agent to run ${style("cyan", command("--json"))}${style("dim", "; it gets the exact edits")}`;
+const applyLine = (report: Report, style: Style) =>
+  `${cell(style, "dim", "Apply fixes", NAME + 2)}ask your agent to run ${style("cyan", command(report, "--json"))}${style("dim", "; it gets the exact edits")}`;
 
 /** Why there is no savings table: nothing added to the harnesses yet, or nothing worth cutting. */
 const nothingToCut = (sheets: Sheet[]) =>
-  sheets.every((sheet) => setupTokens(sheet) === 0)
+  sheets.every((sheet) => installed(sheet).length === 0)
     ? "Skills, MCP servers and instruction files show up here once you add them."
     : "Nothing to cut: the checks found nothing unused or oversized.";
 
@@ -560,7 +572,7 @@ const breakdown = (report: Report, sheet: Sheet, style: Style, all: boolean) => 
     const moreNever = unused.length - unusedShown.length;
     if (moreUsed + moreNever) {
       const text = `+ ${num(moreUsed + moreNever)} more: ${num(moreUsed)} used, ${num(moreNever)} never used`;
-      out.push(`  ${text}   ${style("cyan", command(`${shortId(sheet.harness)} --all`))}`);
+      out.push(`  ${text}   ${style("cyan", command(report, `${shortId(sheet.harness)} --all`))}`);
     }
   }
 
@@ -615,7 +627,7 @@ const breakdown = (report: Report, sheet: Sheet, style: Style, all: boolean) => 
       );
     }
   }
-  if (rows.length || asks.length) out.push("", applyLine(style));
+  if (rows.length) out.push("", applyLine(report, style));
   return out;
 };
 
