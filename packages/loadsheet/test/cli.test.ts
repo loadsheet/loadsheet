@@ -162,7 +162,7 @@ describe("loadsheet (this machine)", () => {
   it("prints a table by default, with no canary or home path", () => {
     const result = local();
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain("claude-code");
+    expect(result.stdout).toContain("Claude Code");
     expect(result.stdout).not.toContain(CANARY);
     expect(result.stdout).not.toContain(root);
   });
@@ -415,15 +415,17 @@ describe("loadsheet on fixtures/home", () => {
     expect(digests()).toEqual(before);
   });
 
-  it("prints what a session starts with and what it can get back", () => {
+  it("prints what a chat starts with and what it can get back", () => {
     const result = inHome();
     expect(result.status).toBe(0);
     expect(result.stdout).toMatch(
-      /^loadsheet \d+\.\d+\.\d+ · ~\n\nClaude Code {2}~[\d.]+k of 200k before you type\n/u,
+      /^loadsheet \d+\.\d+\.\d+\n\nLearn what you send to Claude Code with the first message of every chat\.\n\nClaude Code {2}[\d.]+k tokens · \d+% context window\n/u,
     );
-    expect(result.stdout).toContain("You can get back");
+    expect(result.stdout).toContain("Breakdown");
     expect(result.stdout).toContain("remove 1 skill never used in 3650 days");
-    expect(result.stdout).toContain("More detail    loadsheet claude-code\n");
+    expect(result.stdout).toContain(
+      "More detail    npx loadsheet claude\nAs a web page  npx loadsheet --ui\n",
+    );
     expect(result.stdout).not.toContain("\u001b[");
   });
 

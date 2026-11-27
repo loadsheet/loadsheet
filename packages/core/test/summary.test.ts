@@ -66,54 +66,139 @@ const local = (): Report => {
   });
 };
 
+/** Claude Code as installed: 54k of its own and nothing the person added. */
+const stock = (): Report => ({
+  ...local(),
+  sheet: [
+    {
+      harness: "claude-code",
+      sessions: 1,
+      fixedTokens: { value: 54_000, basis: "measured" },
+      contextWindow: 200_000,
+      lines: [],
+    },
+  ],
+  findings: [],
+});
+
 const rows = (text: string) => text.split("\n");
 
 describe("renderSummary", () => {
-  const text = renderSummary(fleet, { cwd: "~/work" });
+  const text = renderSummary(fleet);
 
-  it("opens with the version, the folder and the machines it could not read", () => {
-    expect(rows(text).slice(0, 2)).toEqual([
-      "loadsheet 0.0.1 · ~/work",
+  it("opens with the version, the machines it could not read, and what it teaches", () => {
+    expect(rows(text).slice(0, 4)).toEqual([
+      "loadsheet 0.0.1",
       "not read: mini (ssh: connect to host mini port 22: Operation timed out)",
+      "",
+      "Learn what you send to Claude Code and Codex with the first message of every chat.",
     ]);
   });
 
-  it("gives each harness what a session starts with, a 60-cell bar and its parts", () => {
+  it("names one harness alone, and three as a list", () => {
+    expect(renderSummary(local())).toContain(
+      "\nLearn what you send to Claude Code with the first message of every chat.\n",
+    );
+    const three = {
+      ...fleet,
+      sheet: [...fleet.sheet, { ...fleet.sheet[1]!, harness: "cursor" }],
+    };
+    expect(renderSummary(three)).toContain(
+      "\nLearn what you send to Claude Code, Codex and Cursor with the first message of every chat.\n",
+    );
+  });
+
+  it("gives each harness what a chat starts with, a 60-cell bar and its parts", () => {
     expect(text).toContain(
-      "Claude Code  ~17.3k of 200k before you type\n" +
-        `${"█".repeat(40)}${"░".repeat(20)} 182.7k free\n` +
-        "■ harness 5.6k  ■ instructions 6.7k  ■ skills 0.8k  ■ MCP 4.1k  ■ agents 0.1k\n",
+      "Claude Code  17.3k tokens · 9% context window\n" +
+        `${"█".repeat(40)}${"░".repeat(20)} 91% free (182.7k)\n` +
+        "■ built-in 5.6k  ■ instructions 6.7k  ■ skills 0.8k (14 skills)  ■ MCP 4.1k\n" +
+        "■ agents 0.1k\n",
     );
     // Codex is drawn on Claude Code's scale, so the lighter harness has the shorter bar.
-    expect(text).toMatch(/\nCodex {8}~11\.7k of 258k before you type\n█{27}░{33} 246\.7k free\n/u);
+    expect(text).toMatch(
+      /\nCodex {8}11\.7k tokens · 5% context window\n█{27}░{33} 95% free \(246\.7k\)\n/u,
+    );
+  });
+
+  it("counts only the skills that cost tokens, and writes a part under 100 as <0.1k", () => {
+    const report = local();
+    const sheet = report.sheet[0]!;
+    sheet.lines.push(
+      { ...line("free", 0, 0) },
+      {
+        ...line("tiny", 8, 1),
+        item: "mcp:tiny",
+        ref: { kind: "mcp", name: "tiny" },
+      },
+    );
+    expect(renderSummary(report)).toContain(
+      "■ built-in 25.4k  ■ skills 4.6k (14 skills)  ■ MCP <0.1k\n",
+    );
   });
 
   it("lists what each harness can get back, tokens aligned on one column", () => {
     const savings = rows(text).slice(
-      rows(text).indexOf(rows(text).find((row) => row.startsWith("You can get back"))!),
+      rows(text).indexOf(rows(text).find((row) => row.startsWith("Breakdown"))!),
     );
     const table = savings.slice(0, savings.indexOf(""));
-    expect(table[0]).toMatch(/^You can get back {2,}tokens per session$/u);
+    expect(table[0]).toMatch(/^Breakdown {2,}saved per chat$/u);
     expect(table).toContain(
       "  Claude Code  shorten 1 skill description over 300 chars          −0.1k",
     );
     expect(table).toContain(
-      "  Ask first    data-toolkit plugin: 6 skills never used            −0.3k",
+      "  Needs your OK data-toolkit plugin: 6 skills never used           −0.3k",
     );
     for (const row of table) expect(row).toHaveLength(72);
   });
 
-  it("closes on the commands for more detail and for applying fixes", () => {
+  it("closes on the commands for more detail, the web page and applying fixes", () => {
     expect(text).toMatch(
-      /\nMore detail {4}loadsheet claude-code {3}loadsheet codex\nApply fixes {4}ask your agent to run npx loadsheet --json; it gets the exact edits\n$/u,
+      /\nMore detail {4}npx loadsheet claude {3}npx loadsheet codex\nAs a web page {2}npx loadsheet --ui\nApply fixes {4}ask your agent to run npx loadsheet --json; it gets the exact edits\n$/u,
     );
   });
 
-  it("leaves out harnesses without sessions, and says when no harness had one", () => {
+  it("on a stock install, says what will show up and offers no fixes", () => {
+    expect(renderSummary(stock())).toBe(
+      [
+        "loadsheet 1.2.3",
+        "",
+        "Learn what you send to Claude Code with the first message of every chat.",
+        "",
+        "Claude Code  54.0k tokens · 27% context window",
+        `${"█".repeat(40)}${"░".repeat(20)} 73% free (146.0k)`,
+        "■ built-in 54.0k",
+        "",
+        "Skills, MCP servers and instruction files show up here once you add them.",
+        "",
+        "More detail    npx loadsheet claude",
+        "As a web page  npx loadsheet --ui",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("says when what was added has nothing to cut, and offers no fixes", () => {
+    const clean = { ...local(), findings: [] };
+    const text = renderSummary(clean);
+    expect(text).toContain("\nNothing to cut: the checks found nothing unused or oversized.\n");
+    expect(text).not.toContain("Apply fixes");
+    expect(text).toMatch(/\nAs a web page {2}npx loadsheet --ui\n$/u);
+  });
+
+  it("leaves out harnesses without chats, and says when no harness had one", () => {
     expect(renderSummary(local())).not.toContain("Codex");
     const empty = { ...local(), sheet: local().sheet.map((sheet) => ({ ...sheet, sessions: 0 })) };
     expect(renderSummary(empty)).toBe(
-      "loadsheet 1.2.3\n\nNo Claude Code or Codex sessions were found on this machine in the last 30 days, so there is nothing to judge yet.\n",
+      [
+        "loadsheet 1.2.3",
+        "",
+        "Learn what you send to your coding agent with the first message of every chat.",
+        "",
+        "No Claude Code or Codex chats were found on this machine in the last 30 days,",
+        "so there is nothing to measure yet.",
+        "",
+      ].join("\n"),
     );
   });
 
@@ -123,17 +208,28 @@ describe("renderSummary", () => {
       style: (format, part) => `<${[format].flat().join(",")}>${part}</>`,
     });
     expect(styled).toContain("<bold>Claude Code</>");
-    expect(styled).toContain("<cyan>loadsheet codex</>");
+    expect(styled).toContain("<cyan>npx loadsheet codex</>");
     expect(styled).toContain("<green,bold>−0.3k</>");
+    expect(styled).toContain("<yellow>Needs your OK</> data-toolkit");
   });
 });
 
 describe("renderSummary for one harness", () => {
   const text = renderSummary(local(), { harness: "claude-code" });
 
+  it("opens on the harness it breaks down", () => {
+    expect(rows(text).slice(0, 5)).toEqual([
+      "loadsheet 1.2.3",
+      "",
+      "Learn what you send to Claude Code with the first message of every chat.",
+      "",
+      "Claude Code  30.0k tokens · 15% context window",
+    ]);
+  });
+
   it("breaks the harness down part by part, tokens and uses on fixed columns", () => {
     expect(text).toContain(
-      "harness                              25.4k\n" +
+      "built-in                             25.4k\n" +
         "  system prompt and built-in tools, set by Claude Code\n",
     );
     expect(text).toContain("skills · 14 listed                    4.6k     uses\n");
@@ -146,7 +242,7 @@ describe("renderSummary for one harness", () => {
   });
 
   it("shows the heaviest skills and names the rest and how to list them", () => {
-    expect(text).toContain("  + 5 more: 3 used, 2 never used   loadsheet claude-code --all\n");
+    expect(text).toContain("  + 5 more: 3 used, 2 never used   npx loadsheet claude --all\n");
     expect(text).not.toContain("used-5");
     const all = renderSummary(local(), { harness: "claude-code", all: true });
     expect(all).toContain("used-7");
@@ -154,17 +250,26 @@ describe("renderSummary for one harness", () => {
     expect(all).not.toContain("more:");
   });
 
-  it("names each change once, with where it goes", () => {
+  it("names each change once, with where it goes, and how to apply it", () => {
     expect(text).toContain(
-      "You can get back\n" +
+      "Fixes\n" +
         "   −1.4k  hide 5 skills never used in 30 days\n" +
         '          ~/.claude/settings.json  skillOverrides.<name> = "user-invocable-only"\n',
     );
+    expect(text).toMatch(/\nApply fixes {4}ask your agent to run npx loadsheet --json/u);
   });
 
-  it("says when the harness had no sessions", () => {
+  it("offers no fixes when there is nothing to cut", () => {
+    const text = renderSummary(stock(), { harness: "claude-code" });
+    expect(text).toContain(
+      "\nSkills, MCP servers and instruction files show up here once you add them.\n",
+    );
+    expect(text).not.toContain("Apply fixes");
+  });
+
+  it("says when the harness had no chats", () => {
     expect(renderSummary(local(), { harness: "codex" })).toContain(
-      "Codex had no sessions in the last 30 days, so there is nothing to break down.",
+      "Codex had no chats in the last 30 days, so there is nothing to break down.",
     );
   });
 });

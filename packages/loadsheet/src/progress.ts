@@ -10,8 +10,9 @@ const duration = (seconds: number) => {
 
 /**
  * Progress on stderr for a scan that takes over 2 s, such as a first run, which reads every
- * transcript before the cache holds them. On a terminal one line with a bar and the time left is
- * rewritten in place and cleared at the end; elsewhere a line is printed every 5 s. Both move with
+ * transcript before the cache holds them. On a terminal one line with a bar, the share read and the
+ * time left is rewritten in place and cleared at the end; elsewhere a line with the files read is
+ * printed every 5 s. Both move with
  * the bytes read, since transcripts run from a few KB to hundreds of MB.
  */
 export function scanProgress(
@@ -20,7 +21,7 @@ export function scanProgress(
 ) {
   const started = clock();
   const tty = stderr.isTTY === true;
-  const label = "Reading this machine's sessions";
+  const label = "Reading your agents' past chats, on this machine only";
   const count = (n: number) => n.toLocaleString("en-US");
   let latest: ScanProgress | undefined;
   // Where reads from disk began: the bytes the cache holds count as read at once.
@@ -40,11 +41,11 @@ export function scanProgress(
         : [];
     if (!tty)
       return `${label}: ${count(done)} of ${count(total)} files, ${[percent, ...left].join(", ")}`;
-    const counts = `${count(done)}/${count(total)} files  ${[percent, ...left].join("  ")}`;
-    const width = Math.min(30, (stderr.columns ?? 80) - label.length - counts.length - 4);
-    if (width < 10) return `${label}: ${counts}`;
+    const status = [percent, ...left].join("  ");
+    const width = Math.min(30, (stderr.columns ?? 80) - label.length - status.length - 4);
+    if (width < 10) return `${label}: ${status}`;
     const filled = Math.round(share * width);
-    return `${label}  ${"█".repeat(filled)}${"░".repeat(width - filled)}  ${counts}`;
+    return `${label}  ${"█".repeat(filled)}${"░".repeat(width - filled)}  ${status}`;
   };
   const show = () => {
     if (!tty && !shown)

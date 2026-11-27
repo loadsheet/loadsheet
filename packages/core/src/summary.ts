@@ -24,8 +24,6 @@ export interface SummaryOptions {
   harness?: string;
   /** In the breakdown, lists every skill instead of the heaviest. */
   all?: boolean;
-  /** The folder it ran in, as the person should read it, such as `~/project`. */
-  cwd?: string;
 }
 
 const NAMES: Record<string, string> = {
@@ -39,6 +37,16 @@ const NAMES: Record<string, string> = {
 
 /** A harness's name as people write it. */
 export const harnessName = (harness: string) => NAMES[harness] ?? harness;
+
+/** What a person types after `loadsheet` to name a harness: the part of its id before the dash. */
+const shortId = (harness: string) => harness.split("-")[0]!;
+
+/** `npx loadsheet` with arguments, as a command to copy. */
+const command = (args: string) => `npx loadsheet ${args}`;
+
+/** Names as a person lists them: `A`, `A and B`, `A, B and C`. */
+const listOf = (names: string[]) =>
+  names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 
 /**
  * The folders each harness keeps its own files in, at home or in a project; a fix under none of
@@ -83,12 +91,8 @@ const USED_ROWS = 5;
 const NEVER_ROWS = 4;
 
 const k = (n: number) => (n < 100 ? String(Math.round(n)) : `${(n / 1000).toFixed(1)}k`);
-const short = (n: number) =>
-  n >= 1e6
-    ? `${(n / 1e6).toFixed(1).replace(/\.0$/, "")}M`
-    : n >= 1000
-      ? `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1).replace(/\.0$/, "")}k`
-      : String(Math.round(n));
+/** Tokens in thousands, with anything under 100 as `<0.1k`. */
+const thousands = (n: number) => (n < 100 ? "<0.1k" : k(n));
 const num = (n: number) => n.toLocaleString("en-US");
 const plural = (n: number, one: string, many = `${one}s`) => `${num(n)} ${n === 1 ? one : many}`;
 const minus = (n: number) => `−${k(n)}`;
@@ -106,7 +110,7 @@ const fit = (text: string, width: number, path = false) =>
 type Part = "harness" | Kind;
 
 const PARTS: { part: Part; label: string; format: Format }[] = [
-  { part: "harness", label: "harness", format: "gray" },
+  { part: "harness", label: "built-in", format: "gray" },
   { part: "instructions", label: "instructions", format: "green" },
   { part: "skill", label: "skills", format: "blue" },
   { part: "mcp", label: "MCP", format: "yellow" },
@@ -118,15 +122,17 @@ const installed = (sheet: Sheet, kind?: Kind) =>
 
 const sum = (lines: Line[]) => lines.reduce((total, line) => total + line.tokens.value, 0);
 
-/** Tokens a session of the harness starts with, part by part. */
+/** Tokens a chat of the harness starts with, part by part, and how many skills cost any. */
 const partsOf = (sheet: Sheet) =>
-  PARTS.map((entry) => ({
-    ...entry,
-    tokens:
-      entry.part === "harness"
-        ? (harnessTokens(sheet) ?? 0)
-        : sum(installed(sheet, entry.part as Kind)),
-  }));
+  PARTS.map((entry) => {
+    if (entry.part === "harness") return { ...entry, tokens: harnessTokens(sheet) ?? 0, note: "" };
+    const lines = installed(sheet, entry.part as Kind);
+    const note =
+      entry.part === "skill"
+        ? ` (${plural(lines.filter((line) => line.tokens.value > 0).length, "skill")})`
+        : "";
+    return { ...entry, tokens: sum(lines), note };
+  });
 
 const totalOf = (sheet: Sheet) => (harnessTokens(sheet) ?? 0) + setupTokens(sheet);
 const windowOf = (sheet: Sheet) => sheet.contextWindow ?? 200_000;
@@ -333,11 +339,13 @@ const cell = (style: Style, format: Format | Format[] | undefined, text: string,
   return style(format, text) + padded.slice(text.length);
 };
 
-const header = (report: Report, cwd?: string) => {
-  const tool = report.tool.replace("@", " ");
-  const out = [[tool, cwd].filter(Boolean).join(" · ")];
+/** The version, the machines it could not read, and what the summary teaches about `harnesses`. */
+const header = (report: Report, harnesses: string[]) => {
+  const out = [report.tool.replace("@", " ")];
   for (const machine of report.machines.filter((m) => !m.reachable))
     out.push(`not read: ${machine.name}${machine.error ? ` (${visible(machine.error)})` : ""}`);
+  const names = harnesses.length ? listOf(harnesses.map(harnessName)) : "your coding agent";
+  out.push("", `Learn what you send to ${names} with the first message of every chat.`);
   return out;
 };
 
@@ -347,25 +355,27 @@ const harnessBlock = (style: Style, sheet: Sheet, scale: number) => {
   const window = windowOf(sheet);
   const name = cell(style, "bold", harnessName(sheet.harness), NAME);
   const known = sheet.fixedTokens !== undefined;
-  const title = `${name}~${k(total)} of ${short(window)} before you type${known ? "" : style("dim", "; the harness's own is unknown")}`;
+  const used = Math.round((total / window) * 100);
+  const title = `${name}${k(total)} tokens · ${used}% context window${known ? "" : style("dim", "; the harness's own is unknown")}`;
   const loaded = Math.max(1, Math.round((total / scale) * LOADED));
   const cells = cellsOf(
     parts.map((part) => part.tokens),
     Math.min(loaded, BAR - 1),
   );
-  const used = cells.reduce((a, b) => a + b, 0);
+  const filled = cells.reduce((a, b) => a + b, 0);
   const bar =
     parts.map((part, index) => style(part.format, "█".repeat(cells[index]!))).join("") +
-    style("dim", "░".repeat(BAR - used)) +
+    style("dim", "░".repeat(BAR - filled)) +
     " " +
-    style("dim", `${k(Math.max(0, window - total))} free`);
+    style("dim", `${100 - used}% free (${k(Math.max(0, window - total))})`);
   const legend: string[] = [];
   let lineText = "";
   let line = "";
   for (const part of parts) {
     if (!part.tokens) continue;
-    const text = `■ ${part.label} ${k(part.tokens)}`;
-    const styled = `${style(part.format, "■")} ${part.label} ${k(part.tokens)}`;
+    const value = `${part.label} ${thousands(part.tokens)}${part.note}`;
+    const text = `■ ${value}`;
+    const styled = `${style(part.format, "■")} ${value}`;
     if (lineText && lineText.length + 2 + text.length > WIDTH) {
       legend.push(line);
       lineText = line = "";
@@ -385,9 +395,11 @@ const savingsLine = (
   text: string,
   saves: string,
 ) => {
-  const head = `  ${name.padEnd(NAME)}${text}`;
+  // A name as wide as the column, such as "Needs your OK", still keeps a space before the change.
+  const width = Math.max(NAME, name.length + 1);
+  const head = `  ${name.padEnd(width)}${text}`;
   const gap = Math.max(2, RIGHT - head.length - saves.length);
-  return `  ${cell(style, nameFormat, name, NAME)}${text}${" ".repeat(gap)}${saves ? style(["green", "bold"], saves) : ""}`.trimEnd();
+  return `  ${cell(style, nameFormat, name, width)}${text}${" ".repeat(gap)}${saves ? style(["green", "bold"], saves) : ""}`.trimEnd();
 };
 
 const overview = (report: Report, sheets: Sheet[], style: Style) => {
@@ -400,12 +412,13 @@ const overview = (report: Report, sheets: Sheet[], style: Style) => {
     rows: bySaves(fixRows(report, sheet)).filter((row) => row.saves > 0),
   }));
   const ask = bySaves(sheets.flatMap((sheet) => askRows(report, sheet)))[0];
+  const fixes = rows.some(({ rows }) => rows.length) || ask !== undefined;
   out.push("");
-  if (rows.every(({ rows }) => !rows.length) && !ask) {
-    out.push("Nothing to cut: no rule found context you could get back.");
+  if (!fixes) {
+    out.push(nothingToCut(sheets));
   } else {
-    const title = "You can get back";
-    const unit = "tokens per session";
+    const title = "Breakdown";
+    const unit = "saved per chat";
     out.push(
       `${style("bold", title)}${" ".repeat(Math.max(2, RIGHT - title.length - unit.length))}${style("dim", unit)}`,
     );
@@ -424,19 +437,28 @@ const overview = (report: Report, sheets: Sheet[], style: Style) => {
     }
     if (ask)
       out.push(
-        savingsLine(style, "Ask first", "yellow", ask.text, ask.saves ? minus(ask.saves) : ""),
+        savingsLine(style, "Needs your OK", "yellow", ask.text, ask.saves ? minus(ask.saves) : ""),
       );
   }
 
   out.push("");
-  const commands = sheets.map((sheet) => style("cyan", `loadsheet ${sheet.harness}`)).join("   ");
+  const commands = sheets
+    .map((sheet) => style("cyan", command(shortId(sheet.harness))))
+    .join("   ");
   out.push(`${cell(style, "dim", "More detail", NAME + 2)}${commands}`);
-  out.push(applyLine(style));
+  out.push(`${cell(style, "dim", "As a web page", NAME + 2)}${style("cyan", command("--ui"))}`);
+  if (fixes) out.push(applyLine(style));
   return out;
 };
 
 const applyLine = (style: Style) =>
-  `${cell(style, "dim", "Apply fixes", NAME + 2)}ask your agent to run ${style("cyan", "npx loadsheet --json")}${style("dim", "; it gets the exact edits")}`;
+  `${cell(style, "dim", "Apply fixes", NAME + 2)}ask your agent to run ${style("cyan", command("--json"))}${style("dim", "; it gets the exact edits")}`;
+
+/** Why there is no savings table: nothing added to the harnesses yet, or nothing worth cutting. */
+const nothingToCut = (sheets: Sheet[]) =>
+  sheets.every((sheet) => setupTokens(sheet) === 0)
+    ? "Skills, MCP servers and instruction files show up here once you add them."
+    : "Nothing to cut: the checks found nothing unused or oversized.";
 
 /** A row of the breakdown: a name, its tokens ending at TOKENS, then optional columns. */
 const itemRow = (
@@ -475,9 +497,9 @@ const heaviest = (a: Line, b: Line) =>
 const breakdown = (report: Report, sheet: Sheet, style: Style, all: boolean) => {
   const out = ["", ...harnessBlock(style, sheet, totalOf(sheet))];
   const harness = harnessTokens(sheet);
-  out.push("", sectionHead(style, "harness", harness ?? 0));
+  out.push("", sectionHead(style, "built-in", harness ?? 0));
   out.push(
-    `  ${style("dim", harness === undefined ? "no session reported what it started with" : `system prompt and built-in tools, set by ${harnessName(sheet.harness)}`)}`,
+    `  ${style("dim", harness === undefined ? "no chat reported what it started with" : `system prompt and built-in tools, set by ${harnessName(sheet.harness)}`)}`,
   );
 
   const hidden = new Set(
@@ -538,7 +560,7 @@ const breakdown = (report: Report, sheet: Sheet, style: Style, all: boolean) => 
     const moreNever = unused.length - unusedShown.length;
     if (moreUsed + moreNever) {
       const text = `+ ${num(moreUsed + moreNever)} more: ${num(moreUsed)} used, ${num(moreNever)} never used`;
-      out.push(`  ${text}   ${style("cyan", `loadsheet ${sheet.harness} --all`)}`);
+      out.push(`  ${text}   ${style("cyan", command(`${shortId(sheet.harness)} --all`))}`);
     }
   }
 
@@ -574,9 +596,9 @@ const breakdown = (report: Report, sheet: Sheet, style: Style, all: boolean) => 
   const asks = bySaves(askRows(report, sheet));
   out.push("");
   if (!rows.length && !asks.length) {
-    out.push("Nothing to cut: no rule found context you could get back.");
+    out.push(nothingToCut([sheet]));
   } else {
-    out.push(style("bold", "You can get back"));
+    out.push(style("bold", "Fixes"));
     for (const row of rows) {
       const saves = row.saves
         ? style(["green", "bold"], minus(row.saves).padStart(6))
@@ -593,28 +615,32 @@ const breakdown = (report: Report, sheet: Sheet, style: Style, all: boolean) => 
       );
     }
   }
-  out.push("", applyLine(style));
+  if (rows.length || asks.length) out.push("", applyLine(style));
   return out;
 };
 
+/** Said when no harness had a chat, on two lines that fit a terminal. */
 const nothingYet = (report: Report) => {
   const where = report.machines.length > 1 ? "on these machines" : "on this machine";
-  return `No Claude Code or Codex sessions were found ${where} in the last ${plural(report.config.window, "day")}, so there is nothing to judge yet.`;
+  return [
+    `No Claude Code or Codex chats were found ${where} in the last ${plural(report.config.window, "day")},`,
+    "so there is nothing to measure yet.",
+  ];
 };
 
 /**
- * What a person reads after `npx loadsheet`: how much of each harness's context is taken before
- * they type, and what they can get back. With `harness`, that harness item by item.
+ * What a person reads after `npx loadsheet`: how much of each harness's context a chat starts
+ * with, and what they can get back. With `harness`, that harness item by item.
  */
 export const renderSummary = (report: Report, options: SummaryOptions = {}): string => {
   const style = options.style ?? plain;
-  const out = header(report, options.cwd);
   if (options.harness !== undefined) {
+    const out = header(report, [options.harness]);
     const sheet = report.sheet.find((candidate) => candidate.harness === options.harness);
     if (!sheet || !sheet.sessions) {
       out.push(
         "",
-        `${harnessName(options.harness)} had no sessions in the last ${plural(report.config.window, "day")}, so there is nothing to break down.`,
+        `${harnessName(options.harness)} had no chats in the last ${plural(report.config.window, "day")}, so there is nothing to break down.`,
       );
     } else {
       out.push(...breakdown(report, sheet, style, options.all ?? false));
@@ -622,7 +648,11 @@ export const renderSummary = (report: Report, options: SummaryOptions = {}): str
     return `${out.join("\n")}\n`;
   }
   const sheets = report.sheet.filter((sheet) => sheet.sessions > 0);
-  if (!sheets.length) out.push("", nothingYet(report));
+  const out = header(
+    report,
+    sheets.map((sheet) => sheet.harness),
+  );
+  if (!sheets.length) out.push("", ...nothingYet(report));
   else out.push(...overview(report, sheets, style));
   return `${out.join("\n")}\n`;
 };
