@@ -1,5 +1,6 @@
-// OpenCode (`opencode`): what is installed for the user. loadsheet reads none of its sessions, so
-// it declares every usage signal `none`.
+// OpenCode (`opencode`): what is installed for the user, and from its database (`opencode-db.ts`)
+// its sessions, compactions and tokens per project. Each session's tokens are one sum, so usage
+// is `inferred`; loadsheet reads none of its listings or uses, so every other signal is `none`.
 //
 // Source: https://github.com/anomalyco/opencode (branch `dev`), the docs in
 // `services/site/src/docs/content/`: `config.mdx` (where config lives, and that its files merge),
@@ -36,6 +37,7 @@ import {
   type FoundSkill,
 } from "./inventory.ts";
 import { skillsLockPath } from "./managed.ts";
+import { opencodeDb } from "./opencode-db.ts";
 import { packInventory } from "./pack.ts";
 import { splitFrontmatter } from "./skill-md.ts";
 
@@ -168,7 +170,7 @@ const machineInventory = async (files: Files, given?: Place): Promise<Item[]> =>
 /** OpenCode: what it has installed for the user; inventory only. */
 export const opencode = defineHarness({
   id: HARNESS,
-  signals: NO_USAGE,
+  signals: { ...NO_USAGE, usage: "inferred" },
   inventory: (files: Files) =>
     packInventory(files, {
       harness: HARNESS,
@@ -191,5 +193,6 @@ export const opencode = defineHarness({
       ];
     },
     inventory: machineInventory,
+    stores: () => [opencodeDb],
   },
 });

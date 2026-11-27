@@ -1,7 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { availableParallelism, homedir, hostname } from "node:os";
 import { posix } from "node:path";
-import type { Day, Scan } from "@loadsheet/schema";
+import { SIGNALS, type Day, type Grade, type Scan, type Signal } from "@loadsheet/schema";
 import {
   buildScan,
   sumTallies,
@@ -11,6 +11,7 @@ import {
   type MachineReader,
   type Place,
   type ProjectHint,
+  type SessionStore,
   type Tally,
   type TranscriptFormat,
 } from "../index.ts";
@@ -20,6 +21,7 @@ import { dirFiles } from "./files.ts";
 import { createProjectResolver } from "./projects.ts";
 import { reachesOf, withReach } from "./reach.ts";
 import { listTranscriptFiles, type TranscriptFile } from "./reader.ts";
+import { readStore } from "./stores.ts";
 import {
   openTranscriptPool,
   readTranscriptTally,
@@ -58,9 +60,17 @@ export interface ScanMachineOptions {
   readonly workers?: number;
   /** Bytes to read below which no worker thread starts; default MIN_POOLED_BYTES. */
   readonly minPooledBytes?: number;
+  /**
+   * Session stores no harness here owns, each with the id its Coverage row takes when it cannot be
+   * read, such as T3 Code's database of the agents it drives. Their Facts name their own harness.
+   */
+  readonly stores?: readonly MachineStore[];
   /** Called as transcript files are read: how many files and bytes of how many are done. */
   readonly onProgress?: (progress: ScanProgress) => void;
 }
+
+/** A session store and the id its Coverage row takes when it cannot be read. */
+export type MachineStore = SessionStore & { readonly harness: string };
 
 /** How far a scan has got through every harness's transcript files. */
 export interface ScanProgress {
@@ -339,6 +349,7 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
   );
   const parts: HarnessScan[] = [];
   const hints: ProjectHint[] = [];
+  let stored: StoresRead = { unread: new Map() };
   try {
     const plans = new Map<string, TranscriptPlan>();
     for (const { harness, machine } of machines) {
@@ -358,6 +369,8 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
       ...(options.onProgress ? { onProgress: options.onProgress } : {}),
     });
     reading.catch(() => {});
+    // Read beside the transcripts: a SELECT bound to the window, or a few small files per session.
+    const storesRead = readStores(machines, options.stores ?? [], place, sinceMs, window);
 
     const inventories = [];
     for (const { harness, machine } of machines) {
@@ -376,6 +389,7 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
     }
 
     await reading;
+    stored = await storesRead;
     // Nothing is left to read, so the threads go before the caches are written.
     await pool?.close();
     for (const { harness, installed, items, contextWindow, settings } of inventories) {
@@ -393,6 +407,20 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
         tally: sumTallies(tallies, window),
         ...(contextWindow === undefined ? {} : { contextWindow }),
         ...(settings === undefined ? {} : { settings }),
+        ...(stored.unread.has(harness.id) ? { unread: stored.unread.get(harness.id) } : {}),
+      });
+    }
+    // A store no harness owns gets a row only to say it could not be read. It is not installed,
+    // so no sheet is made for it.
+    for (const [harness, unread] of stored.unread) {
+      if (parts.some((part) => part.harness === harness)) continue;
+      parts.push({
+        harness,
+        installed: false,
+        signals: NO_SIGNALS,
+        items: [],
+        tally: EMPTY,
+        unread,
       });
     }
   } finally {
@@ -406,7 +434,7 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
     place.home,
   );
 
-  const scan = buildScan({
+  const built = buildScan({
     tool: options.tool,
     machine: options.machine ?? hostname(),
     scannedAt: now.toISOString(),
@@ -416,7 +444,63 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
       items: part.items.map((item) => withReach(item, reaches)),
     })),
   });
+  const scan = stored.usage ? { ...built, usage: sumUsage(built.usage, stored.usage) } : built;
   return resolveProjects(scan, hints, place);
+};
+
+const NO_SIGNALS = Object.fromEntries(SIGNALS.map((signal) => [signal, "none"])) as Record<
+  Signal,
+  Grade
+>;
+const EMPTY: Tally = { sessions: [], cells: [], versions: [] };
+
+type Usage = NonNullable<Scan["usage"]>;
+
+/** What the stores said: their usage in the window, and the stores not read, by harness. */
+interface StoresRead {
+  readonly usage?: Usage;
+  readonly unread: Map<string, string[]>;
+}
+
+/**
+ * Reads every harness's stores and the unowned ones. A store's Facts count as usage only: its
+ * sessions never become SessionCells, which the rules read as sessions that loaded a listing.
+ */
+const readStores = async (
+  machines: readonly { harness: Harness; machine: MachineReader<unknown> }[],
+  extra: readonly MachineStore[],
+  place: Place,
+  sinceMs: number,
+  window: readonly [Day, Day],
+): Promise<StoresRead> => {
+  const stores = [
+    ...machines.flatMap(({ harness, machine }) =>
+      (machine.stores?.(place) ?? []).map((store) => ({ harness: harness.id, store })),
+    ),
+    ...extra.map((store) => ({ harness: store.harness, store })),
+  ];
+  const reads = await Promise.all(
+    stores.map(({ store }) =>
+      readStore(store, place, sinceMs).catch(() => ({ unread: true }) as const),
+    ),
+  );
+  const counters = new Accumulator(window);
+  const unread = new Map<string, string[]>();
+  reads.forEach((read, index) => {
+    const { harness, store } = stores[index]!;
+    if (!read) return;
+    if ("unread" in read) unread.set(harness, [...(unread.get(harness) ?? []), store.name]);
+    else for (const fact of read.facts) counters.fact(fact.harness ?? harness, fact);
+  });
+  const usage = counters.usageResult();
+  return usage ? { usage, unread } : { unread };
+};
+
+const sumUsage = (first: Usage | undefined, second: Usage): Usage => {
+  const counters = new Accumulator();
+  if (first) counters.usage(first);
+  counters.usage(second);
+  return counters.usageResult()!;
 };
 
 /**

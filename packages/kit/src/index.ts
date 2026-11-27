@@ -190,6 +190,68 @@ export interface Place {
 }
 
 /**
+ * A usage Fact a session store read. It is about the store's harness, or, with `harness`, about
+ * another one, as when T3 Code's database holds the sessions of an agent it drives. A store says
+ * only usage: its sessions never count as a harness's SessionCells.
+ */
+export type StoreFact = (UsageSessionFact | CompactionFact | UsageTokensFact) & {
+  readonly harness?: string;
+};
+
+/** One row of a store's SELECT, by column name. */
+export type StoreRow = Readonly<Record<string, number | bigint | string | null | Uint8Array>>;
+
+/**
+ * A SQLite database a harness keeps its sessions in. kit opens it read-only, creating no file
+ * beside it, runs `query` once and passes the rows to `facts`. A database it cannot open or
+ * query is listed in the Coverage's `unread`; one that does not exist is not.
+ */
+export interface SqliteStore {
+  readonly kind: "sqlite";
+  /** Its name in `Coverage.unread`, such as `opencode.db`: never a path. */
+  readonly name: string;
+  /** The database file, absolute. */
+  path(place: Place): string;
+  /**
+   * One SELECT. `?1` is bound to the window's first instant, as epoch milliseconds or as an ISO
+   * 8601 timestamp (`since`). It selects numbers, model names and folders only: a title, message
+   * or payload stays in SQLite, so `json_extract` the one field needed.
+   */
+  readonly query: string;
+  readonly since: "ms" | "iso";
+  /** The rows as Facts; a project is keyed as the Files keys paths, through `place`. */
+  facts(rows: readonly StoreRow[], place: Place): StoreFact[];
+}
+
+/** One session's folder in a FolderStore: the JSON files kit read from it. */
+export interface StoreFolder {
+  /** The folder's path below the store's root, as it is spelled on the disk. */
+  readonly folder: string;
+  /** Each of the store's `files` by name; undefined when missing, unreadable or too large. */
+  readonly files: Readonly<Record<string, string | undefined>>;
+}
+
+/**
+ * A folder holding one folder per session, of small JSON files. kit reads the `files` of each
+ * session folder whose first file changed in the window and passes them to `facts`.
+ */
+export interface FolderStore {
+  readonly kind: "folder";
+  /** Its name in `Coverage.unread`, such as `grok-sessions`: never a path. */
+  readonly name: string;
+  /** The folder the session folders are under, absolute. */
+  root(place: Place): string;
+  /** How many folders below the root a session's folder is: 1 for `<root>/<id>`. */
+  readonly depth: number;
+  /** The files to read in each session folder; the first one's mtime says whether it changed. */
+  readonly files: readonly [string, ...string[]];
+  facts(session: StoreFolder, place: Place): StoreFact[];
+}
+
+/** Where a harness keeps sessions other than JSONL transcripts. */
+export type SessionStore = SqliteStore | FolderStore;
+
+/**
  * A folder's repository as a harness remembers it: a project under `prefix`, a path keyed as the
  * Files keys paths, is `project`, an `owner/repo`. The longest matching prefix wins.
  */
@@ -234,6 +296,8 @@ export interface MachineReader<State> {
   roots?(place: Place): string[];
   /** How its transcript lines become Facts; absent, with `roots`, for an inventory-only harness. */
   readonly transcripts?: TranscriptFormat<State>;
+  /** Its session stores that are not JSONL transcripts, read for usage only. */
+  stores?(place: Place): SessionStore[];
 }
 
 /** One coding agent loadsheet can read. */

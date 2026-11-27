@@ -79,9 +79,10 @@ graph TD
 
 Two entries:
 
-- `.` is the contract a harness adapter is written against: `Files`, `Fact`, `TranscriptFormat`, `MachineReader`, `Harness` and `defineHarness`. It also holds `fold.ts`, which turns Facts into a Tally, Tallies into a Scan, and merges Scans and Items.
+- `.` is the contract a harness adapter is written against: `Files`, `Fact`, `TranscriptFormat`, `SessionStore` (a `SqliteStore` or a `FolderStore` of per-session JSON files that turns rows into usage Facts), `MachineReader`, `Harness` and `defineHarness`. It also holds `fold.ts`, which turns Facts into a Tally, Tallies into a Scan, and merges Scans and Items.
 - `./node` touches the disk:
-  - `scanMachine` (`scan.ts`) runs a full machine scan: it finds transcript files changed in the window and reads them through the cache.
+  - `scanMachine` (`scan.ts`) runs a full machine scan: it finds transcript files changed in the window and reads them through the cache. It also runs each harness's session stores, and the unowned ones in `ScanMachineOptions.stores`, and adds their usage to the Scan without sessions.
+  - `stores.ts` (`readStore`) reads a store: SQLite through a dynamic `node:sqlite` import, opened read-only so no file appears beside the database, with one SELECT bound to the window's start, or a folder of session files changed in the window. Nothing is cached. A store that exists but cannot be read goes to the coverage's `unread`.
   - `cache.ts` stores a cursor and a Tally per transcript file, keyed by a salted hash. It is the only thing loadsheet writes.
   - `reader.ts` streams JSONL lines (ported from t3code). A format's `skip` drops a line from its raw bytes, before it is decoded, when `parse` would get nothing from it. `workers.ts` runs the reads on worker threads, largest file first, once there are enough bytes to be worth it, with more threads as the bytes grow.
   - `files.ts` (`dirFiles`) and `github.ts` (`githubFiles`, from a tarball) produce `Files` for packs.
@@ -92,7 +93,8 @@ Two entries:
 One adapter per coding agent, listed in `harnesses` in `src/index.ts`. An adapter is a `Harness`: its `signals` grades, `inventory(files)` for packs, and an optional `machine` reader.
 
 - `claude-code` and `codex` read transcripts. Each has a `*-transcripts.ts` file with its `TranscriptFormat`, and a listing file that knows how the harness turns an entry into characters in the context.
-- `grok`, `pi`, `opencode`, `cursor`, `gemini` and `kiro` only read what is installed (`NO_USAGE` grades, helpers in `inventory.ts`). Their sheets have no sessions.
+- `grok` and `opencode` read usage from session stores (`grok-sessions.ts`, a folder per session; `opencode-db.ts`, SQLite). `t3-code.ts` reads T3 Code's database for the providers no other adapter reads; `loadsheet` passes it to `scanMachine` as an unowned store (`sessionStores`). Helpers for all three are in `store-facts.ts`.
+- `pi`, `cursor`, `gemini` and `kiro` only read what is installed (`NO_USAGE` grades, helpers in `inventory.ts`). Their sheets, and grok's and opencode's, have no sessions.
 - `managed.ts` reads fleetrc's manifest and the skills CLI's lock to tell who installed a skill folder. It only reads files and never runs either tool.
 - `pack.ts` (`packInventory`) finds every `SKILL.md`, plus a plugin's commands and agents, in a pack.
 

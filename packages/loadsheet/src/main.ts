@@ -11,7 +11,7 @@ import {
   type Style,
 } from "@loadsheet/core";
 import { runOnFleet, type RunResult } from "@loadsheet/fleet";
-import { claudeCode, findHarness, harnesses } from "@loadsheet/harnesses";
+import { claudeCode, findHarness, harnesses, sessionStores } from "@loadsheet/harnesses";
 import type { Files } from "@loadsheet/kit";
 import { dirFiles, githubFiles, githubUrl, scanMachine } from "@loadsheet/kit/node";
 import { parseConfig, resolveConfig, RULES, type Config } from "@loadsheet/schema";
@@ -290,6 +290,7 @@ if (positionals.length === 0) {
     // every harness that loads it. The Report keeps only the wanted harnesses' sheets.
     scan = await scanMachine({
       harnesses,
+      stores: sessionStores,
       days: config.window,
       tool,
       onProgress: progress.update,
