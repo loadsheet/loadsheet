@@ -345,7 +345,7 @@ describe("renderSummary for one harness", () => {
       sheet: [...local().sheet, { harness: "pi", sessions: 0, lines: [line("notes", 50, 0)] }],
     });
     expect(renderSummary(at(true), { harness: "pi" })).toBe(
-      "loadsheet 1.2.3\n\nloadsheet doesn't read pi sessions, only what's installed: loadsheet pi --full lists it.\n",
+      "loadsheet 1.2.3\n\nloadsheet doesn't read pi sessions, only what's installed: run it again with --full to list it.\n",
     );
     expect(renderSummary(at(false), { harness: "pi" })).toContain(
       "loadsheet doesn't read pi sessions, and finds no pi install to list.",

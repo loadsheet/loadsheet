@@ -658,7 +658,7 @@ const nothingToBreakDown = (report: Report, harness: string) => {
   if (!sessionsUnread(report, harness))
     return `${name} had no chats in the last ${plural(report.config.window, "day")}, so there is nothing to break down.`;
   return report.coverage.some((row) => row.harness === harness && row.installed)
-    ? `loadsheet doesn't read ${name} sessions, only what's installed: loadsheet ${harness} --full lists it.`
+    ? `loadsheet doesn't read ${name} sessions, only what's installed: run it again with --full to list it.`
     : `loadsheet doesn't read ${name} sessions, and finds no ${name} install to list.`;
 };
 
