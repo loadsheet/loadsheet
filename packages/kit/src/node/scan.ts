@@ -14,8 +14,10 @@ import {
   type Tally,
   type TranscriptFormat,
 } from "../index.ts";
+import { Accumulator } from "../sum.ts";
 import { defaultCacheDir, openCache, type CachedFile, type HarnessCache } from "./cache.ts";
 import { dirFiles } from "./files.ts";
+import { createProjectResolver } from "./projects.ts";
 import { reachesOf, withReach } from "./reach.ts";
 import { listTranscriptFiles, type TranscriptFile } from "./reader.ts";
 import {
@@ -418,11 +420,19 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
 };
 
 /**
- * The Scan with each usage project folder named by its repository, where the disk or a harness's
- * hints tell it. For now it returns the Scan as it is: transcripts' projects stay as they were read.
+ * The Scan with each usage cell's project named by its repository, where the disk or a harness's
+ * hints tell it, and cells that then name the same project summed: worktrees of one repository
+ * become one project. It runs on every Scan, after the cached tallies are summed, so a changed
+ * remote or a deleted worktree resolves anew on the next run while the cache keeps the cwd keys.
  */
-export const resolveProjects = async (
-  scan: Scan,
-  _hints: readonly ProjectHint[],
-  _place: Place,
-): Promise<Scan> => scan;
+export const resolveProjects = (scan: Scan, hints: readonly ProjectHint[], place: Place): Scan => {
+  if (!scan.usage) return scan;
+  const resolve = createProjectResolver({ home: place.home, hints });
+  const counters = new Accumulator();
+  counters.usage({
+    sessions: scan.usage.sessions.map((cell) => ({ ...cell, project: resolve(cell.project) })),
+    tokens: scan.usage.tokens.map((cell) => ({ ...cell, project: resolve(cell.project) })),
+  });
+  const usage = counters.usageResult();
+  return usage ? { ...scan, usage } : scan;
+};
