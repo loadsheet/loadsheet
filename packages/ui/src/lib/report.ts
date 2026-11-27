@@ -170,6 +170,8 @@ export const RULE: Record<string, string> = {
   "harness-mismatch": "Unused harness",
   drift: "Differs between machines",
   "short-history": "Short history",
+  "cache-ttl": "Prompt cache lasts 5 minutes",
+  "cache-off": "Prompt cache unused",
 };
 /** A rule a newer loadsheet added still reads as words. */
 export const ruleName = (rule: string) =>
@@ -204,7 +206,13 @@ export function evidence(f: Finding, r: Report): string {
     case "harness-mismatch":
       return "Installed for a harness with no sessions.";
     case "short-history":
+      if (e.retentionDays !== undefined)
+        return `Claude Code deletes transcripts after ${n("retentionDays")} days, so history stops at ${n("days")} days.`;
       return `Only ${n("days")} days and ${n("sessions")} sessions so far, so checks that need a month wait.`;
+    case "cache-ttl":
+      return `${Math.round(((e.cacheWrite5m ?? 0) / (e.cacheWrite || 1)) * 100)}% of cache writes lasted 5 minutes${f.via ? ` in ${f.via} sessions` : ""}, so ${n("cacheRewrite")} tokens were written again after a pause.`;
+    case "cache-off":
+      return `${n("sessions")} sessions sent ${n("tokens")} tokens, and no request read the prompt cache.`;
     default:
       return Object.entries(e)
         .map(([k, v]) => `${k} ${fmt(v)}`)

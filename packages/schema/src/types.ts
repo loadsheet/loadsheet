@@ -156,6 +156,8 @@ export interface Settings {
   subagentCacheTtl?: "5m" | "1h";
   /** Whether prompt caching is on or turned off. */
   caching?: "on" | "off";
+  /** Which variable turned caching off, such as `settings.env.DISABLE_PROMPT_CACHING`; absent when it is on. */
+  cachingFrom?: string;
   /** Days the harness keeps a transcript before it deletes it. */
   retentionDays?: number;
   /** The most bytes of an instruction file the harness reads. */
@@ -269,7 +271,9 @@ export type RuleId =
   | "idle-mcp"
   | "harness-mismatch"
   | "drift"
-  | "short-history";
+  | "short-history"
+  | "cache-ttl"
+  | "cache-off";
 
 /** How strongly a finding asks for action: cut it, fix it, or know it. */
 export type Level = "cut" | "fix" | "info";
@@ -350,6 +354,10 @@ export interface RuleOptions {
     /** Least days of history, default 30. */
     minDays: number;
   };
+  /** Claude Code's prompt cache kept 5 minutes on recent days. */
+  "cache-ttl": {};
+  /** No request read the prompt cache. */
+  "cache-off": {};
 }
 
 /** Config with every default applied; this is what a Report carries. */
@@ -459,7 +467,7 @@ export interface Fix {
 
 /** Something a rule found. */
 export interface Finding {
-  /** A stable id, `${rule}:${item ?? pack ?? harness}`. */
+  /** A stable id, `${rule}:${item ?? pack ?? harness}`, then `:${via}` for a finding about one entrypoint. */
   id: string;
   /** The rule that found it: a RuleId, or the id of a rule a newer loadsheet added. */
   rule: string;
@@ -469,6 +477,8 @@ export interface Finding {
   item?: Id;
   /** The pack it is about, for dead-pack. */
   pack?: string;
+  /** The entrypoint it is about, for cache-ttl. */
+  via?: string;
   /** Where it applies; empty in pack mode. */
   where: Where[];
   /** The numbers the rule judged on. */

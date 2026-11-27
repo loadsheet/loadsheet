@@ -275,6 +275,34 @@
             }
           ],
           "description": "Too little history to judge."
+        },
+        "cache-ttl": {
+          "anyOf": [
+            {
+              "const": false
+            },
+            {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": false
+            }
+          ],
+          "description": "Claude Code's prompt cache kept 5 minutes on recent days."
+        },
+        "cache-off": {
+          "anyOf": [
+            {
+              "const": false
+            },
+            {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": false
+            }
+          ],
+          "description": "No request read the prompt cache."
         }
       },
       "required": [],

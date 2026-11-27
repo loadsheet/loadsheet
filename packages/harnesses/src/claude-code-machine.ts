@@ -386,8 +386,8 @@ const CACHING_OFF = /^DISABLE_PROMPT_CACHING(?:_[A-Z0-9]+)?$/u;
  * over the environment it starts in, or else from `place.env`; only the names below are read, and
  * only what they mean is kept. Precedence for the cache's lifetime, as Claude Code documents it:
  * FORCE_PROMPT_CACHING_5M, then CLAUDE_CODE_PROMPT_CACHE_TTL, then `promptCacheTtl`, then
- * ENABLE_PROMPT_CACHING_1H; with none set the lifetime is the default and left out. Undefined when
- * there is no settings.json and no variable set.
+ * ENABLE_PROMPT_CACHING_1H; with none set the lifetime is the default and left out. Retention is
+ * `cleanupPeriodDays`, or Claude Code's 30 days when that is unset.
  */
 export const claudeSettings = async (files: Files, place: Place): Promise<Settings | undefined> => {
   const settingsPath = `${filesKey(claudeConfigDir(place), place.home)}/settings.json`;
@@ -423,12 +423,15 @@ export const claudeSettings = async (files: Files, place: Place): Promise<Settin
   }
   const subagent = lifetime("CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL", "subagentPromptCacheTtl");
   if (subagent) out.subagentCacheTtl = subagent.ttl;
-  if ([...names].some((name) => CACHING_OFF.test(name) && truthy(variable(name)?.value))) {
+  const off = [...names]
+    .sort()
+    .find((name) => CACHING_OFF.test(name) && truthy(variable(name)?.value));
+  if (off !== undefined) {
     out.caching = "off";
+    out.cachingFrom = variable(off)!.from;
   }
 
-  const retention = positive(settings.cleanupPeriodDays);
-  if (retention !== undefined) out.retentionDays = retention;
+  out.retentionDays = positive(settings.cleanupPeriodDays) ?? CLAUDE_CODE_RETENTION_DAYS;
 
   if (
     settings.autoCompactEnabled === false ||
@@ -444,7 +447,7 @@ export const claudeSettings = async (files: Files, place: Place): Promise<Settin
     positive(settings.autoCompactWindow);
   if (window !== undefined) out.autoCompactWindow = window;
 
-  return present || Object.keys(out).length > 0 ? out : undefined;
+  return out;
 };
 
 /** `owner/repo` as GitHub spells it. */

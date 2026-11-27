@@ -1,5 +1,13 @@
 export { NO_SIGNALS, runRules, type RuleInput } from "./engine.ts";
 export { packReport, type PackReportInput } from "./pack.ts";
+export {
+  CACHE_5M_SHARE,
+  CACHE_DAY_WRITES,
+  CACHE_DAYS,
+  promptCacheDays,
+  type PromptCache,
+  type PromptCacheDay,
+} from "./prompt-cache.ts";
 export { buildReport, RECENT_DAYS, type BuildReportInput } from "./report.ts";
 export {
   defineRule,

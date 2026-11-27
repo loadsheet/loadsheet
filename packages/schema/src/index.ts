@@ -105,6 +105,8 @@ const DEFAULT_RULES: ResolvedConfig["rules"] = {
   "harness-mismatch": { enabled: true, minSessions: 1 },
   drift: { enabled: true },
   "short-history": { enabled: true, minDays: 30 },
+  "cache-ttl": { enabled: true },
+  "cache-off": { enabled: true },
 };
 
 /** Applies every default to a config. The result shares no objects with its input or the defaults. */

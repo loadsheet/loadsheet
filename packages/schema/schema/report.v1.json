@@ -303,6 +303,34 @@
               },
               "required": ["enabled", "minDays"],
               "description": "Too little history to judge."
+            },
+            "cache-ttl": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Whether the rule runs."
+                }
+              },
+              "required": ["enabled"],
+              "description": "Claude Code's prompt cache kept 5 minutes on recent days.",
+              "default": {
+                "enabled": true
+              }
+            },
+            "cache-off": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Whether the rule runs."
+                }
+              },
+              "required": ["enabled"],
+              "description": "No request read the prompt cache.",
+              "default": {
+                "enabled": true
+              }
             }
           },
           "required": [
@@ -441,6 +469,11 @@
                 "enum": ["on", "off"],
                 "type": "string",
                 "description": "Whether prompt caching is on or turned off."
+              },
+              "cachingFrom": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z0-9_]+)*$",
+                "description": "Which variable turned caching off, such as `settings.env.DISABLE_PROMPT_CACHING`; absent when it is on."
               },
               "retentionDays": {
                 "type": "integer",
@@ -676,7 +709,7 @@
           "id": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9-]*:(?!(?:(?:skill|instructions|mcp|subagent):)?(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))[\\s\\S]+",
-            "description": "A stable id, `${rule}:${item ?? pack ?? harness}`."
+            "description": "A stable id, `${rule}:${item ?? pack ?? harness}`, then `:${via}` for a finding about one entrypoint."
           },
           "rule": {
             "type": "string",
@@ -698,6 +731,11 @@
             "minLength": 1,
             "pattern": "^(?!(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
             "description": "The pack it is about, for dead-pack."
+          },
+          "via": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The entrypoint it is about, for cache-ttl."
           },
           "where": {
             "type": "array",

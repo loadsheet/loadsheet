@@ -159,6 +159,11 @@
                 "type": "string",
                 "description": "Whether prompt caching is on or turned off."
               },
+              "cachingFrom": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z0-9_]+)*$",
+                "description": "Which variable turned caching off, such as `settings.env.DISABLE_PROMPT_CACHING`; absent when it is on."
+              },
               "retentionDays": {
                 "type": "integer",
                 "minimum": 0,

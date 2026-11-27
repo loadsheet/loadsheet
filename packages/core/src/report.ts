@@ -275,6 +275,12 @@ const buildSheet = (
       lines,
       installs: (item) => installs.get(item) ?? [],
       itemsOn: (machine) => itemsOn.get(machine) ?? [],
+      usageOn: (machine) =>
+        sumUsage(
+          scans.filter((scan) => scan.machine === machine).map((scan) => scan.usage),
+          (cell) => cell.harness === harness && keep(cell),
+        ),
+      settingsOn: (machine) => coverage.find((row) => row.machine === machine)?.settings,
     },
   };
 };

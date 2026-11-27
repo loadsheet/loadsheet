@@ -67,6 +67,8 @@ export const packReport = ({
         installs: (id) =>
           items.filter((item) => item.id === id).map((item) => ({ machine: "", item })),
         itemsOn: () => [],
+        usageOn: () => undefined,
+        settingsOn: () => undefined,
       },
     ],
     config,

@@ -8,7 +8,9 @@ import type {
   ResolvedConfig,
   RuleId,
   RuleOptions,
+  Settings,
   Signal,
+  Usage,
 } from "@loadsheet/schema";
 
 /** One machine's install of an item: the Item a Scan of that machine holds. */
@@ -44,6 +46,10 @@ export interface RuleSheet {
   installs: (item: Id) => Install[];
   /** Every Item this harness loads on a machine, by path; empty in pack mode. */
   itemsOn: (machine: string) => Item[];
+  /** Its usage counters on a machine, after every filter; undefined when that machine reports none. */
+  usageOn: (machine: string) => Usage | undefined;
+  /** What its settings set on a machine; undefined when that machine reads none. */
+  settingsOn: (machine: string) => Settings | undefined;
 }
 
 /**

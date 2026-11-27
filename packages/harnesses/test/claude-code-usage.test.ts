@@ -449,9 +449,11 @@ describe("Claude Code settings", () => {
     place: Partial<Place> = {},
   ) => machine.settings!(settingsFiles(settings), { home: "/home/jo", env, ...place });
 
-  it("reads nothing when there is no settings.json and no variable", async () => {
-    expect(await read(undefined, { HOME: "/home/jo", PATH: "/usr/bin" })).toBeUndefined();
-    expect(await read({})).toEqual({});
+  it("reads only the default retention when there is no settings.json and no variable", async () => {
+    expect(await read(undefined, { HOME: "/home/jo", PATH: "/usr/bin" })).toEqual({
+      retentionDays: 30,
+    });
+    expect(await read({})).toEqual({ retentionDays: 30 });
   });
 
   // Claude Code's documented precedence for the prompt cache's lifetime, highest first.
@@ -534,18 +536,26 @@ describe("Claude Code settings", () => {
     expect(main?.subagentCacheTtl).toBeUndefined();
   });
 
-  it("tells when caching is off, for every model or one", async () => {
-    expect((await read({}, { DISABLE_PROMPT_CACHING: "1" }))?.caching).toBe("off");
-    expect((await read({ env: { DISABLE_PROMPT_CACHING_OPUS: "yes" } }))?.caching).toBe("off");
+  it("tells when caching is off, for every model or one, and which variable turned it off", async () => {
+    expect(await read({}, { DISABLE_PROMPT_CACHING: "1" })).toMatchObject({
+      caching: "off",
+      cachingFrom: "env.DISABLE_PROMPT_CACHING",
+    });
+    expect(await read({ env: { DISABLE_PROMPT_CACHING_OPUS: "yes" } })).toMatchObject({
+      caching: "off",
+      cachingFrom: "settings.env.DISABLE_PROMPT_CACHING_OPUS",
+    });
     expect((await read({}, { DISABLE_PROMPT_CACHING_FABLE: "true" }))?.caching).toBe("off");
-    expect((await read({}, { DISABLE_PROMPT_CACHING: "0" }))?.caching).toBeUndefined();
+    const unset = await read({}, { DISABLE_PROMPT_CACHING: "0" });
+    expect(unset?.caching).toBeUndefined();
+    expect(unset?.cachingFrom).toBeUndefined();
     expect((await read({}, { DISABLE_PROMPT_CACHINGX: "1" }))?.caching).toBeUndefined();
   });
 
   it("reads retention and compaction", async () => {
     expect(CLAUDE_CODE_RETENTION_DAYS).toBe(30);
     expect(await read({ cleanupPeriodDays: 365 })).toEqual({ retentionDays: 365 });
-    expect((await read({ cleanupPeriodDays: "x" }))?.retentionDays).toBeUndefined();
+    expect((await read({ cleanupPeriodDays: "x" }))?.retentionDays).toBe(30);
     expect((await read({ autoCompactEnabled: false }))?.autoCompact).toBe(false);
     expect((await read({ autoCompactEnabled: true }))?.autoCompact).toBe(true);
     expect(
@@ -567,6 +577,7 @@ describe("Claude Code settings", () => {
     expect(await machine.settings!(files, place)).toEqual({
       cacheTtl: "1h",
       cacheTtlFrom: "settings.promptCacheTtl",
+      retentionDays: 30,
     });
   });
 
@@ -579,7 +590,11 @@ describe("Claude Code settings", () => {
       },
       { ANTHROPIC_API_KEY: "sekrit", HOME: "/home/jo" },
     );
-    expect(result).toEqual({ cacheTtl: "1h", cacheTtlFrom: "settings.promptCacheTtl" });
+    expect(result).toEqual({
+      cacheTtl: "1h",
+      cacheTtlFrom: "settings.promptCacheTtl",
+      retentionDays: 30,
+    });
     expect(findCanary(result, ["sekrit", "/home/jo", "jo.example"])).toEqual([]);
   });
 });

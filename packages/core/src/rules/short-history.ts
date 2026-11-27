@@ -1,27 +1,44 @@
+import { retentionFixes } from "../fixes.ts";
 import { defineRule } from "./rule.ts";
 
 /**
  * A harness with sessions whose history, from its first session to the window's end, is shorter
- * than minDays (or the window, when that is shorter), so the rules that judge use cannot. There is no fix: raising how long a harness
- * keeps transcripts is a setting loadsheet does not read, and a value under the user's own would
- * delete transcripts.
+ * than minDays (or the window, when that is shorter), so the rules that judge use cannot. It also
+ * fires where Claude Code's own retention is no longer than the window and the history has reached
+ * it: Claude Code deletes the older transcripts, so the history can never grow, and the fix keeps
+ * them a year. Elsewhere the history is simply young, and there is nothing to change.
  */
 export const shortHistory = defineRule({
   id: "short-history",
   needs: ["listing"],
   run: ({ sheets, options, config }) =>
     sheets
-      .filter(
-        (sheet) => sheet.sessions > 0 && sheet.history < Math.min(options.minDays, config.window),
-      )
-      .map((sheet) => ({
-        id: `short-history:${sheet.harness}`,
-        rule: "short-history",
-        level: "info" as const,
-        where: sheet.machines
-          .filter((machine) => sheet.sessionsOn(machine) > 0)
-          .map((machine) => ({ machine, harness: sheet.harness })),
-        evidence: { days: sheet.history, sessions: sheet.sessions, minDays: options.minDays },
-        fixes: [],
-      })),
+      .filter((sheet) => sheet.sessions > 0)
+      .flatMap((sheet) => {
+        const machines = sheet.machines.filter((machine) => sheet.sessionsOn(machine) > 0);
+        const capped = machines.filter(
+          (machine) =>
+            retentionFixes(sheet, machine, config.window).length > 0 &&
+            sheet.history >= sheet.settingsOn(machine)!.retentionDays!,
+        );
+        const short = sheet.history < Math.min(options.minDays, config.window);
+        if (!short && capped.length === 0) return [];
+        const fixes = machines.flatMap((machine) => retentionFixes(sheet, machine, config.window));
+        const retention = capped.map((machine) => sheet.settingsOn(machine)!.retentionDays!);
+        return [
+          {
+            id: `short-history:${sheet.harness}`,
+            rule: "short-history",
+            level: fixes.length ? ("fix" as const) : ("info" as const),
+            where: machines.map((machine) => ({ machine, harness: sheet.harness })),
+            evidence: {
+              days: sheet.history,
+              sessions: sheet.sessions,
+              minDays: options.minDays,
+              ...(retention.length ? { retentionDays: Math.min(...retention) } : {}),
+            },
+            fixes,
+          },
+        ];
+      }),
 });

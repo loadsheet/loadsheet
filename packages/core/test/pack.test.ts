@@ -123,6 +123,18 @@ describe("packReport", () => {
         reason: "missing-signal",
         missing: ["listing"],
       },
+      {
+        rule: "cache-ttl",
+        harness: "claude-code",
+        reason: "missing-signal",
+        missing: ["usage", "cacheTtl"],
+      },
+      {
+        rule: "cache-off",
+        harness: "claude-code",
+        reason: "missing-signal",
+        missing: ["usage", "cacheTtl"],
+      },
     ]);
   });
 

@@ -34,6 +34,8 @@ export const RULES = [
   "harness-mismatch",
   "drift",
   "short-history",
+  "cache-ttl",
+  "cache-off",
 ] as const satisfies readonly RuleId[];
 
 /** The signals a harness can provide. */
@@ -341,6 +343,15 @@ const SettingsSchema = v.pipe(
     caching: v.optional(
       describe(v.picklist(["on", "off"]), "Whether prompt caching is on or turned off."),
     ),
+    cachingFrom: v.optional(
+      v.pipe(
+        v.string(),
+        v.regex(KNOB, "must name a setting or variable, such as env.DISABLE_PROMPT_CACHING"),
+        v.description(
+          "Which variable turned caching off, such as `settings.env.DISABLE_PROMPT_CACHING`; absent when it is on.",
+        ),
+      ),
+    ),
     retentionDays: v.optional(count("Days the harness keeps a transcript before it deletes it.")),
     docMaxBytes: v.optional(count("The most bytes of an instruction file the harness reads.")),
     autoCompact: v.optional(
@@ -576,6 +587,8 @@ const ruleEntries = {
   },
   drift: {},
   "short-history": { minDays: count("Least days of history, default 30.") },
+  "cache-ttl": {},
+  "cache-off": {},
 } as const satisfies Record<RuleId, v.ObjectEntries>;
 
 const ruleDocs: Record<RuleId, string> = {
@@ -590,6 +603,8 @@ const ruleDocs: Record<RuleId, string> = {
   "harness-mismatch": "Context installed for a harness that is not used.",
   drift: "The same piece of context differs between machines.",
   "short-history": "Too little history to judge.",
+  "cache-ttl": "Claude Code's prompt cache kept 5 minutes on recent days.",
+  "cache-off": "No request read the prompt cache.",
 };
 
 const configRule = <E extends v.ObjectEntries>(entries: E, doc: string) =>
@@ -649,6 +664,8 @@ const configSchema = v.pipe(
           ),
           drift: configRule(ruleEntries["drift"], ruleDocs["drift"]),
           "short-history": configRule(ruleEntries["short-history"], ruleDocs["short-history"]),
+          "cache-ttl": configRule(ruleEntries["cache-ttl"], ruleDocs["cache-ttl"]),
+          "cache-off": configRule(ruleEntries["cache-off"], ruleDocs["cache-off"]),
         }),
         v.description("Per rule: false turns it off, an object overrides its thresholds."),
       ),
@@ -695,6 +712,12 @@ const ResolvedConfigSchema = v.pipe(
         ),
         drift: resolvedRule(ruleEntries["drift"], ruleDocs["drift"]),
         "short-history": resolvedRule(ruleEntries["short-history"], ruleDocs["short-history"]),
+        "cache-ttl": v.optional(resolvedRule(ruleEntries["cache-ttl"], ruleDocs["cache-ttl"]), {
+          enabled: true,
+        }),
+        "cache-off": v.optional(resolvedRule(ruleEntries["cache-off"], ruleDocs["cache-off"]), {
+          enabled: true,
+        }),
       }),
       v.description("Each rule, whether it runs, and its thresholds."),
     ),
@@ -842,7 +865,9 @@ const FindingSchema = v.pipe(
         new RegExp(String.raw`^${RULE_SLUG}:(?!(?:(?:${KINDS.join("|")}):)?${HOME})[\s\S]+`),
         "must be rule:target, where the target is not an absolute home path",
       ),
-      v.description("A stable id, `${rule}:${item ?? pack ?? harness}`."),
+      v.description(
+        "A stable id, `${rule}:${item ?? pack ?? harness}`, then `:${via}` for a finding about one entrypoint.",
+      ),
     ),
     rule: ruleId("The rule that found it: a RuleId, or the id of a rule a newer loadsheet added."),
     level: describe(LevelSchema, "How strongly it asks for action."),
@@ -852,6 +877,7 @@ const FindingSchema = v.pipe(
       ),
     ),
     pack: v.optional(name("The pack it is about, for dead-pack.")),
+    via: v.optional(nonEmpty("The entrypoint it is about, for cache-ttl.")),
     where: describe(
       v.array(
         v.pipe(

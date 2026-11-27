@@ -1,3 +1,5 @@
+import { cacheOff } from "./cache-off.ts";
+import { cacheTtl } from "./cache-ttl.ts";
 import { deadPack } from "./dead-pack.ts";
 import { deadSkill } from "./dead-skill.ts";
 import { drift } from "./drift.ts";
@@ -24,4 +26,6 @@ export const rules: Rule[] = [
   harnessMismatch as Rule,
   drift as Rule,
   shortHistory as Rule,
+  cacheTtl as Rule,
+  cacheOff as Rule,
 ];
