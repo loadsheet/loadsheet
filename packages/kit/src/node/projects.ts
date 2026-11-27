@@ -8,14 +8,7 @@
 // disk counts as none, so no result names an absolute path under the home.
 import { readFileSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-
-/** A folder known to belong to a repository, from what a harness recorded about it. */
-export interface ProjectHint {
-  /** A Files-style key: the hint holds this folder and everything under it. */
-  readonly prefix: string;
-  /** `owner/repo`. */
-  readonly project: string;
-}
+import type { ProjectHint } from "../index.ts";
 
 /** The two disk reads the resolver makes, so tests can count or fake them. */
 export interface ProjectFs {
