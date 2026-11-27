@@ -37,12 +37,8 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ check: [url: string] }>();
 
-const SAYS: Record<string, string> = {
-  ok: "no problems",
-  info: "has a note",
-  warn: "has a problem",
-  error: "leaves a tool out or fails",
-};
+// What a client's dot means, beside its name. A client with no problems needs no word.
+const SAYS: Record<string, string> = { info: "note", warn: "problem", error: "drops tools" };
 
 const TRY = ["https://mcp.deepwiki.com/mcp", "https://nuxt.com/mcp", "https://mcp.linear.app/mcp"];
 
@@ -65,7 +61,7 @@ const status = computed(() => (r.value ? clientStatus(r.value) : {}));
 const problems = computed(() => (r.value ? mcpProblems(r.value) : []));
 const real = computed(() => problems.value.filter((p) => p.severity !== "info"));
 const notes = computed(() => problems.value.filter((p) => p.severity === "info"));
-const verdict = computed(() => (r.value ? mcpVerdict(r.value, problems.value) : undefined));
+const verdict = computed(() => (r.value ? mcpVerdict(r.value) : undefined));
 const prompt = computed(() =>
   r.value && props.url ? mcpFixPrompt(r.value, props.url, problems.value) : "",
 );
@@ -76,7 +72,6 @@ const serverLine = computed(() => {
     .filter(Boolean)
     .join(" · ");
 });
-const anyInfo = computed(() => Object.values(status.value).includes("info"));
 
 // The problem the URL fragment points at: marked, unfolded and scrolled to whenever a result lands or the fragment changes.
 // Shallow, so `target.problem` stays the very object `problems` holds and the cards can compare against it.
@@ -125,7 +120,7 @@ const ask = computed(
   <div class="land">
     <SiteTop />
     <main class="w mc">
-      <div>
+      <div class="mc-head">
         <h1 class="px">Does your MCP server work in every client?</h1>
         <p class="mc-lede">
           Paste its URL. We read its tools once and show what Claude, ChatGPT, Cursor and 6 other
@@ -161,45 +156,32 @@ const ask = computed(
         </div>
 
         <div v-else-if="r && verdict" class="mc-res">
-          <div class="mc-vh">
-            <div>
-              <p class="mc-srv mono">{{ serverLine }}</p>
-              <h2 class="px" :class="{ 's-error': verdict.breaks }">{{ verdict.title }}</h2>
-              <p class="mc-sub">{{ verdict.sub }}</p>
-            </div>
-            <div v-if="real.length" class="mc-act">
-              <button
-                type="button"
-                data-slot="button"
-                data-variant="solid"
-                :data-done="copied.key === prompt || undefined"
-                @click="copy(prompt, 'Prompt copied, paste it into your agent')"
-              >
-                <CopyIcon :done="copied.key === prompt" />Copy fix prompt
-              </button>
-              <span>Paste it into Claude Code, Codex or Cursor.</span>
-            </div>
-          </div>
-          <ul class="mc-clients" aria-label="Clients">
-            <li
-              v-for="c in r.clients"
-              :key="c.id"
-              class="mc-cl"
-              :class="`s-${status[c.id]}`"
-              :title="`${c.label}: ${SAYS[status[c.id] ?? 'ok']}`"
+          <aside class="mc-side">
+            <p class="mc-srv mono">{{ serverLine }}</p>
+            <h2 class="px" :class="{ 's-error': verdict.breaks }">{{ verdict.title }}</h2>
+            <button
+              v-if="real.length"
+              type="button"
+              data-slot="button"
+              data-variant="solid"
+              :data-done="copied.key === prompt || undefined"
+              @click="copy(prompt, 'Prompt copied, paste it into your agent')"
             >
-              <i />{{ c.label }}
-            </li>
-          </ul>
-          <p class="mc-key">
-            <span><i class="mc-dot" />No problems</span>
-            <span><i class="mc-dot s-warn" />Has a problem</span>
-            <span><i class="mc-dot s-error" />Leaves a tool out</span>
-            <span v-if="anyInfo"><i class="mc-dot s-info" />Has a note</span>
-          </p>
-          <template v-if="real.length">
-            <h3 class="mc-sec">{{ plural(real.length, "problem") }}, worst first</h3>
-            <ol class="mc-probs">
+              <CopyIcon :done="copied.key === prompt" />Copy fix prompt
+            </button>
+            <ul class="mc-clients" aria-label="Clients">
+              <li v-for="c in r.clients" :key="c.id" class="mc-cl" :class="`s-${status[c.id]}`">
+                <i />{{ c.label
+                }}<span v-if="SAYS[status[c.id] ?? 'ok']">{{ SAYS[status[c.id] ?? "ok"] }}</span>
+              </li>
+            </ul>
+            <details v-if="r.ci" class="mc-fold">
+              <summary>Run in CI</summary>
+              <Cmd :fix="{ type: 'cmd', text: r.ci }" />
+            </details>
+          </aside>
+          <div class="mc-main">
+            <ol v-if="real.length" class="mc-probs">
               <McpProblem
                 v-for="p in real"
                 :id="cardIds.get(p)"
@@ -210,33 +192,26 @@ const ask = computed(
                 @link="link"
               />
             </ol>
-          </template>
-          <details
-            v-if="notes.length"
-            class="mc-fold"
-            :open="target?.problem.severity === 'info' || undefined"
-          >
-            <summary>{{ plural(notes.length, "note") }} on client behavior</summary>
-            <ol class="mc-probs">
-              <McpProblem
-                v-for="p in notes"
-                :id="cardIds.get(p)"
-                :key="p.code"
-                :problem="p"
-                :labels="labels"
-                :target="target?.problem === p ? target.anchor : undefined"
-                @link="link"
-              />
-            </ol>
-          </details>
-          <details v-if="r.ci" class="mc-fold">
-            <summary>Run this check in CI</summary>
-            <p class="mc-small">
-              It fails on error diagnostics. Use <code>--max-warnings 0</code> to fail on warnings
-              too.
-            </p>
-            <Cmd :fix="{ type: 'cmd', text: r.ci }" />
-          </details>
+            <p v-else class="mc-none">Nothing to fix.</p>
+            <details
+              v-if="notes.length"
+              class="mc-fold"
+              :open="!real.length || target?.problem.severity === 'info' || undefined"
+            >
+              <summary>{{ plural(notes.length, "note") }} on client behavior</summary>
+              <ol class="mc-probs">
+                <McpProblem
+                  v-for="p in notes"
+                  :id="cardIds.get(p)"
+                  :key="p.code"
+                  :problem="p"
+                  :labels="labels"
+                  :target="target?.problem === p ? target.anchor : undefined"
+                  @link="link"
+                />
+              </ol>
+            </details>
+          </div>
         </div>
 
         <div v-else-if="failed?.code === 'auth-required' && failed.command" class="mc-state">

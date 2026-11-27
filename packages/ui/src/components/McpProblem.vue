@@ -3,18 +3,21 @@ import { computed } from "vue";
 import CopyIcon from "./CopyIcon.vue";
 import { copied, esc } from "../lib/ui";
 import {
+  andList,
   type McpCheckDiagnostic,
   mcpAnchor,
   mcpDocs,
   mcpHash,
   type McpProblem,
-  plural,
   problemTitle,
+  sharedFix,
 } from "../lib/mcp";
 
 /**
-  One problem: its title and Diagnostic Code, the clients it hits, the fix, and what each client does. `target` is
-  the anchor a shared link points at inside it, and `link` asks the view to copy the link to an anchor.
+  One problem: its title and Diagnostic Code, the clients it hits (unfolding to what each one does), the fix, and a row
+  per tool. When every tool takes the same fix, or the same fix with its own value (`sharedFix()`), the fix shows once
+  and each row holds only the tool and its value. `target` is the anchor a shared link points at inside it, and `link`
+  asks the view to copy the link to an anchor.
 */
 const props = defineProps<{
   problem: McpProblem;
@@ -23,26 +26,36 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ link: [anchor: string] }>();
 
+// Past this many rows, all but the first FIRST fold away.
+const FOLD = 16;
+const FIRST = 12;
+
 const md = (s: string) => esc(s).replace(/`([^`]+)`/g, "<code>$1</code>");
 const hits = computed(() => [...props.problem.clients.entries()]);
-const tools = computed(() => [
-  ...new Set(props.problem.items.map((d) => d.tool).filter((t): t is string => !!t)),
-]);
-const oneFix = computed(() => new Set(props.problem.items.map((d) => d.fix)).size === 1);
-const toolLine = computed(() => {
-  const t = tools.value;
-  const names = t.slice(0, 6).map((n) => (n.length > 40 ? `${n.slice(0, 39)}…` : n));
-  return `${plural(t.length, "tool")}: ${names.join(", ")}${t.length > 6 ? `, +${t.length - 6} more` : ""}`;
-});
 const label = (id: string) => props.labels[id] ?? id;
 
+const items = computed(() => props.problem.items);
+const same = computed(() => new Set(items.value.map((d) => d.fix)).size === 1);
+const shared = computed(() => (same.value ? undefined : sharedFix(items.value.map((d) => d.fix))));
+const fix = computed(() => (same.value ? items.value[0]!.fix : shared.value?.fix));
+const rows = computed(() =>
+  items.value.map((d, i) => ({
+    d,
+    text: same.value ? "" : (shared.value?.values[i] ?? d.fix),
+  })),
+);
+// A problem about the server alone, with one fix, has no rows to list.
+const listed = computed(() => !(same.value && items.value.every((d) => d.tool === undefined)));
+const folded = computed(() => rows.value.length > FOLD);
+const shown = computed(() => (folded.value ? rows.value.slice(0, FIRST) : rows.value));
+
 const own = computed(() =>
-  props.problem.items.length === 1 ? mcpAnchor(props.problem.items[0]!) : props.problem.code,
+  items.value.length === 1 ? mcpAnchor(items.value[0]!) : props.problem.code,
 );
 const rowId = (d: McpCheckDiagnostic) => (d.tool === undefined ? undefined : mcpAnchor(d));
 const on = (d: McpCheckDiagnostic) => (props.target === mcpAnchor(d) ? "" : undefined);
 const moreOpen = computed(() =>
-  props.problem.items.slice(4).some((d) => props.target === mcpAnchor(d)),
+  rows.value.slice(FIRST).some((r) => props.target === mcpAnchor(r.d)),
 );
 </script>
 
@@ -66,48 +79,8 @@ const moreOpen = computed(() =>
         <CopyIcon :done="copied.key === `link:${own}`" />
       </button>
     </div>
-    <div class="mc-hits">
-      <template v-if="hits.length">
-        <span v-for="[id, f] in hits" :key="id" class="mc-cl" :class="`s-${f.severity}`"
-          ><i />{{ label(id) }}</span
-        >
-      </template>
-      <span v-else>The MCP spec, before any client</span>
-    </div>
-    <template v-if="oneFix">
-      <p class="mc-fix"><span>Fix: </span><span v-html="md(problem.items[0]!.fix)" /></p>
-      <p v-if="tools.length" class="mc-tools">{{ toolLine }}</p>
-    </template>
-    <template v-else>
-      <p class="mc-small">Fix each tool:</p>
-      <ul class="mc-per">
-        <li v-for="(d, i) in problem.items.slice(0, 4)" :id="rowId(d)" :key="i" :data-on="on(d)">
-          <a
-            v-if="d.tool !== undefined"
-            class="mc-tn"
-            :href="mcpHash(mcpAnchor(d))"
-            @click.prevent="emit('link', mcpAnchor(d))"
-            >{{ d.tool }}</a
-          ><span v-else class="mc-tn">server</span><span v-html="md(d.fix)" />
-        </li>
-      </ul>
-      <details v-if="problem.items.length > 4" class="mc-why" :open="moreOpen">
-        <summary>{{ problem.items.length - 4 }} more tools</summary>
-        <ul class="mc-per">
-          <li v-for="(d, i) in problem.items.slice(4)" :id="rowId(d)" :key="i" :data-on="on(d)">
-            <a
-              v-if="d.tool !== undefined"
-              class="mc-tn"
-              :href="mcpHash(mcpAnchor(d))"
-              @click.prevent="emit('link', mcpAnchor(d))"
-              >{{ d.tool }}</a
-            ><span v-else class="mc-tn">server</span><span v-html="md(d.fix)" />
-          </li>
-        </ul>
-      </details>
-    </template>
     <details v-if="hits.length" class="mc-why">
-      <summary>What each client does</summary>
+      <summary>{{ andList(hits.map(([id]) => label(id))) }}</summary>
       <ul>
         <li v-for="[id, f] in hits" :key="id">
           <b>{{ label(id) }}</b>: <span v-html="md(f.message)" />
@@ -117,5 +90,34 @@ const moreOpen = computed(() =>
         </li>
       </ul>
     </details>
+    <p v-else class="mc-who">The MCP spec, before any client</p>
+    <p v-if="fix" class="mc-fix" v-html="md(fix)" />
+    <template v-if="listed">
+      <ul class="mc-per" :class="{ long: !fix }">
+        <li v-for="(r, i) in shown" :id="rowId(r.d)" :key="i" :data-on="on(r.d)">
+          <a
+            v-if="r.d.tool !== undefined"
+            class="mc-tn"
+            :href="mcpHash(mcpAnchor(r.d))"
+            @click.prevent="emit('link', mcpAnchor(r.d))"
+            >{{ r.d.tool }}</a
+          ><span v-else class="mc-tn">server</span><span v-if="r.text" v-html="md(r.text)" />
+        </li>
+      </ul>
+      <details v-if="folded" class="mc-why" :open="moreOpen">
+        <summary>{{ rows.length - FIRST }} more tools</summary>
+        <ul class="mc-per" :class="{ long: !fix }">
+          <li v-for="(r, i) in rows.slice(FIRST)" :id="rowId(r.d)" :key="i" :data-on="on(r.d)">
+            <a
+              v-if="r.d.tool !== undefined"
+              class="mc-tn"
+              :href="mcpHash(mcpAnchor(r.d))"
+              @click.prevent="emit('link', mcpAnchor(r.d))"
+              >{{ r.d.tool }}</a
+            ><span v-else class="mc-tn">server</span><span v-if="r.text" v-html="md(r.text)" />
+          </li>
+        </ul>
+      </details>
+    </template>
   </li>
 </template>
