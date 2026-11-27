@@ -1,0 +1,140 @@
+{
+  "index": {
+    "title": "Skill packs by context cost",
+    "sub": "Estimated Claude Code listing tokens for 8 public skill packs, based on snapshots from 2026-11-27."
+  },
+  "packs": {
+    "anthropics/skills": {
+      "what": "Anthropic's reference pack of 20 skills covering Office documents, Claude API development, visual design, and skill authoring.",
+      "pick": "Pick it if a project needs Office file skills like `docx`, `xlsx`, `pptx`, and `pdf`, or Anthropic's references for `claude-api` and `mcp-builder`.",
+      "skip": "Look elsewhere if only `frontend-design` is needed and 2,449 tokens of unrelated descriptions would go into the full skill listing.",
+      "post": [
+        "Weighing the entire anthropics/skills repository has the largest estimated listing in this table: 2,449 tokens across 20 listed skills, with 0 manual-only entries and 288,376 body characters on disk. The cost reflects both breadth and verbose routing text, since many descriptions spell out long trigger and skip rules.",
+        "Across the repo, 13 skills trip `expensive-description` for crossing 300 characters. `claude-api` takes the top spot at 1,083 characters and 271 tokens, backed by a 103,964-character body. `academy-guide` adds 253 tokens, `discernment-nudge` adds 251 tokens, and the Office skills `xlsx`, `docx`, `pptx`, and `pdf` add 239, 211, 185, and 111 tokens. Even `template-skill` inside `template` adds 22 tokens.",
+        "Anthropic ships the repository as an open-source reference, including the document skills that back Claude's file creation alongside `skill-creator` at 84 tokens, `frontend-design` at 56 tokens, and `webapp-testing` at 56 tokens. In Claude Code, the marketplace splits into `document-skills@anthropic-agent-skills` and `example-skills@anthropic-agent-skills`, so teams can install a subset instead of loading everything."
+      ]
+    },
+    "obra/superpowers": {
+      "what": "An automatic development methodology that moves coding agents through brainstorming, git worktrees, written plans, TDD, and code review.",
+      "pick": "Pick it if a team wants planning, test-first implementation, and verification to fire automatically across Claude Code, Codex, Cursor, or other supported agents.",
+      "skip": "Look elsewhere if small tasks should go straight to edits without mandatory `brainstorming` gates, or if workflows should run only on slash commands.",
+      "post": [
+        "The full Superpowers listing is about 679 tokens for 15 skills, with no manual-only entries. The Claude Code plugin also injects the `using-superpowers` skill body at session start; the listing estimate does not include it. The 15 skill bodies total 139,500 characters. Only `diagnosing-superpowers` trips `expensive-description`, at 402 characters and 101 tokens, while core entries like `writing-plans` at 26 tokens and `test-driven-development` at 27 tokens stay terse.",
+        "Jesse Vincent and Prime Radiant built the pack as a mandatory process, not a menu of commands. `using-superpowers` tells the agent to check for matching skills before replying. From there, `brainstorming` settles design intent, `using-git-worktrees` isolates a branch, `writing-plans` writes out tasks, and `subagent-driven-development` or `executing-plans` implements them under red-green-refactor `test-driven-development` and `verification-before-completion`.",
+        "The README documents installs for Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Pi, and other coding agents, so teams can share one workflow across tools. When a session drifts or repeats work, `diagnosing-superpowers` reads the transcript and reports what happened with line-level evidence."
+      ]
+    },
+    "mattpocock/skills": {
+      "what": "A composable engineering pack of 39 skills centered on grilling interviews, domain glossaries, issue-tracker specs, TDD, and deep-module architecture.",
+      "pick": "Pick it if developers want explicit slash commands for planning and ticket flows while keeping `tdd`, `diagnosing-bugs`, `code-review`, and `domain-modeling` available automatically.",
+      "skip": "Look elsewhere if every stage should trigger automatically, or if misc extras like `scaffold-exercises` and `migrate-to-shoehorn` do not belong in a full install.",
+      "post": [
+        "Matt Pocock's repository has 39 skills, 168,306 body characters, and an estimated listing of 818 tokens. Its 24 orchestration skills, including `grill-me`, `grill-with-docs`, `to-spec`, `to-tickets`, `implement-spec`, and `improve-codebase-architecture`, are manual-only at 0 tokens. The remaining 15 reusable skills stay listed so the agent can pull them in on its own.",
+        "Just 2 descriptions pass 300 characters: `code-review` at 433 characters and 108 tokens, and `wizard` at 324 characters and 81 tokens. At the small end, `pr` costs 9 tokens. Installing everything also brings in repo utilities like `git-guardrails-claude-code` at 69 tokens, `setup-pre-commit` at 65 tokens, `scaffold-exercises` at 57 tokens, and `migrate-to-shoehorn` at 48 tokens, though `npx skills@latest add mattpocock/skills` allows picking specific skills.",
+        "The workflow targets recurring failure modes named in the README: misalignment, verbose domain jargon, missing feedback loops, and creeping complexity. Run `/setup-matt-pocock-skills` once per repo to bind an issue tracker and doc path, then combine `grilling`, `domain-modeling`, `tdd`, `diagnosing-bugs`, and `codebase-design`."
+      ]
+    },
+    "cursor/plugins/pstack": {
+      "what": "Lauren Tan's Cursor and Claude Code engineering plugin of 59 skills routed through `/poteto-mode`, playbooks, and multi-model workflows.",
+      "pick": "Pick it if a Cursor or multi-model setup needs near-zero idle context overhead, adversarial `interrogate` reviews, parallel `arena` and `swarm` runs, and playbooks on demand.",
+      "skip": "Look elsewhere if skills should fire automatically without slash commands, or if upfront spec-and-plan gates are wanted by default.",
+      "post": [
+        "By skill count, pstack is the biggest pack measured here. By estimated listing size, it is the smallest. Across 59 skills and 159,979 body characters, it has a 73-token listing and triggers 0 `expensive-description` findings. Only `setup-pstack` stays listed at 292 characters, while 58 skills are manual-only at 0 tokens.",
+        "Nothing fires until a developer invokes `/poteto-mode` or calls a skill directly, such as `/interrogate`, `/architect`, `/blast-radius`, `/arena`, `/swarm`, or `/create-formal-verification-skill`. `/poteto-mode` matches the request to a playbook, reads its inline index of `principle-*` skills, and dispatches configured models. `/setup-pstack` assigns models per role, and `/automate-me` drafts a personal mode skill from recent transcripts.",
+        "Lauren Tan built pstack for Cursor, and the repository also ships a generated Claude Code plugin under `/pstack:` prefixes. Referenced helpers like `control-cli`, `control-ui`, and `/deslop` live in `cursor-team-kit`, and the dormant `benny` automation requires Cursor. Planning is left out as a default because the author treats code as the primary spec."
+      ]
+    },
+    "vercel-labs/agent-skills": {
+      "what": "Vercel's official pack of 9 skills for React, Next.js, React Native, UI and docs audits, and Vercel deployment and cost optimization.",
+      "pick": "Pick it if a frontend runs on React, Next.js, or React Native on Vercel and benefits from framework performance rules alongside `web-design-guidelines`.",
+      "skip": "Look elsewhere if the stack sits outside React and Vercel, or if visual design direction and mockups matter more than engineering compliance rules.",
+      "post": [
+        "Most of the 812 estimated listing tokens in vercel-labs/agent-skills go to React engineering and Vercel platform work, not general visual design. All 9 skills stay listed with 0 manual-only entries, backed by 65,764 body characters. Skills activate automatically after `npx skills add vercel-labs/agent-skills`, and changes on `main` also publish a GitHub release with a discovery index.",
+        "Descriptions on 5 skills exceed 300 characters. `vercel-react-view-transitions` costs 176 tokens across 704 characters and `vercel-optimize` costs 147 tokens across 586 characters, followed by `vercel-react-best-practices` at 90 tokens, `vercel-composition-patterns` at 86 tokens, and `vercel-react-native-skills` at 82 tokens. Smaller listings cover `vercel-cli-with-tokens` at 66 tokens, `writing-guidelines` at 58 tokens, `deploy-to-vercel` at 54 tokens, and `web-design-guidelines` at 53 tokens.",
+        "For Vercel deployments, `vercel-optimize` gathers project metrics before inspecting routes on Next.js, SvelteKit, Nuxt, or Astro, and `deploy-to-vercel` handles git-push or temporary CLI deploys. Outside React, `web-design-guidelines` still works as a standalone audit for accessibility, focus states, forms, typography, and motion."
+      ]
+    },
+    "antfu/skills": {
+      "what": "Anthony Fu's collection of 15 skills combining Vue, Nuxt, Vite, and pnpm doc references with his own JS and TS maintenance workflows.",
+      "pick": "Pick it if a codebase uses Vue, Nuxt, Vite, and Vitest, or if a team wants a template that generates skills directly from upstream source docs.",
+      "skip": "Look elsewhere if the project sits outside the Vue and Vite stack, or if general workflows tested across other ecosystems are needed instead of a doc-generation proof-of-concept.",
+      "post": [
+        "Anthony Fu's pack splits between hand-maintained maintainer tools and framework references generated from cloned upstream documentation. All 15 skills are listed, with no manual-only entries: about 913 listing tokens and 75,535 body characters. Just 2 descriptions pass 300 characters: `antfu-issue-triage` at 351 characters and 88 tokens, and `antfu-simplify` at 346 characters and 87 tokens.",
+        "The hand-maintained skills cover `antfu` at 63 tokens for JS and TS conventions, `antfu-create-pr` at 63 tokens, `antfu-upgrade-deps` at 68 tokens for `taze` upgrades, `antfu-query` at 73 tokens, `antfu-simplify`, and `antfu-issue-triage`. The doc-generated skills cover `nitro` at 72 tokens, `pnpm` at 67 tokens, `vue` at 55 tokens, `vite` at 49 tokens, `pinia`, `unocss`, and `vitest` at 47 tokens each, `nuxt` at 44 tokens, and `vitepress` at 43 tokens.",
+        "The README describes the repo as a proof-of-concept for keeping skills synced with source docs, and Anthony Fu notes he has not fully tested every skill in practice. Install directly via `pnpx skills add antfu/skills --skill='*'`, sync through `@antfu/skills` and `skills-npm`, or fork the repo to generate custom doc skills."
+      ]
+    },
+    "ibelick/ui-skills": {
+      "what": "A pack of 11 design-engineering skills for UI cleanup, accessibility, motion performance, metadata, interactive canvases, and product visuals.",
+      "pick": "Pick it if a team wants framework-agnostic UI polish, `DESIGN.md` extraction, motion and accessibility fixes, or launch visuals and component canvases.",
+      "skip": "Look elsewhere if a repo needs React or Next.js performance internals, deployment tooling, or a general coding workflow.",
+      "post": [
+        "Every token in ibelick/ui-skills pays for interface craft and presentation. The full listing for all 11 skills is about 708 tokens with 0 manual-only entries and 97,941 body characters, though teams that want a smaller footprint can keep only `ui-skills-root` at 30 tokens and fetch individual skills on demand through `npx ui-skills` or the registry MCP server.",
+        "In the full install, 4 descriptions cross 300 characters: `photographing-software` at 415 characters and 104 tokens, `create-design-md` at 395 characters and 99 tokens, `improve-ui` at 377 characters and 94 tokens, and `fixing-metadata` at 360 characters and 90 tokens. Shorter entries cover `device-frames` at 71 tokens, `fixing-motion-performance` at 63 tokens, `fixing-accessibility` at 61 tokens, `baseline-ui` at 41 tokens, `component-canvas` at 33 tokens, and `create-canvas` at 22 tokens.",
+        "`create-design-md` and `improve-ui` keep auditing separate from code edits: `create-design-md` writes a `DESIGN.md` without touching product source, and `improve-ui` stays read-only while writing implementation plans for another agent. Direct fixes live in `baseline-ui`, `fixing-accessibility`, `fixing-motion-performance`, and `fixing-metadata`."
+      ]
+    },
+    "humanlayer/skills": {
+      "what": "A compact set of 7 Claude Code and Codex skills covering fresh-session research-and-implement workflows, `CLAUDE.md` tuning, visual explainers, and scheduled agent loops.",
+      "pick": "Pick it if a team wants a lightweight, cherry-pickable toolkit for phased `rpi` documents, `CLAUDE.md` rewrites, or scheduled coding-agent loops without adopting a large workflow system.",
+      "skip": "Look elsewhere if a project wants built-in TDD, systematic debugging, or automated code review across every task.",
+      "post": [
+        "At 7 skills and 57,043 body characters, HumanLayer's pack is the smallest repository in this table. The full listing is about 189 tokens across 6 listed skills and 1 manual-only skill, with 0 `expensive-description` findings. Its longest listing, `design-control-loop`, is 238 characters and 60 tokens.",
+        "The README guides teams to install one skill at a time via `npx skills add humanlayer/skills --skill SKILLNAME`. `rpi` researches a change, works through design choices, and implements from local documents in fresh sessions by default. It runs as `/rpi` in Claude Code and `$rpi` in Codex. `design-control-loop` at 60 tokens and `build-iterated-agentic-loop` at 43 tokens set up local components and GitHub Actions workflows for scheduled agent runs.",
+        "Narrower skills fill out the repo: `improve-claude-md` rewrites `CLAUDE.md` with `<important if>` blocks at 28 tokens, `narrow-react-prop-types` trims React props to live code paths at 22 tokens, and `show-me` creates diagrams and HTML sketches at 0 tokens. Both `visual-pr` at 19 tokens and `rpi` at 17 tokens tell the model to wait for explicit invocation instead of setting `disable-model-invocation: true`."
+      ]
+    }
+  },
+  "compare": {
+    "workflow": {
+      "title": "Workflow skill packs compared",
+      "sub": "How obra/superpowers, mattpocock/skills, cursor/plugins/pstack, and humanlayer/skills trade automatic triggers against estimated listing size.",
+      "post": [
+        "Listing size tracks which skills can invoke automatically, not how many files sit in the repo. cursor/plugins/pstack has an estimated 73-token listing: 58 of its 59 skills are manual-only and only `setup-pstack` is listed. humanlayer/skills lists 6 of 7 skills at 189 tokens. obra/superpowers lists all 15 skills at 679 tokens, not counting its startup hook. mattpocock/skills lists 15 reusable skills at 818 tokens and keeps 24 orchestrators manual-only.",
+        "Those numbers reflect distinct bets on developer control. obra/superpowers fires automatically from the first prompt via `using-superpowers`, enforcing `brainstorming`, git worktrees, written plans, and red-green-refactor `test-driven-development` without slash commands. mattpocock/skills starts from explicit commands like `/grill-with-docs`, `/to-spec`, `/to-tickets`, or `/improve-codebase-architecture`, while leaving `tdd`, `diagnosing-bugs`, `code-review`, and `domain-modeling` listed for the model.",
+        "pstack pushes manual invocation furthest and drops upfront planning as a default. It routes work through `/poteto-mode`, playbooks, multi-model `interrogate` reviews, and `arena` or `swarm` parallel runs. humanlayer/skills avoids an all-in-one methodology and offers pick-and-choose skills for fresh-session `rpi` phases, `CLAUDE.md` edits with `improve-claude-md`, visual explainers, and scheduled agent loops."
+      ],
+      "verdict": [
+        {
+          "slug": "obra/superpowers",
+          "line": "Best for teams that want automatic planning, worktree isolation, red-green-refactor TDD, and review across many coding agents without typing slash commands."
+        },
+        {
+          "slug": "mattpocock/skills",
+          "line": "Best for engineers who want slash-command control over grilling interviews, domain glossaries, issue-tracker tickets, and deep-module refactors."
+        },
+        {
+          "slug": "cursor/plugins/pstack",
+          "line": "Best for Cursor and multi-model setups that want a 73-token Claude Code listing estimate and rigorous playbooks triggered through `/poteto-mode`."
+        },
+        {
+          "slug": "humanlayer/skills",
+          "line": "Best for Claude Code and Codex teams that want a minimal 7-skill toolkit for fresh-session `rpi` phases, `CLAUDE.md` tuning, and scheduled agent loops."
+        }
+      ]
+    },
+    "ui": {
+      "title": "UI skill packs compared",
+      "sub": "How ibelick/ui-skills, vercel-labs/agent-skills, and anthropics/skills compare on listing size and interface work.",
+      "post": [
+        "None of these packs marks any skill manual-only, so the estimate includes every description. Each pack trips `expensive-description` over 300 characters. The full listings are estimated at 708 tokens for ibelick/ui-skills (11 skills, 4 findings), 812 for vercel-labs/agent-skills (9 skills, 5 findings), and 2,449 for anthropics/skills (20 skills, 13 findings).",
+        "The gap comes from how much non-UI material each repository bundles. Every skill in ibelick/ui-skills targets interface craft: `baseline-ui`, `improve-ui`, `fixing-accessibility`, `fixing-motion-performance`, `fixing-metadata`, `create-design-md`, canvases, and launch visuals like `device-frames` and `photographing-software`. Teams can also install only `ui-skills-root` at 30 tokens and fetch individual skills through `npx ui-skills` or MCP.",
+        "vercel-labs/agent-skills pairs `web-design-guidelines` at 53 tokens with React, Next.js, and React Native engineering rules plus Vercel tools like `vercel-optimize` at 147 tokens and `deploy-to-vercel` at 54 tokens. anthropics/skills includes `frontend-design` at 56 tokens, `webapp-testing` at 56 tokens, `web-artifacts-builder` at 79 tokens, and `theme-factory` at 70 tokens alongside `claude-api` at 271 tokens and Office document skills. In Claude Code, installing `document-skills@anthropic-agent-skills` or `example-skills@anthropic-agent-skills` separately avoids listing all 20 skills."
+      ],
+      "verdict": [
+        {
+          "slug": "ibelick/ui-skills",
+          "line": "Best for framework-agnostic UI polish, accessibility and motion fixes, `DESIGN.md` extraction, or on-demand loading through `ui-skills-root`."
+        },
+        {
+          "slug": "vercel-labs/agent-skills",
+          "line": "Best for React, Next.js, React Native, and Vercel frontends that want performance, View Transitions, and deploy skills alongside `web-design-guidelines`."
+        },
+        {
+          "slug": "anthropics/skills",
+          "line": "Best for teams that want `frontend-design`, Playwright `webapp-testing`, or multi-component `web-artifacts-builder` alongside Anthropic's document and Claude API skills."
+        }
+      ]
+    }
+  }
+}

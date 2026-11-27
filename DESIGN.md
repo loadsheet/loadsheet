@@ -2,7 +2,7 @@
 
 The web UI shows what an agent loads before you type, against its context window. Every block is sized by its tokens and coloured by its kind. Everything else (type, chrome, copy) stays quiet so the map carries the page.
 
-Its views, components and styles live in `@loadsheet/ui` (`packages/ui`); the paths below are under `packages/ui/src`. Two apps mount them. `apps/site` is loadsheet.dev, a Nuxt app on ViteHub that registers the views under its own path routes. `apps/page` is the single HTML file the CLI writes: `src/main.ts` reads an inlined report, installs `createLoadsheet()` (`lib/state.ts`, where the report on screen lives, given to views through provide/inject) and mounts the hash router in `src/routes.ts`. Views link by route name (`home`, `report`, `fixes`, `pack`), so a Nuxt app can mount them under its own routes.
+Its views, components and styles live in `@loadsheet/ui` (`packages/ui`); the paths below are under `packages/ui/src`. Two apps mount them. `apps/site` is loadsheet.dev, a Nuxt app on ViteHub that registers the views under its own path routes. `apps/page` is the single HTML file the CLI writes: `src/main.ts` reads an inlined report, installs `createLoadsheet()` (`lib/state.ts`, where the report on screen lives, given to views through provide/inject) and mounts the hash router in `src/routes.ts`. Views link by route name (`home`, `report`, `fixes`, `pack`, and on the site `mcp`, `skills`, `skill-pack`, `skill-compare`), so a Nuxt app can mount them under its own routes.
 
 ## Tokens
 
@@ -59,6 +59,15 @@ It answers one question: how much of the window a session started now uses befor
 ## The MCP check (`views/Mcp.vue`)
 
 One column, 820px wide: a URL with three servers to try, then the answer. The verdict is a pixel line ("Works in all 9 clients", or "Breaks in N of 9 clients" in `--s-error`), with the server, its tool count and URL above it in mono and the one "Copy fix prompt" button beside it. A pill per client carries a dot in its worst status: `--s-ok`, `--s-info` (a harmless rewrite), `--s-warn` or `--s-error` (a tool left out). Problems follow worst first (`mcpProblems()` in `lib/mcp.ts`), one card per Diagnostic Code with a 3px bar in its status, a plain title, the clients it hits, the fix, and a link to the code's Doctor docs. Notes (info) and the CI command fold away. A server that wants a token gets the Doctor command instead of a report; any other failure is a pixel title in `--s-error` and one plain line.
+
+## The skill pack reviews (`views/Skills.vue`, `SkillPack.vue`, `SkillCompare.vue`)
+
+loadsheet.dev reviews a few public skill packs at `/skills`: a sortable table, one page per pack, and a comparison per job. `apps/site/scripts/skill-packs.ts` measures each pack at a pinned commit into `apps/site/app/skills/packs.json` and one file list per pack; the review text is `copy.json`. Only file lists are committed: the pack page's file tree (the kit's `Tree`, `components/SkillFiles.vue`) fetches a file's text from raw.githubusercontent.com at that commit when it opens.
+
+- Every bar and share is drawn against the setup budget, `setupBudget()` in `@loadsheet/core`: 5% of the window, 10,000 tokens of 200k, with 10% as too heavy. Never draw against the largest pack.
+- Those bars estimate the full Claude Code skill listing, not the installed pack's runtime cost. The `SKILL.md` body metric excludes front matter and supporting files.
+- `components/SkillBlocks.vue` puts one block per listed skill on a track that is the whole budget, so the empty part is what's left.
+- Their styles are in `styles/skills.css`, every class `sk-`.
 
 ## The treemap (`components/Treemap.vue`)
 

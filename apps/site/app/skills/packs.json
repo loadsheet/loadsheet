@@ -1,0 +1,1738 @@
+{
+  "measuredAt": "2026-11-27",
+  "packs": [
+    {
+      "slug": "anthropics/skills",
+      "title": "Anthropic's skills",
+      "by": "Anthropic",
+      "repo": "anthropics/skills",
+      "sha": "e4bb5d960d87126ff3b3a8af1a104b7db67560ba",
+      "stars": 201253,
+      "pushed": "2026-11-16",
+      "jobs": ["ui"],
+      "items": [
+        {
+          "name": "claude-api",
+          "path": "skills/claude-api",
+          "tokens": 271,
+          "listed": 1083,
+          "body": 103964,
+          "description": "Reference for the Claude API / Anthropic SDK — model ids, pricing, params, streaming, tool use, MCP, agents, caching, token counting, model migration.\nTRIGGER — read BEFORE opening the target file; don't skip because it \"looks like a one-liner\" — whenever: the prompt names Claude/Anthropic in any form (Claude, Anthropic, Fable, Opus, Sonnet, Haiku, `anthropic`, `@anthropic-ai`, `claude-*`, `us.anthropic.*`, `[1m]`); the user asks about an LLM (pricing/model choice/limits/caching) — never answer from memory; OR the task is LLM-shaped with provider unstated (agent/MCP/tool-definition/multi-agent/RAG/LLM-judge/computer-use; generate/summarize/extract/classify/rewrite/converse over NL; debugging refusals/cutoffs/streaming/tool-calls/tokens).\nSKIP only when another provider is being worked on (overrides all triggers): OpenAI/GPT/Gemini/Llama/Mistral/Cohere/Ollama named in the query; OR `grep -rE 'openai|langchain_openai|google.generativeai|genai|mistralai|cohere|ollama'` over the project hits (run this grep FIRST if no provider named — don't Read the file)."
+        },
+        {
+          "name": "academy-guide",
+          "path": "skills/academy-guide",
+          "tokens": 253,
+          "listed": 1010,
+          "body": 6612,
+          "description": "Stop and check this skill before finishing any reply to a question about how to use Claude or a Claude product — it recommends matching courses, tutorials, and use cases from Claude Academy (academy.claude.com), Anthropic's learning hub. Trigger on: \"how do I\", \"how can I\", \"getting started with\", \"what can Claude do\", \"teach me\", \"learn to use\"; questions about artifacts, projects, skills, plugins, connectors, MCP; requests about rolling Claude out to a team, class, or organization; and any ask for training materials, onboarding content, or learning resources. Use it when the user is learning how to use a feature or product — not when they are mid-task and just want the task done. This skill composes with other skills: after consulting product documentation to answer how a Claude feature works, also check here for a matching course or tutorial — a docs-grounded answer and an Academy recommendation belong together. Only recommend on a strong match; never invent Academy content."
+        },
+        {
+          "name": "discernment-nudge",
+          "path": "skills/discernment-nudge",
+          "tokens": 251,
+          "listed": 1005,
+          "body": 9392,
+          "description": "After you give a substantive answer or draft that the user may act on — advice or recommendations, drafted artifacts such as goals, plans, pitches, proposals, or emails, estimates or projections, analysis or interpretation of data, factual claims they may rely on, or a multi-step argument — invoke this skill BEFORE finalizing your reply and then, if it applies, append 2-3 short follow-up questions, each tied to something specific in what you just produced, that help the user check key facts, probe the reasoning or assumptions, and notice missing context. Do this at most once per conversation. Skip it when the user asked a trivial how-to or simple lookup, wants a purely educational explanation, asked you only to format, convert, or assemble a file from content they provided, is writing code they will run, is doing creative writing or casual chat, or already asked you to double-check, cite, or review — the skill file explains these boundaries and the exact output format."
+        },
+        {
+          "name": "xlsx",
+          "path": "skills/xlsx",
+          "tokens": 239,
+          "listed": 957,
+          "body": 8694,
+          "description": "Use this skill any time a spreadsheet file is the primary input or output. This means any task where the user wants to: open, read, edit, or fix an existing .xlsx, .xlsm, .xltx, .csv, or .tsv file (e.g., adding columns, computing formulas, formatting, charting, cleaning messy data); create a new spreadsheet from scratch or from other data sources; or convert between tabular file formats. Trigger especially when the user references a spreadsheet file by name or path — even casually (like \"the xlsx in my downloads\") — and wants something done to it or produced from it. Also trigger for cleaning or restructuring messy tabular data files (malformed rows, misplaced headers, junk data) into proper spreadsheets. The deliverable must be a spreadsheet file. Do NOT trigger when the primary deliverable is a Word document, HTML report, standalone Python script, database pipeline, or Google Sheets API integration, even if tabular data is involved."
+        },
+        {
+          "name": "docx",
+          "path": "skills/docx",
+          "tokens": 211,
+          "listed": 844,
+          "body": 6534,
+          "description": "Use this skill whenever the user wants to create, read, edit, or manipulate Word documents (.docx files) or Word templates (.dotx files). Triggers include: any mention of 'Word doc', 'word document', '.docx', '.dotx', or requests to produce professional documents with formatting like tables of contents, headings, page numbers, or letterheads. Also use when extracting or reorganizing content from .docx or .dotx files, inserting or replacing images in documents, performing find-and-replace in Word files, working with tracked changes or comments, or converting content into a polished Word document. If the user asks for a 'report', 'memo', 'letter', 'template', or similar deliverable as a Word or .docx file, use this skill. Do NOT use for PDFs, spreadsheets, Google Docs, or general coding tasks unrelated to document generation."
+        },
+        {
+          "name": "pptx",
+          "path": "skills/pptx",
+          "tokens": 185,
+          "listed": 741,
+          "body": 27359,
+          "description": "Use this skill any time a .pptx or .potx file is involved in any way — as input, output, or both. This includes: creating slide decks, pitch decks, or presentations; reading, parsing, or extracting text from any .pptx or .potx file (even if the extracted content will be used elsewhere, like in an email or summary); editing, modifying, or updating existing presentations; combining or splitting slide files; working with templates (.potx), layouts, speaker notes, or comments. Trigger whenever the user mentions \"deck,\" \"slides,\" \"presentation,\" or references a .pptx or .potx filename, regardless of what they plan to do with the content afterward. If a .pptx or .potx file needs to be opened, created, or touched, use this skill."
+        },
+        {
+          "name": "doc-coauthoring",
+          "path": "skills/doc-coauthoring",
+          "tokens": 112,
+          "listed": 448,
+          "body": 15343,
+          "description": "Guide users through a structured workflow for co-authoring documentation. Use when user wants to write documentation, proposals, technical specs, decision docs, or similar structured content. This workflow helps users efficiently transfer context, refine content through iteration, and verify the doc works for readers. Trigger when user mentions writing docs, creating proposals, drafting specs, or similar documentation tasks."
+        },
+        {
+          "name": "pdf",
+          "path": "skills/pdf",
+          "tokens": 111,
+          "listed": 445,
+          "body": 7513,
+          "description": "Use this skill whenever the user wants to do anything with PDF files. This includes reading or extracting text/tables from PDFs, combining or merging multiple PDFs into one, splitting PDFs apart, rotating pages, adding watermarks, creating new PDFs, filling PDF forms, encrypting/decrypting PDFs, extracting images, and OCR on scanned PDFs to make them searchable. If the user mentions a .pdf file or asks to produce one, use this skill."
+        },
+        {
+          "name": "internal-comms",
+          "path": "skills/internal-comms",
+          "tokens": 87,
+          "listed": 348,
+          "body": 1100,
+          "description": "A set of resources to help me write all kinds of internal communications, using the formats that my company likes to use. Claude should use this skill whenever asked to write some sort of internal communications (status reports, leadership updates, 3P updates, company newsletters, FAQs, incident reports, project updates, etc.)."
+        },
+        {
+          "name": "algorithmic-art",
+          "path": "skills/algorithmic-art",
+          "tokens": 86,
+          "listed": 344,
+          "body": 19328,
+          "description": "Creating algorithmic art using p5.js with seeded randomness and interactive parameter exploration. Use this when users request creating art using code, generative art, algorithmic art, flow fields, or particle systems. Create original algorithmic art rather than copying existing artists' work to avoid copyright violations."
+        },
+        {
+          "name": "skill-creator",
+          "path": "skills/skill-creator",
+          "tokens": 84,
+          "listed": 337,
+          "body": 32626,
+          "description": "Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill from scratch, edit, or optimize an existing skill, run evals to test a skill, benchmark skill performance with variance analysis, or optimize a skill's description for better triggering accuracy."
+        },
+        {
+          "name": "web-artifacts-builder",
+          "path": "skills/web-artifacts-builder",
+          "tokens": 79,
+          "listed": 314,
+          "body": 2696,
+          "description": "Suite of tools for creating elaborate, multi-component claude.ai HTML artifacts using modern frontend web technologies (React, Tailwind CSS, shadcn/ui). Use for complex artifacts requiring state management, routing, or shadcn/ui components - not for simple single-file HTML/JSX artifacts."
+        },
+        {
+          "name": "canvas-design",
+          "path": "skills/canvas-design",
+          "tokens": 77,
+          "listed": 307,
+          "body": 11567,
+          "description": "Create beautiful visual art in .png and .pdf documents using design philosophy. You should use this skill when the user asks to create a poster, piece of art, design, or other static piece. Create original visual designs, never copying existing artists' work to avoid copyright violations."
+        },
+        {
+          "name": "mcp-builder",
+          "path": "skills/mcp-builder",
+          "tokens": 73,
+          "listed": 293,
+          "body": 10743,
+          "description": "Guide for creating high-quality MCP (Model Context Protocol) servers that enable LLMs to interact with external services through well-designed tools. Use when building MCP servers to integrate external APIs or services, whether in Python (FastMCP) or Node/TypeScript (MCP SDK)."
+        },
+        {
+          "name": "theme-factory",
+          "path": "skills/theme-factory",
+          "tokens": 70,
+          "listed": 280,
+          "body": 2781,
+          "description": "Toolkit for styling artifacts with a theme. These artifacts can be slides, docs, reportings, HTML landing pages, etc. There are 10 pre-set themes with colors/fonts that you can apply to any artifact that has been creating, or can generate a new theme on-the-fly."
+        },
+        {
+          "name": "brand-guidelines",
+          "path": "skills/brand-guidelines",
+          "tokens": 64,
+          "listed": 257,
+          "body": 1915,
+          "description": "Applies Anthropic's official brand colors and typography to any sort of artifact that may benefit from having Anthropic's look-and-feel. Use it when brand colors or style guidelines, visual formatting, or company design standards apply."
+        },
+        {
+          "name": "slack-gif-creator",
+          "path": "skills/slack-gif-creator",
+          "tokens": 62,
+          "listed": 249,
+          "body": 7529,
+          "description": "Knowledge and utilities for creating animated GIFs optimized for Slack. Provides constraints, validation tools, and animation concepts. Use when users request animated GIFs for Slack like \"make me a GIF of X doing Y for Slack.\""
+        },
+        {
+          "name": "frontend-design",
+          "path": "skills/frontend-design",
+          "tokens": 56,
+          "listed": 224,
+          "body": 9076,
+          "description": "Guidance for distinctive, intentional visual design when building new UI or reshaping an existing one. Helps with aesthetic direction, typography, and making choices that don't read as templated defaults."
+        },
+        {
+          "name": "webapp-testing",
+          "path": "skills/webapp-testing",
+          "tokens": 56,
+          "listed": 223,
+          "body": 3575,
+          "description": "Toolkit for interacting with and testing local web applications using Playwright. Supports verifying frontend functionality, debugging UI behavior, capturing browser screenshots, and viewing browser logs."
+        },
+        {
+          "name": "template-skill",
+          "path": "template",
+          "tokens": 22,
+          "listed": 87,
+          "body": 29,
+          "description": "Replace with description of the skill and when Claude should use it."
+        }
+      ],
+      "findings": [
+        {
+          "rule": "expensive-description",
+          "item": "skill:claude-api",
+          "evidence": {
+            "listedChars": 1083,
+            "maxChars": 300
+          }
+        },
+        {
+          "rule": "expensive-description",
+          "item": "skill:academy-guide",
+          "evidence": {
+            "listedChars": 1010,
+            "maxChars": 300
+          }
+        },
+        {
+          "rule": "expensive-description",
+          "item": "skill:discernment-nudge",
+          "evidence": {
+            "listedChars": 1005,
+            "maxChars": 300
+          }
+        },
+        {
+          "rule": "expensive-description",
+          "item": "skill:xlsx",
+          "evidence": {
+            "listedChars": 957,
+            "maxChars": 300
+          }
+        },
+        {
+          "rule": "expensive-description",
+          "item": "skill:docx",
+          "evidence": {
+            "listedChars": 844,
+            "maxChars": 300
+          }
+        },
+        {
+          "rule": "expensive-description",
+          "item": "skill:pptx",
+          "evidence": {
+            "listedChars": 741,
+            "maxChars": 300
+          }
+        },
+        {
+          "rule": "expensive-description",
+          "item": "skill:doc-coauthoring",
+          "evidence": {
+            "listedChars": 448,
+            "maxChars": 300
+          }
+        },
+        {
+          "rule": "expensive-description",
+          "item": "skill:pdf",
+          "evidence": {
+            "listedChars": 445,
+            "maxChars": 300
+          }
+        },
+        {
+          "rule": "expensive-description",
+          "item": "skill:internal-comms",
+          "evidence": {
+            "listedChars": 348,
+            "maxChars": 300
+          }
+        },
+        {
+          "rule": "expensive-description",
+          "item": "skill:algorithmic-art",
+          "evidence": {
+            "listedChars": 344,
+            "maxChars": 300
+          }
+        },
+        {
+          "rule": "expensive-description",
+          "item": "skill:skill-creator",
+          "evidence": {
+            "listedChars": 337,
+            "maxChars": 300
+          }
+        },
+        {
+          "rule": "expensive-description",
+          "item": "skill:web-artifacts-builder",
+          "evidence": {
+            "listedChars": 314,
+            "maxChars": 300
+          }
+        },
+        {
+          "rule": "expensive-description",
+          "item": "skill:canvas-design",
+          "evidence": {
+            "listedChars": 307,
+            "maxChars": 300
+          }
+        }
+      ]
+    },
+    {
+      "slug": "obra/superpowers",
+      "title": "Superpowers",
+      "by": "Jesse Vincent (obra)",
+      "repo": "obra/superpowers",
+      "sha": "22f0b463e7a5e579904dd6211a520321035526f7",
+      "stars": 327859,
+      "pushed": "2026-11-26",
+      "jobs": ["workflow"],
+      "items": [
+        {
+          "name": "diagnosing-superpowers",
+          "path": "skills/diagnosing-superpowers",
+          "tokens": 101,
+          "listed": 402,
+          "body": 6494,
+          "description": "Use when a superpowers session went wrong and your human partner wants to know why — repeated work, ignored plans, stumbles, poor results, a skill that didn't fire, \"it took too long\", \"why is it so expensive\", \"what is it doing\" — or wants to build a bug report for the superpowers maintainers, for the current session or a past one identified by id or path, on any harness."
+        },
+        {
+          "name": "receiving-code-review",
+          "path": "skills/receiving-code-review",
+          "tokens": 65,
+          "listed": 260,
+          "body": 5881,
+          "description": "Use when receiving code review feedback, before implementing suggestions, especially if feedback seems unclear or technically questionable - requires technical rigor and verification, not performative agreement or blind implementation"
+        },
+        {
+          "name": "verification-before-completion",
+          "path": "skills/verification-before-completion",
+          "tokens": 65,
+          "listed": 260,
+          "body": 3314,
+          "description": "Use when about to claim work is complete, fixed, or passing, before committing or creating PRs - requires running verification commands and confirming output before making any success claims; evidence before assertions always"
+        },
+        {
+          "name": "brainstorming",
+          "path": "skills/brainstorming",
+          "tokens": 58,
+          "listed": 231,
+          "body": 14933,
+          "description": "You MUST use this before any creative work - creating features, building components, adding functionality, modifying behavior, or planning anything new, in software or out of it (a talk, a business, a renovation)."
+        },
+        {
+          "name": "using-git-worktrees",
+          "path": "skills/using-git-worktrees",
+          "tokens": 55,
+          "listed": 220,
+          "body": 6559,
+          "description": "Use when starting feature work that needs isolation from current workspace or before executing implementation plans - ensures an isolated workspace exists via native tools or git worktree fallback"
+        },
+        {
+          "name": "executing-plans",
+          "path": "skills/executing-plans",
+          "tokens": 48,
+          "listed": 190,
+          "body": 18044,
+          "description": "Use when executing an implementation plan in the current session as the implementer yourself — your human partner chose inline execution, or no subagent tool is available"
+        },
+        {
+          "name": "using-superpowers",
+          "path": "skills/using-superpowers",
+          "tokens": 44,
+          "listed": 176,
+          "body": 2980,
+          "description": "Use when starting any conversation - establishes how to find and use skills, requiring skill invocation before ANY response including clarifying questions"
+        },
+        {
+          "name": "dispatching-parallel-agents",
+          "path": "skills/dispatching-parallel-agents",
+          "tokens": 35,
+          "listed": 138,
+          "body": 5890,
+          "description": "Use when facing 2+ independent tasks that can be worked on without shared state or sequential dependencies"
+        },
+        {
+          "name": "finishing-a-development-branch",
+          "path": "skills/finishing-a-development-branch",
+          "tokens": 34,
+          "listed": 136,
+          "body": 7569,
+          "description": "Use when implementation is complete, all tests pass, and you need to decide how to integrate the work"
+        },
+        {
+          "name": "requesting-code-review",
+          "path": "skills/requesting-code-review",
+          "tokens": 34,
+          "listed": 134,
+          "body": 2812,
+          "description": "Use when completing tasks, implementing major features, or before merging to verify work meets requirements"
+        },
+        {
+          "name": "subagent-driven-development",
+          "path": "skills/subagent-driven-development",
+          "tokens": 29,
+          "listed": 117,
+          "body": 19484,
+          "description": "Use when executing implementation plans with independent tasks in the current session"
+        },
+        {
+          "name": "systematic-debugging",
+          "path": "skills/systematic-debugging",
+          "tokens": 29,
+          "listed": 116,
+          "body": 9366,
+          "description": "Use when encountering any bug, test failure, or unexpected behavior, before proposing fixes"
+        },
+        {
+          "name": "writing-skills",
+          "path": "skills/writing-skills",
+          "tokens": 29,
+          "listed": 116,
+          "body": 16558,
+          "description": "Use when creating new skills, editing existing skills, or verifying skills work before deployment"
+        },
+        {
+          "name": "test-driven-development",
+          "path": "skills/test-driven-development",
+          "tokens": 27,
+          "listed": 107,
+          "body": 9425,
+          "description": "Use when implementing any feature or bugfix, before writing implementation code"
+        },
+        {
+          "name": "writing-plans",
+          "path": "skills/writing-plans",
+          "tokens": 26,
+          "listed": 102,
+          "body": 10191,
+          "description": "Use when you have a spec or requirements for a multi-step task, before touching code"
+        }
+      ],
+      "findings": [
+        {
+          "rule": "expensive-description",
+          "item": "skill:diagnosing-superpowers",
+          "evidence": {
+            "listedChars": 402,
+            "maxChars": 300
+          }
+        }
+      ]
+    },
+    {
+      "slug": "mattpocock/skills",
+      "title": "Matt Pocock's skills",
+      "by": "Matt Pocock",
+      "repo": "mattpocock/skills",
+      "sha": "6f7f7831a625f040a8e06a0e7954826b87ce775a",
+      "stars": 333922,
+      "pushed": "2026-11-25",
+      "jobs": ["workflow"],
+      "items": [
+        {
+          "name": "code-review",
+          "path": "skills/engineering/code-review",
+          "tokens": 108,
+          "listed": 433,
+          "body": 6230,
+          "description": "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\"."
+        },
+        {
+          "name": "wizard",
+          "path": "skills/engineering/wizard",
+          "tokens": 81,
+          "listed": 324,
+          "body": 3767,
+          "description": "Generate an interactive bash wizard that walks a human through steps only they can perform. Use when provisioning infrastructure, setting up credentials or CI secrets, walking an unfamiliar third-party dashboard, or running a one-off migration or cutover. Don't invoke this for steps the agent can perform itself."
+        },
+        {
+          "name": "codebase-design",
+          "path": "skills/engineering/codebase-design",
+          "tokens": 71,
+          "listed": 285,
+          "body": 5757,
+          "description": "Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary."
+        },
+        {
+          "name": "git-guardrails-claude-code",
+          "path": "skills/misc/git-guardrails-claude-code",
+          "tokens": 69,
+          "listed": 274,
+          "body": 2015,
+          "description": "Set up Claude Code hooks to block dangerous git commands (push, reset --hard, clean, branch -D, etc.) before they execute. Use when user wants to prevent destructive git operations, add git safety hooks, or block git push/reset in Claude Code."
+        },
+        {
+          "name": "setup-pre-commit",
+          "path": "skills/misc/setup-pre-commit",
+          "tokens": 65,
+          "listed": 259,
+          "body": 1975,
+          "description": "Set up Husky pre-commit hooks with lint-staged (Prettier), type checking, and tests in the current repo. Use when user wants to add pre-commit hooks, set up Husky, configure lint-staged, or add commit-time formatting/typechecking/testing."
+        },
+        {
+          "name": "research",
+          "path": "skills/engineering/research",
+          "tokens": 63,
+          "listed": 251,
+          "body": 557,
+          "description": "Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent."
+        },
+        {
+          "name": "scaffold-exercises",
+          "path": "skills/misc/scaffold-exercises",
+          "tokens": 57,
+          "listed": 227,
+          "body": 3338,
+          "description": "Create exercise directory structures with sections, problems, solutions, and explainers that pass linting. Use when user wants to scaffold exercises, create exercise stubs, or set up a new course section."
+        },
+        {
+          "name": "migrate-to-shoehorn",
+          "path": "skills/misc/migrate-to-shoehorn",
+          "tokens": 48,
+          "listed": 192,
+          "body": 2575,
+          "description": "Migrate test files from `as` type assertions to @total-typescript/shoehorn. Use when user mentions shoehorn, wants to replace `as` in tests, or needs partial test data."
+        },
+        {
+          "name": "prototype",
+          "path": "skills/engineering/prototype",
+          "tokens": 48,
+          "listed": 193,
+          "body": 2706,
+          "description": "Build a throwaway prototype to answer a design question. Use when the user wants to sanity-check whether a state model or logic feels right, or explore what a UI should look like."
+        },
+        {
+          "name": "diagnosing-bugs",
+          "path": "skills/engineering/diagnosing-bugs",
+          "tokens": 44,
+          "listed": 176,
+          "body": 8461,
+          "description": "Diagnosis loop for hard bugs and performance regressions. Use when the user says \"diagnose\"/\"debug this\", or reports something broken/throwing/failing/slow."
+        },
+        {
+          "name": "domain-modeling",
+          "path": "skills/engineering/domain-modeling",
+          "tokens": 43,
+          "listed": 171,
+          "body": 3027,
+          "description": "Build and sharpen a project's domain model. Use when discussing codebase terminology, writing or editing a GLOSSARY.md, or recording or editing an ADR."
+        },
+        {
+          "name": "grilling",
+          "path": "skills/productivity/grilling",
+          "tokens": 41,
+          "listed": 165,
+          "body": 1876,
+          "description": "Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases."
+        },
+        {
+          "name": "tdd",
+          "path": "skills/engineering/tdd",
+          "tokens": 39,
+          "listed": 157,
+          "body": 3440,
+          "description": "Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions \"red-green-refactor\", or wants integration tests."
+        },
+        {
+          "name": "writing-for-agents",
+          "path": "skills/productivity/writing-for-agents",
+          "tokens": 32,
+          "listed": 126,
+          "body": 10732,
+          "description": "Writing documents for agents. Use when creating or editing skills, or modifying AGENTS.md or CLAUDE.md."
+        },
+        {
+          "name": "pr",
+          "path": "skills/engineering/pr",
+          "tokens": 9,
+          "listed": 34,
+          "body": 3857,
+          "description": "Use when writing a PR body."
+        },
+        {
+          "name": "ask-matt",
+          "path": "skills/engineering/ask-matt",
+          "tokens": 0,
+          "listed": 0,
+          "body": 12429,
+          "description": "Ask which skill or flow fits your situation. A router over the skills in this repo."
+        },
+        {
+          "name": "chief-of-staff",
+          "path": "skills/in-progress/chief-of-staff",
+          "tokens": 0,
+          "listed": 0,
+          "body": 4270,
+          "description": "Delegate the work to fresh subagents and remember what it taught you in a dated wiki, so the next session picks up the thread."
+        },
+        {
+          "name": "claude-handoff",
+          "path": "skills/in-progress/claude-handoff",
+          "tokens": 0,
+          "listed": 0,
+          "body": 1196,
+          "description": "Hand the current conversation off to a fresh background agent that picks up the work immediately."
+        },
+        {
+          "name": "grill-me",
+          "path": "skills/productivity/grill-me",
+          "tokens": 0,
+          "listed": 0,
+          "body": 38,
+          "description": "A relentless interview to sharpen a plan or design."
+        },
+        {
+          "name": "grill-with-docs",
+          "path": "skills/engineering/grill-with-docs",
+          "tokens": 0,
+          "listed": 0,
+          "body": 66,
+          "description": "A relentless interview to sharpen a plan or design, which also creates docs (ADR's and glossary) as we go."
+        },
+        {
+          "name": "handoff",
+          "path": "skills/productivity/handoff",
+          "tokens": 0,
+          "listed": 0,
+          "body": 730,
+          "description": "Compact the current conversation into a handoff document for another agent to pick up."
+        },
+        {
+          "name": "implement",
+          "path": "skills/engineering/implement",
+          "tokens": 0,
+          "listed": 0,
+          "body": 491,
+          "description": "Implement a piece of work based on a spec or set of tickets."
+        },
+        {
+          "name": "implement-spec",
+          "path": "skills/engineering/implement-spec",
+          "tokens": 0,
+          "listed": 0,
+          "body": 2702,
+          "description": "Implement the result of /to-spec and /to-tickets in code."
+        },
+        {
+          "name": "improve-codebase-architecture",
+          "path": "skills/engineering/improve-codebase-architecture",
+          "tokens": 0,
+          "listed": 0,
+          "body": 5812,
+          "description": "Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick."
+        },
+        {
+          "name": "loop-me",
+          "path": "skills/in-progress/loop-me",
+          "tokens": 0,
+          "listed": 0,
+          "body": 2312,
+          "description": "Grill me about specs for the workflows I want to build, within this workspace."
+        },
+        {
+          "name": "retro",
+          "path": "skills/engineering/retro",
+          "tokens": 0,
+          "listed": 0,
+          "body": 4258,
+          "description": "Conduct a retrospective on a coding session."
+        },
+        {
+          "name": "setup-matt-pocock-skills",
+          "path": "skills/engineering/setup-matt-pocock-skills",
+          "tokens": 0,
+          "listed": 0,
+          "body": 7260,
+          "description": "Configure this repo for the engineering skills: set up its issue tracker, triage label vocabulary, and domain doc layout. Run once before first use of the other engineering skills."
+        },
+        {
+          "name": "setup-ts-deep-modules",
+          "path": "skills/in-progress/setup-ts-deep-modules",
+          "tokens": 0,
+          "listed": 0,
+          "body": 7266,
+          "description": "Wire dependency-cruiser into a TypeScript repo so each package is a deep module, with implementation hidden in subfolders and reachable only through its entry-point files. User-invoked."
+        },
+        {
+          "name": "software-factory",
+          "path": "skills/in-progress/software-factory",
+          "tokens": 0,
+          "listed": 0,
+          "body": 5933,
+          "description": "Shared language for designing a software factory: the tasks it runs and the services it plugs into."
+        },
+        {
+          "name": "teach",
+          "path": "skills/productivity/teach",
+          "tokens": 0,
+          "listed": 0,
+          "body": 9554,
+          "description": "Teach the user a new skill or concept, within this workspace."
+        },
+        {
+          "name": "to-questionnaire",
+          "path": "skills/productivity/to-questionnaire",
+          "tokens": 0,
+          "listed": 0,
+          "body": 2738,
+          "description": "Turn a decision you can't fully answer into a questionnaire for someone else to fill in."
+        },
+        {
+          "name": "to-spec",
+          "path": "skills/engineering/to-spec",
+          "tokens": 0,
+          "listed": 0,
+          "body": 2825,
+          "description": "Turn the current conversation into a spec and publish it to the project issue tracker: no interview, just synthesis of what you've already discussed."
+        },
+        {
+          "name": "to-tickets",
+          "path": "skills/engineering/to-tickets",
+          "tokens": 0,
+          "listed": 0,
+          "body": 5487,
+          "description": "Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker (edges as text in one file per ticket locally, or native blocking links on a real tracker)."
+        },
+        {
+          "name": "triage",
+          "path": "skills/engineering/triage",
+          "tokens": 0,
+          "listed": 0,
+          "body": 6356,
+          "description": "Move issues and external PRs through a state machine of triage roles, categorise, verify, grill if needed, and write agent-ready briefs."
+        },
+        {
+          "name": "wait-what",
+          "path": "skills/productivity/wait-what",
+          "tokens": 0,
+          "listed": 0,
+          "body": 275,
+          "description": "Stop. That last message did not land: re-pitch it."
+        },
+        {
+          "name": "wayfinder",
+          "path": "skills/engineering/wayfinder",
+          "tokens": 0,
+          "listed": 0,
+          "body": 12142,
+          "description": "Plan a huge chunk of work (more than one agent session can hold) as a shared map of decision tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear."
+        },
+        {
+          "name": "writing-beats",
+          "path": "skills/in-progress/writing-beats",
+          "tokens": 0,
+          "listed": 0,
+          "body": 4665,
+          "description": "Writing, exploit; assemble raw material into a journey of beats, grounding each term before a beat leans on it."
+        },
+        {
+          "name": "writing-fragments",
+          "path": "skills/in-progress/writing-fragments",
+          "tokens": 0,
+          "listed": 0,
+          "body": 3424,
+          "description": "Writing, explore: mine raw fragments, no structure yet."
+        },
+        {
+          "name": "writing-shape",
+          "path": "skills/in-progress/writing-shape",
+          "tokens": 0,
+          "listed": 0,
+          "body": 5764,
+          "description": "Writing, exploit: shape raw material into an article, paragraph by paragraph."
+        }
+      ],
+      "findings": [
+        {
+          "rule": "expensive-description",
+          "item": "skill:code-review",
+          "evidence": {
+            "listedChars": 433,
+            "maxChars": 300
+          }
+        },
+        {
+          "rule": "expensive-description",
+          "item": "skill:wizard",
+          "evidence": {
+            "listedChars": 324,
+            "maxChars": 300
+          }
+        }
+      ]
+    },
+    {
+      "slug": "cursor/plugins/pstack",
+      "title": "pstack",
+      "by": "Lauren Tan (poteto), Cursor",
+      "repo": "cursor/plugins",
+      "dir": "pstack",
+      "sha": "b7b93c36be9bcc36a74db438e0fd385d660bc559",
+      "stars": 19885,
+      "pushed": "2026-11-26",
+      "jobs": ["workflow"],
+      "items": [
+        {
+          "name": "setup-pstack",
+          "path": "skills/setup-pstack",
+          "tokens": 73,
+          "listed": 292,
+          "body": 8429,
+          "description": "Configure which models pstack uses per role and at what reasoning budget. Detects your available models and writes an always-applied rule that overrides the skill defaults. Use for /setup-pstack, \"configure pstack models\", \"pstack budget\", or changing pstack's model choices."
+        },
+        {
+          "name": "architect",
+          "path": "skills/architect",
+          "tokens": 0,
+          "listed": 0,
+          "body": 413,
+          "description": "Sketch types, signatures, and module structure before code, then stay in the loop while implementation fills in. Use for /architect, 'architect this', 'design this', or non-trivial work where jumping to code would lock in the wrong shape."
+        },
+        {
+          "name": "arena",
+          "path": "skills/arena",
+          "tokens": 0,
+          "listed": 0,
+          "body": 4295,
+          "description": "Spawn N parallel candidates at the same task, pick a base, graft the strongest parts of the losers into it. Use for /arena, 'arena this', 'throw it in the arena', or when one attempt at a non-trivial artifact would lock in the wrong shape."
+        },
+        {
+          "name": "automate-me",
+          "path": "skills/automate-me",
+          "tokens": 0,
+          "listed": 0,
+          "body": 6893,
+          "description": "Use for \"automate me\", \"create/update/refresh my -mode skill\", \"turn/capture my preferences or working style into a skill\", or wanting agents to follow how the user works. Drafts or revises a personal -mode skill via create-skill + unslop, optionally pulling fresh evidence from recent transcripts."
+        },
+        {
+          "name": "benchmark-checklist",
+          "path": "skills/benchmark-checklist",
+          "tokens": 0,
+          "listed": 0,
+          "body": 4662,
+          "description": "Vet a perf measurement (limiter, tuning, limits, errors, repeatability, relevance, and whether the work happened) before you report or act on it. Use when you run a benchmark or report a speedup or regression you measured."
+        },
+        {
+          "name": "blast-radius",
+          "path": "skills/blast-radius",
+          "tokens": 0,
+          "listed": 0,
+          "body": 3478,
+          "description": "Find what a change could break somewhere else before it ships, beyond the diff, and prove the one fact it's safe because of by running real code instead of writing it up. Use for 'blast radius of X', 'what could this break', or reviewing a small diff you don't trust."
+        },
+        {
+          "name": "bro",
+          "path": "skills/bro",
+          "tokens": 0,
+          "listed": 0,
+          "body": 139,
+          "description": "Restate the last message in plain human language, with no jargon."
+        },
+        {
+          "name": "correct",
+          "path": "skills/correct",
+          "tokens": 0,
+          "listed": 0,
+          "body": 2104,
+          "description": "Find the mistakes agents keep repeating in this repo and make each one impossible. Try architecture first, then types, then a lint whose error names the fix, then a test, and write docs last. Prove each check fails on a real past mistake. Repeat this each time the operator corrects you. Use for /correct."
+        },
+        {
+          "name": "create-formal-verification-skill",
+          "path": "skills/create-formal-verification-skill",
+          "tokens": 0,
+          "listed": 0,
+          "body": 5172,
+          "description": "Generate a project-local skill that formally verifies the code where a bug costs the most and tests reach the least, in any language, with whichever verification tool fits. Use for /create-formal-verification-skill, \"model-check this race\", \"prove this invariant\", or when concurrency, retries, state machines, parsers, or unsafe code need more than tests."
+        },
+        {
+          "name": "create-verification-skill",
+          "path": "skills/create-verification-skill",
+          "tokens": 0,
+          "listed": 0,
+          "body": 6164,
+          "description": "Generate a project-local verification skill that drives your app the way a user does — any language, framework, or platform. Use for /create-verification-skill, \"make a control skill for this repo\", or when a project has no scripted way to prove UI/CLI/service behavior."
+        },
+        {
+          "name": "figure-it-out",
+          "path": "skills/figure-it-out",
+          "tokens": 0,
+          "listed": 0,
+          "body": 3745,
+          "description": "Design an auditable playbook when no narrower one fits: a large migration, an ambitious multi-part change, or work a human reviews after stepping away. Scales rigor to the task, runs a hypothesis loop, and logs decisions. Use for /figure-it-out or 'figure it out'."
+        },
+        {
+          "name": "how",
+          "path": "skills/how",
+          "tokens": 0,
+          "listed": 0,
+          "body": 837,
+          "description": "Use for \"how does X work\", code walkthroughs before changing something, and placement / ownership / layering questions (\"where should this live\", \"which package owns this\", \"is this the right layer\"). Explains subsystem architecture, runtime flow, onboarding mental models. Use why for motivation."
+        },
+        {
+          "name": "in-your-own-words",
+          "path": "skills/in-your-own-words",
+          "tokens": 0,
+          "listed": 0,
+          "body": 105,
+          "description": "Restate in your own words what you think the user's goals are and what problem they're trying to solve. Use for /in-your-own-words."
+        },
+        {
+          "name": "interrogate",
+          "path": "skills/interrogate",
+          "tokens": 0,
+          "listed": 0,
+          "body": 1988,
+          "description": "Use for \"interrogate\", \"adversarial review\", \"multi-model review\", \"challenge this\", \"stress test this code\", \"find blind spots\", or \"tear this apart\". Adversaries try to break a change or design, and only findings proven by a run survive."
+        },
+        {
+          "name": "ketchup",
+          "path": "skills/ketchup",
+          "tokens": 0,
+          "listed": 0,
+          "body": 6146,
+          "description": "Catch the user up on what changed in this chat since their last message, in plain words and small visuals. List every item waiting on them with what they need to decide it from the reply alone. Use for /ketchup."
+        },
+        {
+          "name": "ketchup-video",
+          "path": "skills/ketchup-video",
+          "tokens": 0,
+          "listed": 0,
+          "body": 3659,
+          "description": "Catch the user up like /ketchup, with a short subtitled video of slides for what happened and the waiting calls as text under it. Use for /ketchup-video."
+        },
+        {
+          "name": "maintain-formal-verification-skill",
+          "path": "skills/maintain-formal-verification-skill",
+          "tokens": 0,
+          "listed": 0,
+          "body": 6454,
+          "description": "Bring a project's formal verification back in line with the code after the code changes: find the commits that touched verified code, update the model, harness, or properties to describe the code as it is now, rerun, and say whether each failure is drift in the verification or a bug in the code. Use for /maintain-formal-verification-skill, \"is the model still true to the code\", or after merges and refactors that touched verified code without rechecking it."
+        },
+        {
+          "name": "maintain-verification-skill",
+          "path": "skills/maintain-verification-skill",
+          "tokens": 0,
+          "listed": 0,
+          "body": 4539,
+          "description": "Periodic pass that keeps a project's verification skill and feature map honest: parallel source readers per feature, one live session driving every feature, at most one PR of proven corrections. Use for /maintain-verification-skill or \"audit the verify skill\"."
+        },
+        {
+          "name": "make-bot-ui",
+          "path": "skills/make-bot-ui",
+          "tokens": 0,
+          "listed": 0,
+          "body": 4381,
+          "description": "Use when building a custom UI (page, dashboard, buttons) that should wake a Grok Bot over a webhook, when the user must provide a webhook sender key, or when exposing that UI on Tailscale."
+        },
+        {
+          "name": "no-comments",
+          "path": "skills/no-comments",
+          "tokens": 0,
+          "listed": 0,
+          "body": 2507,
+          "description": "Spawn Comment Sicko, fix accepted findings, and offer encodings for claimed constraints."
+        },
+        {
+          "name": "poteto-help",
+          "path": "skills/poteto-help",
+          "tokens": 0,
+          "listed": 0,
+          "body": 15436,
+          "description": "Guides users through pstack setup, /poteto-mode, and picking the skill, playbook, or principle for a task. Type /poteto-help with a question."
+        },
+        {
+          "name": "poteto-mode",
+          "path": "skills/poteto-mode",
+          "tokens": 0,
+          "listed": 0,
+          "body": 10914,
+          "description": "poteto's agent style for concise, detailed responses, deliberate subagents, unslopped prose, simple code, and verified work. Use for poteto, /poteto-mode, or requests to work in this style."
+        },
+        {
+          "name": "principle-attack-the-premise",
+          "path": "skills/principle-attack-the-premise",
+          "tokens": 0,
+          "listed": 0,
+          "body": 700,
+          "description": "Apply when two or more fixes that share one premise have failed the same gate. Write the premise down and test it directly before you write another fix that assumes it."
+        },
+        {
+          "name": "principle-boundary-discipline",
+          "path": "skills/principle-boundary-discipline",
+          "tokens": 0,
+          "listed": 0,
+          "body": 609,
+          "description": "Apply when wiring validation, error handling, or framework adapters. Concentrate guards at system boundaries (CLI, config, network, external APIs); trust internal types and keep business logic in pure functions."
+        },
+        {
+          "name": "principle-build-the-lever",
+          "path": "skills/principle-build-the-lever",
+          "tokens": 0,
+          "listed": 0,
+          "body": 774,
+          "description": "Apply to any non-trivial work, not just bulk work: edits, migrations, analyses, checks. Build the tool that does it or proves it (codemod, script, generator, or a skill your subagents follow) instead of working by hand. The tool is the artifact a reviewer can rerun."
+        },
+        {
+          "name": "principle-encode-lessons-in-structure",
+          "path": "skills/principle-encode-lessons-in-structure",
+          "tokens": 0,
+          "listed": 0,
+          "body": 263,
+          "description": "Apply when you catch yourself writing the same instruction a second time, or notice a recurring correction. Encode the rule as a lint, metadata flag, runtime check, or script instead of more text."
+        },
+        {
+          "name": "principle-exhaust-the-design-space",
+          "path": "skills/principle-exhaust-the-design-space",
+          "tokens": 0,
+          "listed": 0,
+          "body": 123,
+          "description": "Apply when facing a novel UI interaction or architectural decision with no precedent in the codebase. Build 2-3 competing prototypes and compare side by side before committing."
+        },
+        {
+          "name": "principle-experience-first",
+          "path": "skills/principle-experience-first",
+          "tokens": 0,
+          "listed": 0,
+          "body": 933,
+          "description": "Apply when product, UX, or feature-scope tradeoffs come up. Choose user delight over implementation convenience; ship fewer polished features over more rough ones."
+        },
+        {
+          "name": "principle-explain-the-number",
+          "path": "skills/principle-explain-the-number",
+          "tokens": 0,
+          "listed": 0,
+          "body": 861,
+          "description": "Apply before you measure, and before you trust, report, or act on a number you measured: a speedup, a regression, a throughput, a latency, or an eval result. Find what limits it, and rule out that it measured something other than the work you think."
+        },
+        {
+          "name": "principle-fix-root-causes",
+          "path": "skills/principle-fix-root-causes",
+          "tokens": 0,
+          "listed": 0,
+          "body": 806,
+          "description": "Apply when debugging. Trace each symptom back to the first place the system went wrong and fix it there. A guard is a fix only when the state it handles is legitimate."
+        },
+        {
+          "name": "principle-foundational-thinking",
+          "path": "skills/principle-foundational-thinking",
+          "tokens": 0,
+          "listed": 0,
+          "body": 506,
+          "description": "Apply before writing logic: choosing core types and data structures, sequencing scaffold-vs-feature work, asking what concurrent actors share. Get the data structures right so downstream code becomes obvious."
+        },
+        {
+          "name": "principle-guard-the-context-window",
+          "path": "skills/principle-guard-the-context-window",
+          "tokens": 0,
+          "listed": 0,
+          "body": 251,
+          "description": "Apply when context is filling up: large outputs, long files, repeated reads, fan-out planning. Route bulk to subagents; keep summaries in the main thread, not raw payloads."
+        },
+        {
+          "name": "principle-laziness-protocol",
+          "path": "skills/principle-laziness-protocol",
+          "tokens": 0,
+          "listed": 0,
+          "body": 287,
+          "description": "Apply when refactoring, evaluating diff size, or tempted to add abstractions, layers, or signal threading. Bias toward deletion and the smallest change that solves the problem."
+        },
+        {
+          "name": "principle-make-operations-idempotent",
+          "path": "skills/principle-make-operations-idempotent",
+          "tokens": 0,
+          "listed": 0,
+          "body": 776,
+          "description": "Apply when designing commands, lifecycle steps, or processing loops that run amid crashes, restarts, and retries. Converge to the same end state regardless of partial prior runs."
+        },
+        {
+          "name": "principle-migrate-callers-then-delete-legacy-apis",
+          "path": "skills/principle-migrate-callers-then-delete-legacy-apis",
+          "tokens": 0,
+          "listed": 0,
+          "body": 354,
+          "description": "Apply when introducing a new internal API while old callers still exist. Migrate callers and delete the old API in the same wave instead of preserving compatibility layers."
+        },
+        {
+          "name": "principle-minimize-reader-load",
+          "path": "skills/principle-minimize-reader-load",
+          "tokens": 0,
+          "listed": 0,
+          "body": 718,
+          "description": "Apply when reviewing or shaping code that's hard to trace. Count layers between question and answer, and hidden state in the reader's head; collapse one-caller wrappers and shrink mutable scope."
+        },
+        {
+          "name": "principle-model-the-domain",
+          "path": "skills/principle-model-the-domain",
+          "tokens": 0,
+          "listed": 0,
+          "body": 841,
+          "description": "Apply when writing stateful logic, or when code branches a lot or repeats a shape assumption across files."
+        },
+        {
+          "name": "principle-never-block-on-the-human",
+          "path": "skills/principle-never-block-on-the-human",
+          "tokens": 0,
+          "listed": 0,
+          "body": 752,
+          "description": "Apply when tempted to ask 'should I do X?' on reversible work."
+        },
+        {
+          "name": "principle-outcome-oriented-execution",
+          "path": "skills/principle-outcome-oriented-execution",
+          "tokens": 0,
+          "listed": 0,
+          "body": 790,
+          "description": "Apply during planned rewrites and migrations with explicit phase boundaries. Converge on the target architecture; don't preserve smooth intermediate states with throwaway compatibility code."
+        },
+        {
+          "name": "principle-prove-it-works",
+          "path": "skills/principle-prove-it-works",
+          "tokens": 0,
+          "listed": 0,
+          "body": 492,
+          "description": "Apply after completing a task, before declaring done. Verify against the real artifact (run the feature, read the actual value, inspect the diff), not a proxy, self-report, or 'it compiles.'"
+        },
+        {
+          "name": "principle-redesign-from-first-principles",
+          "path": "skills/principle-redesign-from-first-principles",
+          "tokens": 0,
+          "listed": 0,
+          "body": 591,
+          "description": "Apply when integrating a new requirement into an existing design."
+        },
+        {
+          "name": "principle-separate-before-serializing-shared-state",
+          "path": "skills/principle-separate-before-serializing-shared-state",
+          "tokens": 0,
+          "listed": 0,
+          "body": 646,
+          "description": "Apply when concurrent actors might write to the same file, branch, key, or state object. Eliminate the sharing first; serialize structurally only when one shared writer is a real invariant."
+        },
+        {
+          "name": "principle-sequence-verifiable-units",
+          "path": "skills/principle-sequence-verifiable-units",
+          "tokens": 0,
+          "listed": 0,
+          "body": 523,
+          "description": "Apply to multi-step work (sweeps, migrations, runs of similar edits) and to how you stack commits and PRs. Break work into small units that each end in a verifiable state, check each before the next, and order delivery so the sequence proves itself to a reviewer."
+        },
+        {
+          "name": "principle-subtract-before-you-add",
+          "path": "skills/principle-subtract-before-you-add",
+          "tokens": 0,
+          "listed": 0,
+          "body": 659,
+          "description": "Apply when sequencing an addition, refactor, or rewrite. Remove dead code, redundant validators, and stub references first, then build on the simpler base."
+        },
+        {
+          "name": "principle-test-behavior-not-implementation",
+          "path": "skills/principle-test-behavior-not-implementation",
+          "tokens": 0,
+          "listed": 0,
+          "body": 1118,
+          "description": "Apply when you write, change, or keep a test. Assert what the code's users can observe, so that the test fails when that behavior breaks and keeps passing when only the internals change."
+        },
+        {
+          "name": "principle-type-system-discipline",
+          "path": "skills/principle-type-system-discipline",
+          "tokens": 0,
+          "listed": 0,
+          "body": 681,
+          "description": "Apply when designing types, reviewing a function signature, or writing code in any statically-typed language. Make illegal states unrepresentable, brand semantic primitives, parse external data at boundaries, exhaust variants, derive from authoritative schemas."
+        },
+        {
+          "name": "recall",
+          "path": "skills/recall",
+          "tokens": 0,
+          "listed": 0,
+          "body": 4787,
+          "description": "Reconstruct your recent working context from your own chat history, live state, and the shared record (user reports, prior fixes, incidents), then hand back a tight current-state brief. Use for 'recall my work on X', 'catch me up', 'what have I been working on', 'where did I leave off', before starting or resuming work."
+        },
+        {
+          "name": "reflect",
+          "path": "skills/reflect",
+          "tokens": 0,
+          "listed": 0,
+          "body": 1193,
+          "description": "Mine the active transcript for durable learnings and route each to a concrete edit on an existing skill. Use when the user says reflect."
+        },
+        {
+          "name": "reframe",
+          "path": "skills/reframe",
+          "tokens": 0,
+          "listed": 0,
+          "body": 1077,
+          "description": "Teach the expert words for what the operator is building, borrow words from neighboring fields that solved the same problem, then rewrite their description with them. Use for /reframe."
+        },
+        {
+          "name": "sharpen",
+          "path": "skills/sharpen",
+          "tokens": 0,
+          "listed": 0,
+          "body": 673,
+          "description": "Make a task deeper, not bigger, then rewrite the prompt. Use for /sharpen."
+        },
+        {
+          "name": "show-me-your-work",
+          "path": "skills/show-me-your-work",
+          "tokens": 0,
+          "listed": 0,
+          "body": 6121,
+          "description": "Keep a reviewable decision trail for long-running or unattended work: a TSV log with one row per decision (what, why, evidence, result). Local by default; commit it when a reviewer needs the trail to trust the result. Use for /show-me-your-work, autonomous or multi-phase runs, or work a human reviews after stepping away."
+        },
+        {
+          "name": "statechart",
+          "path": "skills/statechart",
+          "tokens": 0,
+          "listed": 0,
+          "body": 8962,
+          "description": "Check a TLA+ model of a system that moves between states, such as a product flow, a protocol, or a service, and draw it as a Mermaid statechart. The report gives the shortest path to each state that breaks a rule. Use for /statechart, or to show a bug as a path through states."
+        },
+        {
+          "name": "swarm",
+          "path": "skills/swarm",
+          "tokens": 0,
+          "listed": 0,
+          "body": 2502,
+          "description": "Fan out N parallel workers, drain them, and return one report. Use for /swarm, 'swarm this', or parallel coverage, races, gauntlets, and exploration."
+        },
+        {
+          "name": "tdd",
+          "path": "skills/tdd",
+          "tokens": 0,
+          "listed": 0,
+          "body": 2853,
+          "description": "Use only when the user explicitly asks for TDD, a failing test, or a regression test, OR when the bug has an obvious cheap local test target. Skip when the test path is unclear, expensive, integration-heavy, or not requested."
+        },
+        {
+          "name": "teach",
+          "path": "skills/teach",
+          "tokens": 0,
+          "listed": 0,
+          "body": 5052,
+          "description": "Explain a body of work plainly so a person actually understands it. Runs the `how` and `why` skills and weaves what they find into one clear explanation. Use for 'teach me this', 'help me really understand X', 'explain this change or subsystem to me'."
+        },
+        {
+          "name": "technical-writing",
+          "path": "skills/technical-writing",
+          "tokens": 0,
+          "listed": 0,
+          "body": 4106,
+          "description": "Layered technical-writing standard: Diátaxis structure, Google developer style sentences, STE instruction rules, Global English syntax. Use for /technical-writing or when writing or reviewing docs, RFCs, readmes, PR descriptions, or commit messages."
+        },
+        {
+          "name": "typescript-best-practices",
+          "path": "skills/typescript-best-practices",
+          "tokens": 0,
+          "listed": 0,
+          "body": 2573,
+          "description": "TypeScript best practices. Use when reading or editing any .ts or .tsx file."
+        },
+        {
+          "name": "unslop",
+          "path": "skills/unslop",
+          "tokens": 0,
+          "listed": 0,
+          "body": 2284,
+          "description": "Cut AI tells from any writing."
+        },
+        {
+          "name": "why",
+          "path": "skills/why",
+          "tokens": 0,
+          "listed": 0,
+          "body": 282,
+          "description": "Use for 'why does X work this way', 'why we picked Y', design rationale, regressions, postmortems, or data-backed thresholds. Returns a cited read on decisions and tradeoffs. Use how for runtime behavior."
+        }
+      ],
+      "findings": []
+    },
+    {
+      "slug": "vercel-labs/agent-skills",
+      "title": "Vercel agent skills",
+      "by": "Vercel",
+      "repo": "vercel-labs/agent-skills",
+      "sha": "5a37a6329fbad3666c3207392a6a7c0110e92efb",
+      "stars": 35009,
+      "pushed": "2026-11-20",
+      "jobs": ["ui", "framework"],
+      "items": [
+        {
+          "name": "vercel-react-view-transitions",
+          "path": "skills/react-view-transitions",
+          "tokens": 176,
+          "listed": 704,
+          "body": 13655,
+          "description": "Guide for implementing smooth, native-feeling animations using React's View Transition API (`<ViewTransition>` component, `addTransitionType`, and CSS view transition pseudo-elements). Use this skill whenever the user wants to add page transitions, animate route changes, create shared element animations, animate enter/exit of components, animate list reorder, implement directional (forward/back) navigation animations, or integrate view transitions in Next.js. Also use when the user mentions view transitions, `startViewTransition`, `ViewTransition`, transition types, or asks about animating between UI states in React without third-party animation libraries."
+        },
+        {
+          "name": "vercel-optimize",
+          "path": "skills/vercel-optimize",
+          "tokens": 147,
+          "listed": 586,
+          "body": 16670,
+          "description": "Use for Vercel cost and performance optimization on deployed projects, especially Next.js, SvelteKit, Nuxt, and limited Astro apps. Collect Vercel metrics, usage, project config, and code scan results first; investigate only metric-backed candidates; produce ranked recommendations grounded in verified files and version-aware Vercel/framework docs. Trigger for Vercel bill reduction, slow or expensive routes, caching opportunities, Function Invocations, Build Minutes, Fast Data Transfer, Core Web Vitals, Bot Management, Fluid compute, or cost breakdown requests."
+        },
+        {
+          "name": "vercel-react-best-practices",
+          "path": "skills/react-best-practices",
+          "tokens": 90,
+          "listed": 361,
+          "body": 6807,
+          "description": "React and Next.js performance optimization guidelines from Vercel Engineering. This skill should be used when writing, reviewing, or refactoring React/Next.js code to ensure optimal performance patterns. Triggers on tasks involving React components, Next.js pages, data fetching, bundle optimization, or performance improvements."
+        },
+        {
+          "name": "vercel-composition-patterns",
+          "path": "skills/composition-patterns",
+          "tokens": 86,
+          "listed": 342,
+          "body": 2447,
+          "description": "React composition patterns that scale. Use when refactoring components with boolean prop proliferation, building flexible component libraries, or designing reusable APIs. Triggers on tasks involving compound components, render props, context providers, or component architecture. Includes React 19 API changes."
+        },
+        {
+          "name": "vercel-react-native-skills",
+          "path": "skills/react-native-skills",
+          "tokens": 82,
+          "listed": 326,
+          "body": 4022,
+          "description": "React Native and Expo best practices for building performant mobile apps. Use when building React Native components, optimizing list performance, implementing animations, or working with native modules. Triggers on tasks involving React Native, Expo, mobile performance, or native platform APIs."
+        },
+        {
+          "name": "vercel-cli-with-tokens",
+          "path": "skills/vercel-cli-with-tokens",
+          "tokens": 66,
+          "listed": 263,
+          "body": 10101,
+          "description": "Deploy and manage projects on Vercel using token-based authentication. Use when working with Vercel CLI using access tokens rather than interactive login — e.g. \"deploy to vercel\", \"set up vercel\", \"add environment variables to vercel\"."
+        },
+        {
+          "name": "writing-guidelines",
+          "path": "skills/writing-guidelines",
+          "tokens": 58,
+          "listed": 230,
+          "body": 898,
+          "description": "Review docs/prose for Writing Guidelines compliance. Use when asked to \"review my docs\", \"check writing style\", \"audit prose\", \"review docs voice and tone\", or \"check this page against the writing handbook\"."
+        },
+        {
+          "name": "deploy-to-vercel",
+          "path": "skills/deploy-to-vercel",
+          "tokens": 54,
+          "listed": 215,
+          "body": 9402,
+          "description": "Deploy applications and websites to Vercel. Use when the user requests deployment actions like \"deploy my app\", \"deploy and give me the link\", \"push this live\", or \"create a preview deployment\"."
+        },
+        {
+          "name": "web-design-guidelines",
+          "path": "skills/web-design-guidelines",
+          "tokens": 53,
+          "listed": 210,
+          "body": 1762,
+          "description": "Review UI code for Web Interface Guidelines compliance. Use when asked to \"review my UI\", \"check accessibility\", \"audit design\", \"review UX\", or \"check my site against best practices\"."
+        }
+      ],
+      "findings": [
+        {
+          "rule": "expensive-description",
+          "item": "skill:vercel-react-view-transitions",
+          "evidence": {
+            "listedChars": 704,
+            "maxChars": 300
+          }
+        },
+        {
+          "rule": "expensive-description",
+          "item": "skill:vercel-optimize",
+          "evidence": {
+            "listedChars": 586,
+            "maxChars": 300
+          }
+        },
+        {
+          "rule": "expensive-description",
+          "item": "skill:vercel-react-best-practices",
+          "evidence": {
+            "listedChars": 361,
+            "maxChars": 300
+          }
+        },
+        {
+          "rule": "expensive-description",
+          "item": "skill:vercel-composition-patterns",
+          "evidence": {
+            "listedChars": 342,
+            "maxChars": 300
+          }
+        },
+        {
+          "rule": "expensive-description",
+          "item": "skill:vercel-react-native-skills",
+          "evidence": {
+            "listedChars": 326,
+            "maxChars": 300
+          }
+        }
+      ]
+    },
+    {
+      "slug": "antfu/skills",
+      "title": "Anthony Fu's skills",
+      "by": "Anthony Fu",
+      "repo": "antfu/skills",
+      "sha": "0ecc25a6dcc805074133f7315fb6965450c70990",
+      "stars": 6102,
+      "pushed": "2026-11-27",
+      "jobs": ["framework"],
+      "items": [
+        {
+          "name": "antfu-issue-triage",
+          "path": "skills/antfu-issue-triage",
+          "tokens": 88,
+          "listed": 351,
+          "body": 16318,
+          "description": "Triage open issues and PRs of the current GitHub repo - find already-fixed, duplicate, and spam items, suggest labels, gauge demand from reactions and comments, then present a table of proposed actions and comments for confirmation before touching anything. Use when asked to triage, organize, clean up, or groom issues and PRs."
+        },
+        {
+          "name": "antfu-simplify",
+          "path": "skills/antfu-simplify",
+          "tokens": 87,
+          "listed": 346,
+          "body": 6028,
+          "description": "Simplify the changes of the current PR or working tree with an ablation study - remove each piece of the diff and keep only what is proven needed - so the result has just-right abstraction, minimal clean code, and stays robust and universal. Use when asked to simplify, slim down, clean up, or reduce the current changes or PR."
+        },
+        {
+          "name": "antfu-query",
+          "path": "skills/antfu-query",
+          "tokens": 73,
+          "listed": 291,
+          "body": 2644,
+          "description": "Interview the user relentlessly about a plan, decision, or idea until reaching a shared understanding, using the agent's interactive question tool (not plain text). Use when the user wants to stress-test their thinking, clarify requirements, or says \"grill me\" or \"query me\"."
+        },
+        {
+          "name": "nitro",
+          "path": "skills/nitro",
+          "tokens": 72,
+          "listed": 286,
+          "body": 3318,
+          "description": "Nitro is the framework-agnostic server toolkit (powering Nuxt) for building and deploying web servers anywhere. Use when working with nitro.config, server routes/event handlers, route rules, caching, storage, tasks, websockets, or deploying to Node/Bun/Deno/Cloudflare/Vercel."
+        },
+        {
+          "name": "antfu-upgrade-deps",
+          "path": "skills/antfu-upgrade-deps",
+          "tokens": 68,
+          "listed": 271,
+          "body": 5131,
+          "description": "Upgrade the dependencies of the current project with taze, migrate code for major versions by reading their changelogs, dedupe the lockfile, verify tests, lint, and typecheck, then open a PR. Use when asked to upgrade, update, or bump dependencies."
+        },
+        {
+          "name": "pnpm",
+          "path": "skills/pnpm",
+          "tokens": 67,
+          "listed": 266,
+          "body": 4738,
+          "description": "Node.js package manager with strict dependency resolution. Use when running pnpm specific commands, configuring workspaces via pnpm-workspace.yaml, or managing dependencies with catalogs, patches, overrides, config dependencies, or the global virtual store."
+        },
+        {
+          "name": "antfu",
+          "path": "skills/antfu",
+          "tokens": 63,
+          "listed": 253,
+          "body": 7516,
+          "description": "Anthony Fu's opinionated tooling and conventions for JavaScript/TypeScript projects. Use when setting up new projects, configuring ESLint/Prettier alternatives, monorepos, library publishing, or when the user mentions Anthony Fu's preferences."
+        },
+        {
+          "name": "antfu-create-pr",
+          "path": "skills/antfu-create-pr",
+          "tokens": 63,
+          "listed": 252,
+          "body": 8393,
+          "description": "Create a reviewable GitHub pull request from the current branch with a Conventional Commits title, a concise evidence-based body, and before/after screenshots for UI changes. Use when asked to open, create, publish, or prepare a PR."
+        },
+        {
+          "name": "vue",
+          "path": "skills/vue",
+          "tokens": 55,
+          "listed": 218,
+          "body": 2078,
+          "description": "Vue 3 Composition API, script setup macros, reactivity system, and built-in components. Use when writing Vue SFCs, defineProps/defineEmits/defineModel, watchers, or using Transition/Teleport/Suspense/KeepAlive."
+        },
+        {
+          "name": "vite",
+          "path": "skills/vite",
+          "tokens": 49,
+          "listed": 196,
+          "body": 2150,
+          "description": "Vite build tool configuration, plugin API, SSR, and Vite 8 Rolldown migration. Use when working with Vite projects, vite.config.ts, Vite plugins, or building libraries/SSR apps with Vite."
+        },
+        {
+          "name": "pinia",
+          "path": "skills/pinia",
+          "tokens": 47,
+          "listed": 186,
+          "body": 2347,
+          "description": "Pinia official Vue state management library, type-safe and extensible. Use when defining stores, working with state/getters/actions, or implementing store patterns in Vue apps."
+        },
+        {
+          "name": "unocss",
+          "path": "skills/unocss",
+          "tokens": 47,
+          "listed": 188,
+          "body": 3984,
+          "description": "UnoCSS instant atomic CSS engine, superset of Tailwind CSS. Use when configuring UnoCSS, writing utility rules, shortcuts, or working with presets like Wind, Icons, Attributify."
+        },
+        {
+          "name": "vitest",
+          "path": "skills/vitest",
+          "tokens": 47,
+          "listed": 187,
+          "body": 3336,
+          "description": "Vitest fast unit testing framework powered by Vite with Jest-compatible API. Use when writing tests, mocking, configuring coverage, or working with test filtering and fixtures."
+        },
+        {
+          "name": "nuxt",
+          "path": "skills/nuxt",
+          "tokens": 44,
+          "listed": 177,
+          "body": 4232,
+          "description": "Nuxt full-stack Vue framework with SSR, auto-imports, and file-based routing. Use when working with Nuxt apps, server routes, useFetch, middleware, or hybrid rendering."
+        },
+        {
+          "name": "vitepress",
+          "path": "skills/vitepress",
+          "tokens": 43,
+          "listed": 170,
+          "body": 3322,
+          "description": "VitePress static site generator powered by Vite and Vue. Use when building documentation sites, configuring themes, or writing Markdown with Vue components."
+        }
+      ],
+      "findings": [
+        {
+          "rule": "expensive-description",
+          "item": "skill:antfu-issue-triage",
+          "evidence": {
+            "listedChars": 351,
+            "maxChars": 300
+          }
+        },
+        {
+          "rule": "expensive-description",
+          "item": "skill:antfu-simplify",
+          "evidence": {
+            "listedChars": 346,
+            "maxChars": 300
+          }
+        }
+      ]
+    },
+    {
+      "slug": "ibelick/ui-skills",
+      "title": "UI Skills",
+      "by": "ibelick",
+      "repo": "ibelick/ui-skills",
+      "sha": "4b5bf7bbde7852d2904aa2bcd1d6bcc62823f721",
+      "stars": 11458,
+      "pushed": "2026-11-27",
+      "jobs": ["ui"],
+      "items": [
+        {
+          "name": "photographing-software",
+          "path": "skills/photographing-software",
+          "tokens": 104,
+          "listed": 415,
+          "body": 17106,
+          "description": "Create photographic images of software — a website or app shown on a real-looking laptop, display, tablet or phone, shot through a camera with depth of field, room light and film finish. Use for product photos, launch visuals, hero images and social posts that should look photographed rather than mocked up, including close-ups of UI text, three-quarter desk shots and full-device shots."
+        },
+        {
+          "name": "create-design-md",
+          "path": "skills/create-design-md",
+          "tokens": 99,
+          "listed": 395,
+          "body": 15757,
+          "description": "Create or update a DESIGN.md from an existing product repository or public website. Use when asked to document an interface's design language, reconstruct its visual system, extract design tokens and guidance from current evidence, or give coding agents persistent UI context. Do not modify product source or promote accidental implementation patterns into design decisions."
+        },
+        {
+          "name": "improve-ui",
+          "path": "skills/improve-ui",
+          "tokens": 94,
+          "listed": 377,
+          "body": 7415,
+          "description": "Audit an existing product surface against its own design evidence, identify verified UI problems, and write self-contained implementation plans for another agent. Strictly read-only on product source. Use when asked to review, refine, improve, or clean up an interface without replacing its identity; investigate design-system drift; or prepare a design handoff."
+        },
+        {
+          "name": "fixing-metadata",
+          "path": "skills/fixing-metadata",
+          "tokens": 90,
+          "listed": 360,
+          "body": 4013,
+          "description": "Audit and fix HTML metadata including page titles, meta descriptions, canonical URLs, Open Graph tags, Twitter cards, favicons, JSON-LD structured data, and robots directives. Use when adding SEO metadata, fixing social share previews, reviewing Open Graph tags, setting up canonical URLs, or shipping new pages that need correct meta tags."
+        },
+        {
+          "name": "device-frames",
+          "path": "skills/device-frames",
+          "tokens": 71,
+          "listed": 284,
+          "body": 17273,
+          "description": "Create device-framed screenshots, product images, videos, or live UI mockups. Use when placing an image, recording, webpage, or component inside a phone, foldable, tablet, watch, laptop, monitor, or browser frame, including App Store-style visuals and launch videos."
+        },
+        {
+          "name": "fixing-motion-performance",
+          "path": "skills/fixing-motion-performance",
+          "tokens": 63,
+          "listed": 253,
+          "body": 5284,
+          "description": "Audit and fix animation performance issues including layout thrashing, compositor properties, scroll-linked motion, and blur effects. Use when animations stutter, transitions jank, or reviewing CSS/JS animation performance."
+        },
+        {
+          "name": "fixing-accessibility",
+          "path": "skills/fixing-accessibility",
+          "tokens": 61,
+          "listed": 243,
+          "body": 4447,
+          "description": "Audit and fix HTML accessibility issues including ARIA labels, keyboard navigation, focus management, color contrast, and form errors. Use when adding interactive controls, forms, dialogs, or reviewing WCAG compliance."
+        },
+        {
+          "name": "baseline-ui",
+          "path": "skills/baseline-ui",
+          "tokens": 41,
+          "listed": 165,
+          "body": 3228,
+          "description": "Quickly deslop UI code by fixing spacing, hierarchy, typography, and small layout issues. Use when the interface needs a fast cleanup or polish pass."
+        },
+        {
+          "name": "component-canvas",
+          "path": "skills/component-canvas",
+          "tokens": 33,
+          "listed": 132,
+          "body": 8744,
+          "description": "Build a full-screen, interactive canvas to explore existing UI components and their variants with pan and zoom."
+        },
+        {
+          "name": "ui-skills-root",
+          "path": "skills/ui-skills-root",
+          "tokens": 30,
+          "listed": 120,
+          "body": 1244,
+          "description": "Use before UI-related work to select the smallest useful UI Skills context through the ui-skills CLI."
+        },
+        {
+          "name": "create-canvas",
+          "path": "skills/create-canvas",
+          "tokens": 22,
+          "listed": 87,
+          "body": 13430,
+          "description": "Build a freeform canvas to explore, compare, and iterate on anything."
+        }
+      ],
+      "findings": [
+        {
+          "rule": "expensive-description",
+          "item": "skill:photographing-software",
+          "evidence": {
+            "listedChars": 415,
+            "maxChars": 300
+          }
+        },
+        {
+          "rule": "expensive-description",
+          "item": "skill:create-design-md",
+          "evidence": {
+            "listedChars": 395,
+            "maxChars": 300
+          }
+        },
+        {
+          "rule": "expensive-description",
+          "item": "skill:improve-ui",
+          "evidence": {
+            "listedChars": 377,
+            "maxChars": 300
+          }
+        },
+        {
+          "rule": "expensive-description",
+          "item": "skill:fixing-metadata",
+          "evidence": {
+            "listedChars": 360,
+            "maxChars": 300
+          }
+        }
+      ]
+    },
+    {
+      "slug": "humanlayer/skills",
+      "title": "HumanLayer skills",
+      "by": "HumanLayer",
+      "repo": "humanlayer/skills",
+      "sha": "4d69d20f6e9b57b4fcf0d501ccfb1be961f0f329",
+      "stars": 5970,
+      "pushed": "2026-11-01",
+      "jobs": ["workflow"],
+      "items": [
+        {
+          "name": "design-control-loop",
+          "path": "plugins/design-control-loop/skills/design-control-loop",
+          "tokens": 60,
+          "listed": 238,
+          "body": 15141,
+          "description": "interview the user to design an agentic control loop (sensor, controller, actuator under disturbances) tailored to their codebase, then build it as locally-runnable components plus a scheduled coding-agent workflow"
+        },
+        {
+          "name": "build-iterated-agentic-loop",
+          "path": "plugins/build-iterated-agentic-loop/skills/build-iterated-agentic-loop",
+          "tokens": 43,
+          "listed": 171,
+          "body": 13358,
+          "description": "build a repo-local skill and install a matching iterated coding-agent GitHub Actions workflow, prompt, memory file, and reference templates"
+        },
+        {
+          "name": "improve-claude-md",
+          "path": "plugins/improve-claude-md/skills/improve-claude-md",
+          "tokens": 28,
+          "listed": 113,
+          "body": 9273,
+          "description": "improve a CLAUDE.md file using <important if> blocks to improve instruction adherence"
+        },
+        {
+          "name": "narrow-react-prop-types",
+          "path": "plugins/narrow-react-prop-types/skills/narrow-react-prop-types",
+          "tokens": 22,
+          "listed": 86,
+          "body": 7654,
+          "description": "narrow React component prop types to match live code paths"
+        },
+        {
+          "name": "visual-pr",
+          "path": "plugins/visual-pr/skills/visual-pr",
+          "tokens": 19,
+          "listed": 75,
+          "body": 3278,
+          "description": "Only use when the user explicitly invokes this skill by name."
+        },
+        {
+          "name": "rpi",
+          "path": "plugins/rpi/skills/rpi",
+          "tokens": 17,
+          "listed": 69,
+          "body": 5265,
+          "description": "Only use when the user explicitly invokes this skill by name."
+        },
+        {
+          "name": "show-me",
+          "path": "plugins/show-me/skills/show-me",
+          "tokens": 0,
+          "listed": 0,
+          "body": 3074,
+          "description": "Help the user understand the current topic visually with concise diagrams, code-shape sketches, and focused HTML artifacts."
+        }
+      ],
+      "findings": []
+    }
+  ],
+  "unmeasured": [
+    {
+      "slug": "affaan-m/everything-claude-code",
+      "why": "larger than the 32 MB the resolver reads"
+    }
+  ]
+}
