@@ -8,6 +8,7 @@ npx loadsheet claude     # Claude Code, item by item
 npx loadsheet --full     # every finding and fix in full
 npx loadsheet --json     # the Report as JSON, schema 1
 npx loadsheet --fleet    # this machine and every machine of its fleetrc fleet, over ssh
+npx loadsheet usage      # sessions, compactions and tokens per project
 npx loadsheet ./skills   # weigh a skill pack, with no usage data
 npx loadsheet build      # the report as a web page in ./loadsheet-report
 npx loadsheet --ui       # the same page, served on 127.0.0.1

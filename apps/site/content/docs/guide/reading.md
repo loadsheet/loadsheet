@@ -4,7 +4,7 @@ description: What loadsheet prints, from how much context each harness sends wit
 navigation.order: 1
 ---
 
-`npx loadsheet` prints a short summary. `npx loadsheet <harness>` breaks one harness down item by item. `npx loadsheet --full` prints every finding and fix in full, and `npx loadsheet --json` prints the same numbers as a [Report](/docs/reference/schemas).
+`npx loadsheet` prints a short summary. `npx loadsheet <harness>` breaks one harness down item by item. `npx loadsheet --full` prints every finding and fix in full, and `npx loadsheet --json` prints the same numbers as a [Report](/docs/reference/schemas). `npx loadsheet usage` looks back instead: sessions, compactions and tokens per project.
 
 ## The first message of a chat
 
@@ -54,3 +54,36 @@ skills · 9 listed                     0.4k     uses
 ## The full report
 
 `npx loadsheet --full` prints what the summary is built from: each harness's heaviest lines, what each harness lets loadsheet see, every finding grouped by rule with each fix's action, file, key and command, and the rules that did not run. A skill pack's report, `npx loadsheet ./skills`, always prints in full. See [Weigh a skill pack](/docs/guide/packs).
+
+## Usage by project
+
+```txt
+Sessions, compactions and tokens by project, last 30 days, on 2 machines.
+
+Totals                          sessions     compacted      tokens   share
+  Claude Code                         17        3  18%       62.0M     90%
+  Codex                                5        1  20%        7.1M     10%
+  all                                 22        4  18%       69.1M    100%
+  plus 22 subagent sessions, whose tokens are counted above
+
+Orgs                            sessions     compacted      tokens   share
+  acme                                19        4  21%       68.6M     99%
+  no repository                        3        0   0%      507.4k      1%
+
+Projects                        sessions     compacted      tokens   share
+  acme/web                            14        3  21%       61.5M     89%
+  acme/api                             5        1  20%        7.1M     10%
+  no repository                        3        0   0%      507.4k      1%
+
+Settings
+  Claude Code  prompt cache      5 minutes
+               subagent cache    Claude Code's default
+               transcripts kept  30 days
+  Codex        auto-compact      Codex's default limit
+```
+
+`npx loadsheet usage` counts the sessions you started, how many compacted their context at least once, and the tokens they used, per harness, per organisation and for the 10 biggest projects. Tokens are input, output, cache reads and cache writes, subagents' included; the share is of all of them. A project is its repository, `owner/repo`, from the git remote of the folder the session ran in. Folders that are no repository count under one row. A session counts on the day it started.
+
+Settings shows what loadsheet read from each harness's settings that changes these numbers: how long the prompt cache lives, how long transcripts are kept, and when the harness compacts on its own. When a 1-hour cache followed 5-minute days, it says when the 5-minute writes stopped. Fixes for the [prompt cache rules](/docs/reference/rules#prompt-cache) and for transcripts kept too short follow it.
+
+These counters stay on your machines. See [Privacy](/docs/guide/privacy).

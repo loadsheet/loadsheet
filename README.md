@@ -21,6 +21,7 @@ npx loadsheet          # report for this machine
 npx loadsheet claude   # Claude Code, item by item
 npx loadsheet --ui     # the same report as a web page on 127.0.0.1
 npx loadsheet --json   # the Report as JSON
+npx loadsheet usage    # sessions, compactions and tokens per project
 ```
 
 `npx loadsheet mcp <url>` checks what each MCP client does with a server's tools: the ones it leaves out, cuts or rewrites. [loadsheet.dev/mcp](https://loadsheet.dev/mcp) does the same for a public server.

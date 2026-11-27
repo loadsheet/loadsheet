@@ -14,8 +14,9 @@ Change nothing until I accept a fix.
 2. If the Report's `schema` is not 1, tell me this prompt is for schema 1 and stop.
 3. Read `findings`. Before changing anything, present them to me in plain words, grouped by
    `rule` and ranked by `savesTokens.value` (tokens every session would save; findings without
-   it last). For each: the item, what its `evidence` numbers mean, what it saves, and what its
-   fixes would change. Say in one line which rules did not run (`skipped`). Ask which to apply.
+   it last). For each: the item (or, when it has none, the harness and the `via` entrypoint),
+   what its `evidence` numbers mean, what it saves, and what its fixes would change. Say in
+   one line which rules did not run (`skipped`). Ask which to apply.
 4. Apply only the fixes I accept, one at a time. Each finding lists its fixes in `fixes`.
    - `machine`: act only when it names the machine you run on. The Report's `machines` lists
      the machines read; a local Report holds one, this machine. In a fleet Report, yours is the
