@@ -5,8 +5,10 @@ import { useRouter } from "vue-router";
 import { usePickReport } from "../lib/open";
 
 const pickReport = usePickReport();
-// Only loadsheet.dev registers the MCP check; the CLI's page has no server to run it.
-const mcp = useRouter().hasRoute("mcp");
+// Only loadsheet.dev registers the MCP check and the skill pack reviews; the CLI's page has neither.
+const router = useRouter();
+const mcp = router.hasRoute("mcp");
+const skills = router.hasRoute("skills");
 </script>
 
 <template>
@@ -16,6 +18,7 @@ const mcp = useRouter().hasRoute("mcp");
     /></RouterLink>
     <nav aria-label="Site">
       <button type="button" class="nav-link" @click="pickReport">Open a report</button>
+      <RouterLink v-if="skills" class="nav-link" :to="{ name: 'skills' }">Skills</RouterLink>
       <RouterLink v-if="mcp" class="nav-link" :to="{ name: 'mcp' }">MCP</RouterLink>
       <a class="nav-link" href="https://github.com/loadsheet/loadsheet">GitHub</a>
       <ThemeToggle />

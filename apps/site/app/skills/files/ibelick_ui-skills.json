@@ -1,0 +1,19 @@
+{
+  "source": "ibelick/ui-skills",
+  "sha": "4b5bf7bbde7852d2904aa2bcd1d6bcc62823f721",
+  "files": [
+    { "path": "skills/baseline-ui/SKILL.md", "size": 3419 },
+    { "path": "skills/component-canvas/SKILL.md", "size": 8900 },
+    { "path": "skills/create-canvas/SKILL.md", "size": 13554 },
+    { "path": "skills/create-design-md/SKILL.md", "size": 16208 },
+    { "path": "skills/device-frames/SKILL.md", "size": 17645 },
+    { "path": "skills/fixing-accessibility/SKILL.md", "size": 4718 },
+    { "path": "skills/fixing-metadata/SKILL.md", "size": 4439 },
+    { "path": "skills/fixing-motion-performance/SKILL.md", "size": 5565 },
+    { "path": "skills/improve-ui/agents/openai.yaml", "size": 386 },
+    { "path": "skills/improve-ui/references/plan-template.md", "size": 1590 },
+    { "path": "skills/improve-ui/SKILL.md", "size": 7830 },
+    { "path": "skills/photographing-software/SKILL.md", "size": 17654 },
+    { "path": "skills/ui-skills-root/SKILL.md", "size": 1448 }
+  ]
+}

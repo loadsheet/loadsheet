@@ -1,0 +1,494 @@
+{
+  "source": "vercel-labs/agent-skills",
+  "sha": "5a37a6329fbad3666c3207392a6a7c0110e92efb",
+  "files": [
+    { "path": "skills/composition-patterns/AGENTS.md", "size": 22627 },
+    { "path": "skills/composition-patterns/metadata.json", "size": 530 },
+    { "path": "skills/composition-patterns/README.md", "size": 2140 },
+    { "path": "skills/composition-patterns/rules/_sections.md", "size": 829 },
+    { "path": "skills/composition-patterns/rules/_template.md", "size": 329 },
+    {
+      "path": "skills/composition-patterns/rules/architecture-avoid-boolean-props.md",
+      "size": 2267
+    },
+    {
+      "path": "skills/composition-patterns/rules/architecture-compound-components.md",
+      "size": 2600
+    },
+    {
+      "path": "skills/composition-patterns/rules/patterns-children-over-render-props.md",
+      "size": 1886
+    },
+    { "path": "skills/composition-patterns/rules/patterns-explicit-variants.md", "size": 2395 },
+    { "path": "skills/composition-patterns/rules/react19-no-forwardref.md", "size": 953 },
+    { "path": "skills/composition-patterns/rules/state-context-interface.md", "size": 4974 },
+    { "path": "skills/composition-patterns/rules/state-decouple-implementation.md", "size": 2699 },
+    { "path": "skills/composition-patterns/rules/state-lift-state.md", "size": 3224 },
+    { "path": "skills/composition-patterns/SKILL.md", "size": 2886 },
+    { "path": "skills/deploy-to-vercel/SKILL.md", "size": 9721 },
+    { "path": "skills/react-best-practices/AGENTS.md", "size": 108261 },
+    { "path": "skills/react-best-practices/metadata.json", "size": 921 },
+    { "path": "skills/react-best-practices/README.md", "size": 3360 },
+    { "path": "skills/react-best-practices/rules/_sections.md", "size": 1554 },
+    { "path": "skills/react-best-practices/rules/_template.md", "size": 631 },
+    { "path": "skills/react-best-practices/rules/advanced-effect-event-deps.md", "size": 1802 },
+    { "path": "skills/react-best-practices/rules/advanced-event-handler-refs.md", "size": 1483 },
+    { "path": "skills/react-best-practices/rules/advanced-init-once.md", "size": 958 },
+    { "path": "skills/react-best-practices/rules/advanced-use-latest.md", "size": 1072 },
+    { "path": "skills/react-best-practices/rules/async-api-routes.md", "size": 1125 },
+    {
+      "path": "skills/react-best-practices/rules/async-cheap-condition-before-await.md",
+      "size": 1220
+    },
+    { "path": "skills/react-best-practices/rules/async-defer-await.md", "size": 2208 },
+    { "path": "skills/react-best-practices/rules/async-dependencies.md", "size": 1293 },
+    { "path": "skills/react-best-practices/rules/async-parallel.md", "size": 654 },
+    { "path": "skills/react-best-practices/rules/async-suspense-boundaries.md", "size": 2510 },
+    { "path": "skills/react-best-practices/rules/bundle-analyzable-paths.md", "size": 2382 },
+    { "path": "skills/react-best-practices/rules/bundle-barrel-imports.md", "size": 2795 },
+    { "path": "skills/react-best-practices/rules/bundle-conditional.md", "size": 949 },
+    { "path": "skills/react-best-practices/rules/bundle-defer-third-party.md", "size": 920 },
+    { "path": "skills/react-best-practices/rules/bundle-dynamic-imports.md", "size": 791 },
+    { "path": "skills/react-best-practices/rules/bundle-preload.md", "size": 1149 },
+    { "path": "skills/react-best-practices/rules/client-event-listeners.md", "size": 1969 },
+    { "path": "skills/react-best-practices/rules/client-localstorage-schema.md", "size": 1950 },
+    { "path": "skills/react-best-practices/rules/client-passive-event-listeners.md", "size": 1644 },
+    { "path": "skills/react-best-practices/rules/client-swr-dedup.md", "size": 1159 },
+    { "path": "skills/react-best-practices/rules/js-batch-dom-css.md", "size": 3266 },
+    { "path": "skills/react-best-practices/rules/js-cache-function-results.md", "size": 1949 },
+    { "path": "skills/react-best-practices/rules/js-cache-property-access.md", "size": 532 },
+    { "path": "skills/react-best-practices/rules/js-cache-storage.md", "size": 1651 },
+    { "path": "skills/react-best-practices/rules/js-combine-iterations.md", "size": 753 },
+    { "path": "skills/react-best-practices/rules/js-early-exit.md", "size": 1133 },
+    { "path": "skills/react-best-practices/rules/js-flatmap-filter.md", "size": 1411 },
+    { "path": "skills/react-best-practices/rules/js-hoist-regexp.md", "size": 1028 },
+    { "path": "skills/react-best-practices/rules/js-index-maps.md", "size": 837 },
+    { "path": "skills/react-best-practices/rules/js-length-check-first.md", "size": 1747 },
+    { "path": "skills/react-best-practices/rules/js-min-max-loop.md", "size": 2290 },
+    { "path": "skills/react-best-practices/rules/js-request-idle-callback.md", "size": 2647 },
+    { "path": "skills/react-best-practices/rules/js-set-map-lookups.md", "size": 532 },
+    { "path": "skills/react-best-practices/rules/js-tosorted-immutable.md", "size": 1782 },
+    { "path": "skills/react-best-practices/rules/rendering-activity.md", "size": 564 },
+    { "path": "skills/react-best-practices/rules/rendering-animate-svg-wrapper.md", "size": 1185 },
+    { "path": "skills/react-best-practices/rules/rendering-conditional-render.md", "size": 980 },
+    { "path": "skills/react-best-practices/rules/rendering-content-visibility.md", "size": 815 },
+    { "path": "skills/react-best-practices/rules/rendering-hoist-jsx.md", "size": 1039 },
+    { "path": "skills/react-best-practices/rules/rendering-hydration-no-flicker.md", "size": 2308 },
+    {
+      "path": "skills/react-best-practices/rules/rendering-hydration-suppress-warning.md",
+      "size": 872
+    },
+    { "path": "skills/react-best-practices/rules/rendering-resource-hints.md", "size": 2549 },
+    { "path": "skills/react-best-practices/rules/rendering-script-defer-async.md", "size": 1868 },
+    { "path": "skills/react-best-practices/rules/rendering-svg-precision.md", "size": 588 },
+    {
+      "path": "skills/react-best-practices/rules/rendering-usetransition-loading.md",
+      "size": 2074
+    },
+    { "path": "skills/react-best-practices/rules/rerender-defer-reads.md", "size": 973 },
+    { "path": "skills/react-best-practices/rules/rerender-dependencies.md", "size": 824 },
+    {
+      "path": "skills/react-best-practices/rules/rerender-derived-state-no-effect.md",
+      "size": 1201
+    },
+    { "path": "skills/react-best-practices/rules/rerender-derived-state.md", "size": 728 },
+    { "path": "skills/react-best-practices/rules/rerender-functional-setstate.md", "size": 2968 },
+    { "path": "skills/react-best-practices/rules/rerender-lazy-state-init.md", "size": 2016 },
+    {
+      "path": "skills/react-best-practices/rules/rerender-memo-with-default-value.md",
+      "size": 1173
+    },
+    { "path": "skills/react-best-practices/rules/rerender-memo.md", "size": 1148 },
+    { "path": "skills/react-best-practices/rules/rerender-move-effect-to-event.md", "size": 1268 },
+    { "path": "skills/react-best-practices/rules/rerender-no-inline-components.md", "size": 2135 },
+    {
+      "path": "skills/react-best-practices/rules/rerender-simple-expression-in-memo.md",
+      "size": 1018
+    },
+    { "path": "skills/react-best-practices/rules/rerender-split-combined-hooks.md", "size": 1844 },
+    { "path": "skills/react-best-practices/rules/rerender-transitions.md", "size": 1055 },
+    { "path": "skills/react-best-practices/rules/rerender-use-deferred-value.md", "size": 1846 },
+    {
+      "path": "skills/react-best-practices/rules/rerender-use-ref-transient-values.md",
+      "size": 1742
+    },
+    { "path": "skills/react-best-practices/rules/server-after-nonblocking.md", "size": 2012 },
+    { "path": "skills/react-best-practices/rules/server-auth-actions.md", "size": 2649 },
+    { "path": "skills/react-best-practices/rules/server-cache-lru.md", "size": 1353 },
+    { "path": "skills/react-best-practices/rules/server-cache-react.md", "size": 2228 },
+    { "path": "skills/react-best-practices/rules/server-dedup-props.md", "size": 2060 },
+    { "path": "skills/react-best-practices/rules/server-hoist-static-io.md", "size": 4423 },
+    { "path": "skills/react-best-practices/rules/server-no-shared-module-state.md", "size": 1766 },
+    { "path": "skills/react-best-practices/rules/server-parallel-fetching.md", "size": 1554 },
+    { "path": "skills/react-best-practices/rules/server-parallel-nested-fetching.md", "size": 992 },
+    { "path": "skills/react-best-practices/rules/server-serialization.md", "size": 996 },
+    { "path": "skills/react-best-practices/SKILL.md", "size": 7251 },
+    { "path": "skills/react-native-skills/AGENTS.md", "size": 73771 },
+    { "path": "skills/react-native-skills/metadata.json", "size": 896 },
+    { "path": "skills/react-native-skills/README.md", "size": 5064 },
+    { "path": "skills/react-native-skills/rules/_sections.md", "size": 2228 },
+    { "path": "skills/react-native-skills/rules/_template.md", "size": 631 },
+    { "path": "skills/react-native-skills/rules/animation-derived-value.md", "size": 1373 },
+    {
+      "path": "skills/react-native-skills/rules/animation-gesture-detector-press.md",
+      "size": 2559
+    },
+    { "path": "skills/react-native-skills/rules/animation-gpu-properties.md", "size": 2059 },
+    {
+      "path": "skills/react-native-skills/rules/design-system-compound-components.md",
+      "size": 1625
+    },
+    { "path": "skills/react-native-skills/rules/fonts-config-plugin.md", "size": 1393 },
+    { "path": "skills/react-native-skills/rules/imports-design-system-folder.md", "size": 1418 },
+    { "path": "skills/react-native-skills/rules/js-hoist-intl.md", "size": 1645 },
+    { "path": "skills/react-native-skills/rules/list-performance-callbacks.md", "size": 1059 },
+    {
+      "path": "skills/react-native-skills/rules/list-performance-function-references.md",
+      "size": 4133
+    },
+    { "path": "skills/react-native-skills/rules/list-performance-images.md", "size": 1417 },
+    { "path": "skills/react-native-skills/rules/list-performance-inline-objects.md", "size": 2308 },
+    { "path": "skills/react-native-skills/rules/list-performance-item-expensive.md", "size": 2466 },
+    { "path": "skills/react-native-skills/rules/list-performance-item-memo.md", "size": 2250 },
+    { "path": "skills/react-native-skills/rules/list-performance-item-types.md", "size": 2749 },
+    { "path": "skills/react-native-skills/rules/list-performance-virtualize.md", "size": 1742 },
+    { "path": "skills/react-native-skills/rules/monorepo-native-deps-in-app.md", "size": 1091 },
+    {
+      "path": "skills/react-native-skills/rules/monorepo-single-dependency-versions.md",
+      "size": 1351
+    },
+    { "path": "skills/react-native-skills/rules/navigation-native-navigators.md", "size": 4941 },
+    {
+      "path": "skills/react-native-skills/rules/react-compiler-destructure-functions.md",
+      "size": 1274
+    },
+    {
+      "path": "skills/react-native-skills/rules/react-compiler-reanimated-shared-values.md",
+      "size": 1268
+    },
+    { "path": "skills/react-native-skills/rules/react-state-dispatcher.md", "size": 2255 },
+    { "path": "skills/react-native-skills/rules/react-state-fallback.md", "size": 1735 },
+    { "path": "skills/react-native-skills/rules/react-state-minimize.md", "size": 1740 },
+    { "path": "skills/react-native-skills/rules/rendering-no-falsy-and.md", "size": 1812 },
+    { "path": "skills/react-native-skills/rules/rendering-text-in-text-component.md", "size": 697 },
+    { "path": "skills/react-native-skills/rules/scroll-position-no-state.md", "size": 1936 },
+    { "path": "skills/react-native-skills/rules/state-ground-truth.md", "size": 2172 },
+    { "path": "skills/react-native-skills/rules/ui-expo-image.md", "size": 1648 },
+    { "path": "skills/react-native-skills/rules/ui-image-gallery.md", "size": 2546 },
+    { "path": "skills/react-native-skills/rules/ui-measure-views.md", "size": 2232 },
+    { "path": "skills/react-native-skills/rules/ui-menus.md", "size": 4598 },
+    { "path": "skills/react-native-skills/rules/ui-native-modals.md", "size": 1859 },
+    { "path": "skills/react-native-skills/rules/ui-pressable.md", "size": 1534 },
+    { "path": "skills/react-native-skills/rules/ui-safe-area-scroll.md", "size": 1579 },
+    { "path": "skills/react-native-skills/rules/ui-scrollview-content-inset.md", "size": 1317 },
+    { "path": "skills/react-native-skills/rules/ui-styling.md", "size": 2212 },
+    { "path": "skills/react-native-skills/SKILL.md", "size": 4439 },
+    { "path": "skills/react-view-transitions/AGENTS.md", "size": 59088 },
+    { "path": "skills/react-view-transitions/metadata.json", "size": 852 },
+    { "path": "skills/react-view-transitions/README.md", "size": 2231 },
+    { "path": "skills/react-view-transitions/references/css-recipes.md", "size": 8337 },
+    { "path": "skills/react-view-transitions/references/implementation.md", "size": 9280 },
+    { "path": "skills/react-view-transitions/references/nextjs.md", "size": 10700 },
+    { "path": "skills/react-view-transitions/references/patterns.md", "size": 11941 },
+    { "path": "skills/react-view-transitions/references/troubleshooting.md", "size": 4940 },
+    { "path": "skills/react-view-transitions/SKILL.md", "size": 14502 },
+    { "path": "skills/vercel-cli-with-tokens/SKILL.md", "size": 10476 },
+    { "path": "skills/vercel-optimize/AGENTS.md", "size": 1964 },
+    { "path": "skills/vercel-optimize/CONTRIBUTING.md", "size": 2224 },
+    { "path": "skills/vercel-optimize/lib/auth-route.mjs", "size": 807 },
+    { "path": "skills/vercel-optimize/lib/budget-summary.mjs", "size": 7145 },
+    { "path": "skills/vercel-optimize/lib/citations.mjs", "size": 4029 },
+    { "path": "skills/vercel-optimize/lib/cost-coverage.mjs", "size": 8628 },
+    { "path": "skills/vercel-optimize/lib/dedup-recs.mjs", "size": 10151 },
+    { "path": "skills/vercel-optimize/lib/deep-dive.mjs", "size": 10458 },
+    { "path": "skills/vercel-optimize/lib/display-labels.mjs", "size": 7611 },
+    { "path": "skills/vercel-optimize/lib/extract-claims.mjs", "size": 19136 },
+    { "path": "skills/vercel-optimize/lib/framework-support.mjs", "size": 2126 },
+    { "path": "skills/vercel-optimize/lib/gates/build-minutes-fanout.mjs", "size": 3016 },
+    { "path": "skills/vercel-optimize/lib/gates/cold-start.mjs", "size": 2797 },
+    { "path": "skills/vercel-optimize/lib/gates/contract.mjs", "size": 3143 },
+    { "path": "skills/vercel-optimize/lib/gates/cwv-poor.mjs", "size": 3372 },
+    { "path": "skills/vercel-optimize/lib/gates/external-api-slow.mjs", "size": 2173 },
+    { "path": "skills/vercel-optimize/lib/gates/hard-gates.mjs", "size": 2543 },
+    { "path": "skills/vercel-optimize/lib/gates/index.mjs", "size": 2066 },
+    { "path": "skills/vercel-optimize/lib/gates/isr-overrevalidation.mjs", "size": 2442 },
+    { "path": "skills/vercel-optimize/lib/gates/middleware-heavy.mjs", "size": 2085 },
+    {
+      "path": "skills/vercel-optimize/lib/gates/observability-events-attribution.mjs",
+      "size": 2255
+    },
+    { "path": "skills/vercel-optimize/lib/gates/platform-bot-protection.mjs", "size": 5089 },
+    { "path": "skills/vercel-optimize/lib/gates/platform-fluid-compute.mjs", "size": 3630 },
+    { "path": "skills/vercel-optimize/lib/gates/region-misconfig.mjs", "size": 3101 },
+    { "path": "skills/vercel-optimize/lib/gates/route-errors.mjs", "size": 3101 },
+    { "path": "skills/vercel-optimize/lib/gates/scanner-driven.mjs", "size": 5191 },
+    { "path": "skills/vercel-optimize/lib/gates/select-candidates.mjs", "size": 4703 },
+    { "path": "skills/vercel-optimize/lib/gates/slow-route.mjs", "size": 4384 },
+    { "path": "skills/vercel-optimize/lib/gates/types.d.ts", "size": 893 },
+    { "path": "skills/vercel-optimize/lib/gates/uncached-route.mjs", "size": 3963 },
+    { "path": "skills/vercel-optimize/lib/gates/usage-spike-triage.mjs", "size": 5095 },
+    { "path": "skills/vercel-optimize/lib/grade-recommendation.mjs", "size": 6887 },
+    { "path": "skills/vercel-optimize/lib/impact-label.mjs", "size": 5344 },
+    { "path": "skills/vercel-optimize/lib/impact-magnitude.mjs", "size": 2172 },
+    { "path": "skills/vercel-optimize/lib/investigation-brief.mjs", "size": 35165 },
+    { "path": "skills/vercel-optimize/lib/observation-safety.mjs", "size": 9486 },
+    { "path": "skills/vercel-optimize/lib/project-facts.mjs", "size": 4399 },
+    { "path": "skills/vercel-optimize/lib/queries.mjs", "size": 10338 },
+    { "path": "skills/vercel-optimize/lib/reconcile-candidates.mjs", "size": 15966 },
+    { "path": "skills/vercel-optimize/lib/render-report.mjs", "size": 39131 },
+    { "path": "skills/vercel-optimize/lib/repo-root.mjs", "size": 3135 },
+    { "path": "skills/vercel-optimize/lib/route-normalize.mjs", "size": 8590 },
+    { "path": "skills/vercel-optimize/lib/sanitizers/bot-protection-certainty.mjs", "size": 1988 },
+    {
+      "path": "skills/vercel-optimize/lib/sanitizers/cache-tag-invalidation-certainty.mjs",
+      "size": 1522
+    },
+    { "path": "skills/vercel-optimize/lib/sanitizers/count-correct.mjs", "size": 1956 },
+    {
+      "path": "skills/vercel-optimize/lib/sanitizers/function-duration-invocations.mjs",
+      "size": 1470
+    },
+    { "path": "skills/vercel-optimize/lib/sanitizers/index.mjs", "size": 3053 },
+    { "path": "skills/vercel-optimize/lib/sanitizers/middleware-conflict.mjs", "size": 1586 },
+    { "path": "skills/vercel-optimize/lib/sanitizers/missing-citation.mjs", "size": 497 },
+    { "path": "skills/vercel-optimize/lib/sanitizers/pre-release.mjs", "size": 2224 },
+    { "path": "skills/vercel-optimize/lib/sanitizers/rate-limit.mjs", "size": 2655 },
+    { "path": "skills/vercel-optimize/lib/sanitizers/rendering-mode-mislabel.mjs", "size": 1670 },
+    { "path": "skills/vercel-optimize/lib/sanitizers/undeclared-dep.mjs", "size": 2833 },
+    { "path": "skills/vercel-optimize/lib/sanitizers/vercel-directive-strip.mjs", "size": 1460 },
+    { "path": "skills/vercel-optimize/lib/sanitizers/window-units.mjs", "size": 869 },
+    {
+      "path": "skills/vercel-optimize/lib/scanners/cache-components-suspense-dedupe.mjs",
+      "size": 4367
+    },
+    { "path": "skills/vercel-optimize/lib/scanners/edge-heavy-import.mjs", "size": 3740 },
+    { "path": "skills/vercel-optimize/lib/scanners/force-dynamic.mjs", "size": 1586 },
+    { "path": "skills/vercel-optimize/lib/scanners/headers-in-page.mjs", "size": 1537 },
+    { "path": "skills/vercel-optimize/lib/scanners/index.mjs", "size": 1458 },
+    { "path": "skills/vercel-optimize/lib/scanners/large-static-asset.mjs", "size": 3279 },
+    { "path": "skills/vercel-optimize/lib/scanners/max-age-without-s-maxage.mjs", "size": 1629 },
+    { "path": "skills/vercel-optimize/lib/scanners/middleware-broad-matcher.mjs", "size": 1986 },
+    { "path": "skills/vercel-optimize/lib/scanners/missing-cache-headers.mjs", "size": 3922 },
+    { "path": "skills/vercel-optimize/lib/scanners/prisma-include-tree.mjs", "size": 1585 },
+    { "path": "skills/vercel-optimize/lib/scanners/region-pin-in-config.mjs", "size": 3448 },
+    { "path": "skills/vercel-optimize/lib/scanners/source-maps-production.mjs", "size": 1300 },
+    { "path": "skills/vercel-optimize/lib/scanners/sveltekit-prerender-missing.mjs", "size": 2127 },
+    { "path": "skills/vercel-optimize/lib/scanners/turbo-force-bypass.mjs", "size": 4974 },
+    { "path": "skills/vercel-optimize/lib/scanners/unoptimized-image.mjs", "size": 4516 },
+    { "path": "skills/vercel-optimize/lib/scanners/use-cache-date-stamp.mjs", "size": 4040 },
+    { "path": "skills/vercel-optimize/lib/support-topics.mjs", "size": 12836 },
+    { "path": "skills/vercel-optimize/lib/throttle.mjs", "size": 8992 },
+    { "path": "skills/vercel-optimize/lib/util.mjs", "size": 544 },
+    { "path": "skills/vercel-optimize/lib/vercel.mjs", "size": 31125 },
+    { "path": "skills/vercel-optimize/lib/verify-claim.mjs", "size": 60992 },
+    { "path": "skills/vercel-optimize/lib/workspace-resolver.mjs", "size": 17545 },
+    { "path": "skills/vercel-optimize/metadata.json", "size": 903 },
+    { "path": "skills/vercel-optimize/README.md", "size": 4471 },
+    { "path": "skills/vercel-optimize/references/candidates.md", "size": 8510 },
+    { "path": "skills/vercel-optimize/references/data-collection.md", "size": 20925 },
+    { "path": "skills/vercel-optimize/references/docs-library.json", "size": 31540 },
+    { "path": "skills/vercel-optimize/references/doctrine.md", "size": 9512 },
+    { "path": "skills/vercel-optimize/references/observability-plus.md", "size": 5329 },
+    { "path": "skills/vercel-optimize/references/playbooks/ai-application.md", "size": 3933 },
+    { "path": "skills/vercel-optimize/references/playbooks/api-service.md", "size": 2485 },
+    { "path": "skills/vercel-optimize/references/playbooks/content-site.md", "size": 2502 },
+    { "path": "skills/vercel-optimize/references/playbooks/ecommerce.md", "size": 2737 },
+    { "path": "skills/vercel-optimize/references/playbooks/marketing.md", "size": 2675 },
+    { "path": "skills/vercel-optimize/references/playbooks/README.md", "size": 2812 },
+    { "path": "skills/vercel-optimize/references/playbooks/saas.md", "size": 2896 },
+    { "path": "skills/vercel-optimize/references/playbooks/sveltekit.md", "size": 4019 },
+    { "path": "skills/vercel-optimize/references/recommendations.md", "size": 10788 },
+    { "path": "skills/vercel-optimize/references/scanner-patterns.md", "size": 13671 },
+    { "path": "skills/vercel-optimize/references/scoring.md", "size": 12505 },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/astro-edge-middleware-scope.md",
+      "size": 1012
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/astro-output-mode-and-isr.md",
+      "size": 1135
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/auth-preserving-parallelization.md",
+      "size": 1203
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/bot-protection-product-guardrails.md",
+      "size": 1119
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/build-minutes-monorepo-fanout.md",
+      "size": 1269
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/cache-components-static-shell-boundaries.md",
+      "size": 1162
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/cache-components-suspense-dedupe-pitfall.md",
+      "size": 1380
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/cdn-cache-auth-safety.md",
+      "size": 1068
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/cold-start-initialization-bundle.md",
+      "size": 1159
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/core-web-vitals-client-bottlenecks.md",
+      "size": 1037
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/database-egress-pooling-region.md",
+      "size": 1015
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/dynamic-rendering-traps.md",
+      "size": 1139
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/external-api-critical-path-platform.md",
+      "size": 1145
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/external-api-critical-path.md",
+      "size": 978
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/fast-data-transfer-payloads.md",
+      "size": 1050
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/fluid-compute-caveats.md",
+      "size": 1125
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/function-duration-io-and-after.md",
+      "size": 1027
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/function-invocation-reduction.md",
+      "size": 1181
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/function-region-misconfiguration-ttfb.md",
+      "size": 1254
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/image-optimization-cost-control.md",
+      "size": 1071
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/isr-revalidation-static-generation.md",
+      "size": 1419
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/middleware-proxy-edge-cost.md",
+      "size": 991
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/next-fetch-revalidate-floor.md",
+      "size": 1059
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/next-font-cls-self-hosting.md",
+      "size": 906
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/next-heavy-ui-lazy-load-boundaries.md",
+      "size": 1048
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/next-image-lcp-preload-sizes.md",
+      "size": 1062
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/next-route-handler-get-cache-defaults.md",
+      "size": 1072
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/next-script-third-party-strategy.md",
+      "size": 1051
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/nextjs-version-cache-semantics.md",
+      "size": 996
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/not-found-catchall-request-waste.md",
+      "size": 1273
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/nuxt-route-rules-cache-isr.md",
+      "size": 1188
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/observability-events-cost-attribution.md",
+      "size": 1155
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/post-response-work-waituntil.md",
+      "size": 1009
+    },
+    { "path": "skills/vercel-optimize/references/support-topics/README.md", "size": 1785 },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/route-error-durable-offload.md",
+      "size": 1298
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/route-error-runtime-limits.md",
+      "size": 988
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/runtime-cache-reusable-data.md",
+      "size": 1180
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/sveltekit-isr-prerender-safety.md",
+      "size": 1167
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/sveltekit-split-cold-start-tradeoff.md",
+      "size": 1040
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/usage-spike-triage.md",
+      "size": 1018
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/use-cache-date-stamp-isr-write-amplifier.md",
+      "size": 1189
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/use-cache-remote-shared-origin-data.md",
+      "size": 1089
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/workflow-resumable-stream-routes.md",
+      "size": 1274
+    },
+    { "path": "skills/vercel-optimize/references/verification.md", "size": 9000 },
+    { "path": "skills/vercel-optimize/references/voice.md", "size": 3731 },
+    { "path": "skills/vercel-optimize/scripts/budget-summary.mjs", "size": 2096 },
+    { "path": "skills/vercel-optimize/scripts/build-docs.mjs", "size": 3414 },
+    { "path": "skills/vercel-optimize/scripts/check-citations.mjs", "size": 3531 },
+    { "path": "skills/vercel-optimize/scripts/check-docs-fresh.mjs", "size": 3910 },
+    { "path": "skills/vercel-optimize/scripts/collect-signals.mjs", "size": 21576 },
+    { "path": "skills/vercel-optimize/scripts/collect-sub-agent-outputs.mjs", "size": 10123 },
+    { "path": "skills/vercel-optimize/scripts/deep-dive.mjs", "size": 12332 },
+    { "path": "skills/vercel-optimize/scripts/gate-investigations.mjs", "size": 6353 },
+    { "path": "skills/vercel-optimize/scripts/merge-signals.mjs", "size": 6325 },
+    { "path": "skills/vercel-optimize/scripts/prepare-investigation-brief.mjs", "size": 8071 },
+    { "path": "skills/vercel-optimize/scripts/reconcile-candidates.mjs", "size": 2442 },
+    { "path": "skills/vercel-optimize/scripts/render-report.mjs", "size": 17424 },
+    { "path": "skills/vercel-optimize/scripts/scan-codebase.mjs", "size": 11521 },
+    { "path": "skills/vercel-optimize/scripts/verify-and-regen.mjs", "size": 15238 },
+    { "path": "skills/vercel-optimize/scripts/verify-finding.mjs", "size": 698 },
+    { "path": "skills/vercel-optimize/SKILL.md", "size": 17311 },
+    { "path": "skills/web-design-guidelines/references/command.md", "size": 8055 },
+    { "path": "skills/web-design-guidelines/SKILL.md", "size": 2077 },
+    { "path": "skills/writing-guidelines/SKILL.md", "size": 1233 }
+  ]
+}

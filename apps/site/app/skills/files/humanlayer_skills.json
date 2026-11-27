@@ -1,0 +1,279 @@
+{
+  "source": "humanlayer/skills",
+  "sha": "4d69d20f6e9b57b4fcf0d501ccfb1be961f0f329",
+  "files": [
+    {
+      "path": "plugins/build-iterated-agentic-loop/skills/build-iterated-agentic-loop/references/agent-iteration.ts",
+      "size": 5896
+    },
+    {
+      "path": "plugins/build-iterated-agentic-loop/skills/build-iterated-agentic-loop/references/agent-runner-templates.md",
+      "size": 4369
+    },
+    {
+      "path": "plugins/build-iterated-agentic-loop/skills/build-iterated-agentic-loop/references/example-skill.md",
+      "size": 7466
+    },
+    {
+      "path": "plugins/build-iterated-agentic-loop/skills/build-iterated-agentic-loop/references/memory-template.md",
+      "size": 178
+    },
+    {
+      "path": "plugins/build-iterated-agentic-loop/skills/build-iterated-agentic-loop/references/prompt-template.md",
+      "size": 1456
+    },
+    {
+      "path": "plugins/build-iterated-agentic-loop/skills/build-iterated-agentic-loop/references/response-template.md",
+      "size": 2442
+    },
+    {
+      "path": "plugins/build-iterated-agentic-loop/skills/build-iterated-agentic-loop/references/skill-template.md",
+      "size": 1847
+    },
+    {
+      "path": "plugins/build-iterated-agentic-loop/skills/build-iterated-agentic-loop/references/workflow-template.yml",
+      "size": 10521
+    },
+    {
+      "path": "plugins/build-iterated-agentic-loop/skills/build-iterated-agentic-loop/SKILL.md",
+      "size": 13553
+    },
+    {
+      "path": "plugins/design-control-loop/skills/design-control-loop/references/agent-iteration.ts",
+      "size": 5896
+    },
+    {
+      "path": "plugins/design-control-loop/skills/design-control-loop/references/agent-runner-templates.md",
+      "size": 4841
+    },
+    {
+      "path": "plugins/design-control-loop/skills/design-control-loop/references/control-loop-taxonomy.md",
+      "size": 5593
+    },
+    {
+      "path": "plugins/design-control-loop/skills/design-control-loop/references/example-control-loop.md",
+      "size": 4241
+    },
+    {
+      "path": "plugins/design-control-loop/skills/design-control-loop/references/example-skill.md",
+      "size": 7466
+    },
+    {
+      "path": "plugins/design-control-loop/skills/design-control-loop/references/memory-template.md",
+      "size": 456
+    },
+    {
+      "path": "plugins/design-control-loop/skills/design-control-loop/references/prompt-template.md",
+      "size": 1521
+    },
+    {
+      "path": "plugins/design-control-loop/skills/design-control-loop/references/response-template.md",
+      "size": 2442
+    },
+    {
+      "path": "plugins/design-control-loop/skills/design-control-loop/references/skill-template.md",
+      "size": 1847
+    },
+    {
+      "path": "plugins/design-control-loop/skills/design-control-loop/references/workflow-template.yml",
+      "size": 12081
+    },
+    { "path": "plugins/design-control-loop/skills/design-control-loop/SKILL.md", "size": 15495 },
+    { "path": "plugins/improve-claude-md/skills/improve-claude-md/SKILL.md", "size": 9450 },
+    {
+      "path": "plugins/narrow-react-prop-types/skills/narrow-react-prop-types/references/agent-narrow-component-props.yml",
+      "size": 11103
+    },
+    {
+      "path": "plugins/narrow-react-prop-types/skills/narrow-react-prop-types/references/narrow-component-props-memory.md",
+      "size": 213
+    },
+    {
+      "path": "plugins/narrow-react-prop-types/skills/narrow-react-prop-types/references/response-template.md",
+      "size": 1879
+    },
+    {
+      "path": "plugins/narrow-react-prop-types/skills/narrow-react-prop-types/SKILL.md",
+      "size": 7764
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/create-design-discussion/process.md",
+      "size": 4060
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/create-design-discussion/references/design_discussion_final_answer_resolved.md",
+      "size": 461
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/create-design-discussion/references/design_discussion_final_answer.md",
+      "size": 258
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/create-design-discussion/references/design_discussion_template.md",
+      "size": 1042
+    },
+    { "path": "plugins/rpi/skills/rpi/references/create-prd/process.md", "size": 3579 },
+    {
+      "path": "plugins/rpi/skills/rpi/references/create-prd/references/prd_final_answer_resolved.md",
+      "size": 438
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/create-prd/references/prd_template.md",
+      "size": 853
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/create-research-questions/process.md",
+      "size": 3413
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/create-research-questions/references/request_template.md",
+      "size": 312
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/create-research-questions/references/research_questions_final_answer.md",
+      "size": 471
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/create-research-questions/references/research_questions_template.md",
+      "size": 462
+    },
+    { "path": "plugins/rpi/skills/rpi/references/create-research/process.md", "size": 5544 },
+    {
+      "path": "plugins/rpi/skills/rpi/references/create-research/references/research_final_answer.md",
+      "size": 651
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/create-research/references/research_template.md",
+      "size": 1641
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/create-structure-outline/process.md",
+      "size": 3297
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/create-structure-outline/references/structure_outline_final_answer.md",
+      "size": 342
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/create-structure-outline/references/structure_outline_template.md",
+      "size": 1074
+    },
+    { "path": "plugins/rpi/skills/rpi/references/create-tdd/process.md", "size": 3637 },
+    {
+      "path": "plugins/rpi/skills/rpi/references/create-tdd/references/tdd_final_answer_resolved.md",
+      "size": 451
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/create-tdd/references/tdd_template.md",
+      "size": 776
+    },
+    { "path": "plugins/rpi/skills/rpi/references/implement-outline/process.md", "size": 3009 },
+    {
+      "path": "plugins/rpi/skills/rpi/references/implement-outline/references/implement_outline_final_answer.md",
+      "size": 504
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/iterate-design-discussion/process.md",
+      "size": 2640
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/iterate-design-discussion/references/design_discussion_final_answer_resolved.md",
+      "size": 461
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/iterate-design-discussion/references/design_discussion_final_answer.md",
+      "size": 258
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/iterate-design-discussion/references/design_discussion_template.md",
+      "size": 915
+    },
+    { "path": "plugins/rpi/skills/rpi/references/iterate-implementation/process.md", "size": 1553 },
+    {
+      "path": "plugins/rpi/skills/rpi/references/iterate-implementation/references/iterate_implementation_final_answer.md",
+      "size": 382
+    },
+    { "path": "plugins/rpi/skills/rpi/references/iterate-prd/process.md", "size": 2484 },
+    {
+      "path": "plugins/rpi/skills/rpi/references/iterate-prd/references/prd_final_answer_resolved.md",
+      "size": 438
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/iterate-prd/references/prd_template.md",
+      "size": 853
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/iterate-research-questions/process.md",
+      "size": 2530
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/iterate-research-questions/references/research_questions_final_answer.md",
+      "size": 473
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/iterate-research-questions/references/research_questions_template.md",
+      "size": 462
+    },
+    { "path": "plugins/rpi/skills/rpi/references/iterate-research/process.md", "size": 4492 },
+    {
+      "path": "plugins/rpi/skills/rpi/references/iterate-research/references/research_final_answer.md",
+      "size": 710
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/iterate-research/references/research_template.md",
+      "size": 1475
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/iterate-structure-outline/process.md",
+      "size": 2228
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/iterate-structure-outline/references/structure_outline_final_answer.md",
+      "size": 344
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/iterate-structure-outline/references/structure_outline_template.md",
+      "size": 1074
+    },
+    { "path": "plugins/rpi/skills/rpi/references/iterate-tdd/process.md", "size": 2717 },
+    {
+      "path": "plugins/rpi/skills/rpi/references/iterate-tdd/references/tdd_final_answer_resolved.md",
+      "size": 451
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/iterate-tdd/references/tdd_template.md",
+      "size": 776
+    },
+    { "path": "plugins/rpi/skills/rpi/references/prose.md", "size": 1501 },
+    { "path": "plugins/rpi/skills/rpi/references/show-me.md", "size": 3297 },
+    { "path": "plugins/rpi/skills/rpi/references/subagents/codebase-analyzer.md", "size": 5670 },
+    { "path": "plugins/rpi/skills/rpi/references/subagents/codebase-locator.md", "size": 4834 },
+    {
+      "path": "plugins/rpi/skills/rpi/references/subagents/codebase-pattern-finder.md",
+      "size": 6950
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/subagents/outline-implementer-agent.md",
+      "size": 4452
+    },
+    {
+      "path": "plugins/rpi/skills/rpi/references/subagents/web-search-researcher.md",
+      "size": 5969
+    },
+    { "path": "plugins/rpi/skills/rpi/references/workflow-choice.md", "size": 2596 },
+    { "path": "plugins/rpi/skills/rpi/references/workflow.md", "size": 3810 },
+    { "path": "plugins/rpi/skills/rpi/SKILL.md", "size": 5358 },
+    { "path": "plugins/show-me/skills/show-me/agents/openai.yaml", "size": 43 },
+    { "path": "plugins/show-me/skills/show-me/SKILL.md", "size": 3328 },
+    {
+      "path": "plugins/visual-pr/skills/visual-pr/references/describe_pr_final_answer.md",
+      "size": 421
+    },
+    {
+      "path": "plugins/visual-pr/skills/visual-pr/references/pr_description_template.md",
+      "size": 1979
+    },
+    { "path": "plugins/visual-pr/skills/visual-pr/references/show-me.md", "size": 3039 },
+    { "path": "plugins/visual-pr/skills/visual-pr/SKILL.md", "size": 3377 }
+  ]
+}
