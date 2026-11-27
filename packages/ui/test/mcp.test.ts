@@ -185,7 +185,7 @@ describe("the MCP check page on a server", () => {
       expect(html).toContain(s);
   });
 
-  it("renders a result: verdict and clients aside, problems with doc links, notes and CI folded", async () => {
+  it("renders a result: verdict and broken clients aside, problems with doc links, notes open, CI folded", async () => {
     const html = await render("/mcp", { url: URL, result: check });
     expect(html).toContain("Breaks in 1 of 3 clients");
     expect(html).toContain("Example 1.2.0 · 2 tools · mcp.example.com/mcp");
@@ -195,7 +195,10 @@ describe("the MCP check page on a server", () => {
       html.indexOf("Tools have no display title"),
     );
     expect(html).toContain('href="https://loadsheet.dev/docs/reference/mcp#mcp0005"');
-    expect(html).toContain("1 note on client behavior");
+    expect(html).toContain("Notes on client behavior");
+    // Clients with a problem get a row; the rest are marks with the count beside them.
+    expect(html).toContain('aria-label="Clients with problems"');
+    expect(html).toContain("1 fine");
     expect(html).toContain("Run in CI");
     // Each card carries its code as an id, and the shared-link button.
     expect(html).toContain('id="MCP0005"');
@@ -224,6 +227,24 @@ describe("the MCP check page on a server", () => {
     // The fix shows once, and each row only the value that differs.
     expect(html).toContain("Add a title to <code>…</code>.");
     expect(html.match(/Add a title/g)).toHaveLength(1);
+  });
+
+  it("shows each fix once above the tools that take it", async () => {
+    const fixes = ["Rename it.", "Rename it.", "Rename it. Then list the values.", "Rename it."];
+    const grouped: McpCheck = {
+      ...check,
+      diagnostics: fixes.map((fix, i) => ({
+        code: "MCP0007",
+        severity: "warn" as const,
+        tool: `t${i}`,
+        clients: ["codex"],
+        fix,
+        findings: [{ client: "codex", severity: "warn" as const, message: "Renames it." }],
+      })),
+    };
+    const html = await render("/mcp", { url: URL, result: grouped });
+    expect(html.match(/Rename it\./g)).toHaveLength(2);
+    expect(html.match(/<p class="mc-fix"/g)).toHaveLength(2);
   });
 
   it("gives a server that wants a token the command to run locally", async () => {

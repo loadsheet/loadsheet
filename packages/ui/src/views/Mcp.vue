@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import Cmd from "../components/Cmd.vue";
 import CopyIcon from "../components/CopyIcon.vue";
+import McpClientMark from "../components/McpClientMark.vue";
 import McpProblem from "../components/McpProblem.vue";
 import SiteTop from "../components/SiteTop.vue";
 import {
@@ -9,6 +10,7 @@ import {
   type McpCheckError,
   type McpProblem as McpProblemGroup,
   anchorOf,
+  andList,
   clientStatus,
   hostOf,
   localCommand,
@@ -22,7 +24,7 @@ import {
   plural,
   shortUrl,
 } from "../lib/mcp";
-import { copied, copy } from "../lib/ui";
+import { copied, copy, esc, hideTip, showTip } from "../lib/ui";
 
 /**
   Checks an MCP server against every client. The host runs the check: it gets `check` with the URL, then passes the
@@ -37,8 +39,8 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ check: [url: string] }>();
 
-// What a client's dot means, beside its name. A client with no problems needs no word.
-const SAYS: Record<string, string> = { info: "note", warn: "problem", error: "drops tools" };
+// What happens in a client that has a problem, beside its name.
+const SAYS: Record<string, string> = { warn: "problem", error: "drops tools" };
 
 const TRY = ["https://mcp.deepwiki.com/mcp", "https://nuxt.com/mcp", "https://mcp.linear.app/mcp"];
 
@@ -58,6 +60,15 @@ const labels = computed(() =>
   Object.fromEntries(r.value?.clients.map((c) => [c.id, c.label]) ?? []),
 );
 const status = computed(() => (r.value ? clientStatus(r.value) : {}));
+// Clients with a problem get a row each; the rest, notes included, sit together as marks that name themselves on hover.
+const hit = computed(() => r.value?.clients.filter((c) => SAYS[status.value[c.id] ?? "ok"]) ?? []);
+const fine = computed(
+  () => r.value?.clients.filter((c) => !SAYS[status.value[c.id] ?? "ok"]) ?? [],
+);
+function tipAt(e: MouseEvent | FocusEvent, label: string) {
+  const at = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  showTip({ clientX: at.left, clientY: at.bottom - 8 } as MouseEvent, esc(label));
+}
 const problems = computed(() => (r.value ? mcpProblems(r.value) : []));
 const real = computed(() => problems.value.filter((p) => p.severity !== "info"));
 const notes = computed(() => problems.value.filter((p) => p.severity === "info"));
@@ -169,12 +180,32 @@ const ask = computed(
             >
               <CopyIcon :done="copied.key === prompt" />Copy fix prompt
             </button>
-            <ul class="mc-clients" aria-label="Clients">
-              <li v-for="c in r.clients" :key="c.id" class="mc-cl" :class="`s-${status[c.id]}`">
-                <i />{{ c.label
-                }}<span v-if="SAYS[status[c.id] ?? 'ok']">{{ SAYS[status[c.id] ?? "ok"] }}</span>
+            <ul v-if="hit.length" class="mc-clients" aria-label="Clients with problems">
+              <li v-for="c in hit" :key="c.id" class="mc-cl" :class="`s-${status[c.id]}`">
+                <McpClientMark :id="c.id" :label="c.label" />{{ c.label
+                }}<span>{{ SAYS[status[c.id]!] }}</span>
               </li>
             </ul>
+            <div v-if="fine.length" class="mc-fine">
+              <ul
+                data-slot="vh-avatar-group"
+                :aria-label="`Fine in ${andList(fine.map((c) => c.label))}`"
+              >
+                <li
+                  v-for="c in fine"
+                  :key="c.id"
+                  data-slot="avatar"
+                  tabindex="0"
+                  @mouseenter="tipAt($event, c.label)"
+                  @mouseleave="hideTip"
+                  @focus="tipAt($event, c.label)"
+                  @blur="hideTip"
+                >
+                  <McpClientMark :id="c.id" :label="c.label" />
+                </li>
+              </ul>
+              <span v-if="hit.length">{{ fine.length }} fine</span>
+            </div>
             <details v-if="r.ci" class="mc-fold">
               <summary>Run in CI</summary>
               <Cmd :fix="{ type: 'cmd', text: r.ci }" />
@@ -193,12 +224,8 @@ const ask = computed(
               />
             </ol>
             <p v-else class="mc-none">Nothing to fix.</p>
-            <details
-              v-if="notes.length"
-              class="mc-fold"
-              :open="!real.length || target?.problem.severity === 'info' || undefined"
-            >
-              <summary>{{ plural(notes.length, "note") }} on client behavior</summary>
+            <template v-if="notes.length">
+              <h3 class="mc-notes">Notes on client behavior</h3>
               <ol class="mc-probs">
                 <McpProblem
                   v-for="p in notes"
@@ -210,7 +237,7 @@ const ask = computed(
                   @link="link"
                 />
               </ol>
-            </details>
+            </template>
           </div>
         </div>
 

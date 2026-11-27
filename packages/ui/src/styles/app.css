@@ -1005,7 +1005,6 @@
   color: var(--muted-foreground);
   font-size: 12px;
 }
-:where(.loadsheet) .mc-cl > i,
 :where(.loadsheet) .mc-dot {
   flex: none;
   width: 8px;
@@ -1013,17 +1012,54 @@
   border-radius: 50%;
   background: var(--s-ok);
 }
-:where(.loadsheet) .mc-cl.s-info > i,
 :where(.loadsheet) .mc-dot.s-info {
   background: var(--s-info);
 }
-:where(.loadsheet) .mc-cl.s-warn > i,
 :where(.loadsheet) .mc-dot.s-warn {
   background: var(--s-warn);
 }
-:where(.loadsheet) .mc-cl.s-error > i,
 :where(.loadsheet) .mc-dot.s-error {
   background: var(--s-error);
+}
+:where(.loadsheet) .mc-mark {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+:where(.loadsheet) span.mc-mark {
+  width: auto;
+  height: auto;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+:where(.loadsheet) .mc-fine {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+:where(.loadsheet) .mc-fine ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+:where(.loadsheet) .mc-fine [data-slot="avatar"] {
+  color: var(--foreground);
+  cursor: default;
+}
+:where(.loadsheet) .mc-fine [data-slot="avatar"]:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+:where(.loadsheet) .mc-notes {
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 500;
 }
 :where(.loadsheet) .mc-cl.s-warn > span {
   color: var(--s-warn);
