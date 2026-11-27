@@ -100,6 +100,15 @@ describe("createProjectResolver", () => {
       remotes({ origin: "https://github.com/far/away.git" }),
     );
     mkdirSync(join(outside, "plain"), { recursive: true });
+    // A config with a section per branch, past 64 KiB.
+    const branches = Array.from(
+      { length: 3000 },
+      (_, i) => `[branch "b${i}"]\n\tremote = origin\n`,
+    );
+    write(
+      join(home, "code/big/.git/config"),
+      `${remotes({ origin: "https://github.com/acme/big.git" })}${branches.join("")}`,
+    );
   });
 
   afterAll(() => {
@@ -136,7 +145,9 @@ describe("createProjectResolver", () => {
 
   it("reads absolute paths outside the home", () => {
     expect(resolver()(join(outside, "repo"))).toBe("far/away");
-    expect(resolver()(join(outside, "plain"))).toBe(join(outside, "plain"));
+    // The temporary folder holding `outside` folds to its parent; anywhere else the path stays.
+    const plain = join(outside, "plain");
+    expect(resolver()(plain)).toBe(plain.startsWith("/tmp/") ? "/tmp" : plain);
   });
 
   it("turns an absolute path under the home into a key", () => {
@@ -178,6 +189,20 @@ describe("createProjectResolver", () => {
       "~/.t3/worktrees/loadsheet",
     );
     expect(resolve("~/work/app/.claude/worktrees/agent-1/src")).toBe("~/work/app");
+  });
+
+  it("reads a config larger than 64 KiB", () => {
+    expect(resolver()("~/code/big/src")).toBe("acme/big");
+  });
+
+  it("names a deleted T3 worktree by a live worktree beside it", () => {
+    expect(resolver()("~/.t3/worktrees/main/feat-gone/src")).toBe("acme/main");
+  });
+
+  it("folds scratch and temporary folders to their parent", () => {
+    const resolve = resolver();
+    expect(resolve("~/.t3/scratch/2026-11-25-a-task-title-1234/src")).toBe("~/.t3/scratch");
+    expect(resolve("/tmp/probe")).toBe("/tmp");
   });
 
   it("passes an owner/repo key through", () => {

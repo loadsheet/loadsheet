@@ -3,27 +3,34 @@
 // 1. the git remote of the folder or its nearest ancestor below the home (`origin`, else the first
 //    remote), as lowercase `owner/repo`: the last two segments of the remote's path, on any host;
 // 2. the longest hint whose prefix holds the key, for folders that no longer exist;
-// 3. the key itself, with a worktree folder folded to the repository it was made from.
+// 3. for a worktree that no longer exists, the remote of its repository or of a live sibling;
+// 4. the key itself, with a worktree folder folded to the repository it was made from and a
+//    scratch or temporary folder folded to its parent, whose child names are often task titles.
 // The home's own `.git` (a dotfiles repository) is never read, and a remote that is a path on the
 // disk counts as none, so no result names an absolute path under the home.
-import { readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import type { ProjectHint } from "../index.ts";
 import { repoOfRemote } from "../project.ts";
 
 export { repoOfRemote };
 
-/** The two disk reads the resolver makes, so tests can count or fake them. */
+/** The disk reads the resolver makes, so tests can count or fake them. */
 export interface ProjectFs {
   kind(path: string): "file" | "dir" | undefined;
   read(path: string): string | undefined;
+  /** The entry names of a folder, or none when it can't be read. */
+  list?(path: string): readonly string[];
 }
 
 /** Folders walked up from a cwd before giving up on finding its `.git`. */
 const MAX_LEVELS = 12;
 
-/** Git metadata files larger than this are ignored. */
-const MAX_GIT_FILE_BYTES = 64 * 1024;
+/** Git metadata files larger than this are ignored. A config with a section per branch reaches hundreds of KiB. */
+const MAX_GIT_FILE_BYTES = 4 * 1024 * 1024;
+
+/** Sibling worktrees tried when a deleted one names no repository. */
+const MAX_SIBLINGS = 32;
 
 const nodeFs: ProjectFs = {
   kind: (path) => {
@@ -40,6 +47,13 @@ const nodeFs: ProjectFs = {
       return readFileSync(path, "utf8");
     } catch {
       return undefined;
+    }
+  },
+  list: (path) => {
+    try {
+      return readdirSync(path);
+    } catch {
+      return [];
     }
   },
 };
@@ -102,12 +116,20 @@ const repoOfDir = (dir: string, home: string, fs: ProjectFs): string | undefined
 const holds = (prefix: string, key: string) =>
   key === prefix || key.startsWith(prefix.endsWith("/") ? prefix : `${prefix}/`);
 
-/** A worktree folder's key folded to the repository it was made from. */
+/** T3 Code keeps a repository's worktrees in one folder named after it. */
+const T3_WORKTREES = /^(~\/\.t3\/worktrees\/[^/]+)\//;
+
+/** Folders whose children are one-off scratch or temporary folders. */
+const SCRATCH = /^(~\/\.t3\/scratch|\/tmp|\/var\/tmp|\/private\/tmp)\//;
+
+/** A worktree folder's key folded to the repository it was made from, a scratch folder to its parent. */
 const fold = (key: string): string => {
-  const t3 = /^(~\/\.t3\/worktrees\/[^/]+)\//.exec(key);
+  const t3 = T3_WORKTREES.exec(key);
   if (t3) return t3[1]!;
   const claude = key.indexOf("/.claude/worktrees/");
   if (claude > 0) return key.slice(0, claude);
+  const scratch = SCRATCH.exec(key);
+  if (scratch) return scratch[1]!;
   return key;
 };
 
@@ -138,6 +160,24 @@ export const createProjectResolver = ({
     }))
     .toSorted((a, b) => b.prefix.length - a.prefix.length);
   const memo = new Map<string, string>();
+  const siblings = new Map<string, string | undefined>();
+
+  /** The repository of a deleted worktree, read from the repository or a live worktree beside it. */
+  const repoOfFolded = (folded: string, normal: string): string | undefined => {
+    // A Claude Code worktree sits inside its repository, which repoOfDir already walked through.
+    if (folded === normal || !T3_WORKTREES.test(normal)) return undefined;
+    if (siblings.has(folded)) return siblings.get(folded);
+    const dir = toPath(folded);
+    let repo: string | undefined;
+    for (const name of (fs.list?.(dir) ?? []).slice(0, MAX_SIBLINGS)) {
+      const config = configOf(join(dir, name, ".git"), fs);
+      const text = config === undefined ? undefined : fs.read(config);
+      repo = text === undefined ? undefined : remoteUrls(text).map(repoOfRemote).find(Boolean);
+      if (repo) break;
+    }
+    siblings.set(folded, repo);
+    return repo;
+  };
 
   return (key) => {
     const known = memo.get(key);
@@ -146,10 +186,12 @@ export const createProjectResolver = ({
     if (isPathKey(key)) {
       const path = toPath(key);
       const normal = toKey(path);
+      const folded = fold(normal);
       project =
         repoOfDir(path, root, fs) ??
         sorted.find((hint) => holds(hint.prefix, normal))?.project ??
-        fold(normal);
+        repoOfFolded(folded, normal) ??
+        folded;
     } else {
       project = key.toLowerCase();
     }
