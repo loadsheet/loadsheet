@@ -163,7 +163,8 @@ const readStored = async () => (await readFile()).doc;
 const writeStored = async (stored: Stored, sum?: string) => {
   const doc = JSON.stringify(stored);
   sum ??= NodeCrypto.createHash("sha256").update(doc).digest("hex");
-  await NodeFSP.writeFile(cacheFile(), `{"layout":4,"sum":"${sum}","doc":${doc}}`);
+  const { layout } = await readFile();
+  await NodeFSP.writeFile(cacheFile(), `{"layout":${layout},"sum":"${sum}","doc":${doc}}`);
 };
 
 describe("the scan cache file", () => {
@@ -284,15 +285,15 @@ describe("the scan cache file", () => {
   it("opens empty a file saved in another layout", async () => {
     await (await open()).save(new Map([["one", cachedFile(1)]]));
     const file = await readFile();
-    expect(file.layout).toBe(4);
+    expect(file.layout).toBe(5);
     // Layout 2 kept the document's fields beside its sum.
     await NodeFSP.writeFile(cacheFile(), JSON.stringify({ layout: 2, ...file.doc, sum: file.sum }));
     expect((await open()).get("one")).toBeUndefined();
 
-    await writeStored(file.doc);
+    await NodeFSP.writeFile(cacheFile(), JSON.stringify(file));
     expect((await open()).get("one")).toEqual(cachedFile(1));
     const text = await NodeFSP.readFile(cacheFile(), "utf8");
-    await NodeFSP.writeFile(cacheFile(), text.replace('"layout":4', '"layout":5'));
+    await NodeFSP.writeFile(cacheFile(), text.replace('"layout":5', '"layout":4'));
     expect((await open()).get("one")).toBeUndefined();
   });
 
@@ -318,7 +319,8 @@ describe("the scan cache file", () => {
       )},`,
     );
     const sum = NodeCrypto.createHash("sha256").update(doc).digest("hex");
-    await NodeFSP.writeFile(cacheFile(), `{"layout":4,"sum":"${sum}","doc":${doc}}`);
+    const { layout } = await readFile();
+    await NodeFSP.writeFile(cacheFile(), `{"layout":${layout},"sum":"${sum}","doc":${doc}}`);
     const cache = await open();
     expect(cache.get("deep")).toBeUndefined();
     expect(cache.get("one")).toEqual(cachedFile(1));

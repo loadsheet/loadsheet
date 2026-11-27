@@ -7,7 +7,7 @@ import {
   type UsageTokenCell,
 } from "@loadsheet/schema";
 import { describe, expect, it } from "vite-plus/test";
-import { renderUsage, usageTotals } from "../src/index.ts";
+import { renderUsage, unreadUsageStores, usageTotals } from "../src/index.ts";
 
 const fleet = parseReport(
   JSON.parse(
@@ -186,5 +186,23 @@ describe("renderUsage", () => {
       expect(text).toContain("opencode.db");
       expect(text).not.toContain("nothing to count");
     }
+  });
+
+  it("warns only about unread stores that could contribute to the selected entrypoints", () => {
+    const report = withUsage(undefined);
+    const row = fleet.coverage[0]!;
+    report.coverage = [
+      { ...row, harness: "opencode", unread: ["opencode.db"] },
+      { ...row, harness: "t3-code", unread: ["statev2.sqlite"] },
+    ];
+    report.config = { ...report.config, via: { include: [], exclude: ["t3-code"] } };
+    expect(unreadUsageStores(report)).toEqual(["opencode.db"]);
+    report.config.via = { include: ["t3-code"], exclude: [] };
+    expect(unreadUsageStores(report)).toEqual(["statev2.sqlite"]);
+    report.config.via.exclude = ["t3-code"];
+    expect(unreadUsageStores(report)).toEqual([]);
+    expect(renderUsage(report)).toContain("nothing to count yet");
+    report.coverage[1]!.unread!.push("unknown.sqlite");
+    expect(unreadUsageStores(report)).toEqual(["unknown.sqlite"]);
   });
 });

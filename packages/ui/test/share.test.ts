@@ -22,6 +22,42 @@ describe("a shared link", () => {
       r.sheet.flatMap((s) => s.lines.map((l) => [s.harness, l.item, l.tokens.value]));
     expect(lines(opened)).toEqual(lines(report));
   });
+
+  it("omits custom settings paths and their edits without retargeting them", async () => {
+    const local = structuredClone(report);
+    const settingsPath = "~/workspaces/private-project/settings.json";
+    const row = local.coverage.find(
+      (candidate) => candidate.harness === "claude-code" && candidate.machine === "server",
+    )!;
+    row.settings = { ...row.settings, settingsPath, retentionDays: 30 };
+    local.findings.push({
+      id: "short-history:claude-code",
+      rule: "short-history",
+      level: "fix",
+      where: [{ machine: row.machine, harness: row.harness }],
+      evidence: { days: 30, sessions: 1, minDays: 30, retentionDays: 30 },
+      fixes: [
+        {
+          machine: row.machine,
+          action: "set",
+          path: settingsPath,
+          set: { key: "cleanupPeriodDays", value: 365 },
+        },
+      ],
+    });
+    const opened = await fromShareCode(await shareCode(local));
+    expect(JSON.stringify(opened)).not.toContain("private-project");
+    const sharedRow = opened.coverage.find(
+      (candidate) => candidate.machine === row.machine && candidate.harness === row.harness,
+    );
+    expect(sharedRow?.settings).toEqual({ retentionDays: 30 });
+    expect(opened.findings.at(-1)).toMatchObject({ level: "info", fixes: [] });
+    expect(opened.findings.find((finding) => finding.rule === "cache-ttl")?.fixes).toEqual(
+      local.findings.find((finding) => finding.rule === "cache-ttl")?.fixes,
+    );
+    expect(local.findings.at(-1)?.fixes[0]?.path).toBe(settingsPath);
+    expect(row.settings.settingsPath).toBe(settingsPath);
+  });
 });
 
 describe("shareLink", () => {

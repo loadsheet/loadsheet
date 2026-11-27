@@ -31,7 +31,7 @@ loadsheet edits none of your files. It writes its scan cache to `~/.cache/loadsh
 ## What leaves your machine
 
 - With `--fleet`, each of your machines sends its Scan to the one that asked, over your own ssh.
-- A Share link from the web page holds the Report after the `#` of the URL, which browsers do not send to loadsheet.dev. The link drops every description and the whole usage first, so a shared page has no project names.
+- A Share link from the web page holds the Report after the `#` of the URL, which browsers do not send to loadsheet.dev. The link drops every description, the whole usage, and custom settings paths and their exact edits.
 - `npx loadsheet <GitHub URL>` downloads that repository's archive from GitHub.
 - A pack page on loadsheet.dev downloads a public GitHub repository. It takes no token and stores nothing.
 - [The MCP check](/mcp) on loadsheet.dev reads the `tools/list` of the public MCP server you paste, once. It takes no token and never stores the URL; it keeps only a daily count of checks.

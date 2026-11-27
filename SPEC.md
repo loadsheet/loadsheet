@@ -86,7 +86,7 @@ graph TD
 
 - Owns the public types and their validation. `parseScan`, `parseReport` and `parseConfig` throw a `SchemaError` that lists each issue with its JSON path.
 - `RULES` and `SIGNALS` list every rule id and every signal. The default rule thresholds live in `DEFAULT_RULES` in `src/index.ts`.
-- `shareableReport` drops descriptions and `usage` before a Report goes into a share link.
+- `shareableReport` drops descriptions, `usage`, and custom settings paths and their exact edits before a Report goes into a share link.
 - `orgOf` names the organisation of a usage project, for core and the web alike.
 
 ### `@loadsheet/kit` (`packages/kit`)

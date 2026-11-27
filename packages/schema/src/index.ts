@@ -147,16 +147,29 @@ export const defaultConfig: ResolvedConfig = resolveConfig();
 
 /**
  * The Report as it may leave the user's machines in a link through loadsheet.dev: a copy without
- * any line's description, which is the user's own text, and without its usage, whose project
- * names are the user's own. Everything else is counters and names.
+ * any line's description, usage project names, or custom settings paths and their exact edits.
  */
 export const shareableReport = (report: Report): Report => {
   const { usage: _usage, ...rest } = report;
   return {
     ...rest,
+    coverage: report.coverage.map((row) => {
+      if (!row.settings || row.settings.settingsPath === "~/.claude/settings.json") return row;
+      const { settingsPath: _settingsPath, ...settings } = row.settings;
+      return { ...row, settings };
+    }),
     sheet: report.sheet.map((sheet) => ({
       ...sheet,
       lines: sheet.lines.map(({ description: _description, ...line }) => line),
     })),
+    findings: report.findings.map((finding) => {
+      if (!["cache-ttl", "cache-off", "short-history"].includes(finding.rule)) return finding;
+      const fixes = finding.fixes.filter(
+        (fix) => fix.action !== "set" || fix.path === "~/.claude/settings.json",
+      );
+      return fixes.length === finding.fixes.length
+        ? finding
+        : { ...finding, level: fixes.length ? finding.level : "info", fixes };
+    }),
   };
 };

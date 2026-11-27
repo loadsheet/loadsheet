@@ -233,9 +233,7 @@ describe("cache-ttl", () => {
         ],
       },
     ]);
-    expect(renderText(built)).toContain(
-      "75% of cache writes kept 5 min over 3 days; 900,000 tokens with potential reuse",
-    );
+    expect(renderText(built)).toContain("75% 5-min writes in 3 days; 900,000 tokens might be reused");
     const detail = renderSummary(built, { harness: "claude-code" });
     expect(detail).toContain("keep the prompt cache 1 hour");
     expect(detail).toContain('~/.claude/settings.json  promptCacheTtl = "1h"');
@@ -493,5 +491,11 @@ describe("short-history fix", () => {
     expect(renderText(report([young({ retentionDays: 90 })], "short-history"))).toContain(
       "keeps transcripts longer than the window",
     );
+  });
+
+  it("does not claim retention exceeds the window on a young install", () => {
+    const text = renderText(report([young({ retentionDays: 30 })], "short-history"));
+    expect(text).toContain("the usage rules need more observed history");
+    expect(text).not.toContain("keeps transcripts longer than the window");
   });
 });

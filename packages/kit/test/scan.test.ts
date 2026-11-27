@@ -185,7 +185,8 @@ const readStored = async (file: string) => JSON.parse(await NodeFSP.readFile(fil
 const writeStored = async (file: string, doc: unknown, sum?: string) => {
   const text = JSON.stringify(doc);
   sum ??= NodeCrypto.createHash("sha256").update(text).digest("hex");
-  await NodeFSP.writeFile(file, `{"layout":4,"sum":"${sum}","doc":${text}}`);
+  const { layout } = JSON.parse(await NodeFSP.readFile(file, "utf8")) as { layout: number };
+  await NodeFSP.writeFile(file, `{"layout":${layout},"sum":"${sum}","doc":${text}}`);
 };
 
 const scan = (home: string, cacheDir: string | false, tool = "loadsheet@0.0.0-test") =>

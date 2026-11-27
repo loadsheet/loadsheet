@@ -301,7 +301,7 @@ const evidenceOf = (finding: Finding): string => {
       break;
     case "cache-ttl":
       if (has("days", "cacheWrite", "cacheWrite5m", "cacheRewrite") && e.cacheWrite! > 0)
-        return `${Math.round((e.cacheWrite5m! / e.cacheWrite!) * 100)}% of cache writes kept 5 min over ${plural(e.days!, "day")}; ${num(e.cacheRewrite!)} tokens with potential reuse`;
+        return `${Math.round((e.cacheWrite5m! / e.cacheWrite!) * 100)}% 5-min writes in ${plural(e.days!, "day")}; ${num(e.cacheRewrite!)} tokens might be reused`;
       break;
     case "cache-off":
       if (has("sessions", "tokens"))
@@ -369,11 +369,13 @@ const noFixReason = (report: Report, finding: Finding): string => {
     case "short-history": {
       if (finding.evidence.retentionDays !== undefined)
         return "ask your agent to locate the active Claude Code settings.json before raising cleanupPeriodDays.";
-      const kept = report.coverage.some(
-        (row) => harnesses.has(row.harness) && row.settings?.retentionDays !== undefined,
-      );
-      if (kept)
+      if (
+        settings.length &&
+        settings.every((row) => (row?.retentionDays ?? 0) > report.config.window)
+      )
         return "the harness keeps transcripts longer than the window; the usage rules judge once it holds more days.";
+      if (settings.some((row) => row?.retentionDays !== undefined))
+        return "the usage rules need more observed history; the reported history does not show it reached the retention limit.";
       return harnesses.has("claude-code")
         ? "Claude Code deletes transcripts older than its `cleanupPeriodDays` setting (default 30); to judge more history, raise it in settings.json, never lower it."
         : "the harness kept too little history for the usage rules to judge.";

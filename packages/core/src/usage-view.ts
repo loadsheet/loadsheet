@@ -289,9 +289,22 @@ const FIX_WORDS: Record<string, (finding: Finding) => string> = {
       : "keep transcripts longer",
 };
 
-/** Store names that could not be read; absence of usage is not evidence of an empty history. */
-export const unreadUsageStores = (report: Report): string[] =>
-  [...new Set(report.coverage.flatMap((row) => row.unread ?? []))].sort();
+/** Unread stores that could have contributed to the selected usage. */
+export const unreadUsageStores = (report: Report): string[] => {
+  const { include, exclude } = report.config.via;
+  const unread = report.coverage.flatMap((row) =>
+    (row.unread ?? []).filter((store) => {
+      const via =
+        row.harness === "t3-code" && store === "statev2.sqlite"
+          ? "t3-code"
+          : row.harness === "opencode" && store === "opencode.db"
+            ? "cli"
+            : undefined;
+      return !via || (!exclude.includes(via) && (!include.length || include.includes(via)));
+    }),
+  );
+  return [...new Set(unread)].sort();
+};
 
 const fixesBlock = (report: Report, style: Style) => {
   const findings = report.findings.filter((finding) => FIX_WORDS[finding.rule]);
