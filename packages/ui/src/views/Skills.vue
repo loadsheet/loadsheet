@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import HelpTip from "../components/HelpTip.vue";
 import SiteTop from "../components/SiteTop.vue";
 import { fmt } from "../lib/report";
 import {
+  BODY_NOTE,
   BUDGET,
   JOBS,
+  LISTING_NOTE,
   type SkillCatalog,
   type SkillPack,
   kchars,
@@ -58,6 +59,7 @@ const what = (p: SkillPack) => props.catalog.copy.packs[p.slug]?.what ?? "";
         <div>
           <h1 class="px">{{ catalog.copy.index.title }}</h1>
           <p class="sub" v-html="md(catalog.copy.index.sub)" />
+          <p class="muted sk-small">{{ LISTING_NOTE }} {{ BODY_NOTE }}</p>
         </div>
       </div>
       <div class="sk-tools">
@@ -85,64 +87,59 @@ const what = (p: SkillPack) => props.catalog.copy.packs[p.slug]?.what ?? "";
           packs
         </span>
       </div>
-      <table class="sk-t">
-        <thead>
-          <tr>
-            <th>Pack</th>
-            <th class="r" :aria-sort="aria('tokens')">
-              <button type="button" class="sk-sort" @click="sortBy('tokens')">
-                <HelpTip
-                  :text="`Tokens its skill descriptions add to every session once installed, against a ${fmt(BUDGET)}-token budget`"
-                  >Every session</HelpTip
+      <div class="sk-table-wrap" role="region" aria-label="Sortable skill packs" tabindex="0">
+        <table class="sk-t">
+          <thead>
+            <tr>
+              <th>Pack</th>
+              <th class="r" :aria-sort="aria('tokens')">
+                <button type="button" class="sk-sort" @click="sortBy('tokens')">
+                  Listing tokens
+                </button>
+              </th>
+              <th class="r" :aria-sort="aria('skills')">
+                <button type="button" class="sk-sort" @click="sortBy('skills')">Skills</button>
+              </th>
+              <th class="r" :aria-sort="aria('body')">
+                <button type="button" class="sk-sort" @click="sortBy('body')">SKILL.md body</button>
+              </th>
+              <th class="r" :aria-sort="aria('flags')">
+                <button type="button" class="sk-sort" @click="sortBy('flags')">Flags</button>
+              </th>
+              <th class="r" :aria-sort="aria('stars')">
+                <button type="button" class="sk-sort" @click="sortBy('stars')">Stars</button>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in shown" :key="r.p.slug">
+              <td class="sk-nm">
+                <RouterLink class="mono" :to="skillPackRoute(r.p.slug)">{{ r.p.slug }}</RouterLink>
+                <span class="sk-what" v-html="md(what(r.p))" />
+              </td>
+              <td class="num r">
+                <b>{{ fmt(r.tokens) }}</b>
+                <span class="sk-bar"
+                  ><i :style="{ width: `${Math.min(100, (r.tokens / BUDGET) * 100)}%` }"
+                /></span>
+                <span class="sk-pct muted">{{ ofBudget(r.tokens) }} of budget</span>
+              </td>
+              <td class="num r">
+                {{ r.skills
+                }}<span v-if="r.slashOnly" class="muted"> · {{ r.slashOnly }} slash-only</span>
+              </td>
+              <td class="num r">{{ kchars(r.body) }}</td>
+              <td class="r">
+                <span v-if="r.flags" class="chip sk-warn"
+                  >{{ r.flags }} long description{{ r.flags === 1 ? "" : "s" }}</span
                 >
-              </button>
-            </th>
-            <th class="r" :aria-sort="aria('skills')">
-              <button type="button" class="sk-sort" @click="sortBy('skills')">Skills</button>
-            </th>
-            <th class="r" :aria-sort="aria('body')">
-              <button type="button" class="sk-sort" @click="sortBy('body')">
-                <HelpTip text="Characters of SKILL.md and its files, read only when a skill runs"
-                  >On use</HelpTip
-                >
-              </button>
-            </th>
-            <th class="r" :aria-sort="aria('flags')">
-              <button type="button" class="sk-sort" @click="sortBy('flags')">Flags</button>
-            </th>
-            <th class="r" :aria-sort="aria('stars')">
-              <button type="button" class="sk-sort" @click="sortBy('stars')">Stars</button>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="r in shown" :key="r.p.slug">
-            <td class="sk-nm">
-              <RouterLink class="mono" :to="skillPackRoute(r.p.slug)">{{ r.p.slug }}</RouterLink>
-              <span class="sk-what" v-html="md(what(r.p))" />
-            </td>
-            <td class="num r">
-              <b>{{ fmt(r.tokens) }}</b>
-              <span class="sk-bar"
-                ><i :style="{ width: `${Math.min(100, (r.tokens / BUDGET) * 100)}%` }"
-              /></span>
-              <span class="sk-pct muted">{{ ofBudget(r.tokens) }} of budget</span>
-            </td>
-            <td class="num r">
-              {{ r.skills
-              }}<span v-if="r.slashOnly" class="muted"> · {{ r.slashOnly }} slash-only</span>
-            </td>
-            <td class="num r">{{ kchars(r.body) }}</td>
-            <td class="r">
-              <span v-if="r.flags" class="chip sk-warn"
-                >{{ r.flags }} long description{{ r.flags === 1 ? "" : "s" }}</span
-              >
-              <span v-else class="chip">none</span>
-            </td>
-            <td class="num r muted">{{ fmt(r.p.stars) }}</td>
-          </tr>
-        </tbody>
-      </table>
+                <span v-else class="chip">none</span>
+              </td>
+              <td class="num r muted">{{ fmt(r.p.stars) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <p class="muted sk-small sk-foot">
         Measured {{ catalog.measuredAt }}.
         <template v-for="u in catalog.unmeasured" :key="u.slug">

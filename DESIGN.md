@@ -65,6 +65,7 @@ One column, 820px wide: a URL with three servers to try, then the answer. The ve
 loadsheet.dev reviews a few public skill packs at `/skills`: a sortable table, one page per pack, and a comparison per job. `apps/site/scripts/skill-packs.ts` measures each pack at a pinned commit into `apps/site/app/skills/packs.json` and one file list per pack; the review text is `copy.json`. Only file lists are committed: the pack page's file tree (the kit's `Tree`, `components/SkillFiles.vue`) fetches a file's text from raw.githubusercontent.com at that commit when it opens.
 
 - Every bar and share is drawn against the setup budget, `setupBudget()` in `@loadsheet/core`: 5% of the window, 10,000 tokens of 200k, with 10% as too heavy. Never draw against the largest pack.
+- Those bars estimate the full Claude Code skill listing, not the installed pack's runtime cost. The `SKILL.md` body metric excludes front matter and supporting files.
 - `components/SkillBlocks.vue` puts one block per listed skill on a track that is the whole budget, so the empty part is what's left.
 - Their styles are in `styles/skills.css`, every class `sk-`.
 

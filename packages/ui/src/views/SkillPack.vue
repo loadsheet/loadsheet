@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRoute } from "vue-router";
+import HelpTip from "../components/HelpTip.vue";
 import SiteTop from "../components/SiteTop.vue";
 import SkillBlocks from "../components/SkillBlocks.vue";
 import SkillFiles from "../components/SkillFiles.vue";
 import StateBox from "../components/StateBox.vue";
 import { fmt, packRoute } from "../lib/report";
 import {
+  BODY_NOTE,
   BUDGET,
   JOBS,
+  LISTING_NOTE,
   type SkillCatalog,
   type SkillFiles as Files,
   githubUrl,
@@ -20,7 +23,7 @@ import {
 } from "../lib/skills";
 
 /**
-  One reviewed pack: what it adds to every session against the budget, the review, and its files. The route's `slug`
+  One reviewed pack: its estimated listing against the budget, the review, and its files. The route's `slug`
   names the pack, one segment per folder; `files` is that pack's file list.
 */
 const props = defineProps<{ catalog: SkillCatalog; files?: Files }>();
@@ -41,8 +44,9 @@ const compares = computed(() => p.value?.jobs.filter((j) => props.catalog.copy.c
       <div class="ph">
         <div>
           <p class="mono sk-slug">{{ p.slug }} <span class="muted">by {{ p.by }}</span></p>
-          <h1 class="px">Adds {{ fmt(t.tokens) }} tokens to every session</h1>
+          <h1 class="px">~{{ fmt(t.tokens) }} listing tokens</h1>
           <p class="sub" v-html="md(c.what)" />
+          <p class="muted sk-small">{{ LISTING_NOTE }}</p>
         </div>
         <a data-slot="button" data-size="lg" :href="githubUrl(p)">View on GitHub</a>
       </div>
@@ -57,13 +61,13 @@ const compares = computed(() => p.value?.jobs.filter((j) => props.catalog.copy.c
           <p class="sk-pick" v-html="md(c.pick)" />
           <p class="sk-skip" v-html="md(c.skip)" />
           <dl class="sk-facts">
-            <dt>Every session</dt>
+            <dt>Listing tokens</dt>
             <dd class="num">{{ fmt(t.tokens) }} · {{ ofBudget(t.tokens) }} of {{ fmt(BUDGET) }}</dd>
             <dt>Skills</dt>
             <dd class="num">{{ t.skills }}</dd>
-            <dt>Listed every session</dt>
+            <dt>Listed skills</dt>
             <dd class="num">{{ t.listed }}</dd>
-            <dt>On use</dt>
+            <dt><HelpTip :text="BODY_NOTE">SKILL.md body</HelpTip></dt>
             <dd class="num">{{ kchars(t.body) }} chars</dd>
             <dt>Stars</dt>
             <dd class="num">{{ fmt(p.stars) }}</dd>

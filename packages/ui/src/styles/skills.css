@@ -148,21 +148,27 @@
 :where(.loadsheet) .sk-track {
   /* Holds each block's .sr label, so a scrolling table clips it too. */
   position: relative;
-  display: flex;
-  gap: 2px;
   height: var(--h);
-  padding: 2px;
   border-radius: var(--r-b);
   background: var(--muted);
   overflow: hidden;
 }
-:where(.loadsheet) .sk-b {
-  flex: none;
+:where(.loadsheet) .sk-fill {
+  display: flex;
   height: 100%;
-  min-width: 2px;
-  border-radius: 2px;
+}
+:where(.loadsheet) .sk-b {
+  flex-basis: 0;
+  min-width: 0;
   background: var(--k-skill);
   transition: filter 0.15s var(--ease);
+}
+:where(.loadsheet) .sk-b + .sk-b {
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--k-skill) 60%, var(--muted)) min(1px, 20%),
+    var(--k-skill) 0
+  );
 }
 :where(.loadsheet) .sk-scale {
   display: flex;
@@ -385,9 +391,6 @@
   :where(.loadsheet) .sk-t td {
     padding: 10px 8px;
   }
-  :where(.loadsheet) .sk-t:not(.sk-cmp) :is(th, td):nth-child(n + 3) {
-    display: none;
-  }
   :where(.loadsheet) .sk-what {
     display: none;
   }
@@ -425,13 +428,14 @@
     flex-direction: column;
     gap: 2px;
   }
-  :where(.loadsheet) .sk-cmp-wrap {
-    overflow-x: auto;
-  }
   :where(.loadsheet) .sk-cmp {
     min-width: 640px;
   }
   :where(.loadsheet) .sk-cmp .sk-big {
     font-size: 18px;
   }
+}
+
+:where(.loadsheet) .sk-table-wrap {
+  overflow-x: auto;
 }

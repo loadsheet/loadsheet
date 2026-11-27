@@ -16,9 +16,9 @@ if (pack && copy) {
   const tokens = packTotals(pack).tokens.toLocaleString("en-US");
   const description = plain(copy.what);
   useSeoMeta({
-    title: `${pack.title} (${slug}): ${tokens} tokens in every session · loadsheet`,
+    title: `${pack.title} (${slug}): ~${tokens} listing tokens · loadsheet`,
     description,
-    ogTitle: `${slug}: ${tokens} tokens in every session`,
+    ogTitle: `${slug}: ~${tokens} listing tokens`,
     ogDescription: description,
   });
 } else {

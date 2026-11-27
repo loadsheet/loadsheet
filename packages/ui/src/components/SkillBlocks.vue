@@ -13,16 +13,18 @@ const tip = (name: string, tokens: number) => `${esc(name)} · ${fmt(tokens)} to
 
 <template>
   <div class="sk-track" :style="{ '--h': `${height ?? 28}px` }">
-    <span
-      v-for="s in listed"
-      :key="s.name"
-      class="sk-b"
-      :style="{ width: `${(s.tokens / BUDGET) * 100}%` }"
-      @mouseenter="showTip($event, tip(s.name, s.tokens))"
-      @mousemove="showTip($event, tip(s.name, s.tokens))"
-      @mouseleave="hideTip"
-      ><span class="sr">{{ s.name }}, {{ fmt(s.tokens) }} tokens</span></span
-    >
+    <div class="sk-fill" :style="{ width: `${(totals.tokens * 100) / BUDGET}%` }">
+      <span
+        v-for="skill in listed"
+        :key="skill.name"
+        class="sk-b"
+        :style="{ flexGrow: skill.tokens }"
+        @mouseenter="showTip($event, tip(skill.name, skill.tokens))"
+        @mousemove="showTip($event, tip(skill.name, skill.tokens))"
+        @mouseleave="hideTip"
+        ><span class="sr">{{ skill.name }}, {{ fmt(skill.tokens) }} tokens</span></span
+      >
+    </div>
   </div>
   <div v-if="label" class="sk-scale num">
     <span><b>{{ fmt(totals.tokens) }}</b> of the {{ fmt(BUDGET) }}-token budget</span>

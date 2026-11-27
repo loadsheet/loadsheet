@@ -7,7 +7,9 @@ import SkillBlocks from "../components/SkillBlocks.vue";
 import StateBox from "../components/StateBox.vue";
 import { fmt } from "../lib/report";
 import {
+  BODY_NOTE,
   BUDGET,
+  LISTING_NOTE,
   type SkillCatalog,
   kchars,
   longDescriptions,
@@ -43,9 +45,10 @@ const low = computed(() => Math.min(...cols.value.map((x) => x.tokens)));
         <div>
           <h1 class="px">{{ c.title }}</h1>
           <p class="sub" v-html="md(c.sub)" />
+          <p class="muted sk-small">{{ LISTING_NOTE }}</p>
         </div>
       </div>
-      <div class="sk-cmp-wrap">
+      <div class="sk-table-wrap" role="region" aria-label="Skill pack comparison" tabindex="0">
         <table class="sk-t sk-cmp">
           <thead>
             <tr>
@@ -58,11 +61,7 @@ const low = computed(() => Math.min(...cols.value.map((x) => x.tokens)));
           </thead>
           <tbody>
             <tr>
-              <th scope="row">
-                <HelpTip text="Tokens its skill descriptions add to every session once installed"
-                  >Every session</HelpTip
-                >
-              </th>
+              <th scope="row">Listing tokens</th>
               <td v-for="x in cols" :key="x.p.slug">
                 <span class="num sk-big" :class="{ 'sk-lo': x.tokens === low }">{{
                   fmt(x.tokens)
@@ -88,9 +87,7 @@ const low = computed(() => Math.min(...cols.value.map((x) => x.tokens)));
             </tr>
             <tr>
               <th scope="row">
-                <HelpTip text="Characters of SKILL.md and its files, read only when a skill runs"
-                  >On use</HelpTip
-                >
+                <HelpTip :text="BODY_NOTE">SKILL.md body</HelpTip>
               </th>
               <td v-for="x in cols" :key="x.p.slug">
                 <span class="num">{{ kchars(x.body) }}</span> <span class="muted">chars</span>

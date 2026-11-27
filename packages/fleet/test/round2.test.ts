@@ -229,13 +229,17 @@ describe("a sync killed or left without its records", () => {
     const key = readdirSync(cache)
       .find((name) => name.endsWith(".json"))!
       .replace(/\.json$/, "");
-    // What writeTree leaves when killed after rmSync(tree) and before renameSync(temp, tree).
-    renameSync(join(cache, key), join(cache, `${key}.4242.tmp`));
+    // Model an interrupted publish. PID 0 cannot belong to a live writer, unlike an arbitrary PID.
+    const stale = `${key}.0.tmp`;
+    const active = `${key}.${process.pid}.tmp`;
+    renameSync(join(cache, key), join(cache, stale));
+    mkdirSync(join(cache, active));
     const offline = await m.run("sync", "--offline");
     expect(offline.code, offline.stderr).toBe(0);
+    expect(existsSync(join(cache, key))).toBe(true);
     const online = await m.run("sync");
     expect(online.code, online.stderr).toBe(0);
-    expect(readdirSync(cache).filter((name) => name.endsWith(".tmp"))).toEqual([]);
+    expect(readdirSync(cache).filter((name) => name.endsWith(".tmp"))).toEqual([active]);
   });
 });
 

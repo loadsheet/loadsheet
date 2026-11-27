@@ -8,13 +8,19 @@ export interface SkillItem {
   name: string;
   /** The skill's folder, relative to the pack; `SKILL.md` for a skill at the pack's root. */
   path: string;
-  /** What its listing adds to every session; 0 for a skill only a slash command runs. */
+  /** Estimated Claude Code listing tokens; 0 for a skill only a slash command runs. */
   tokens: number;
   listed: number;
-  /** Characters of SKILL.md and its files, read when the skill runs. */
+  /** Characters in the SKILL.md body, excluding front matter and supporting files. */
   body: number;
   description: string;
 }
+
+export const LISTING_NOTE =
+  "Estimates for the full Claude Code skill listing. They exclude startup hooks and do not account for descriptions Claude Code may shorten or omit when its listing budget fills.";
+
+export const BODY_NOTE =
+  "Characters in SKILL.md bodies, excluding front matter and supporting files.";
 export interface SkillPack {
   /** `owner/repo[/dir]`. */
   slug: string;
