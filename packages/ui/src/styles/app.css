@@ -1182,6 +1182,21 @@
 :where(.loadsheet) .mc-tools .mc-link {
   font-size: 12.5px;
 }
+:where(.loadsheet) .mc-tools > li {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+:where(.loadsheet) .mc-tools .mc-tn {
+  white-space: normal;
+}
+:where(.loadsheet) .mc-exact-toggle {
+  margin-left: 6px;
+}
+:where(.loadsheet) .mc-exact {
+  margin: 2px 0 4px;
+  color: var(--foreground);
+}
 /* The copy-link square sits on the title line, centred on it rather than on its baseline. */
 :where(.loadsheet) .mc-pt .cp {
   align-self: center;

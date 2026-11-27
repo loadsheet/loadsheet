@@ -192,6 +192,7 @@ const ask = computed(
                   :key="c.id"
                   data-slot="avatar"
                   tabindex="0"
+                  :aria-label="c.label"
                   @mouseenter="tipUnder($event, esc(c.label))"
                   @mouseleave="hideTip"
                   @focus="tipUnder($event, esc(c.label))"

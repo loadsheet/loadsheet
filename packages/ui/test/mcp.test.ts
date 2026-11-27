@@ -210,6 +210,7 @@ describe("the MCP check page on a server", () => {
     expect(html).toContain("Notes on client behavior");
     // Clients with a problem get a row; the rest are marks with the count beside them.
     expect(html).toContain('aria-label="Clients with problems"');
+    expect(html).toContain('data-slot="avatar" tabindex="0" aria-label="Codex"');
     expect(html).toContain("1 fine");
     expect(html).toContain("Run in CI");
     // Each card carries its code as an id, and the shared-link button.
@@ -236,9 +237,11 @@ describe("the MCP check page on a server", () => {
     const html = await render("/mcp", { url: URL, result: many });
     expect(html).toContain('<li id="MCP0001-get-blog-post">');
     expect(html).toContain('href="#MCP0001-get-blog-post"');
-    // The fix shows once, and each row only the value that differs.
-    expect(html).toContain("Add a title to <code>…</code>.");
-    expect(html.match(/Add a title/g)).toHaveLength(1);
+    // The common instruction is visible once; exact fixes are available in the collapsed disclosures.
+    expect(html.match(/<p class="mc-fix">Add a title to <code>…<\/code>\.<\/p>/g)).toHaveLength(1);
+    expect(html).toContain(
+      'class="mc-exact" style="display:none;">Add a title to <code>get-blog-post</code>.',
+    );
   });
 
   it("shows each fix once above the tools that take it", async () => {
