@@ -134,8 +134,18 @@ await check(
   },
 );
 
+await check("/mcp?url= renders the page for that server, ready to check it", async () => {
+  const res = await get(`/mcp?url=${encodeURIComponent("https://nuxt.com/mcp")}`);
+  assert.equal(res.status, 200);
+  const html = withoutScripts(await res.text());
+  // Unhead escapes the slash in a title.
+  assert.match(html, /<title>nuxt\.com(\/|&#x2F;)mcp in every MCP client · loadsheet<\/title>/);
+  assert.ok(html.includes('value="https://nuxt.com/mcp"'), "the input isn't filled");
+  assert.ok(html.includes("Reading tools/list from nuxt.com"), "the check isn't pending");
+});
+
 await check("/mcp still answers MCP clients as the docs MCP server", async () => {
-  const res = await fetch(`${base}/mcp`, {
+  const res = await fetch(`${base}/mcp?url=${encodeURIComponent("https://nuxt.com/mcp")}`, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
     body: JSON.stringify({

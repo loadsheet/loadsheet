@@ -35,7 +35,7 @@ export {
   shareLink,
 } from "./lib/report";
 export { fromShareCode, shareCode } from "./lib/share";
-export type { McpCheck, McpCheckError } from "./lib/mcp";
+export { type McpCheck, type McpCheckError, mcpUrl, shortUrl } from "./lib/mcp";
 export {
   type SkillCatalog,
   type SkillFiles,

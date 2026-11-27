@@ -1155,6 +1155,32 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+:where(.loadsheet) a.mc-tn {
+  color: inherit;
+  text-decoration: none;
+}
+/* The copy-link square sits on the title line, centred on it rather than on its baseline. */
+:where(.loadsheet) .mc-pt .cp {
+  align-self: center;
+}
+/* What a shared link points at: the card gets an accent edge, and the tool's row a tint. */
+:where(.loadsheet) .mc-prob,
+:where(.loadsheet) .mc-per li {
+  scroll-margin: calc(var(--bar) + 16px) 0;
+}
+:where(.loadsheet) .mc-prob[data-on] {
+  border-color: var(--acc);
+}
+:where(.loadsheet) .mc-prob .mc-per li[data-on] {
+  margin: 0 -8px;
+  padding: 4px 8px;
+  border-top-color: transparent;
+  border-radius: var(--r-b);
+  background: var(--acc-tint);
+}
+:where(.loadsheet) .mc-per li[data-on] + li {
+  border-top-color: transparent;
+}
 
 :where(.loadsheet) :is(.mc-fold, .mc-why) > summary {
   color: var(--muted-foreground);
@@ -1231,6 +1257,11 @@
 @media (hover: hover) and (pointer: fine) {
   :where(.loadsheet) .mc-link:hover {
     color: var(--foreground);
+  }
+  :where(.loadsheet) a.mc-tn:hover {
+    color: var(--acc);
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 }
 /* On a phone the four header items leave no room for the wordmark; the mark still links home. */

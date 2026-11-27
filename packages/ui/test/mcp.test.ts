@@ -7,7 +7,11 @@ import {
   type McpCheck,
   mcpFailure,
   mcpFixPrompt,
+  anchorOf,
+  mcpAnchor,
+  mcpHash,
   mcpProblems,
+  mcpTarget,
   mcpUrl,
   mcpVerdict,
 } from "../src/lib/mcp";
@@ -103,6 +107,30 @@ describe("the MCP check's reading of an answer", () => {
     expect(prompt).toContain(`Then run \`npx loadsheet mcp ${URL}\``);
   });
 
+  it("names each diagnostic by code and tool in the URL fragment", () => {
+    const problems = mcpProblems(check);
+    expect(mcpAnchor({ code: "MCP0001", tool: "get-blog-post" })).toBe("MCP0001-get-blog-post");
+    expect(mcpAnchor({ code: "MCP0009" })).toBe("MCP0009");
+    expect(mcpHash("MCP0001-my tool")).toBe("#MCP0001-my%20tool");
+    expect(anchorOf("#MCP0001-my%20tool")).toBe("MCP0001-my tool");
+    expect(anchorOf("#%E0%A4%A")).toBe("");
+
+    expect(mcpTarget(problems, "MCP0001-search")).toMatchObject({
+      problem: { code: "MCP0001", severity: "warn" },
+      item: { tool: "search" },
+      anchor: "MCP0001-search",
+    });
+    // The code part in any case, as the docs' anchors are lower case; a bare code is its first problem.
+    expect(mcpTarget(problems, "mcp0007-search")).toMatchObject({
+      problem: { code: "MCP0007", severity: "info" },
+      anchor: "MCP0007-search",
+    });
+    expect(mcpTarget(problems, "mcp0005")).toMatchObject({ anchor: "MCP0005" });
+    expect(mcpTarget(problems, "MCP0005")?.item).toBeUndefined();
+    expect(mcpTarget(problems, "MCP0001-nope")).toBeUndefined();
+    expect(mcpTarget(problems, "")).toBeUndefined();
+  });
+
   it("adds https to a bare host", () => {
     expect(mcpUrl(" mcp.deepwiki.com/mcp ")).toBe("https://mcp.deepwiki.com/mcp");
     expect(mcpUrl("http://example.com")).toBe("http://example.com");
@@ -161,6 +189,30 @@ describe("the MCP check page on a server", () => {
     expect(html).toContain('href="https://loadsheet.dev/docs/reference/mcp#mcp0005"');
     expect(html).toContain("1 note on client behavior");
     expect(html).toContain("Run this check in CI");
+    // Each card carries its code as an id, and the shared-link button.
+    expect(html).toContain('id="MCP0005"');
+    expect(html).toContain('id="MCP0001"');
+    expect(html).toContain('aria-label="Copy a link to MCP0005"');
+  });
+
+  it("links each tool row to its diagnostic", async () => {
+    const tools = ["a", "b", "c", "d", "get-blog-post"];
+    const many: McpCheck = {
+      ...check,
+      diagnostics: tools.map((tool) => ({
+        code: "MCP0001",
+        severity: "warn" as const,
+        tool,
+        clients: ["claude-directory"],
+        fix: `Add a title to \`${tool}\`.`,
+        findings: [
+          { client: "claude-directory", severity: "warn" as const, message: "Needs one." },
+        ],
+      })),
+    };
+    const html = await render("/mcp", { url: URL, result: many });
+    expect(html).toContain('<li id="MCP0001-get-blog-post">');
+    expect(html).toContain('href="#MCP0001-get-blog-post"');
   });
 
   it("gives a server that wants a token the command to run locally", async () => {

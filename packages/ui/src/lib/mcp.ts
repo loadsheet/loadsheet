@@ -114,6 +114,41 @@ export function mcpProblems(r: McpCheck): McpProblem[] {
   );
 }
 
+/**
+  A diagnostic's anchor in the report's URL fragment: its code and tool (`MCP0001-get-blog-post`), or the code alone
+  for one about the server. Shared links carry it, so keep the format stable.
+*/
+export const mcpAnchor = (d: { code: string; tool?: string }) =>
+  d.tool === undefined ? d.code : `${d.code}-${d.tool}`;
+export const mcpHash = (anchor: string) => `#${encodeURIComponent(anchor)}`;
+
+/** The anchor a URL fragment names, or "" when it names none. */
+export function anchorOf(hash: string): string {
+  try {
+    return decodeURIComponent(hash.replace(/^#/, ""));
+  } catch {
+    return "";
+  }
+}
+
+/**
+  The problem an anchor points at, and the diagnostic when it names one. A bare code picks that code's first problem,
+  and the code part matches in any case, as the docs' own `#mcp0001` anchors are lower case.
+*/
+export function mcpTarget(
+  problems: McpProblem[],
+  anchor: string,
+): { problem: McpProblem; item?: McpCheckDiagnostic; anchor: string } | undefined {
+  if (!anchor) return undefined;
+  const lower = anchor.toLowerCase();
+  for (const same of [(a: string) => a === anchor, (a: string) => a.toLowerCase() === lower])
+    for (const problem of problems)
+      for (const item of problem.items)
+        if (same(mcpAnchor(item))) return { problem, item, anchor: mcpAnchor(item) };
+  const problem = problems.find((p) => p.code.toLowerCase() === lower);
+  return problem && { problem, anchor: problem.code };
+}
+
 /** The headline and the line under it. */
 export function mcpVerdict(r: McpCheck, problems = mcpProblems(r)) {
   const st = clientStatus(r);
