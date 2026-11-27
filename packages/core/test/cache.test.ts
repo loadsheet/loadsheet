@@ -233,7 +233,9 @@ describe("cache-ttl", () => {
         ],
       },
     ]);
-    expect(renderText(built)).toContain("75% 5-min writes in 3 days; 900,000 tokens might be reused");
+    expect(renderText(built)).toContain(
+      "75% 5-min writes in 3 days; 900,000 tokens might be reused",
+    );
     const detail = renderSummary(built, { harness: "claude-code" });
     expect(detail).toContain("keep the prompt cache 1 hour");
     expect(detail).toContain('~/.claude/settings.json  promptCacheTtl = "1h"');

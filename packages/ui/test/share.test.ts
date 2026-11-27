@@ -1,6 +1,8 @@
-import { parseReport } from "@loadsheet/schema";
+import { buildReport } from "@loadsheet/core";
+import { parseReport, parseScan, resolveConfig, RULES } from "@loadsheet/schema";
 import { describe, expect, it } from "vite-plus/test";
 import example from "../../../examples/report.example.json";
+import scanExample from "../../../examples/scan.example.json";
 import { shareLink } from "../src/lib/report";
 import { fromShareCode, shareCode } from "../src/lib/share";
 
@@ -45,18 +47,77 @@ describe("a shared link", () => {
         },
       ],
     });
+    local.findings.push({
+      id: "dead-skill:skill:commit-style",
+      rule: "dead-skill",
+      level: "fix",
+      item: "skill:commit-style",
+      where: [{ machine: row.machine, harness: row.harness }],
+      evidence: {},
+      fixes: [
+        {
+          machine: row.machine,
+          action: "hide-from-model",
+          path: settingsPath,
+          set: { key: "skillOverrides.commit-style", value: "user-invocable-only" },
+        },
+      ],
+    });
     const opened = await fromShareCode(await shareCode(local));
     expect(JSON.stringify(opened)).not.toContain("private-project");
     const sharedRow = opened.coverage.find(
       (candidate) => candidate.machine === row.machine && candidate.harness === row.harness,
     );
     expect(sharedRow?.settings).toEqual({ retentionDays: 30 });
-    expect(opened.findings.at(-1)).toMatchObject({ level: "info", fixes: [] });
+    expect(opened.findings.slice(-2)).toMatchObject([
+      { level: "info", fixes: [] },
+      { level: "info", fixes: [] },
+    ]);
     expect(opened.findings.find((finding) => finding.rule === "cache-ttl")?.fixes).toEqual(
       local.findings.find((finding) => finding.rule === "cache-ttl")?.fixes,
     );
     expect(local.findings.at(-1)?.fixes[0]?.path).toBe(settingsPath);
     expect(row.settings.settingsPath).toBe(settingsPath);
+  });
+
+  it("keeps only the default listing-budget edit for a skill installed on both machines", async () => {
+    const scan = parseScan(scanExample);
+    const item = scan.items.find((candidate) => candidate.id === "skill:commit-style")!;
+    const coverage = scan.coverage.find((row) => row.harness === "claude-code")!;
+    const makeScan = (machine: string, configDir: string) => ({
+      ...scan,
+      machine,
+      coverage: [
+        { ...coverage, machine, settings: { settingsPath: `${configDir}/settings.json` } },
+      ],
+      items: [{ ...item, path: `${configDir}/skills/commit-style` }],
+      sessions: scan.sessions.filter((cell) => cell.harness === "claude-code"),
+      cells: scan.cells
+        .filter((cell) => cell.item === item.id && cell.harness === "claude-code")
+        .map((cell) => ({ ...cell, bare: cell.sessions })),
+    });
+    const settingsPath = "~/workspaces/private-project/settings.json";
+    const local = buildReport({
+      scans: [makeScan("laptop", "~/.claude"), makeScan("server", "~/workspaces/private-project")],
+      config: resolveConfig({
+        rules: Object.fromEntries(
+          RULES.filter((rule) => rule !== "invisible-skill").map((rule) => [rule, false]),
+        ),
+      }),
+      now: new Date(scan.scannedAt),
+      tool: scan.tool,
+    });
+    const finding = local.findings.find((candidate) => candidate.rule === "invisible-skill")!;
+    expect(local.sheet[0]?.lines[0]?.path).toBe(item.path);
+    expect(finding.fixes.map((fix) => fix.path)).toEqual(["~/.claude/settings.json", settingsPath]);
+
+    const opened = await fromShareCode(await shareCode(local));
+    expect(JSON.stringify(opened)).not.toContain("private-project");
+    expect(opened.findings).toEqual([{ ...finding, fixes: [finding.fixes[0]] }]);
+    expect(finding.fixes[1]?.path).toBe(settingsPath);
+    expect(local.coverage.find((row) => row.machine === "server")?.settings?.settingsPath).toBe(
+      settingsPath,
+    );
   });
 });
 
