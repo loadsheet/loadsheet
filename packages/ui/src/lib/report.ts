@@ -74,6 +74,10 @@ const HARNESS: Record<string, string> = {
   opencode: "OpenCode",
   cursor: "Cursor",
   gemini: "Gemini CLI",
+  grok: "Grok",
+  antigravity: "Antigravity",
+  kiro: "Kiro",
+  pi: "Pi",
 };
 export const harnessName = (h: string) => HARNESS[h] ?? h;
 

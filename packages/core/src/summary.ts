@@ -33,6 +33,9 @@ const NAMES: Record<string, string> = {
   gemini: "Gemini CLI",
   grok: "Grok",
   opencode: "OpenCode",
+  antigravity: "Antigravity",
+  kiro: "Kiro",
+  pi: "Pi",
 };
 
 /** A harness's name as people write it. */
