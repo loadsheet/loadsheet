@@ -14,6 +14,8 @@ import {
   mcpTarget,
   mcpUrl,
   mcpVerdict,
+  sharedFix,
+  sharedHead,
 } from "../src/lib/mcp";
 
 const URL = "https://mcp.example.com/mcp";
@@ -87,11 +89,7 @@ describe("the MCP check's reading of an answer", () => {
   });
 
   it("says which clients break", () => {
-    expect(mcpVerdict(check)).toEqual({
-      breaks: true,
-      title: "Breaks in 1 of 3 clients",
-      sub: "Cursor leaves tools out or fails on them. 1 more client has problems.",
-    });
+    expect(mcpVerdict(check)).toEqual({ breaks: true, title: "Breaks in 1 of 3 clients" });
     const clean = { ...check, diagnostics: [], matrix: { server: {}, tools: [] } };
     expect(mcpVerdict(clean)).toMatchObject({ breaks: false, title: "Works in all 3 clients" });
   });
@@ -129,6 +127,28 @@ describe("the MCP check's reading of an answer", () => {
     expect(mcpTarget(problems, "MCP0005")?.item).toBeUndefined();
     expect(mcpTarget(problems, "MCP0001-nope")).toBeUndefined();
     expect(mcpTarget(problems, "")).toBeUndefined();
+  });
+
+  it("shows a fix once when tools differ only in a quoted value", () => {
+    const title = (t: string) => `Add \`title: "${t}"\` to the tool's annotations.`;
+    expect(sharedFix([title("Get Blog Post"), title("Get Changelog")])).toEqual({
+      fix: 'Add `title: "…"` to the tool\'s annotations.',
+      values: ["Get Blog Post", "Get Changelog"],
+    });
+    // Different sentences, or the same one twice, have no shared fix.
+    expect(sharedFix(["Split the tool.", "Rename the tool."])).toBeUndefined();
+    expect(sharedFix([title("A"), title("A")])).toBeUndefined();
+    // A quote escaped inside the value doesn't end it.
+    expect(sharedFix([title('Say \\"Hi\\"'), title('Say \\"Bye\\"')])).toBeUndefined();
+  });
+
+  it("shows the sentences every fix starts with once, and what some add", () => {
+    expect(sharedHead(["Rename it.", "Rename it. Then list the values."])).toEqual({
+      head: "Rename it.",
+      rest: ["", "Then list the values."],
+    });
+    expect(sharedHead(["Split it.", "Rename it."])).toBeUndefined();
+    expect(sharedHead(["Rename it.", "Rename it."])).toBeUndefined();
   });
 
   it("adds https to a bare host", () => {
@@ -177,18 +197,22 @@ describe("the MCP check page on a server", () => {
       expect(html).toContain(s);
   });
 
-  it("renders a result: verdict, a pill per client, problems with doc links, notes and CI folded", async () => {
+  it("renders a result: verdict and broken clients aside, problems with doc links, notes open, CI folded", async () => {
     const html = await render("/mcp", { url: URL, result: check });
     expect(html).toContain("Breaks in 1 of 3 clients");
     expect(html).toContain("Example 1.2.0 · 2 tools · mcp.example.com/mcp");
     expect(html).toContain("Copy fix prompt");
-    expect(html).toContain("2 problems, worst first");
+    expect(html).toContain("<span>breaks</span>");
     expect(html.indexOf("Clients leave tools out")).toBeLessThan(
       html.indexOf("Tools have no display title"),
     );
     expect(html).toContain('href="https://loadsheet.dev/docs/reference/mcp#mcp0005"');
-    expect(html).toContain("1 note on client behavior");
-    expect(html).toContain("Run this check in CI");
+    expect(html).toContain("Notes on client behavior");
+    // Clients with a problem get a row; the rest are marks with the count beside them.
+    expect(html).toContain('aria-label="Clients with problems"');
+    expect(html).toContain('data-slot="avatar" tabindex="0" aria-label="Codex"');
+    expect(html).toContain("1 fine");
+    expect(html).toContain("Run in CI");
     // Each card carries its code as an id, and the shared-link button.
     expect(html).toContain('id="MCP0005"');
     expect(html).toContain('id="MCP0001"');
@@ -213,6 +237,48 @@ describe("the MCP check page on a server", () => {
     const html = await render("/mcp", { url: URL, result: many });
     expect(html).toContain('<li id="MCP0001-get-blog-post">');
     expect(html).toContain('href="#MCP0001-get-blog-post"');
+    // The common instruction is visible once; exact fixes are available in the collapsed disclosures.
+    expect(html.match(/<p class="mc-fix">Add a title to <code>…<\/code>\.<\/p>/g)).toHaveLength(1);
+    expect(html).toContain(
+      'class="mc-exact" style="display:none;">Add a title to <code>get-blog-post</code>.',
+    );
+  });
+
+  it("shows each fix once above the tools that take it", async () => {
+    const result = (fixes: string[]): McpCheck => ({
+      ...check,
+      toolCount: fixes.length,
+      diagnostics: fixes.map((fix, i) => ({
+        code: "MCP0007",
+        severity: "warn" as const,
+        tool: `t${i}`,
+        clients: ["codex"],
+        fix,
+        findings: [{ client: "codex", severity: "warn" as const, message: "Renames it." }],
+      })),
+    });
+    // The sentence every fix starts with covers every tool; the one that adds a sentence names its tool under it.
+    const head = await render("/mcp", {
+      url: URL,
+      result: result([
+        "Rename it.",
+        "Rename it.",
+        "Rename it. Then list the values.",
+        "Rename it.",
+      ]),
+    });
+    expect(head.match(/Rename it\./g)).toHaveLength(1);
+    expect(head).toContain("All 4 tools");
+    expect(head).toContain('<p class="mc-fix">Then list the values.</p>');
+    expect(head).toContain('id="MCP0007-t2"');
+    expect(head).not.toContain('id="MCP0007-t0"');
+    // Fixes with nothing in common show once each, above their own tools.
+    const apart = await render("/mcp", {
+      url: URL,
+      result: result(["Split it.", "Split it.", "Rename it."]),
+    });
+    expect(apart.match(/<p class="mc-fix"/g)).toHaveLength(2);
+    expect(apart).toContain('id="MCP0007-t0"');
   });
 
   it("gives a server that wants a token the command to run locally", async () => {

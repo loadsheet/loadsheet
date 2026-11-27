@@ -115,6 +115,45 @@ export function mcpProblems(r: McpCheck): McpProblem[] {
 }
 
 /**
+  The fix a problem's diagnostics share when they differ only in one quoted value, such as each tool's suggested title:
+  the fix once, with "…" for that value, and each diagnostic's value. The value runs between the last quote mark (`"` or
+  a backtick) the fixes share and the first one after it, so it never starts or ends inside a word.
+*/
+export function sharedFix(fixes: string[]): { fix: string; values: string[] } | undefined {
+  const first = fixes[0];
+  if (first === undefined || fixes.every((f) => f === first)) return undefined;
+  const shortest = Math.min(...fixes.map((f) => f.length));
+  let head = 0;
+  while (head < shortest && fixes.every((f) => f[head] === first[head])) head++;
+  let tail = 0;
+  while (tail < shortest - head && fixes.every((f) => f.at(-1 - tail) === first.at(-1 - tail)))
+    tail++;
+  const start = Math.max(first.lastIndexOf('"', head - 1), first.lastIndexOf("`", head - 1)) + 1;
+  const ends = ['"', "`"].map((q) => first.indexOf(q, first.length - tail)).filter((i) => i >= 0);
+  if (!start || !ends.length) return undefined;
+  const end = first.length - Math.min(...ends);
+  const values = fixes.map((f) => f.slice(start, f.length - end));
+  // An escaped quote (`\"`) inside the value is not where it ends.
+  if (first[start - 2] === "\\" || values.some((v) => !v || /["`]|\\$/.test(v))) return undefined;
+  return { fix: `${first.slice(0, start)}…${first.slice(first.length - end)}`, values };
+}
+
+/**
+  The sentences every fix starts with, when some fixes add more: the shared part once, and what each fix adds after it
+  ("" for a fix that is only the shared part).
+*/
+export function sharedHead(fixes: string[]): { head: string; rest: string[] } | undefined {
+  const parts = fixes.map((f) => f.split(/(?<=\.)\s+(?=[A-Z])/));
+  const first = parts[0];
+  if (!first) return undefined;
+  let n = 0;
+  while (parts.every((p) => n < p.length && p[n] === first[n])) n++;
+  const rest = parts.map((p) => p.slice(n).join(" "));
+  if (!n || rest.every((r) => !r)) return undefined;
+  return { head: first.slice(0, n).join(" "), rest };
+}
+
+/**
   A diagnostic's anchor in the report's URL fragment: its code and tool (`MCP0001-get-blog-post`), or the code alone
   for one about the server. Shared links carry it, so keep the format stable.
 */
@@ -149,35 +188,14 @@ export function mcpTarget(
   return problem && { problem, anchor: problem.code };
 }
 
-/** The headline and the line under it. */
-export function mcpVerdict(r: McpCheck, problems = mcpProblems(r)) {
+/** The headline: whether any client leaves tools out, or else that the server works in all of them. */
+export function mcpVerdict(r: McpCheck) {
   const st = clientStatus(r);
   const total = r.clients.length;
-  const errs = r.clients.filter((c) => st[c.id] === "error");
-  const warns = r.clients.filter((c) => st[c.id] === "warn");
-  const real = problems.filter((p) => p.severity !== "info").length;
-  const notes = problems.length - real;
-  const names = (cs: { label: string }[]) => andList(cs.map((c) => c.label));
-  if (errs.length) {
-    const one = errs.length === 1;
-    const more = warns.length
-      ? ` ${plural(warns.length, "more client")} ${warns.length === 1 ? "has" : "have"} problems.`
-      : "";
-    return {
-      breaks: true,
-      title: `Breaks in ${errs.length} of ${total} clients`,
-      sub: `${names(errs)} ${one ? "leaves" : "leave"} tools out or ${one ? "fails" : "fail"} on them.${more}`,
-    };
-  }
-  return {
-    breaks: false,
-    title: `Works in all ${total} clients`,
-    sub: warns.length
-      ? `${plural(real, "problem")} to fix for ${names(warns)}.`
-      : notes
-        ? `No problems. ${plural(notes, "note")} below, nothing to fix.`
-        : "No problems found.",
-  };
+  const errs = r.clients.filter((c) => st[c.id] === "error").length;
+  return errs
+    ? { breaks: true, title: `Breaks in ${errs} of ${total} clients` }
+    : { breaks: false, title: `Works in all ${total} clients` };
 }
 
 /** The request that hands every problem to the user's agent, with the command that confirms the fix. */

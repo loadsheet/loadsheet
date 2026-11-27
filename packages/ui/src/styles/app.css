@@ -873,12 +873,14 @@
 :where(.loadsheet) .mc {
   display: grid;
   gap: 20px;
-  max-width: 820px;
   padding-top: 48px;
+  padding-bottom: 64px;
 }
-:where(.loadsheet) .mc > *,
-:where(.loadsheet) .mc-res > * {
+:where(.loadsheet) .mc > * {
   min-width: 0;
+}
+:where(.loadsheet) .mc > :is(.mc-check, .mc-try) {
+  max-width: 820px;
 }
 :where(.loadsheet) .mc h1 {
   font-size: 40px;
@@ -939,20 +941,24 @@
   }
 }
 
+/* The verdict and the clients hold a side column; the problems take the rest of the width. */
 :where(.loadsheet) .mc-res {
   display: grid;
-  gap: 18px;
+  grid-template-columns: 264px minmax(0, 1fr);
+  align-items: start;
+  gap: 32px 40px;
   padding-top: 28px;
   border-top: 1px solid var(--border);
 }
-:where(.loadsheet) .mc-vh {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px 24px;
+:where(.loadsheet) .mc-side {
+  position: sticky;
+  top: 24px;
+  display: grid;
+  gap: 16px;
 }
-:where(.loadsheet) .mc-vh > div:first-child {
+:where(.loadsheet) .mc-main {
+  display: grid;
+  gap: 20px;
   min-width: 0;
 }
 :where(.loadsheet) .mc-srv {
@@ -960,26 +966,16 @@
   font-size: 12.5px;
   overflow-wrap: anywhere;
 }
-:where(.loadsheet) .mc-vh h2 {
-  margin-top: 6px;
+:where(.loadsheet) .mc-side h2 {
+  margin-top: -8px;
   font-size: 30px;
+  line-height: 1.1;
 }
-:where(.loadsheet) .mc-vh h2.s-error {
+:where(.loadsheet) .mc-side h2.s-error {
   color: var(--s-error);
 }
-:where(.loadsheet) .mc-sub {
-  max-width: 54ch;
-  margin-top: 8px;
+:where(.loadsheet) .mc-none {
   color: var(--muted-foreground);
-}
-:where(.loadsheet) .mc-act {
-  display: grid;
-  justify-items: end;
-  gap: 6px;
-}
-:where(.loadsheet) .mc-act > span {
-  color: var(--muted-foreground);
-  font-size: 12.5px;
 }
 :where(.loadsheet) .mc [data-slot="button"][data-done] {
   color: var(--acc);
@@ -990,28 +986,25 @@
   color: var(--primary-foreground);
 }
 
-:where(.loadsheet) .mc-clients,
-:where(.loadsheet) .mc-hits {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-}
 :where(.loadsheet) .mc-clients {
-  gap: 6px;
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 :where(.loadsheet) .mc-cl {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 9px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--card);
-  font-size: 12.5px;
+  gap: 8px;
+  height: 28px;
+  font-size: 13px;
   white-space: nowrap;
 }
-:where(.loadsheet) .mc-cl > i,
+:where(.loadsheet) .mc-cl > span:last-child {
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
 :where(.loadsheet) .mc-dot {
   flex: none;
   width: 8px;
@@ -1019,68 +1012,101 @@
   border-radius: 50%;
   background: var(--s-ok);
 }
-:where(.loadsheet) .mc-cl.s-info > i,
 :where(.loadsheet) .mc-dot.s-info {
   background: var(--s-info);
 }
-:where(.loadsheet) .mc-cl.s-warn > i,
 :where(.loadsheet) .mc-dot.s-warn {
   background: var(--s-warn);
 }
-:where(.loadsheet) .mc-cl.s-error > i,
 :where(.loadsheet) .mc-dot.s-error {
   background: var(--s-error);
 }
-:where(.loadsheet) .mc-cl.s-warn {
-  border-color: color-mix(in srgb, var(--s-warn) 45%, var(--border));
+:where(.loadsheet) .mc-mark {
+  flex: none;
+  width: 14px;
+  height: 14px;
 }
-:where(.loadsheet) .mc-cl.s-error {
-  border-color: color-mix(in srgb, var(--s-error) 45%, var(--border));
-  color: var(--s-error);
-  font-weight: 500;
+:where(.loadsheet) span.mc-mark {
+  width: auto;
+  height: auto;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
-:where(.loadsheet) .mc-key {
+:where(.loadsheet) .mc-fine {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  margin-top: -8px;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 0;
   color: var(--muted-foreground);
   font-size: 12px;
 }
-:where(.loadsheet) .mc-key span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-:where(.loadsheet) .mc-sec {
-  font-size: 14.5px;
-  font-weight: 600;
-}
-:where(.loadsheet) .mc-probs {
-  display: grid;
-  gap: 10px;
+:where(.loadsheet) .mc-fine ul {
   margin: 0;
   padding: 0;
   list-style: none;
 }
+/* A client with a problem gets the same 24px circle as the fine ones, so every logo sits in one column. */
+:where(.loadsheet) .mc-cl [data-slot="avatar"] {
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  color: var(--foreground);
+  font-size: 0.75rem;
+}
+:where(.loadsheet) .mc-cl [data-slot="avatar"] svg {
+  width: 1em;
+  height: 1em;
+}
+:where(.loadsheet) .mc-fine [data-slot="avatar"] {
+  color: var(--foreground);
+  cursor: default;
+}
+:where(.loadsheet) .mc-fine [data-slot="avatar"]:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+:where(.loadsheet) .mc-notes {
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 500;
+}
+/* Notes change nothing on their own, so they sit a step quieter than the problems above them. */
+:where(.loadsheet) .mc-notes + .mc-probs {
+  gap: 20px;
+}
+:where(.loadsheet) .mc-notes + .mc-probs .mc-prob + .mc-prob {
+  padding-top: 18px;
+}
+:where(.loadsheet) .mc-notes + .mc-probs .mc-fix {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+:where(.loadsheet) .mc-cl.s-warn > span:last-child {
+  color: var(--s-warn);
+}
+:where(.loadsheet) .mc-cl.s-error,
+:where(.loadsheet) .mc-cl.s-error > span:last-child {
+  color: var(--s-error);
+}
+
+:where(.loadsheet) .mc-probs {
+  display: grid;
+  gap: 28px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* A problem is a title, who it hits and the fix, then its tools; no card, the dot carries the status. */
 :where(.loadsheet) .mc-prob {
   display: grid;
   gap: 8px;
-  padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  background: var(--card);
-  box-shadow: inset 3px 0 0 var(--s-ok);
 }
-:where(.loadsheet) .mc-prob.s-error {
-  box-shadow: inset 3px 0 0 var(--s-error);
-}
-:where(.loadsheet) .mc-prob.s-warn {
-  box-shadow: inset 3px 0 0 var(--s-warn);
-}
-:where(.loadsheet) .mc-prob.s-info {
-  box-shadow: inset 3px 0 0 var(--s-info);
+:where(.loadsheet) .mc-prob + .mc-prob {
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
 }
 :where(.loadsheet) .mc-pt {
   display: flex;
@@ -1100,25 +1126,13 @@
   text-underline-offset: 3px;
   white-space: nowrap;
 }
-:where(.loadsheet) .mc-hits {
-  gap: 5px;
-  color: var(--muted-foreground);
-  font-size: 13px;
-}
-:where(.loadsheet) .mc-hits .mc-cl {
-  height: 22px;
-  padding: 0 7px;
-  font-size: 12px;
-}
 :where(.loadsheet) .mc-fix {
-  font-size: 13.5px;
+  font-size: 14px;
   line-height: 1.55;
 }
-:where(.loadsheet) .mc-fix > span:first-child,
+:where(.loadsheet) .mc-who,
 :where(.loadsheet) .mc-small {
   color: var(--muted-foreground);
-}
-:where(.loadsheet) .mc-small {
   font-size: 13px;
 }
 :where(.loadsheet) .mc-prob code {
@@ -1128,26 +1142,32 @@
   font-size: 0.9em;
   overflow-wrap: anywhere;
 }
+/* The tools a fix applies to, as one wrapped line of names. */
 :where(.loadsheet) .mc-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  margin: 0;
+  padding: 0;
   color: var(--muted-foreground);
-  font: 400 12.5px var(--font-mono);
-  overflow-wrap: anywhere;
+  font-size: 13px;
+  list-style: none;
 }
+/* With no fix shared, each tool shows its own beside it. */
 :where(.loadsheet) .mc-per {
   display: grid;
-  gap: 4px;
+  margin: 0;
+  padding: 0;
   font-size: 13px;
+  list-style: none;
 }
 :where(.loadsheet) .mc-per li {
   display: grid;
   grid-template-columns: minmax(0, 200px) minmax(0, 1fr);
-  gap: 10px;
-  padding-top: 4px;
+  align-items: baseline;
+  gap: 12px;
+  padding: 5px 0;
   border-top: 1px solid var(--border);
-}
-:where(.loadsheet) .mc-per li:first-child {
-  padding-top: 0;
-  border-top: 0;
 }
 :where(.loadsheet) .mc-tn {
   overflow: hidden;
@@ -1159,21 +1179,46 @@
   color: inherit;
   text-decoration: none;
 }
+:where(.loadsheet) .mc-tools .mc-link {
+  font-size: 12.5px;
+}
+:where(.loadsheet) .mc-tools > li {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+:where(.loadsheet) .mc-tools .mc-tn {
+  white-space: normal;
+}
+:where(.loadsheet) .mc-exact-toggle {
+  margin-left: 6px;
+}
+:where(.loadsheet) .mc-exact {
+  margin: 2px 0 4px;
+  color: var(--foreground);
+}
 /* The copy-link square sits on the title line, centred on it rather than on its baseline. */
 :where(.loadsheet) .mc-pt .cp {
   align-self: center;
 }
-/* What a shared link points at: the card gets an accent edge, and the tool's row a tint. */
+/* What a shared link points at: the problem's title turns accent, and the tool takes a tint. */
 :where(.loadsheet) .mc-prob,
-:where(.loadsheet) .mc-per li {
+:where(.loadsheet) .mc-prob li[id] {
   scroll-margin: calc(var(--bar) + 16px) 0;
 }
-:where(.loadsheet) .mc-prob[data-on] {
-  border-color: var(--acc);
+:where(.loadsheet) .mc-prob[data-on] .mc-pt b {
+  color: var(--acc);
 }
-:where(.loadsheet) .mc-prob .mc-per li[data-on] {
+:where(.loadsheet) .mc-tools li[data-on] {
+  margin: 0 -4px;
+  padding: 0 4px;
+  border-radius: var(--r-b);
+  background: var(--acc-tint);
+  color: var(--foreground);
+}
+:where(.loadsheet) .mc-per li[data-on] {
   margin: 0 -8px;
-  padding: 4px 8px;
+  padding: 5px 8px;
   border-top-color: transparent;
   border-radius: var(--r-b);
   background: var(--acc-tint);
@@ -1199,7 +1244,7 @@
   content: "− ";
 }
 :where(.loadsheet) .mc-fold {
-  padding-top: 12px;
+  padding-top: 14px;
   border-top: 1px solid var(--border);
 }
 :where(.loadsheet) .mc-fold > summary {
@@ -1270,6 +1315,18 @@
     display: none;
   }
 }
+@media (max-width: 960px) {
+  :where(.loadsheet) .mc-res {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  :where(.loadsheet) .mc-side {
+    position: static;
+  }
+  :where(.loadsheet) .mc-clients {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    column-gap: 24px;
+  }
+}
 @media (max-width: 760px) {
   :where(.loadsheet) .mc {
     gap: 18px;
@@ -1281,12 +1338,8 @@
   :where(.loadsheet) .mc-lede {
     font-size: 14px;
   }
-  :where(.loadsheet) .mc-vh h2 {
+  :where(.loadsheet) .mc-side h2 {
     font-size: 24px;
-  }
-  :where(.loadsheet) .mc-act {
-    justify-items: stretch;
-    width: 100%;
   }
   :where(.loadsheet) .mc-per li {
     grid-template-columns: minmax(0, 1fr);
