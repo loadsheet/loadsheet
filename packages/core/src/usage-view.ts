@@ -1,6 +1,7 @@
 import { orgOf } from "@loadsheet/schema";
 import type { Coverage, Finding, Report, Settings, Usage } from "@loadsheet/schema";
 import type { Format, Style } from "./summary.ts";
+import { promptCacheDays } from "./prompt-cache.ts";
 import { harnessName } from "./summary.ts";
 import { visible } from "./text.ts";
 
@@ -200,7 +201,11 @@ const sumRows = (rows: UsageRow[]) =>
 const source = (from: string | undefined) => (from && from !== "default" ? `, from ${from}` : "");
 
 /** A setting's label and value per line, for one harness. */
-const settingLines = (harness: string, settings: Settings): [string, string][] => {
+const settingLines = (
+  harness: string,
+  settings: Settings,
+  usage: Usage | undefined,
+): [string, string][] => {
   if (harness === "claude-code") {
     const cache: string =
       settings.caching === "off"
@@ -208,9 +213,12 @@ const settingLines = (harness: string, settings: Settings): [string, string][] =
         : settings.cacheTtl
           ? `${LIFETIME[settings.cacheTtl]}${source(settings.cacheTtlFrom)}`
           : "Claude Code's default";
-    // Seam for the rules' promptCacheDays(): append ` · 5m writes stopped <day>` to `cache` here.
+    // A cache now kept for an hour that was kept for 5 minutes earlier in the window says since when.
+    const stopped =
+      settings.caching === "off" ? undefined : promptCacheDays(usage, { byVia: false })[0]?.stopped;
     return [
       ["prompt cache", cache],
+      ...(stopped ? [["", `5-minute writes stopped ${stopped}`] as [string, string]] : []),
       [
         "subagent cache",
         settings.subagentCacheTtl ? LIFETIME[settings.subagentCacheTtl] : "Claude Code's default",
@@ -249,7 +257,7 @@ const settingsBlock = (report: Report, style: Style, used: Set<string>) => {
     for (const row of each) {
       const name =
         each.length > 1 ? `${harnessName(harness)} on ${row.machine}` : harnessName(harness);
-      const lines = settingLines(harness, row.settings!);
+      const lines = settingLines(harness, row.settings!, report.usage);
       if (!lines.length) continue;
       // A name too long for its column goes on a line of its own.
       const own = name.length + 2 > HARNESS;
@@ -297,11 +305,16 @@ const fixesBlock = (report: Report, style: Style) => {
       out.push(`          ${style("dim", visible(`${fix.path}${detail ? `  ${detail}` : ""}`))}`);
     }
   }
-  if (findings.some((finding) => finding.fixes.length))
+  if (findings.some((finding) => finding.fixes.length)) {
+    const run = `npx loadsheet --json${report.mode === "fleet" ? " --fleet" : ""}`;
+    const line = `${cell(style, "dim", "Apply fixes", 15)}ask your agent to run ${style("cyan", run)}`;
+    const tail = "; it gets the exact edits";
+    // The explanation goes when it would push the line past the width.
     out.push(
       "",
-      `${cell(style, "dim", "Apply fixes", 15)}ask your agent to run ${style("cyan", `npx loadsheet --json${report.mode === "fleet" ? " --fleet" : ""}`)}${style("dim", "; it gets the exact edits")}`,
+      visible(line).length + tail.length > WIDTH ? line : `${line}${style("dim", tail)}`,
     );
+  }
   return out;
 };
 

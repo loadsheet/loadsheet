@@ -127,6 +127,28 @@ describe("renderUsage", () => {
     expect(text).toContain("not read: mini");
   });
 
+  it("says on which day 5-minute cache writes stopped", () => {
+    const day = (date: string, write5m: number, write1h: number): UsageTokenCell => ({
+      ...tokens("acme/app", 1),
+      day: date,
+      cacheWrite: write5m + write1h,
+      cacheWrite5m: write5m,
+      cacheWrite1h: write1h,
+    });
+    const text = renderUsage(
+      withUsage({
+        sessions: [sessions("acme/app", 1)],
+        tokens: [
+          day("2026-11-17", 2e6, 0),
+          day("2026-11-18", 0, 2e6),
+          day("2026-11-19", 0, 2e6),
+          day("2026-11-20", 0, 2e6),
+        ],
+      }),
+    );
+    expect(text).toMatch(/prompt cache +5 minutes\n +5-minute writes stopped 2026-11-18\n/);
+  });
+
   it("lists the findings that concern usage with their fixes", () => {
     const finding = {
       id: "cache-ttl:claude-code",

@@ -73,6 +73,12 @@
       "short-history": {
         "enabled": true,
         "minDays": 30
+      },
+      "cache-ttl": {
+        "enabled": true
+      },
+      "cache-off": {
+        "enabled": true
       }
     }
   },
@@ -1690,6 +1696,51 @@
       "evidence": {
         "variants": 2,
         "machines": 2
+      },
+      "fixes": []
+    },
+    {
+      "id": "cache-ttl:claude-code:cli",
+      "rule": "cache-ttl",
+      "level": "fix",
+      "via": "cli",
+      "where": [
+        {
+          "machine": "laptop",
+          "harness": "claude-code"
+        }
+      ],
+      "evidence": {
+        "days": 3,
+        "cacheWrite": 11640000,
+        "cacheWrite5m": 8700000,
+        "cacheRewrite": 3630000
+      },
+      "fixes": [
+        {
+          "machine": "laptop",
+          "action": "set",
+          "path": "~/.claude/settings.json",
+          "set": {
+            "key": "promptCacheTtl",
+            "value": "1h"
+          }
+        }
+      ]
+    },
+    {
+      "id": "cache-off:claude-code",
+      "rule": "cache-off",
+      "level": "fix",
+      "where": [
+        {
+          "machine": "server",
+          "harness": "claude-code"
+        }
+      ],
+      "evidence": {
+        "sessions": 38,
+        "tokens": 2400000
       },
       "fixes": []
     },

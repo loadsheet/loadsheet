@@ -470,7 +470,7 @@ describe("examples/report.example.json is coherent", () => {
       if (finding.item) expect(lines.map((line) => line.item)).toContain(finding.item);
       if (finding.pack) expect(lines.map((line) => line.pack)).toContain(finding.pack);
       expect(finding.id).toBe(
-        `${finding.rule}:${finding.item ?? finding.pack ?? finding.where[0]!.harness}`,
+        `${finding.rule}:${finding.item ?? finding.pack ?? finding.where[0]!.harness}${finding.via ? `:${finding.via}` : ""}`,
       );
     }
   });

@@ -678,7 +678,7 @@ describe("loadsheet usage", () => {
     expect(text).toContain("transcripts kept  90 days");
     expect(text).toMatch(/Codex {8}auto-compact {6}at 180\.0k tokens\n/u);
     expect(text).not.toContain(root);
-    for (const line of text.split("\n")) expect(line.length).toBeLessThanOrEqual(80);
+    for (const line of text.split("\n")) expect(line.length, line).toBeLessThanOrEqual(80);
   });
 
   it("--json prints the Report --json prints, and --scan carries the usage", () => {

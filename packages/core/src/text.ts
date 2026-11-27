@@ -301,7 +301,7 @@ const evidenceOf = (finding: Finding): string => {
       break;
     case "cache-ttl":
       if (has("days", "cacheWrite", "cacheWrite5m", "cacheRewrite") && e.cacheWrite! > 0)
-        return `${Math.round((e.cacheWrite5m! / e.cacheWrite!) * 100)}% of cache writes for 5 minutes on the last ${plural(e.days!, "day")} with 1M; ${num(e.cacheRewrite!)} tokens written again after a pause`;
+        return `${Math.round((e.cacheWrite5m! / e.cacheWrite!) * 100)}% of cache writes kept 5 min over ${plural(e.days!, "day")}; ${num(e.cacheRewrite!)} rewritten`;
       break;
     case "cache-off":
       if (has("sessions", "tokens"))

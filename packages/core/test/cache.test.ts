@@ -234,7 +234,7 @@ describe("cache-ttl", () => {
       },
     ]);
     expect(renderText(built)).toContain(
-      "claude-code via cli  75% of cache writes for 5 minutes on the last 3 days with 1M; 900,000 tokens written again after a pause",
+      "claude-code via cli  75% of cache writes kept 5 min over 3 days; 900,000 rewritten",
     );
     const detail = renderSummary(built, { harness: "claude-code" });
     expect(detail).toContain("keep the prompt cache 1 hour");
