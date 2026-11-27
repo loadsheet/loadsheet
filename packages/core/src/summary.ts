@@ -644,6 +644,24 @@ const breakdown = (report: Report, sheet: Sheet, style: Style, all: boolean) => 
   return out;
 };
 
+/** Whether loadsheet reads no sessions of the harness anywhere, as for Pi or Cursor. */
+const sessionsUnread = (report: Report, harness: string) => {
+  const rows = report.coverage.filter((row) => row.harness === harness);
+  return (
+    rows.length > 0 && rows.every((row) => row.sessions === 0 && row.signals.listing === "none")
+  );
+};
+
+/** Why `loadsheet <harness>` has nothing to break down. */
+const nothingToBreakDown = (report: Report, harness: string) => {
+  const name = harnessName(harness);
+  if (!sessionsUnread(report, harness))
+    return `${name} had no chats in the last ${plural(report.config.window, "day")}, so there is nothing to break down.`;
+  return report.coverage.some((row) => row.harness === harness && row.installed)
+    ? `loadsheet doesn't read ${name} sessions, only what's installed: loadsheet ${harness} --full lists it.`
+    : `loadsheet doesn't read ${name} sessions, and finds no ${name} install to list.`;
+};
+
 /** Said when no harness had a chat, on two lines that fit a terminal. */
 const nothingYet = (report: Report) => {
   const where = report.machines.length > 1 ? "on these machines" : "on this machine";
@@ -663,10 +681,7 @@ export const renderSummary = (report: Report, options: SummaryOptions = {}): str
     const out = header(report, [options.harness]);
     const sheet = report.sheet.find((candidate) => candidate.harness === options.harness);
     if (!sheet || !sheet.sessions) {
-      out.push(
-        "",
-        `${harnessName(options.harness)} had no chats in the last ${plural(report.config.window, "day")}, so there is nothing to break down.`,
-      );
+      out.push("", nothingToBreakDown(report, options.harness));
     } else {
       out.push(...breakdown(report, sheet, style, options.all ?? false));
     }
