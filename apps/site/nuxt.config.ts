@@ -33,6 +33,8 @@ export default defineNuxtConfig({
   docs: {
     site: { name: "loadsheet", url: "https://loadsheet.dev" },
     comments: false,
+    // The app's pages, next to every docs page. The pack pages are the ones the home page links to.
+    sitemap: ["/", "/mcp", "/pack/mattpocock/skills", "/pack/cursor/plugins/pstack"],
   },
   // /mcp is the MCP check page only for a request that asks for HTML (server/middleware/mcp-page.ts); the link
   // checker's request reaches the docs MCP server there instead.
