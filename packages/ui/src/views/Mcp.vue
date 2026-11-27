@@ -175,7 +175,7 @@ const ask = computed(
           <details v-if="r.ci" class="mc-fold">
             <summary>Run this check in CI</summary>
             <p class="mc-small">
-              Doctor exits with an error when a client breaks. Add it to your server's CI:
+              It exits with an error when a client breaks. Add it to your server's CI:
             </p>
             <Cmd :fix="{ type: 'cmd', text: r.ci }" />
           </details>

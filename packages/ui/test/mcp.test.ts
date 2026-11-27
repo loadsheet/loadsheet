@@ -70,7 +70,7 @@ const check: McpCheck = {
       },
     ],
   },
-  ci: `npx vite-doctor --mcp-url ${URL}`,
+  ci: `npx loadsheet mcp ${URL}`,
 };
 
 describe("the MCP check's reading of an answer", () => {
@@ -96,11 +96,11 @@ describe("the MCP check's reading of an answer", () => {
     const prompt = mcpFixPrompt(check, URL);
     expect(prompt).toContain(`checked it at ${URL} against 3 MCP clients`);
     expect(prompt).toContain(
-      "1. MCP0005 (error) tool `fetch_everything` in Cursor: Split the tool. Docs: https://vite-doctor.onmax.me/diagnostics/MCP0005",
+      "1. MCP0005 (error) tool `fetch_everything` in Cursor: Split the tool. Docs: https://loadsheet.dev/docs/reference/mcp#mcp0005",
     );
     expect(prompt).toContain("2. MCP0001 (warn) tool `search` in Anthropic's Connectors Directory");
     expect(prompt).not.toContain("MCP0007");
-    expect(prompt).toContain(`Then run \`npx vite-doctor --mcp-url ${URL}\``);
+    expect(prompt).toContain(`Then run \`npx loadsheet mcp ${URL}\``);
   });
 
   it("adds https to a bare host", () => {
@@ -158,13 +158,13 @@ describe("the MCP check page on a server", () => {
     expect(html.indexOf("Clients leave tools out")).toBeLessThan(
       html.indexOf("Tools have no display title"),
     );
-    expect(html).toContain('href="https://vite-doctor.onmax.me/diagnostics/MCP0005"');
+    expect(html).toContain('href="https://loadsheet.dev/docs/reference/mcp#mcp0005"');
     expect(html).toContain("1 note: clients rewrite something, nothing to fix");
     expect(html).toContain("Run this check in CI");
   });
 
   it("gives a server that wants a token the command to run locally", async () => {
-    const command = `npx vite-doctor --mcp-url ${URL} --mcp-header "Authorization: Bearer $TOKEN"`;
+    const command = `npx loadsheet mcp ${URL} --header "Authorization: Bearer $TOKEN"`;
     const html = await render("/mcp", { url: URL, error: { code: "auth-required", command } });
     expect(html).toContain("This server needs a token");
     expect(html).toContain("mcp.example.com answered HTTP 401");

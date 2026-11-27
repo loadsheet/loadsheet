@@ -8,6 +8,14 @@ export {
   type McpFetchErrorReason,
 } from "./fetch.ts";
 export { normalizeToolList } from "./input.ts";
+export {
+  mcpDocsUrl,
+  mcpReport,
+  type McpCellStatus,
+  type McpMatrixCell,
+  type McpReport,
+  type McpReportOptions,
+} from "./report.ts";
 export { checkMcpToolResult, type CheckMcpToolResultOptions } from "./result.ts";
 export { walkSchema, type SchemaNode } from "./schema.ts";
 export {

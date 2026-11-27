@@ -50,6 +50,7 @@ graph TD
   cli --> harnesses
   cli --> kit
   cli --> fleet
+  cli --> mcp
   cli --> schema
   cli -. bundles the build of .-> page
   resolve --> core
@@ -61,6 +62,7 @@ graph TD
   page --> ui
   site --> ui
   site --> resolve
+  site --> mcp
   site --> schema
   fleetrc --> fleet
 ```
@@ -107,9 +109,10 @@ Adapters work on the `Files` and `Place` kit gives them, and never read the disk
 
 ### `loadsheet` (`packages/loadsheet`)
 
-The npm bin. `cli.ts` routes to one of three places:
+The npm bin. `cli.ts` routes to one of four places:
 
 - `fleet …` goes to `@loadsheet/fleet`'s `run`.
+- `mcp …` goes to `mcp.ts`. It reads a server over Streamable HTTP with `fetchMcpToolList` (100 pages, since no Worker budget applies) or a `tools/list` JSON file, and prints `mcpReport` as text or `--json`. `--header` values are sent and never printed, and output names only the endpoint's origin. It exits 1 on an error or more warnings than `--max-warnings`, 2 on a usage error and 3 when the server can't be read.
 - `build` and `--ui` go to `ui.ts`. It inlines the Report into the `apps/page` build (copied into `dist/web` by `scripts/copy-web.ts`) and writes it to a folder or serves it on 127.0.0.1.
 - Everything else goes to `main.ts`, which parses flags and config. It then either scans and builds a Report, prints `--scan`, or weighs a pack.
 
@@ -127,9 +130,10 @@ Weighs a GitHub skills source for loadsheet.dev. `parsePackSource` supports GitH
 
 ### `@loadsheet/mcp` (`packages/mcp`)
 
-Checks an MCP server's `tools/list` against what each MCP client does with it. It is the MCP checker Doctor (`techlog`) reports through its MCP Rule Pack, moved here so loadsheet.dev and Doctor's CLI report the same findings. Private until it publishes; its version moves in lockstep with the public packages.
+Checks an MCP server's `tools/list` against what each MCP client does with it. loadsheet.dev's `/mcp` and `loadsheet mcp` both report through it. Its version moves in lockstep with the public packages.
 
-- `checkMcpToolList(list, options)` (`tool-list.ts`) returns one `McpDiagnostic` per Diagnostic Code and tool: `{ code, ruleId, severity, confidence, tool?, clients, message, fix, brief, findings }`. It covers MCP0001 to MCP0003 and MCP0005 to MCP0010. MCP0004 needs the server's source and stays in Doctor. The message, fix and brief text match Doctor's word for word, and so do its grouping and suppression rules: MCP0010 hides `/annotations` findings, ChatGPT's hint finding folds into MCP0002, and a rename of a tool in `definedTools` that MCP0003 covers is dropped.
+- `checkMcpToolList(list, options)` (`tool-list.ts`) returns one `McpDiagnostic` per Diagnostic Code and tool: `{ code, ruleId, severity, confidence, tool?, clients, message, fix, brief, findings }`. It covers MCP0001 to MCP0003 and MCP0005 to MCP0010. MCP0004 needs the server's source, so nothing here reports it. Its grouping and suppression rules: MCP0010 hides `/annotations` findings, ChatGPT's hint finding folds into MCP0002, and a rename of a tool in `definedTools` that MCP0003 covers is dropped.
+- `mcpReport(list, { clients?, url? })` (`report.ts`) wraps `checkMcpToolList` with the server's `initialize` info, the tool count, the clients checked and a client-by-tool matrix of statuses and codes. It is what `POST /api/mcp` answers and `loadsheet mcp --json` prints. `mcpDocsUrl(code)` is the code's anchor on `loadsheet.dev/docs/reference/mcp`.
 - `checkMcpClientLimits` (`check.ts`) returns the raw per-client `McpFinding`s, which come from the rules in `clients/`, one file per client. Each rule cites its source. `checkMcpToolResult` checks one `tools/call` result.
 - `fetchMcpToolList` (`fetch.ts`) reads `initialize` and every `tools/list` page over Streamable HTTP. It never follows redirects. A failure throws `McpFetchError` with a `reason` and, for an HTTP answer, its `status`. `maxPages` (40), `deadline`, `maxBytes` and the per-request `timeout` bound a read to fit one Worker request's 50 subrequests.
 - It runs in Workers, which forbid `new Function`, so `src/generated/` holds Ajv's meta-schema validators compiled ahead of time with the one Ajv helper inlined. After updating ajv, run `pnpm --filter @loadsheet/mcp generate`. `test/generated.test.ts` fails when the files are stale. The package has no runtime dependencies.
@@ -142,7 +146,7 @@ The Vue views (`Landing`, `ReportShell`, `Report`, `Fixes`, `Pack`) and their co
 ### Apps
 
 - `apps/page` is the single static HTML file. `src/main.ts` reads the inlined Report or a share code from the hash, then mounts the views on a hash router (`src/routes.ts`).
-- `apps/site` is loadsheet.dev on Nuxt and ViteHub. `app/pages` mounts the same views on path routes. `server/api/resolve.get.ts` is `GET /api/resolve?source=…`, rate-limited, calling `resolvePack`; an https source off GitHub gets `data.see: "/mcp"`. `server/api/mcp.post.ts` is `POST /api/mcp` with `{ url }` or `{ toolList }`: it reads a public https MCP server (no IP literals, private names, other ports or redirects; 15 s, 4 MiB, 40 pages) or a pasted tools/list, and answers `checkMcpToolList`'s diagnostics with a client-by-tool matrix. A 401 or 403 answers `auth-required` with the Doctor command to run locally. `app/pages/mcp.vue` mounts `Mcp` at `/mcp` and posts each URL to `/api/mcp`. `/mcp` is also the docs MCP server: `server/middleware/mcp-page.ts` renders the page for a GET that accepts `text/html` and not `text/event-stream`, and passes every other request to the docs server. `content/docs` holds the docs that the ViteHub CMS edits. Its D1 database stores CMS editor sessions and `mcp_counters`, one count per UTC day and scan outcome, never a URL, host or tool name. `app/plugins/legacy-hash.client.ts` redirects the old `/#/…` links.
+- `apps/site` is loadsheet.dev on Nuxt and ViteHub. `app/pages` mounts the same views on path routes. `server/api/resolve.get.ts` is `GET /api/resolve?source=…`, rate-limited, calling `resolvePack`; an https source off GitHub gets `data.see: "/mcp"`. `server/api/mcp.post.ts` is `POST /api/mcp` with `{ url }` or `{ toolList }`: it reads a public https MCP server (no IP literals, private names, other ports or redirects; 15 s, 4 MiB, 40 pages) or a pasted tools/list, and answers `mcpReport`. A 401 or 403 answers `auth-required` with the `npx loadsheet mcp` command to run locally. `app/pages/mcp.vue` mounts `Mcp` at `/mcp` and posts each URL to `/api/mcp`. `/mcp` is also the docs MCP server: `server/middleware/mcp-page.ts` renders the page for a GET that accepts `text/html` and not `text/event-stream`, and passes every other request to the docs server. `content/docs` holds the docs that the ViteHub CMS edits. Its D1 database stores CMS editor sessions and `mcp_counters`, one count per UTC day and scan outcome, never a URL, host or tool name. `app/plugins/legacy-hash.client.ts` redirects the old `/#/…` links.
 
 ### Test and build support
 

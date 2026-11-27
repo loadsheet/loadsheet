@@ -10,9 +10,10 @@ npx loadsheet <folder | GitHub URL> [options]   # weigh a skill pack
 npx loadsheet --ui [--port <n>] [options]       # serve the report on 127.0.0.1
 npx loadsheet build [--out <folder>] [options]  # write the report as a web page
 npx loadsheet fleet [command] [options]         # run fleetrc
+npx loadsheet mcp <url | file> [options]        # check an MCP server's tools
 ```
 
-`npx loadsheet --help` prints the same list.
+`npx loadsheet --help` prints the same list. `loadsheet mcp` has its own options and exit codes, on [MCP servers](/docs/reference/mcp).
 
 ## Options
 

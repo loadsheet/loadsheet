@@ -120,7 +120,7 @@ describe("a URL", () => {
     );
     expect(result).toMatchObject({
       source: "url",
-      ci: "npx vite-doctor --mcp-url https://mcp.deepwiki.com/mcp",
+      ci: "npx loadsheet mcp https://mcp.deepwiki.com/mcp",
       server: { name: "DeepWiki" },
     });
   });
@@ -131,7 +131,7 @@ describe("a URL", () => {
     const error = await scanError(scanMcp(parseMcpScanInput({ url }), { fetch }));
     expect(error).toMatchObject({ code: "auth-required", status: 401 });
     expect(error.command).toBe(
-      `npx vite-doctor --mcp-url 'https://mcp.example.dev/mcp?team=a&b=c' --mcp-header "Authorization: Bearer $TOKEN"`,
+      `npx loadsheet mcp 'https://mcp.example.dev/mcp?team=a&b=c' --header "Authorization: Bearer $TOKEN"`,
     );
     expect(scanEvent(undefined, error)).toBe("auth-required");
   });

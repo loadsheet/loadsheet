@@ -14,7 +14,7 @@ import {
 /**
   `POST /api/mcp` with `{ url }` or `{ toolList }`, and optional `clients`: an MCP server's tools/list checked against
   what each client does with it. A URL is read once over https, never stored or logged, and a server that wants a
-  token gets back the Doctor command that reads it locally. Only a daily count per outcome is kept.
+  token gets back the loadsheet command that reads it locally. Only a daily count per outcome is kept.
 */
 export default defineHandler(async (event) => {
   event.res.headers.set("cache-control", "no-store");

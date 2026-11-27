@@ -430,6 +430,9 @@ importers:
       '@loadsheet/kit':
         specifier: workspace:*
         version: link:../kit
+      '@loadsheet/mcp':
+        specifier: workspace:*
+        version: link:../mcp
       '@loadsheet/schema':
         specifier: workspace:*
         version: link:../schema

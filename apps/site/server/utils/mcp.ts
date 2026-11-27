@@ -1,13 +1,11 @@
 import {
-  checkMcpToolList,
   fetchMcpToolList,
   MCP_CLIENT_LABELS,
   McpFetchError,
+  mcpReport,
   normalizeToolList,
   type McpClient,
-  type McpCode,
-  type McpDiagnostic,
-  type McpFinding,
+  type McpReport,
   type McpToolList,
 } from "@loadsheet/mcp";
 
@@ -35,7 +33,7 @@ const STATUS: Record<McpScanErrorCode, number> = {
 export class McpScanError extends Error {
   readonly code: McpScanErrorCode;
   readonly status: number;
-  /** For `auth-required`: the Doctor command that reads the server with the user's own token. */
+  /** For `auth-required`: the loadsheet command that reads the server with the user's own token. */
   readonly command: string | undefined;
   constructor(code: McpScanErrorCode, message: string, command?: string) {
     super(message);
@@ -106,7 +104,7 @@ export function checkMcpUrl(value: string): URL {
   )
     throw new McpScanError(
       "private-host",
-      "loadsheet.dev reads public MCP servers only. Run `npx vite-doctor --mcp-url <url>` on your machine for a private one.",
+      "loadsheet.dev reads public MCP servers only. Run `npx loadsheet mcp <url>` on your machine for a private one.",
     );
   return url;
 }
@@ -116,9 +114,10 @@ export function shellWord(value: string): string {
   return /^[\w@%+=:,./~-]+$/.test(value) ? value : `'${value.replaceAll("'", `'\\''`)}'`;
 }
 
-export function doctorCommand(url: string, auth = false): string {
-  const command = `npx vite-doctor --mcp-url ${shellWord(url)}`;
-  return auth ? `${command} --mcp-header "Authorization: Bearer $TOKEN"` : command;
+/** The same check on the user's machine, which reads private servers and fits CI. */
+export function localCommand(url: string, auth = false): string {
+  const command = `npx loadsheet mcp ${shellWord(url)}`;
+  return auth ? `${command} --header "Authorization: Bearer $TOKEN"` : command;
 }
 
 export type McpScanInput =
@@ -168,26 +167,8 @@ function parseClients(value: unknown): McpClient[] | undefined {
   return [...new Set(value as McpClient[])];
 }
 
-export type McpCellStatus = "ok" | "info" | "warn" | "error";
-
-/** What one client does to one tool, or to the server as a whole. */
-export interface McpMatrixCell {
-  status: McpCellStatus;
-  codes: McpCode[];
-}
-
-export interface McpScanResult {
+export interface McpScanResult extends McpReport {
   source: "url" | "json";
-  /** The server's `initialize` result, when the scan or the paste had one. */
-  server?: { name?: string; version?: string; protocolVersion?: string };
-  toolCount: number;
-  clients: { id: McpClient; label: string }[];
-  diagnostics: McpDiagnostic[];
-  /** Per client: what happens to the server as a whole (instructions, tool count), then to each tool, in list order. */
-  matrix: {
-    server: Record<string, McpMatrixCell>;
-    tools: { tool: string; clients: Record<string, McpMatrixCell> }[];
-  };
   /** The same check in CI, against the live server. Only for a URL scan. */
   ci?: string;
 }
@@ -204,7 +185,11 @@ export async function scanMcp(
   if (input.kind === "url") {
     const url = checkMcpUrl(input.url);
     const list = await readServer(url, input.url, options);
-    return report(list, input.clients, "url", { url: url.href, ci: doctorCommand(input.url) });
+    return {
+      source: "url",
+      ...mcpReport(list, { ...(input.clients ? { clients: input.clients } : {}), url: url.href }),
+      ci: localCommand(input.url),
+    };
   }
   let list: McpToolList;
   try {
@@ -213,7 +198,7 @@ export async function scanMcp(
     if (!(error instanceof TypeError)) throw error;
     throw new McpScanError("not-mcp", error.message);
   }
-  return report(list, input.clients, "json");
+  return { source: "json", ...mcpReport(list, input.clients ? { clients: input.clients } : {}) };
 }
 
 async function readServer(url: URL, given: string, options: ScanMcpOptions): Promise<McpToolList> {
@@ -232,8 +217,8 @@ async function readServer(url: URL, given: string, options: ScanMcpOptions): Pro
     if (error.status === 401 || error.status === 403)
       throw new McpScanError(
         "auth-required",
-        `The server answered HTTP ${error.status}: it needs a token. Run Doctor on your machine with yours.`,
-        doctorCommand(given, true),
+        `The server answered HTTP ${error.status}: it needs a token. Run loadsheet on your machine with yours.`,
+        localCommand(given, true),
       );
     switch (error.reason) {
       case "timeout":
@@ -245,61 +230,6 @@ async function readServer(url: URL, given: string, options: ScanMcpOptions): Pro
         throw new McpScanError("not-mcp", error.message);
     }
   }
-}
-
-const RANK: Record<McpCellStatus, number> = { ok: 0, info: 1, warn: 2, error: 3 };
-
-function report(
-  list: McpToolList,
-  clients: McpClient[] | undefined,
-  source: "url" | "json",
-  endpoint?: { url: string; ci: string },
-): McpScanResult {
-  const diagnostics = checkMcpToolList(list, {
-    ...(clients ? { clients } : {}),
-    ...(endpoint ? { url: endpoint.url } : {}),
-  });
-  const ids = clients ?? CLIENTS;
-  const row = () =>
-    Object.fromEntries(ids.map((id) => [id, { status: "ok", codes: [] }])) as Record<
-      string,
-      McpMatrixCell
-    >;
-  const server = row();
-  const tools = new Map(list.tools.map((tool) => [tool.name, row()]));
-  for (const diagnostic of diagnostics) {
-    const cells = diagnostic.tool === undefined ? server : tools.get(diagnostic.tool);
-    if (!cells) continue;
-    for (const finding of backing(diagnostic))
-      mark(cells[finding.client], diagnostic.code, finding.severity);
-  }
-  const info = list.initialize;
-  const serverInfo = {
-    ...(typeof info?.serverInfo?.name === "string" ? { name: info.serverInfo.name } : {}),
-    ...(typeof info?.serverInfo?.version === "string" ? { version: info.serverInfo.version } : {}),
-    ...(typeof info?.protocolVersion === "string" ? { protocolVersion: info.protocolVersion } : {}),
-  };
-  return {
-    source,
-    ...(Object.keys(serverInfo).length ? { server: serverInfo } : {}),
-    toolCount: list.tools.length,
-    clients: ids.map((id) => ({ id, label: MCP_CLIENT_LABELS[id] })),
-    diagnostics,
-    matrix: { server, tools: [...tools].map(([tool, cells]) => ({ tool, clients: cells })) },
-    ...(endpoint ? { ci: endpoint.ci } : {}),
-  };
-}
-
-/** A diagnostic's client findings; MCP0003 and MCP0010 can have none, and then count against each client they name. */
-function backing(diagnostic: McpDiagnostic): Pick<McpFinding, "client" | "severity">[] {
-  if (diagnostic.findings.length) return diagnostic.findings;
-  return diagnostic.clients.map((client) => ({ client, severity: diagnostic.severity }));
-}
-
-function mark(cell: McpMatrixCell | undefined, code: McpCode, severity: McpFinding["severity"]) {
-  if (!cell) return;
-  if (RANK[severity] > RANK[cell.status]) cell.status = severity;
-  if (!cell.codes.includes(code)) cell.codes.push(code);
 }
 
 /** The counter event for a scan's outcome: no URL, host or tool name ever goes into one. */
