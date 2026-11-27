@@ -10,7 +10,14 @@ export {
   type RuleSheet,
   type Unfiltered,
 } from "./rules/rule.ts";
-export { harnessTokens, setupTokens } from "./setup.ts";
+export {
+  DEFAULT_WINDOW,
+  harnessTokens,
+  SETUP_BUDGET,
+  SETUP_LIMIT,
+  setupBudget,
+  setupTokens,
+} from "./setup.ts";
 export {
   harnessName,
   renderSummary,

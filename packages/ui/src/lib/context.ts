@@ -1,4 +1,4 @@
-import { harnessTokens, setupTokens } from "@loadsheet/core";
+import { DEFAULT_WINDOW, harnessTokens, setupTokens } from "@loadsheet/core";
 import type { Line, Sheet } from "@loadsheet/schema";
 import type { InjectionKey } from "vue";
 import { harnessName } from "./report";
@@ -43,9 +43,6 @@ export interface Context {
   free: number | undefined;
   segments: Segment[];
 }
-
-/** The window a Report without `contextWindow` is drawn against. */
-export const DEFAULT_WINDOW = 200_000;
 
 const SKILLS_ABOUT =
   "Reusable instructions. The startup list can include skill names or short descriptions.";
