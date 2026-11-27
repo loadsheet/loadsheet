@@ -22,6 +22,11 @@ export function showTip(e: MouseEvent, html: string) {
   tip.on = true;
 }
 export const hideTip = () => (tip.on = false);
+/** Shows the tip under the element the event is on, for focus as well as hover. */
+export function tipUnder(e: Event, html: string) {
+  const at = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  showTip({ clientX: at.left, clientY: at.bottom - 8 } as MouseEvent, html);
+}
 
 export const esc = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);

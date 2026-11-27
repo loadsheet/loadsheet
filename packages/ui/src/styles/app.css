@@ -1000,7 +1000,7 @@
   font-size: 13px;
   white-space: nowrap;
 }
-:where(.loadsheet) .mc-cl > span {
+:where(.loadsheet) .mc-cl > span:last-child {
   margin-left: auto;
   color: var(--muted-foreground);
   font-size: 12px;
@@ -1046,6 +1046,18 @@
   padding: 0;
   list-style: none;
 }
+/* A client with a problem gets the same 24px circle as the fine ones, so every logo sits in one column. */
+:where(.loadsheet) .mc-cl [data-slot="avatar"] {
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  color: var(--foreground);
+  font-size: 0.75rem;
+}
+:where(.loadsheet) .mc-cl [data-slot="avatar"] svg {
+  width: 1em;
+  height: 1em;
+}
 :where(.loadsheet) .mc-fine [data-slot="avatar"] {
   color: var(--foreground);
   cursor: default;
@@ -1061,11 +1073,22 @@
   font-size: 13px;
   font-weight: 500;
 }
-:where(.loadsheet) .mc-cl.s-warn > span {
+/* Notes change nothing on their own, so they sit a step quieter than the problems above them. */
+:where(.loadsheet) .mc-notes + .mc-probs {
+  gap: 20px;
+}
+:where(.loadsheet) .mc-notes + .mc-probs .mc-prob + .mc-prob {
+  padding-top: 18px;
+}
+:where(.loadsheet) .mc-notes + .mc-probs .mc-fix {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+:where(.loadsheet) .mc-cl.s-warn > span:last-child {
   color: var(--s-warn);
 }
 :where(.loadsheet) .mc-cl.s-error,
-:where(.loadsheet) .mc-cl.s-error > span {
+:where(.loadsheet) .mc-cl.s-error > span:last-child {
   color: var(--s-error);
 }
 
@@ -1119,37 +1142,32 @@
   font-size: 0.9em;
   overflow-wrap: anywhere;
 }
-/* Short rows (a tool and its value) flow into as many columns as fit; a row holding a whole fix takes the width. */
+/* The tools a fix applies to, as one wrapped line of names. */
+:where(.loadsheet) .mc-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  margin: 0;
+  padding: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  list-style: none;
+}
+/* With no fix shared, each tool shows its own beside it. */
 :where(.loadsheet) .mc-per {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
-  gap: 0 32px;
   margin: 0;
   padding: 0;
   font-size: 13px;
   list-style: none;
 }
-:where(.loadsheet) .mc-per.long {
-  grid-template-columns: minmax(0, 1fr);
-}
 :where(.loadsheet) .mc-per li {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 200px) minmax(0, 1fr);
   align-items: baseline;
   gap: 12px;
   padding: 5px 0;
   border-top: 1px solid var(--border);
-}
-:where(.loadsheet) .mc-per.long li {
-  grid-template-columns: minmax(0, 200px) minmax(0, 1fr);
-}
-/* A tool's own value: plain mono on one line, as the fix above already says where it goes. */
-:where(.loadsheet) .mc-per:not(.long) li > span:last-child {
-  overflow: hidden;
-  color: var(--muted-foreground);
-  font: 400 12.5px var(--font-mono);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 :where(.loadsheet) .mc-tn {
   overflow: hidden;
@@ -1161,19 +1179,29 @@
   color: inherit;
   text-decoration: none;
 }
+:where(.loadsheet) .mc-tools .mc-link {
+  font-size: 12.5px;
+}
 /* The copy-link square sits on the title line, centred on it rather than on its baseline. */
 :where(.loadsheet) .mc-pt .cp {
   align-self: center;
 }
-/* What a shared link points at: the problem's title turns accent, and the tool's row takes a tint. */
+/* What a shared link points at: the problem's title turns accent, and the tool takes a tint. */
 :where(.loadsheet) .mc-prob,
-:where(.loadsheet) .mc-per li {
+:where(.loadsheet) .mc-prob li[id] {
   scroll-margin: calc(var(--bar) + 16px) 0;
 }
 :where(.loadsheet) .mc-prob[data-on] .mc-pt b {
   color: var(--acc);
 }
-:where(.loadsheet) .mc-prob .mc-per li[data-on] {
+:where(.loadsheet) .mc-tools li[data-on] {
+  margin: 0 -4px;
+  padding: 0 4px;
+  border-radius: var(--r-b);
+  background: var(--acc-tint);
+  color: var(--foreground);
+}
+:where(.loadsheet) .mc-per li[data-on] {
   margin: 0 -8px;
   padding: 5px 8px;
   border-top-color: transparent;

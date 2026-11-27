@@ -133,8 +133,24 @@ export function sharedFix(fixes: string[]): { fix: string; values: string[] } | 
   if (!start || !ends.length) return undefined;
   const end = first.length - Math.min(...ends);
   const values = fixes.map((f) => f.slice(start, f.length - end));
-  if (values.some((v) => !v || /["`]/.test(v))) return undefined;
+  // An escaped quote (`\"`) inside the value is not where it ends.
+  if (first[start - 2] === "\\" || values.some((v) => !v || /["`]|\\$/.test(v))) return undefined;
   return { fix: `${first.slice(0, start)}…${first.slice(first.length - end)}`, values };
+}
+
+/**
+  The sentences every fix starts with, when some fixes add more: the shared part once, and what each fix adds after it
+  ("" for a fix that is only the shared part).
+*/
+export function sharedHead(fixes: string[]): { head: string; rest: string[] } | undefined {
+  const parts = fixes.map((f) => f.split(/(?<=\.)\s+(?=[A-Z])/));
+  const first = parts[0];
+  if (!first) return undefined;
+  let n = 0;
+  while (parts.every((p) => n < p.length && p[n] === first[n])) n++;
+  const rest = parts.map((p) => p.slice(n).join(" "));
+  if (!n || rest.every((r) => !r)) return undefined;
+  return { head: first.slice(0, n).join(" "), rest };
 }
 
 /**

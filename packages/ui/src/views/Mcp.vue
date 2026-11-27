@@ -24,7 +24,7 @@ import {
   plural,
   shortUrl,
 } from "../lib/mcp";
-import { copied, copy, esc, hideTip, showTip } from "../lib/ui";
+import { copied, copy, esc, hideTip, tipUnder } from "../lib/ui";
 
 /**
   Checks an MCP server against every client. The host runs the check: it gets `check` with the URL, then passes the
@@ -40,7 +40,7 @@ const props = defineProps<{
 const emit = defineEmits<{ check: [url: string] }>();
 
 // What happens in a client that has a problem, beside its name.
-const SAYS: Record<string, string> = { warn: "problem", error: "drops tools" };
+const SAYS: Record<string, string> = { warn: "problem", error: "breaks" };
 
 const TRY = ["https://mcp.deepwiki.com/mcp", "https://nuxt.com/mcp", "https://mcp.linear.app/mcp"];
 
@@ -65,10 +65,6 @@ const hit = computed(() => r.value?.clients.filter((c) => SAYS[status.value[c.id
 const fine = computed(
   () => r.value?.clients.filter((c) => !SAYS[status.value[c.id] ?? "ok"]) ?? [],
 );
-function tipAt(e: MouseEvent | FocusEvent, label: string) {
-  const at = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  showTip({ clientX: at.left, clientY: at.bottom - 8 } as MouseEvent, esc(label));
-}
 const problems = computed(() => (r.value ? mcpProblems(r.value) : []));
 const real = computed(() => problems.value.filter((p) => p.severity !== "info"));
 const notes = computed(() => problems.value.filter((p) => p.severity === "info"));
@@ -182,8 +178,8 @@ const ask = computed(
             </button>
             <ul v-if="hit.length" class="mc-clients" aria-label="Clients with problems">
               <li v-for="c in hit" :key="c.id" class="mc-cl" :class="`s-${status[c.id]}`">
-                <McpClientMark :id="c.id" :label="c.label" />{{ c.label
-                }}<span>{{ SAYS[status[c.id]!] }}</span>
+                <span data-slot="avatar"><McpClientMark :id="c.id" :label="c.label" /></span
+                >{{ c.label }}<span>{{ SAYS[status[c.id]!] }}</span>
               </li>
             </ul>
             <div v-if="fine.length" class="mc-fine">
@@ -196,9 +192,9 @@ const ask = computed(
                   :key="c.id"
                   data-slot="avatar"
                   tabindex="0"
-                  @mouseenter="tipAt($event, c.label)"
+                  @mouseenter="tipUnder($event, esc(c.label))"
                   @mouseleave="hideTip"
-                  @focus="tipAt($event, c.label)"
+                  @focus="tipUnder($event, esc(c.label))"
                   @blur="hideTip"
                 >
                   <McpClientMark :id="c.id" :label="c.label" />
@@ -219,6 +215,7 @@ const ask = computed(
                 :key="p.code"
                 :problem="p"
                 :labels="labels"
+                :tools="r.toolCount"
                 :target="target?.problem === p ? target.anchor : undefined"
                 @link="link"
               />
@@ -233,6 +230,7 @@ const ask = computed(
                   :key="p.code"
                   :problem="p"
                   :labels="labels"
+                  :tools="r.toolCount"
                   :target="target?.problem === p ? target.anchor : undefined"
                   @link="link"
                 />
