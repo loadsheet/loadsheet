@@ -93,6 +93,16 @@ export const parseId = (id: Id): Ref => {
   return { kind: kind as Kind, name };
 };
 
+/** The organisation a usage project belongs to: the owner of `owner/repo`, else the first folder of its key. */
+export const orgOf = (project: string): string => {
+  if (project.startsWith("/")) return `/${project.split("/")[1] ?? ""}`;
+  if (project === "~" || project.startsWith("~/")) {
+    const first = project.split("/")[1];
+    return first ? `~/${first}` : "~";
+  }
+  return project.split("/")[0]!;
+};
+
 const DEFAULT_RULES: ResolvedConfig["rules"] = {
   "invisible-skill": { enabled: true, minSessions: 5, bareShare: 0.5 },
   "dead-skill": { enabled: true, minSessions: 20, minDays: 14 },

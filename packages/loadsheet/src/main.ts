@@ -8,6 +8,7 @@ import {
   PROMPT_DOC,
   renderSummary,
   renderText,
+  renderUsage,
   type Style,
 } from "@loadsheet/core";
 import { runOnFleet, type RunResult } from "@loadsheet/fleet";
@@ -28,6 +29,8 @@ Usage: loadsheet [options]                     Scan this machine's sessions: how
                                                harness's context is taken before you type, and
                                                what you can get back
        loadsheet <harness> [--all] [options]   The same for one harness, item by item
+       loadsheet usage [options]               Sessions, compactions and tokens per project
+                                               and org, and the settings behind them
        loadsheet <dir | GitHub URL> [options]  Weigh a skill pack, with no usage data
        loadsheet fleet [command] [options]     Run fleetrc, which keeps a fleet's skills in sync;
                                                \`loadsheet fleet --help\` lists its commands
@@ -39,7 +42,7 @@ Usage: loadsheet [options]                     Scan this machine's sessions: how
 
   <harness>           A harness id, or the part before its dash, such as claude for claude-code.
   <dir | GitHub URL>  A URL is https://github.com/<owner>/<repo>[/tree/<ref>[/<folder>]].
-                      A pack in a folder named fleet, build, mcp or a harness is ./<folder>.
+                      A pack in a folder named fleet, build, mcp, usage or a harness is ./<folder>.
 
 Options:
   --fleet               Also ask every other machine of this machine's fleet for its Scan, over
@@ -120,6 +123,17 @@ try {
   fail((error as Error).message);
 }
 const { values, positionals } = args;
+const argv = process.argv.slice(2);
+/** `loadsheet usage`: the word before any `--`, after which a word is a pack. */
+const usageView =
+  positionals[0] === "usage" &&
+  (argv.includes("--") ? argv.slice(0, argv.indexOf("--")) : argv).includes("usage");
+if (usageView) {
+  if (positionals.length > 1) fail("loadsheet usage takes no pack or harness; use --harness");
+  if (values.all || values.full)
+    fail(`--${values.all ? "all" : "full"} is not for loadsheet usage`);
+  positionals.length = 0;
+}
 
 if (values.version) {
   process.stdout.write(`${pkg.version}\n`);
@@ -245,9 +259,11 @@ const print = (report: Parameters<typeof renderText>[0]) =>
   process.stdout.write(
     values.json
       ? `${JSON.stringify(report, null, 2)}\n`
-      : report.mode === "pack" || values.full
-        ? renderText(report)
-        : renderSummary(report, { style, harness: breakdown, all: values.all }),
+      : usageView
+        ? renderUsage(report, { style })
+        : report.mode === "pack" || values.full
+          ? renderText(report)
+          : renderSummary(report, { style, harness: breakdown, all: values.all }),
   );
 
 /**

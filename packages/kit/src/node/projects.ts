@@ -14,6 +14,8 @@ import type { ProjectHint } from "../index.ts";
 import { repoOfRemote } from "../project.ts";
 
 export { repoOfRemote };
+// The view of a project by its owner lives in the schema, where core and the web can reach it.
+export { orgOf } from "@loadsheet/schema";
 
 /** The disk reads the resolver makes, so tests can count or fake them. */
 export interface ProjectFs {
@@ -198,14 +200,4 @@ export const createProjectResolver = ({
     memo.set(key, project);
     return project;
   };
-};
-
-/** The organisation a project belongs to: the owner of `owner/repo`, else the first folder of its key. */
-export const orgOf = (project: string): string => {
-  if (project.startsWith("/")) return `/${project.split("/")[1] ?? ""}`;
-  if (project === "~" || project.startsWith("~/")) {
-    const first = project.split("/")[1];
-    return first ? `~/${first}` : "~";
-  }
-  return project.split("/")[0]!;
 };

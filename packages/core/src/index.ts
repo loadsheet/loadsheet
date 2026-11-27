@@ -35,3 +35,11 @@ export {
 } from "./summary.ts";
 export { PROMPT_DOC, renderText } from "./text.ts";
 export { sumUsage } from "./usage.ts";
+export {
+  NO_REPOSITORY,
+  renderUsage,
+  usageTotals,
+  type UsageRow,
+  type UsageTotals,
+  type UsageViewOptions,
+} from "./usage-view.ts";
