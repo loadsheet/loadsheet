@@ -450,6 +450,11 @@
           "settings": {
             "type": "object",
             "properties": {
+              "settingsPath": {
+                "type": "string",
+                "pattern": "^~\\/(?:(?!\\.{1,2}\\/)[^/\\\\\\x00-\\x1f\\x7f]+\\/)*settings\\.json$",
+                "description": "The active settings.json, only when it can be named relative to home."
+              },
               "cacheTtl": {
                 "enum": ["5m", "1h"],
                 "type": "string",
@@ -1058,7 +1063,7 @@
               "cacheRewrite": {
                 "type": "integer",
                 "minimum": 0,
-                "description": "Of the cache writes, the tokens of requests made 5 to 60 minutes after the previous request of their conversation: what a 1-hour cache would have read instead."
+                "description": "Five-minute cache writes 5 to 60 minutes after a request to the same model in the conversation: possible reuse with a longer cache, not guaranteed hits."
               }
             },
             "required": [

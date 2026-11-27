@@ -229,7 +229,7 @@ const RULE_TITLE: Record<string, string> = {
   "harness-mismatch": "installed for a harness you do not use",
   drift: "differs between machines",
   "short-history": "too little history to judge",
-  "cache-ttl": "the prompt cache lasted 5 minutes, so a longer pause writes it again",
+  "cache-ttl": "the prompt cache lasted 5 minutes",
   "cache-off": "no request read the prompt cache",
 };
 
@@ -301,7 +301,7 @@ const evidenceOf = (finding: Finding): string => {
       break;
     case "cache-ttl":
       if (has("days", "cacheWrite", "cacheWrite5m", "cacheRewrite") && e.cacheWrite! > 0)
-        return `${Math.round((e.cacheWrite5m! / e.cacheWrite!) * 100)}% of cache writes kept 5 min over ${plural(e.days!, "day")}; ${num(e.cacheRewrite!)} rewritten`;
+        return `${Math.round((e.cacheWrite5m! / e.cacheWrite!) * 100)}% of cache writes kept 5 min over ${plural(e.days!, "day")}; ${num(e.cacheRewrite!)} tokens with potential reuse`;
       break;
     case "cache-off":
       if (has("sessions", "tokens"))
@@ -356,12 +356,19 @@ const INSTALLER: Record<string, string> = { skills: "the skills CLI", fleetrc: "
 /** Why a finding has no fix, from what the Report holds about its line. */
 const noFixReason = (report: Report, finding: Finding): string => {
   const harnesses = new Set(finding.where.map((where) => where.harness));
+  const settings = report.coverage
+    .filter((row) =>
+      finding.where.some((where) => where.machine === row.machine && where.harness === row.harness),
+    )
+    .map((row) => row.settings);
   switch (finding.rule) {
     case "drift": {
       const machines = [...new Set(finding.where.map((where) => where.machine))].sort(compare);
       return `its copies on ${machines.join(", ")} differ; bring them to one version with the tool that installed them.`;
     }
     case "short-history": {
+      if (finding.evidence.retentionDays !== undefined)
+        return "ask your agent to locate the active Claude Code settings.json before raising cleanupPeriodDays.";
       const kept = report.coverage.some(
         (row) => harnesses.has(row.harness) && row.settings?.retentionDays !== undefined,
       );
@@ -372,6 +379,10 @@ const noFixReason = (report: Report, finding: Finding): string => {
         : "the harness kept too little history for the usage rules to judge.";
     }
     case "cache-ttl": {
+      if (!finding.evidence.cacheRewrite)
+        return "no reuse opportunity was observed; longer-lived writes can cost more.";
+      if (!settings.length || settings.some((row) => row?.cacheTtl !== "1h"))
+        return "ask your agent to locate the active Claude Code settings.json and weigh possible reuse against higher write costs.";
       const from = report.coverage.find(
         (row) =>
           harnesses.has(row.harness) &&
@@ -381,6 +392,8 @@ const noFixReason = (report: Report, finding: Finding): string => {
       return `the settings already ask for 1 hour${from ? ` (${from})` : ""}, so Claude Code itself wrote these 5-minute caches for ${finding.via ?? "these"} sessions; anthropics/claude-code#101685 tracks it.`;
     }
     case "cache-off":
+      if (settings.some((row) => row?.caching === "off"))
+        return "ask your agent to locate the active Claude Code settings.json and check which setting turned caching off.";
       return "no setting loadsheet reads turns caching off. A gateway or proxy between the harness and the API may drop it; ask its provider whether it passes prompt caching through.";
     case "heavy-instructions":
       return "every session that loads the file pays for all of it; trim what the agent does not need.";

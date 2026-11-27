@@ -315,13 +315,27 @@ const STORE = /^[a-z0-9][a-z0-9._-]*$/;
 // A knob, such as `settings.promptCacheTtl` or `env.FORCE_PROMPT_CACHING_5M`: never its value.
 const KNOB = /^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*$/;
 // owner/repo as GitHub spells it, a `~` path, an absolute path that is not a home, or unknown.
+const REPO_KEY = String.raw`[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+`;
 const PROJECT = new RegExp(
-  String.raw`^(?!${HOME})(?:[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+|~(?:/[^\0\n\r]*)?|/[^\0\n\r]*|unknown)$`,
+  String.raw`^(?!${HOME})(?:${REPO_KEY}|~(?:/[^\0\n\r]*)?|/[^\0\n\r]*|unknown)$`,
 );
+const REPOSITORY = new RegExp(`^${REPO_KEY}$`, "u");
+export const isRepositoryKey = (key: string): boolean => REPOSITORY.test(key);
+export const isProjectKey = (key: string): boolean => PROJECT.test(key);
 const TtlSchema = v.picklist(["5m", "1h"]);
 
 const SettingsSchema = v.pipe(
   v.looseObject({
+    settingsPath: v.optional(
+      v.pipe(
+        v.string(),
+        v.regex(
+          new RegExp(String.raw`^~/(?:(?!\.{1,2}/)[^/\\\x00-\x1f\x7f]+/)*settings\.json$`),
+          "must be a home-relative settings file",
+        ),
+        v.description("The active settings.json, only when it can be named relative to home."),
+      ),
+    ),
     cacheTtl: v.optional(
       describe(
         TtlSchema,
@@ -488,7 +502,7 @@ const UsageTokenCellSchema = v.pipe(
       "Of the cache writes, the tokens written to a cache that lives 1 hour; with cacheWrite5m at most cacheWrite, and the rest unsplit.",
     ),
     cacheRewrite: count(
-      "Of the cache writes, the tokens of requests made 5 to 60 minutes after the previous request of their conversation: what a 1-hour cache would have read instead.",
+      "Five-minute cache writes 5 to 60 minutes after a request to the same model in the conversation: possible reuse with a longer cache, not guaranteed hits.",
     ),
   }),
   v.check((cell) => cell.reasoning <= cell.output, "reasoning must not exceed output"),

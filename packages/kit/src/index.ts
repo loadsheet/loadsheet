@@ -213,7 +213,7 @@ export interface SqliteStore {
   /** The database file, absolute. */
   path(place: Place): string;
   /**
-   * One SELECT. `?1` is bound to the window's first instant, as epoch milliseconds or as an ISO
+   * One SELECT. `$since` is bound to the window's first instant, as epoch milliseconds or as an ISO
    * 8601 timestamp (`since`). It selects numbers, model names and folders only: a title, message
    * or payload stays in SQLite, so `json_extract` the one field needed.
    */

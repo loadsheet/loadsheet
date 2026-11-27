@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { NO_REPOSITORY, usageTokens, usageTotals, type UsageRow } from "@loadsheet/core";
+import {
+  NO_REPOSITORY,
+  unreadUsageStores,
+  usageTokens,
+  usageTotals,
+  type UsageRow,
+} from "@loadsheet/core";
 import { computed, reactive } from "vue";
 import CopyButton from "../components/CopyButton.vue";
 import StateBox from "../components/StateBox.vue";
@@ -13,6 +19,7 @@ import { usageRows } from "../lib/usage";
 */
 const { report, shared } = useLoadsheet();
 const totals = computed(() => usageTotals(report.value.usage));
+const unread = computed(() => unreadUsageStores(report.value));
 const counted = computed(
   () => !!(totals.value.all.sessions || totals.value.all.tokens || totals.value.subagentSessions),
 );
@@ -51,6 +58,9 @@ const percent = (row: UsageRow) =>
       :to="{ name: 'report', query: { h: $route.query.h, r: $route.query.r }, hash: $route.hash }"
       >← Report</RouterLink
     >
+    <p v-if="!shared && unread.length" role="status">
+      Usage is incomplete. Could not read: {{ unread.join(", ") }}.
+    </p>
     <template v-if="report.usage && counted">
       <div class="ph">
         <div>
@@ -160,7 +170,7 @@ const percent = (row: UsageRow) =>
         </div>
       </template>
     </StateBox>
-    <StateBox v-else title="Nothing to count yet">
+    <StateBox v-else-if="!unread.length" title="Nothing to count yet">
       No session in the last {{ plural(report.config.window, "day") }} said its project or tokens.
     </StateBox>
   </main>

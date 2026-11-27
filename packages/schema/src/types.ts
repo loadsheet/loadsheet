@@ -148,6 +148,8 @@ export interface Coverage {
 
 /** What a harness's settings and environment set, as derived values: never a setting's text or an environment variable's value. */
 export interface Settings {
+  /** The active settings.json, only when it can be named relative to home. */
+  settingsPath?: string;
   /** How long the main conversation's prompt cache lives, as the settings set it. */
   cacheTtl?: "5m" | "1h";
   /** Which knob set cacheTtl, such as `settings.promptCacheTtl`, `env.FORCE_PROMPT_CACHING_5M` or `default`. */
@@ -223,7 +225,7 @@ export interface UsageTokenCell {
   cacheWrite5m: number;
   /** Of the cache writes, the tokens written to a cache that lives 1 hour; with cacheWrite5m at most cacheWrite, and the rest unsplit. */
   cacheWrite1h: number;
-  /** Of the cache writes, the tokens of requests made 5 to 60 minutes after the previous request of their conversation: what a 1-hour cache would have read instead. */
+  /** Five-minute cache writes 5 to 60 minutes after a request to the same model in the conversation: possible reuse with a longer cache, not guaranteed hits. */
   cacheRewrite: number;
 }
 

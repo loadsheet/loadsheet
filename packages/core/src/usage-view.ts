@@ -278,13 +278,20 @@ const settingsBlock = (report: Report, style: Style, used: Set<string>) => {
 
 /** The usage rules whose findings this view lists, and what each asks for. */
 const FIX_WORDS: Record<string, (finding: Finding) => string> = {
-  "cache-ttl": () => "keep the prompt cache 1 hour",
+  "cache-ttl": (finding) =>
+    finding.fixes.length
+      ? "consider keeping the prompt cache 1 hour"
+      : "the prompt cache lasted 5 minutes",
   "cache-off": () => "turn the prompt cache back on",
   "short-history": (finding) =>
     typeof finding.evidence.days === "number"
-      ? `only ${plural(finding.evidence.days, "day")} of transcripts; keep them longer`
+      ? `${plural(finding.evidence.days, "day")} of transcripts${finding.fixes.length ? "; keep them longer" : ""}`
       : "keep transcripts longer",
 };
+
+/** Store names that could not be read; absence of usage is not evidence of an empty history. */
+export const unreadUsageStores = (report: Report): string[] =>
+  [...new Set(report.coverage.flatMap((row) => row.unread ?? []))].sort();
 
 const fixesBlock = (report: Report, style: Style) => {
   const findings = report.findings.filter((finding) => FIX_WORDS[finding.rule]);
@@ -331,7 +338,13 @@ export const renderUsage = (report: Report, options: UsageViewOptions = {}): str
   const where = read > 1 ? `on ${num(read)} machines` : "on this machine";
   const days = plural(report.config.window, "day");
   const totals = usageTotals(report.usage);
+  const unread = unreadUsageStores(report);
+  if (unread.length) {
+    out.push("", "Usage is incomplete; these stores could not be read:");
+    for (const store of unread) out.push(`  ${visible(store).slice(0, WIDTH - 2)}`);
+  }
   if (!totals.all.sessions && !totals.all.tokens && !totals.subagentSessions) {
+    if (unread.length) return `${out.join("\n")}\n`;
     out.push(
       "",
       `No session in the last ${days} ${where} said its project or tokens,`,

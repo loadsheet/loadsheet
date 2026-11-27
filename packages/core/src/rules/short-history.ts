@@ -16,21 +16,23 @@ export const shortHistory = defineRule({
       .filter((sheet) => sheet.sessions > 0)
       .flatMap((sheet) => {
         const machines = sheet.machines.filter((machine) => sheet.sessionsOn(machine) > 0);
-        const capped = machines.filter(
-          (machine) =>
-            retentionFixes(sheet, machine, config.window).length > 0 &&
-            sheet.history >= sheet.settingsOn(machine)!.retentionDays!,
-        );
+        const capped = machines.filter((machine) => {
+          const days = sheet.settingsOn(machine)?.retentionDays;
+          return days !== undefined && days <= config.window && sheet.historyOn(machine) >= days;
+        });
         const short = sheet.history < Math.min(options.minDays, config.window);
         if (!short && capped.length === 0) return [];
-        const fixes = machines.flatMap((machine) => retentionFixes(sheet, machine, config.window));
+        const fixes = capped.flatMap((machine) => retentionFixes(sheet, machine, config.window));
         const retention = capped.map((machine) => sheet.settingsOn(machine)!.retentionDays!);
         return [
           {
             id: `short-history:${sheet.harness}`,
             rule: "short-history",
             level: fixes.length ? ("fix" as const) : ("info" as const),
-            where: machines.map((machine) => ({ machine, harness: sheet.harness })),
+            where: (short ? machines : capped).map((machine) => ({
+              machine,
+              harness: sheet.harness,
+            })),
             evidence: {
               days: sheet.history,
               sessions: sheet.sessions,

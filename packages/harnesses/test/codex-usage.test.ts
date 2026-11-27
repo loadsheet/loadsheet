@@ -3,7 +3,8 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import { findCanary } from "@loadsheet/fixtures";
 import { memoryFiles, type Fact, type Place } from "@loadsheet/kit";
-import { readTranscript, type ReadPosition } from "@loadsheet/kit/node";
+import { readTranscript, scanMachine, type ReadPosition } from "@loadsheet/kit/node";
+import { parseScan } from "@loadsheet/schema";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { codex, codexTranscripts, readCodexConfig } from "../src/index.ts";
 
@@ -283,16 +284,59 @@ describe("codex usage", () => {
       project: "~/work/app",
     });
     expect(project({ git: { repository_url: "https://x/a/b?token=t" } })).toMatchObject({
-      project: "~/work/app",
+      project: "a/b",
     });
     expect(project({ cwd: "/home/u" })).toMatchObject({ project: "~" });
     expect(project({ cwd: "/home/u/../u/work/./site/" })).toMatchObject({
       project: "~/work/site",
     });
-    expect(project({ cwd: "/home/user2/app" })).toMatchObject({ project: "/home/user2/app" });
+    expect(project({ cwd: "/home/user2/app" })).toMatchObject({ project: "unknown" });
+    expect(project({ cwd: "\\home\\u\\work\\app" })).toMatchObject({ project: "~/work/app" });
     expect(project({ cwd: "/srv/app" })).toMatchObject({ project: "/srv/app" });
     expect(project({ cwd: "relative/app" })).toMatchObject({ project: "unknown" });
     expect(project({ cwd: undefined })).toMatchObject({ project: "unknown" });
+  });
+
+  it("keeps remote credentials and foreign home paths out of a scan and its cache", async () => {
+    const home = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "loadsheet-project-"));
+    try {
+      const sessions = NodePath.join(home, ".codex", "sessions", "2026", "11", "10");
+      const cacheDir = NodePath.join(home, "cache");
+      const forbidden = ["query-secret", "/home/foreign-user"];
+      await NodeFSP.mkdir(sessions, { recursive: true });
+      for (const [index, payload] of [
+        { git: { repository_url: "https://host/Good/Repo.git?token=query-secret#fragment" } },
+        { git: { repository_url: "git@host:invalid_owner/repo" }, cwd: `${forbidden[1]}/app` },
+      ].entries()) {
+        await NodeFSP.writeFile(
+          NodePath.join(sessions, `rollout-${index}.jsonl`),
+          `${JSON.stringify(meta(payload))}\n`,
+        );
+      }
+      const scan = parseScan(
+        await scanMachine({
+          harnesses: [codex],
+          place: { home, env: {} },
+          cacheDir,
+          days: 1,
+          tool: "loadsheet@test",
+          now: new Date(at("23:00:00")),
+        }),
+      );
+      expect(scan.usage?.sessions.map((cell) => cell.project).sort()).toEqual([
+        "good/repo",
+        "unknown",
+      ]);
+      expect(findCanary(scan, forbidden)).toEqual([]);
+      const cacheFiles = await NodeFSP.readdir(cacheDir);
+      expect(cacheFiles).not.toHaveLength(0);
+      for (const file of cacheFiles) {
+        const text = await NodeFSP.readFile(NodePath.join(cacheDir, file), "utf8");
+        for (const secret of forbidden) expect(text).not.toContain(secret);
+      }
+    } finally {
+      await NodeFSP.rm(home, { recursive: true, force: true });
+    }
   });
 
   it("keeps ids, the home folder, credentials and text out of every Fact and the State", () => {

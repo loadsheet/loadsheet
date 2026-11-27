@@ -38,6 +38,7 @@ export { sumUsage } from "./usage.ts";
 export {
   NO_REPOSITORY,
   renderUsage,
+  unreadUsageStores,
   tokens as usageTokens,
   usageTotals,
   type UsageRow,

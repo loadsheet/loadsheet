@@ -34,6 +34,7 @@ describe("repoOfRemote", () => {
     ["https://github.com/Onmax/Loadsheet.git", "onmax/loadsheet"],
     ["https://github.com/o/r", "o/r"],
     ["https://user:token@github.com/o/r.git/", "o/r"],
+    ["https://user:token@github.com/o/r.git?token=secret#other/repo", "o/r"],
     ["git@github.com:o/r.git", "o/r"],
     ["ssh://git@gitlab.example.com:2222/o/r.git", "o/r"],
     ["git://host/o/r", "o/r"],
@@ -48,6 +49,7 @@ describe("repoOfRemote", () => {
     "file:///home/me/r.git",
     "host:/home/me/r.git",
     "https://github.com/o",
+    "git@host:invalid_owner/r.git",
   ])("reads no repository from %s", (url) => {
     expect(repoOfRemote(url)).toBeUndefined();
   });

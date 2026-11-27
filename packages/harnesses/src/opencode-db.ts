@@ -21,7 +21,7 @@ const QUERY = `SELECT time_created AS at,
   time_compacting IS NOT NULL AS compacted,
   tokens_input AS input, tokens_output AS output, tokens_reasoning AS reasoning,
   tokens_cache_read AS cacheRead, tokens_cache_write AS cacheWrite
-FROM session WHERE time_created >= ?1`;
+FROM session WHERE time_created >= $since`;
 
 const rowFacts = (row: StoreRow, place: Place): StoreFact[] => {
   const day = utcDay(row.at);

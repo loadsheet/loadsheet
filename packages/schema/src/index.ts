@@ -4,6 +4,7 @@ import type { Config, Id, Kind, Ref, Report, ResolvedConfig, Scan } from "./type
 
 export type * from "./types.ts";
 export { ConfigSchema, ReportSchema, RULES, SIGNALS, ScanSchema };
+export { isProjectKey, isRepositoryKey } from "./schemas.ts";
 
 /** One reason a document did not validate, at a JSON path such as `$.sheet[0].lines[3].path`. */
 export interface SchemaIssue {

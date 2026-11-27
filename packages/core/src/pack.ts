@@ -59,6 +59,7 @@ export const packReport = ({
         days: 0,
         machines: [],
         sessionsOn: () => 0,
+        historyOn: () => 0,
         history: 0,
         signals: NO_SIGNALS,
         lines,

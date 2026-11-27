@@ -55,6 +55,25 @@ const escape = (s: string) =>
     .replace(/'/g, "&#39;");
 
 describe("the views on a server", () => {
+  it("renders usage and its navigation when there are no setup sheets", async () => {
+    const report = {
+      ...exampleReport,
+      sheet: [],
+      coverage: [{ ...exampleReport.coverage[0]!, unread: ["opencode.db"] }],
+      usage: {
+        sessions: [
+          { ...exampleReport.usage!.sessions[0]!, harness: "opencode", project: "acme/app" },
+        ],
+        tokens: [],
+      },
+    };
+    expect(await render("/report", undefined, report)).toContain('href="/report/usage"');
+    const html = await render("/report/usage", undefined, report);
+    expect(html).toContain("acme");
+    expect(html).toContain("Usage is incomplete");
+    expect(html).toContain("opencode.db");
+    expect(html).not.toContain("No sessions found");
+  });
   it("run where there is no document", () => {
     expect(typeof document).toBe("undefined");
   });

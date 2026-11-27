@@ -169,12 +169,22 @@ describe("renderUsage", () => {
       withUsage({ sessions: [sessions("acme/app", 1)], tokens: [] }, [finding]),
     );
     expect(text).toContain(
-      'Fixes\n  fix     keep the prompt cache 1 hour\n          ~/.claude/settings.json  promptCacheTtl = "1h"\n',
+      'Fixes\n  fix     consider keeping the prompt cache 1 hour\n          ~/.claude/settings.json  promptCacheTtl = "1h"\n',
     );
     expect(text).toContain("Apply fixes    ask your agent to run npx loadsheet --json --fleet");
   });
 
   it("says there is nothing to count without usage", () => {
     expect(renderUsage(withUsage(undefined))).toContain("nothing to count yet");
+  });
+
+  it("distinguishes unread stores from empty and complete histories", () => {
+    const coverage = [{ ...fleet.coverage[0]!, unread: ["opencode.db"] }];
+    for (const usage of [undefined, { sessions: [sessions("acme/app", 1)], tokens: [] }]) {
+      const text = renderUsage({ ...withUsage(usage), coverage });
+      expect(text).toContain("Usage is incomplete");
+      expect(text).toContain("opencode.db");
+      expect(text).not.toContain("nothing to count");
+    }
   });
 });

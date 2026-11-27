@@ -59,7 +59,7 @@ const sqliteStore = (overrides: Partial<SqliteStore> = {}): SqliteStore => ({
   kind: "sqlite",
   name: "sessions.db",
   path: (at) => `${at.home}/.db/sessions.db`,
-  query: "SELECT at, cwd, input, output FROM sessions WHERE at >= ?1 ORDER BY at",
+  query: "SELECT at, cwd, input, output FROM sessions WHERE at >= $since ORDER BY at",
   since: "ms",
   facts: (rows) =>
     rows.flatMap((row) => {
@@ -131,6 +131,22 @@ describe("readStore on SQLite", () => {
     }
   });
 
+  it("reports a WAL without its shared-memory index as unread without changing files", async () => {
+    const dir = `${home}/.db`;
+    await NodeFSP.mkdir(dir, { recursive: true });
+    const writer = makeDb(true);
+    try {
+      await NodeFSP.copyFile(`${dir}/sessions.db`, `${dir}/copy.db`);
+      await NodeFSP.copyFile(`${dir}/sessions.db-wal`, `${dir}/copy.db-wal`);
+      const before = await listing();
+      const copy = sqliteStore({ path: () => `${dir}/copy.db` });
+      expect(await readStore(copy, place(), SINCE)).toEqual({ unread: true });
+      expect(await listing()).toEqual(before);
+    } finally {
+      writer.close();
+    }
+  });
+
   it("binds the window's start as an ISO timestamp", async () => {
     await NodeFSP.mkdir(`${home}/.db`, { recursive: true });
     const db = new DatabaseSync(`${home}/.db/sessions.db`);
@@ -141,7 +157,7 @@ describe("readStore on SQLite", () => {
     db.close();
     const seen: unknown[] = [];
     const store = sqliteStore({
-      query: "SELECT at FROM sessions WHERE at >= ?1",
+      query: "SELECT at FROM sessions WHERE at >= $since",
       since: "iso",
       facts: (rows) => {
         seen.push(...rows.map((row) => row.at));
@@ -159,7 +175,7 @@ describe("readStore on SQLite", () => {
 
     await NodeFSP.rm(`${home}/.db/sessions.db`);
     makeDb(false).close();
-    const wrong = sqliteStore({ query: "SELECT nothing FROM elsewhere WHERE ?1" });
+    const wrong = sqliteStore({ query: "SELECT nothing FROM elsewhere WHERE $since" });
     expect(await readStore(wrong, place(), SINCE)).toEqual({ unread: true });
     expect(await listing()).toEqual(["sessions.db"]);
   });

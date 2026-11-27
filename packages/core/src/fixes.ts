@@ -421,10 +421,10 @@ const variableOf = (knob: string | undefined) =>
 
 /** A Fix that sets one key in Claude Code's user settings on a machine. */
 const settingFix = (
-  sheet: RuleSheet,
+  path: string,
   machine: string,
   set: { key: string; value: string | number },
-): Fix => ({ machine, action: "set", path: userSettingsPath(sheet, machine), set });
+): Fix => ({ machine, action: "set", path, set });
 
 /**
  * The settings change that keeps Claude Code's main prompt cache 1 hour on a machine. A variable
@@ -432,20 +432,24 @@ const settingFix = (
  * outranks one a shell profile sets: FORCE_PROMPT_CACHING_5M is turned off there, and
  * CLAUDE_CODE_PROMPT_CACHE_TTL set to 1h. Otherwise `promptCacheTtl` is set.
  */
-export const promptCacheFixes = (sheet: RuleSheet, machine: string, settings: Settings): Fix[] => {
+export const promptCacheFixes = (machine: string, settings: Settings): Fix[] => {
+  const path = settings.settingsPath;
+  if (!path) return [];
   const name = variableOf(settings.cacheTtlFrom);
-  const lifetime = settingFix(sheet, machine, { key: "promptCacheTtl", value: "1h" });
+  const lifetime = settingFix(path, machine, { key: "promptCacheTtl", value: "1h" });
   if (name === "FORCE_PROMPT_CACHING_5M")
-    return [settingFix(sheet, machine, { key: `env.${name}`, value: "0" }), lifetime];
+    return [settingFix(path, machine, { key: `env.${name}`, value: "0" }), lifetime];
   if (name === "CLAUDE_CODE_PROMPT_CACHE_TTL")
-    return [settingFix(sheet, machine, { key: `env.${name}`, value: "1h" })];
+    return [settingFix(path, machine, { key: `env.${name}`, value: "1h" })];
   return [lifetime];
 };
 
 /** The settings change that turns Claude Code's prompt caching back on, when a variable turned it off. */
-export const cachingOnFixes = (sheet: RuleSheet, machine: string, settings: Settings): Fix[] => {
+export const cachingOnFixes = (machine: string, settings: Settings): Fix[] => {
   const name = settings.caching === "off" ? variableOf(settings.cachingFrom) : undefined;
-  return name === undefined ? [] : [settingFix(sheet, machine, { key: `env.${name}`, value: "0" })];
+  return name && settings.settingsPath
+    ? [settingFix(settings.settingsPath, machine, { key: `env.${name}`, value: "0" })]
+    : [];
 };
 
 /** Days of transcripts a retention fix keeps. */
@@ -457,7 +461,11 @@ export const RETENTION_DAYS = 365;
  */
 export const retentionFixes = (sheet: RuleSheet, machine: string, window: number): Fix[] => {
   if (sheet.harness !== "claude-code") return [];
-  const days = sheet.settingsOn(machine)?.retentionDays;
-  if (days === undefined || days > window || days >= RETENTION_DAYS) return [];
-  return [settingFix(sheet, machine, { key: "cleanupPeriodDays", value: RETENTION_DAYS })];
+  const settings = sheet.settingsOn(machine);
+  const days = settings?.retentionDays;
+  if (!settings?.settingsPath || days === undefined || days > window || days >= RETENTION_DAYS)
+    return [];
+  return [
+    settingFix(settings.settingsPath, machine, { key: "cleanupPeriodDays", value: RETENTION_DAYS }),
+  ];
 };

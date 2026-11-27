@@ -2,7 +2,7 @@
 // the Files kit reads: nothing here touches the filesystem.
 import type { Files, Place, ProjectHint } from "@loadsheet/kit";
 import { sha256 } from "@loadsheet/kit";
-import type { Item, Kind, Settings } from "@loadsheet/schema";
+import { isRepositoryKey, type Item, type Kind, type Settings } from "@loadsheet/schema";
 import {
   claudeCodeAgentChars,
   claudeCodeBareChars,
@@ -12,7 +12,7 @@ import {
 } from "./claude-code-listing.ts";
 import { readManagers, skillsLockPath, type Manager } from "./managed.ts";
 import { packInventory } from "./pack.ts";
-import { isAbsolute, normalPath } from "./path.ts";
+import { filesKey, isAbsolute, normalPath } from "./path.ts";
 import { readSkillMd, SKILL_NAME } from "./skill-md.ts";
 
 const HARNESS = "claude-code";
@@ -339,28 +339,6 @@ export const claudeInventory = async (files: Files): Promise<Item[]> => {
   return items;
 };
 
-/** `path` keyed as kit keys a source in Files: `~/...` under the home directory, absolute elsewhere. */
-export const filesKey = (path: string, home: string): string => {
-  const root = normalPath(home.replaceAll("\\", "/"));
-  const at = normalPath(path.replaceAll("\\", "/"));
-  if (at === root) return "~";
-  return at.startsWith(`${root}/`) ? `~/${at.slice(root.length + 1)}` : at;
-};
-
-/** A home directory written out in full, as the schema rejects one in a project. */
-const FULL_HOME = /^(?:\/(?:home|Users|var\/home)\/|\/root(?:\/|$)|[A-Za-z]:\/)/u;
-
-/**
- * A session's working directory as a project key: `~/...` under `place`'s home, absolute
- * elsewhere, and `unknown` when it is not absolute, holds a control character, or would name a
- * home directory in full (another user's, or any without a Place to tell).
- */
-export const folderKey = (cwd: string, place?: Place): string => {
-  if (!isAbsolute(cwd) || /\p{C}/u.test(cwd)) return "unknown";
-  const key = place ? filesKey(cwd, place.home) : normalPath(cwd.replaceAll("\\", "/"));
-  return FULL_HOME.test(key) ? "unknown" : key;
-};
-
 /** Days Claude Code keeps a transcript when `cleanupPeriodDays` is unset. */
 export const CLAUDE_CODE_RETENTION_DAYS = 30;
 
@@ -403,6 +381,8 @@ export const claudeSettings = async (files: Files, place: Place): Promise<Settin
   };
   const names = new Set([...Object.keys(block), ...Object.keys(place.env)]);
   const out: Settings = {};
+  if (settingsPath.startsWith("~/") && !/\p{C}/u.test(settingsPath))
+    out.settingsPath = settingsPath;
 
   const lifetime = (envName: string, settingName: string) => {
     const force = variable("FORCE_PROMPT_CACHING_5M");
@@ -450,9 +430,6 @@ export const claudeSettings = async (files: Files, place: Place): Promise<Settin
   return out;
 };
 
-/** `owner/repo` as GitHub spells it. */
-const REPO = /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+$/u;
-
 /**
  * The repositories `~/.claude.json` remembers folders for, in `githubRepoPaths`: each folder,
  * keyed as the Files keys paths, belongs to its `owner/repo`, folders since deleted included.
@@ -462,7 +439,7 @@ export const claudeProjects = async (files: Files, place: Place): Promise<Projec
   if (!isRecord(githubRepoPaths)) return [];
   const hints: ProjectHint[] = [];
   for (const [project, paths] of Object.entries(githubRepoPaths)) {
-    if (!REPO.test(project)) continue;
+    if (!isRepositoryKey(project)) continue;
     for (const path of strings(paths)) {
       if (isAbsolute(path)) hints.push({ prefix: filesKey(path, place.home), project });
     }

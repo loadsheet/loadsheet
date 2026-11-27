@@ -35,6 +35,8 @@ export interface RuleSheet {
   machines: string[];
   /** Its sessions on a machine, after every filter. */
   sessionsOn: (machine: string) => number;
+  /** Days from this machine's first kept session to the window's last day. */
+  historyOn: (machine: string) => number;
   /** How well each signal is provided: the worst grade among the machines read. */
   signals: Record<Signal, Grade>;
   /** The sheet's lines, without ignored items. */

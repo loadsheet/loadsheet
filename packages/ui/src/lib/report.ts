@@ -214,7 +214,7 @@ export function evidence(f: Finding, r: Report): string {
         return `Claude Code deletes transcripts after ${n("retentionDays")} days, so history stops at ${n("days")} days.`;
       return `Only ${n("days")} days and ${n("sessions")} sessions so far, so checks that need a month wait.`;
     case "cache-ttl":
-      return `${Math.round(((e.cacheWrite5m ?? 0) / (e.cacheWrite || 1)) * 100)}% of cache writes lasted 5 minutes${f.via ? ` in ${f.via} sessions` : ""}, so ${n("cacheRewrite")} tokens were written again after a pause.`;
+      return `${Math.round(((e.cacheWrite5m ?? 0) / (e.cacheWrite || 1)) * 100)}% of cache writes lasted 5 minutes${f.via ? ` in ${f.via} sessions` : ""}. An estimated ${n("cacheRewrite")} tokens had a chance of reuse with a longer cache.`;
     case "cache-off":
       return `${n("sessions")} sessions sent ${n("tokens")} tokens, and no request read the prompt cache.`;
     default:

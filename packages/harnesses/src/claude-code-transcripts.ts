@@ -3,7 +3,8 @@
 // tool calls and usage, `user` lines slash commands, `system` lines compactions.
 import type { Fact, LineBytes, TranscriptFormat } from "@loadsheet/kit";
 import type { Day, Id, Thread } from "@loadsheet/schema";
-import { folderKey, MCP_NAME, mcpToolName, NAME } from "./claude-code-machine.ts";
+import { MCP_NAME, mcpToolName, NAME } from "./claude-code-machine.ts";
+import { projectOfCwd } from "./path.ts";
 import { SKILL_NAME } from "./skill-md.ts";
 
 /**
@@ -40,6 +41,7 @@ export interface ClaudeState {
   last?: string;
   /** The UTC minute, since the epoch, of the last request counted. */
   minute?: number;
+  requestModel?: string;
   /** The conversation compacted at least once. */
   compacted?: boolean;
 }
@@ -473,31 +475,36 @@ const usageTokens = (
 ): Fact => {
   const cacheWrite = count(usage.cache_creation_input_tokens);
   const split = isRecord(usage.cache_creation) ? usage.cache_creation : {};
+  const cacheWrite5m = count(split.ephemeral_5m_input_tokens);
+  const modelName = typeof model === "string" && NAME.test(model) ? model : undefined;
   const details = isRecord(usage.output_tokens_details) ? usage.output_tokens_details : {};
   let day = state.day!;
   let cacheRewrite = 0;
   if (!Number.isNaN(time)) {
     day = new Date(time).toISOString().slice(0, 10);
     const minute = Math.floor(time / MINUTE_MS);
-    if (state.minute !== undefined) {
+    if (state.minute !== undefined && modelName !== undefined && modelName === state.requestModel) {
       const gap = minute - state.minute;
-      if (gap >= REWRITE_MINUTES[0] && gap < REWRITE_MINUTES[1]) cacheRewrite = cacheWrite;
+      if (gap >= REWRITE_MINUTES[0] && gap < REWRITE_MINUTES[1]) cacheRewrite = cacheWrite5m;
     }
     state.minute = minute;
+  } else {
+    delete state.minute;
   }
+  state.requestModel = modelName;
   return {
     type: "usage-tokens",
     day,
     via: state.via ?? "unknown",
     project: state.folder ?? "unknown",
     thread,
-    model: typeof model === "string" && NAME.test(model) ? model : "unknown",
+    model: modelName ?? "unknown",
     input: count(usage.input_tokens),
     output: count(usage.output_tokens),
     reasoning: count(details.thinking_tokens),
     cacheRead: count(usage.cache_read_input_tokens),
     cacheWrite,
-    cacheWrite5m: count(split.ephemeral_5m_input_tokens),
+    cacheWrite5m,
     cacheWrite1h: count(split.ephemeral_1h_input_tokens),
     cacheRewrite,
   };
@@ -535,7 +542,7 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
           : "unknown";
       if (typeof record.version === "string" && NAME.test(record.version))
         state.version = record.version;
-      state.folder = typeof record.cwd === "string" ? folderKey(record.cwd, place) : "unknown";
+      state.folder = projectOfCwd(record.cwd, place);
       // Each file is one conversation: a session's main one, or one subagent's in a file of its own.
       facts.push({
         type: "usage-session",

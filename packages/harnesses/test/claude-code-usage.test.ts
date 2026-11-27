@@ -276,7 +276,10 @@ describe("Claude Code usage", () => {
         request("s", "2026-03-02T10:30:00Z", usage, {}, "<synthetic>"),
         // The synthetic message moved neither the last id nor the last request's minute.
         request("a", "2026-03-02T10:31:00Z", { input_tokens: 2 }),
-        request("b", "2026-03-02T10:32:00Z", { cache_creation_input_tokens: 5 }),
+        request("b", "2026-03-02T10:32:00Z", {
+          cache_creation_input_tokens: 5,
+          cache_creation: { ephemeral_5m_input_tokens: 5 },
+        }),
       ],
       jo,
     );
@@ -335,7 +338,10 @@ describe("Claude Code usage", () => {
   });
 
   it("counts as rewritten the cache writes of a request 5 to 60 minutes after the one before", () => {
-    const write = (tokens: number) => ({ cache_creation_input_tokens: tokens });
+    const write = (tokens: number) => ({
+      cache_creation_input_tokens: tokens,
+      cache_creation: { ephemeral_5m_input_tokens: tokens },
+    });
     const { facts } = parseLines(
       [
         request("a", "2026-03-02T10:00:59Z", write(1)),
@@ -348,6 +354,14 @@ describe("Claude Code usage", () => {
         // A subagent's line in the same file follows the file's last request.
         request("f", "2026-03-02T12:20:00Z", write(32), { isSidechain: true }),
         request("f", "2026-03-02T12:40:00Z", write(32), { isSidechain: true }),
+        request("g", "2026-03-02T12:35:00Z", write(64), {}, "different-model"),
+        request(
+          "h",
+          "2026-03-02T12:50:00Z",
+          { cache_creation_input_tokens: 128, cache_creation: { ephemeral_1h_input_tokens: 128 } },
+          {},
+          "different-model",
+        ),
       ],
       jo,
     );
@@ -359,9 +373,11 @@ describe("Claude Code usage", () => {
         [8, 8],
         [16, 0],
         [32, 32],
+        [64, 0],
+        [128, 0],
       ],
     );
-    expect(tokens(facts).at(-1)?.thread).toBe("subagent");
+    expect(tokens(facts).find((cell) => cell.cacheWrite === 32)?.thread).toBe("subagent");
   });
 
   it("counts automatic and manual compactions, the first one marked", () => {
@@ -452,8 +468,9 @@ describe("Claude Code settings", () => {
   it("reads only the default retention when there is no settings.json and no variable", async () => {
     expect(await read(undefined, { HOME: "/home/jo", PATH: "/usr/bin" })).toEqual({
       retentionDays: 30,
+      settingsPath: "~/.claude/settings.json",
     });
-    expect(await read({})).toEqual({ retentionDays: 30 });
+    expect(await read({})).toEqual({ retentionDays: 30, settingsPath: "~/.claude/settings.json" });
   });
 
   // Claude Code's documented precedence for the prompt cache's lifetime, highest first.
@@ -554,7 +571,10 @@ describe("Claude Code settings", () => {
 
   it("reads retention and compaction", async () => {
     expect(CLAUDE_CODE_RETENTION_DAYS).toBe(30);
-    expect(await read({ cleanupPeriodDays: 365 })).toEqual({ retentionDays: 365 });
+    expect(await read({ cleanupPeriodDays: 365 })).toEqual({
+      retentionDays: 365,
+      settingsPath: "~/.claude/settings.json",
+    });
     expect((await read({ cleanupPeriodDays: "x" }))?.retentionDays).toBe(30);
     expect((await read({ autoCompactEnabled: false }))?.autoCompact).toBe(false);
     expect((await read({ autoCompactEnabled: true }))?.autoCompact).toBe(true);
@@ -579,6 +599,12 @@ describe("Claude Code settings", () => {
       cacheTtlFrom: "settings.promptCacheTtl",
       retentionDays: 30,
     });
+    expect(
+      await machine.settings!(settingsFiles({ promptCacheTtl: "5m" }, "~/custom"), {
+        home: "/home/jo",
+        env: { CLAUDE_CONFIG_DIR: "/home/jo/custom" },
+      }),
+    ).toMatchObject({ settingsPath: "~/custom/settings.json", cacheTtl: "5m" });
   });
 
   it("copies no value of a setting or variable it does not read", async () => {
@@ -591,6 +617,7 @@ describe("Claude Code settings", () => {
       { ANTHROPIC_API_KEY: "sekrit", HOME: "/home/jo" },
     );
     expect(result).toEqual({
+      settingsPath: "~/.claude/settings.json",
       cacheTtl: "1h",
       cacheTtlFrom: "settings.promptCacheTtl",
       retentionDays: 30,

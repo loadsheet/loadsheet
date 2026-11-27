@@ -1,7 +1,7 @@
 // What the session stores share: reading a row's counters and days, and naming a project.
-import type { Place, UsageTokensFact } from "@loadsheet/kit";
+import type { UsageTokensFact } from "@loadsheet/kit";
 import type { Day } from "@loadsheet/schema";
-import { keyOf } from "./inventory.ts";
+export { projectOfCwd } from "./path.ts";
 
 /** A column as a count: a whole number of 0 or more, else 0. */
 export const count = (value: unknown): number => {
@@ -26,10 +26,6 @@ export const utcDay = (value: unknown): Day | undefined => {
   const date = new Date(ms);
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString().slice(0, 10);
 };
-
-/** A working directory as a usage Fact's project: keyed as the Files keys paths, or `unknown`. */
-export const projectOfCwd = (cwd: unknown, place: Place): string =>
-  typeof cwd === "string" && cwd.startsWith("/") ? keyOf(cwd, place) : "unknown";
 
 /** A model's name for a Fact: the harness's spelling, or `unknown`. */
 export const modelName = (value: unknown): string =>

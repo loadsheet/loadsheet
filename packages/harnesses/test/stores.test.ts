@@ -397,7 +397,7 @@ describe("T3 Code's database", () => {
     try {
       const plan = db
         .prepare(`EXPLAIN QUERY PLAN ${t3Code.query}`)
-        .all("2026-11-18T00:00:00.000Z")
+        .all({ $since: "2026-11-18T00:00:00.000Z" })
         .map((row) => String(row.detail));
       expect(plan.some((detail) => /provider_turns_thread_idx/u.test(detail))).toBe(true);
       expect(plan.some((detail) => /turn_items_thread_type_idx/u.test(detail))).toBe(true);

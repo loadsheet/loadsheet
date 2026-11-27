@@ -83,7 +83,7 @@ const coverage = (settings?: Settings, extra: Partial<Coverage> = {}): Coverage 
   firstDay: FIRST,
   lastDay: LAST,
   signals: EXACT,
-  ...(settings ? { settings } : {}),
+  ...(settings ? { settings: { settingsPath: "~/.claude/settings.json", ...settings } } : {}),
   ...extra,
 });
 
@@ -234,7 +234,7 @@ describe("cache-ttl", () => {
       },
     ]);
     expect(renderText(built)).toContain(
-      "claude-code via cli  75% of cache writes kept 5 min over 3 days; 900,000 rewritten",
+      "75% of cache writes kept 5 min over 3 days; 900,000 tokens with potential reuse",
     );
     const detail = renderSummary(built, { harness: "claude-code" });
     expect(detail).toContain("keep the prompt cache 1 hour");
@@ -303,7 +303,7 @@ describe("cache-ttl", () => {
     const built = report(
       [
         scan(fiveMinutes, { cacheTtl: "1h", cacheTtlFrom: "settings.promptCacheTtl" }, {}, "desk"),
-        scan(fiveMinutes, undefined, {}, "laptop"),
+        scan(fiveMinutes, { settingsPath: "~/custom/settings.json" }, {}, "laptop"),
       ],
       "cache-ttl",
     );
@@ -314,9 +314,29 @@ describe("cache-ttl", () => {
           { machine: "laptop", harness: "claude-code" },
         ],
         evidence: { cacheWrite5m: 18 * M },
-        fixes: [{ machine: "laptop", set: { key: "promptCacheTtl", value: "1h" } }],
+        fixes: [
+          {
+            machine: "laptop",
+            path: "~/custom/settings.json",
+            set: { key: "promptCacheTtl", value: "1h" },
+          },
+        ],
       },
     ]);
+  });
+
+  it("reports five-minute writes without suggesting a longer TTL when no reuse was observed", () => {
+    const built = report(
+      [
+        scan(
+          fiveMinutes.map((cell) => ({ ...cell, cacheRewrite: 0 })),
+          {},
+        ),
+      ],
+      "cache-ttl",
+    );
+    expect(built.findings).toMatchObject([{ level: "info", fixes: [] }]);
+    expect(renderText(built)).toContain("no reuse opportunity was observed");
   });
 
   it("skips a harness that cannot tell the lifetime", () => {
@@ -397,6 +417,16 @@ describe("cache-off", () => {
   });
 });
 
+it("keeps unread T3 coverage when filtering for a provider T3 supplies", () => {
+  const one = scan([], undefined, {
+    coverage: [coverage(undefined, { harness: "t3-code", unread: ["statev2.sqlite"] })],
+  });
+  expect(report([one], "short-history", { harnesses: ["antigravity"] }).coverage).toMatchObject([
+    { harness: "t3-code", unread: ["statev2.sqlite"] },
+  ]);
+  expect(report([one], "short-history", { harnesses: ["codex"] }).coverage).toEqual([]);
+});
+
 describe("short-history fix", () => {
   const young = (settings?: Settings) =>
     scan([], settings, {
@@ -412,26 +442,31 @@ describe("short-history fix", () => {
       ],
     });
 
-  it("keeps Claude Code's transcripts a year when its retention is no longer than the window", () => {
+  it("does not change retention when local history has not reached it", () => {
     const built = report([young({ retentionDays: 30 })], "short-history");
     expect(built.findings).toEqual([
       {
         id: "short-history:claude-code",
         rule: "short-history",
-        level: "fix",
+        level: "info",
         where: [{ machine: "laptop", harness: "claude-code" }],
         evidence: { days: 6, sessions: 30, minDays: 30 },
-        fixes: [
-          {
-            machine: "laptop",
-            action: "set",
-            path: "~/.claude/settings.json",
-            set: { key: "cleanupPeriodDays", value: 365 },
-          },
-        ],
+        fixes: [],
       },
     ]);
-    expect(renderSummary(built, { harness: "claude-code" })).toContain("keep transcripts a year");
+    expect(renderSummary(built, { harness: "claude-code" })).not.toContain(
+      "keep transcripts a year",
+    );
+  });
+
+  it("does not borrow another machine's history as evidence", () => {
+    const built = report(
+      [young({ retentionDays: 30 }), scan([], { retentionDays: 30 }, {}, "desk")],
+      "short-history",
+    );
+    expect(built.findings).toMatchObject([
+      { where: [{ machine: "desk" }], fixes: [{ machine: "desk" }] },
+    ]);
   });
 
   it("fires when Claude Code's retention caps a full window", () => {

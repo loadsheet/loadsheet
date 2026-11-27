@@ -31,15 +31,19 @@ export const cacheTtl = defineRule({
         for (const cache of promptCacheDays(sheet.usageOn(machine))) {
           if (cache.recent !== "5m") continue;
           const recent = cache.days.slice(-CACHE_DAYS);
+          const cacheRewrite = recent.reduce((total, day) => total + day.cacheRewrite, 0);
           const hit: Hit = {
             where: { machine, harness: sheet.harness },
-            fixes: settings.cacheTtl === "1h" ? [] : promptCacheFixes(sheet, machine, settings),
+            fixes:
+              cacheRewrite > 0 && settings.cacheTtl !== "1h"
+                ? promptCacheFixes(machine, settings)
+                : [],
             cacheWrite5m: recent.reduce((total, day) => total + day.cacheWrite5m, 0),
             cacheWrite: recent.reduce(
               (total, day) => total + day.cacheWrite5m + day.cacheWrite1h,
               0,
             ),
-            cacheRewrite: recent.reduce((total, day) => total + day.cacheRewrite, 0),
+            cacheRewrite,
             days: recent.length,
           };
           byVia.set(cache.via, [...(byVia.get(cache.via) ?? []), hit]);
@@ -52,7 +56,7 @@ export const cacheTtl = defineRule({
       return {
         id: `cache-ttl:claude-code:${via}`,
         rule: "cache-ttl",
-        level: "fix",
+        level: hits.some((hit) => hit.fixes.length) ? "fix" : "info",
         via,
         where: hits.map((hit) => hit.where),
         evidence: {

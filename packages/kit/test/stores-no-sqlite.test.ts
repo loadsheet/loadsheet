@@ -26,7 +26,7 @@ it("lists a database as unread when node:sqlite cannot be loaded", async () => {
     kind: "sqlite",
     name: "sessions.db",
     path: () => `${tmp}/sessions.db`,
-    query: "SELECT 1 WHERE ?1",
+    query: "SELECT 1 WHERE $since",
     since: "ms",
     facts: () => [],
   };

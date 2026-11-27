@@ -13,7 +13,7 @@ import { Accumulator } from "../sum.ts";
 import type { ReadPosition } from "./reader.ts";
 
 /** The layout of a cache file; a change here starts every cache cold. */
-const CACHE_LAYOUT = 4;
+const CACHE_LAYOUT = 5;
 
 /** What the cache keeps for one transcript file. */
 export interface CachedFile {
@@ -54,7 +54,7 @@ export const defaultCacheDir = (place: {
 
 const sha256 = (text: string | Uint8Array) => createHash("sha256").update(text).digest("hex");
 
-// A cache file is `{"layout":4,"sum":"<sha256 of the document's text>","doc":<document>}`, so one
+// A cache file is `{"layout":5,"sum":"<sha256 of the document's text>","doc":<document>}`, so one
 // cut short or changed by anything else opens empty, and checking it hashes the bytes as read.
 const HEAD = `{"layout":${CACHE_LAYOUT},"sum":"`;
 const DOC = '","doc":';

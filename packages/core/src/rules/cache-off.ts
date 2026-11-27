@@ -36,7 +36,7 @@ export const cacheOff = defineRule({
         }
         if (main < CACHE_OFF_SESSIONS || sent < CACHE_OFF_TOKENS || read > 0) continue;
         where.push({ machine, harness: sheet.harness });
-        fixes.push(...cachingOnFixes(sheet, machine, sheet.settingsOn(machine) ?? {}));
+        fixes.push(...cachingOnFixes(machine, sheet.settingsOn(machine) ?? {}));
         sessions += main;
         tokens += sent;
       }

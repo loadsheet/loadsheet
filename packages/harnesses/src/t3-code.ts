@@ -53,7 +53,7 @@ CROSS JOIN orchestration_v2_projection_provider_turns pt ON pt.thread_id = t.thr
 JOIN orchestration_v2_projection_provider_threads pth ON pth.provider_thread_id = pt.provider_thread_id
 LEFT JOIN projection_projects p ON p.project_id = t.project_id
 WHERE t.default_provider NOT IN (${NATIVE_LIST}) AND pth.provider NOT IN (${NATIVE_LIST})
-  AND coalesce(pt.completed_at, pt.started_at) >= ?1
+  AND coalesce(pt.completed_at, pt.started_at) >= $since
 UNION ALL
 SELECT 'thread', t.default_provider, t.created_at, ${THREAD},
   NULL, NULL, NULL, NULL, NULL,
@@ -61,7 +61,7 @@ SELECT 'thread', t.default_provider, t.created_at, ${THREAD},
     WHERE ti.thread_id = t.thread_id AND ti.type = 'compaction')
 FROM orchestration_v2_projection_threads t
 LEFT JOIN projection_projects p ON p.project_id = t.project_id
-WHERE t.default_provider NOT IN (${NATIVE_LIST}) AND t.created_at >= ?1`;
+WHERE t.default_provider NOT IN (${NATIVE_LIST}) AND t.created_at >= $since`;
 
 /** A provider as a harness id: loadsheet's name for it, else its own, lowercased and hyphenated. */
 const harnessOf = (provider: unknown): string | undefined => {

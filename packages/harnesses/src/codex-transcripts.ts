@@ -5,7 +5,7 @@ import {
   type Place,
   type TranscriptFormat,
 } from "@loadsheet/kit";
-import { isAbsolute, normalPath } from "./path.ts";
+import { projectOfCwd } from "./path.ts";
 
 /** The user instruction file's item name: Codex loads `AGENTS.md` (or `AGENTS.override.md`) from its home. */
 export const CODEX_INSTRUCTIONS = "~/.codex/AGENTS.md";
@@ -68,7 +68,6 @@ const CLIENT = /^(?=.{1,64}$)[A-Za-z0-9_.-]+(?: [A-Za-z0-9_.-]+)*$/u;
 const VERSION = /^[A-Za-z0-9_.+-]{1,32}$/u;
 /** A model name such as `gpt-6.1-sol`; anything else counts as `unknown`. */
 const MODEL = /^[A-Za-z0-9_.:@+/-]{1,64}$/u;
-const REPO = /^[a-z0-9_.-]+\/[a-z0-9_.-]+$/u;
 const PROJECT_DOC = "\n\n--- project-doc ---\n\n";
 const INSTRUCTIONS_OPEN = "<INSTRUCTIONS>\n";
 const INSTRUCTIONS_CLOSE = "\n</INSTRUCTIONS>";
@@ -421,14 +420,7 @@ const skip = (line: LineBytes, state: CodexState): boolean => {
 const projectOf = (payload: Record<string, unknown>, place: Place | undefined): string => {
   const url = record(payload.git)?.repository_url;
   const repo = typeof url === "string" ? repoOfRemote(url) : undefined;
-  if (repo !== undefined && REPO.test(repo)) return repo;
-  const cwd = payload.cwd;
-  if (typeof cwd !== "string" || !isAbsolute(cwd)) return "unknown";
-  const path = normalPath(cwd);
-  if (place === undefined) return path;
-  const home = normalPath(place.home);
-  if (path === home) return "~";
-  return path.startsWith(`${home}/`) ? `~/${path.slice(home.length + 1)}` : path;
+  return repo ?? projectOfCwd(payload.cwd, place);
 };
 
 /** A count Codex wrote: a whole number of 0 or more. */

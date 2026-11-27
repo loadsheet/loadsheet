@@ -39,8 +39,8 @@ const isFile = (path: string) =>
 /**
  * A database is opened so that no file appears beside it. One in WAL mode whose `-wal` and `-shm`
  * are there holds rows its main file does not yet: it is opened read-only and reads them through
- * those files. Without both, it is opened `immutable`, which takes no lock and creates none, and
- * reads the main file, which then holds every committed row.
+ * those files. With no WAL, an immutable read avoids creating sidecars. With a WAL but no
+ * shared-memory index, neither approach is safe: one omits data and the other can create files.
  */
 const readSqlite = async (
   store: SqliteStore,
@@ -51,14 +51,16 @@ const readSqlite = async (
   if (!(await isFile(path))) return undefined;
   const module = await loadSqlite();
   if (!module) return { unread: true };
-  const live = (await isFile(`${path}-wal`)) && (await isFile(`${path}-shm`));
+  const live = await isFile(`${path}-wal`);
+  if (live && !(await isFile(`${path}-shm`))) return { unread: true };
   const uri = `${pathToFileURL(path).href}?${live ? "mode=ro" : "immutable=1"}`;
   const since = store.since === "ms" ? sinceMs : new Date(sinceMs).toISOString();
   let rows: StoreRow[];
   let db: InstanceType<Sqlite["DatabaseSync"]> | undefined;
   try {
-    db = new module.DatabaseSync(uri, { readOnly: true, timeout: BUSY_MS });
-    rows = db.prepare(store.query).all(since) as StoreRow[];
+    db = new module.DatabaseSync(uri, { readOnly: true });
+    db.exec(`PRAGMA busy_timeout = ${BUSY_MS}`);
+    rows = db.prepare(store.query).all({ $since: since }) as StoreRow[];
   } catch {
     // Locked, corrupt, not a database, or a schema the query does not fit.
     return { unread: true };
@@ -67,6 +69,7 @@ const readSqlite = async (
       db?.close();
     } catch {}
   }
+  if (!live && (await isFile(`${path}-wal`))) return { unread: true };
   return { facts: store.facts(rows, place) };
 };
 
