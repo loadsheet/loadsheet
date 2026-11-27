@@ -126,7 +126,7 @@ const plain: Style = (_format, text) => text;
 const num = (n: number) => n.toLocaleString("en-US");
 const plural = (n: number, one: string, many = `${one}s`) => `${num(n)} ${n === 1 ? one : many}`;
 /** Tokens as the default view writes them, `12.3k`, and in millions and billions past those. */
-const tokens = (n: number) =>
+export const tokens = (n: number) =>
   n < 100
     ? String(Math.round(n))
     : n < 999_950

@@ -12,6 +12,7 @@ import {
   Pack,
   Report,
   ReportShell,
+  Usage,
   bundledPacks,
   createLoadsheet,
   exampleReport,
@@ -30,6 +31,7 @@ async function render(url: string, pack?: Record<string, unknown>, report?: Repo
         children: [
           { path: "", name: "report", component: Report },
           { path: "fixes", name: "fixes", component: Fixes },
+          { path: "usage", name: "usage", component: Usage },
         ],
       },
       { path: "/pack/:slug+", name: "pack", component: Pack, props: () => pack ?? {} },

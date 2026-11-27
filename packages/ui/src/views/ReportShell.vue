@@ -19,8 +19,11 @@ import { useLoadsheet } from "../lib/state";
 import { copied, copy } from "../lib/ui";
 
 const h = useHarness();
-const shown = computed(() => h.all.value.filter((x) => x.hasReport || x.id === h.current.value));
 const route = useRoute();
+// The usage page counts every harness at once, so the switch would change nothing there.
+const shown = computed(() =>
+  route.name === "usage" ? [] : h.all.value.filter((x) => x.hasReport || x.id === h.current.value),
+);
 const pickReport = usePickReport();
 const { report, linkError, shareBase, shareForm } = useLoadsheet();
 async function share() {
