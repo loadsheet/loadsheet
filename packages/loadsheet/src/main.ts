@@ -241,20 +241,13 @@ const style: Style | undefined = colour
   ? (format, text) => styleText(format, text, { validateStream: false })
   : undefined;
 
-/** Where it ran, with the home directory as ~, which the summary names after the version. */
-const cwd = () => {
-  const home = homedir();
-  const here = process.cwd();
-  return here === home || here.startsWith(`${home}/`) ? `~${here.slice(home.length)}` : here;
-};
-
 const print = (report: Parameters<typeof renderText>[0]) =>
   process.stdout.write(
     values.json
       ? `${JSON.stringify(report, null, 2)}\n`
       : report.mode === "pack" || values.full
         ? renderText(report)
-        : renderSummary(report, { style, harness: breakdown, all: values.all, cwd: cwd() }),
+        : renderSummary(report, { style, harness: breakdown, all: values.all }),
   );
 
 /**

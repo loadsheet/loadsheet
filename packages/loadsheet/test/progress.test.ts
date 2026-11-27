@@ -4,9 +4,9 @@ import { scanProgress } from "../src/progress.ts";
 const MB = 1024 * 1024;
 
 /** A stderr that keeps what is written, and a clock the test moves. */
-const setup = (tty: boolean) => {
+const setup = (tty: boolean, columns = 120) => {
   const written: string[] = [];
-  const stderr = { isTTY: tty, columns: 120, write: (text: string) => written.push(text) > 0 };
+  const stderr = { isTTY: tty, columns, write: (text: string) => written.push(text) > 0 };
   let now = 0;
   const progress = scanProgress(stderr, () => now);
   return { written, progress, at: (ms: number) => (now = ms) };
@@ -28,11 +28,11 @@ describe("scan progress", () => {
     at(2500);
     progress.update({ done: 1, total: 10, doneBytes: 75 * MB, totalBytes: 100 * MB });
     expect(written.at(-1)).toBe(
-      `\r\u001b[2KReading this machine's sessions  ${"█".repeat(23)}${"░".repeat(7)}  1/10 files  75%  ~1s left`,
+      `\r\u001b[2KReading your agents' past chats, on this machine only  ${"█".repeat(23)}${"░".repeat(7)}  75%  ~1s left`,
     );
     at(5000);
     progress.update({ done: 5, total: 10, doneBytes: 80 * MB, totalBytes: 100 * MB });
-    expect(written.at(-1)).toContain("5/10 files  80%  ~1s left");
+    expect(written.at(-1)).toContain("  80%  ~1s left");
     progress.stop();
     expect(written.at(-1)).toBe("\r\u001b[2K");
   });
@@ -43,7 +43,20 @@ describe("scan progress", () => {
     at(4000);
     progress.update({ done: 95, total: 100, doneBytes: 92 * MB, totalBytes: 100 * MB });
     // 2 MB in 4 s, 8 MB to go.
-    expect(written.at(-1)).toContain("95/100 files  92%  ~16s left");
+    expect(written.at(-1)).toContain("  92%  ~16s left");
+  });
+
+  it.each([64, 40, 12])("stays on one row at %i columns", (columns) => {
+    const { written, progress, at } = setup(true, columns);
+    vi.advanceTimersByTime(2000);
+    progress.update({ done: 0, total: 10, doneBytes: 0, totalBytes: 100 * MB });
+    at(2500);
+    progress.update({ done: 1, total: 10, doneBytes: 75 * MB, totalBytes: 100 * MB });
+    expect(written.at(-1)).toContain("75%");
+    if (columns === 64) expect(written.at(-1)).toContain("~1s left");
+    progress.stop();
+    expect(written.at(-1)).toBe("\r\u001b[2K");
+    for (const row of written) expect(row.slice("\r\u001b[2K".length).length).toBeLessThan(columns);
   });
 
   it("prints a line every 5 s off a terminal, with files and the share of bytes", () => {
@@ -56,12 +69,12 @@ describe("scan progress", () => {
     progress.update({ done: 20, total: 2000, doneBytes: 120 * MB, totalBytes: 400 * MB });
     expect(written).toEqual([
       "The first run reads every transcript; later runs use a cache.\n",
-      "Reading this machine's sessions: 10 of 2,000 files, 25%, ~6s left\n",
+      "Reading your agents' past chats, on this machine only: 10 of 2,000 files, 25%, ~6s left\n",
     ]);
     at(7000);
     progress.update({ done: 1500, total: 2000, doneBytes: 380 * MB, totalBytes: 400 * MB });
     expect(written.at(-1)).toBe(
-      "Reading this machine's sessions: 1,500 of 2,000 files, 95%, ~1s left\n",
+      "Reading your agents' past chats, on this machine only: 1,500 of 2,000 files, 95%, ~1s left\n",
     );
     progress.stop();
   });
