@@ -373,6 +373,10 @@ export const codex = defineHarness({
     mcp: "inferred",
     // `token_count` events carry each request's input tokens.
     tokens: "exact",
+    // `token_count` events carry the thread's running totals, and `turn_context` its model.
+    usage: "exact",
+    // Codex has no prompt cache lifetime to set.
+    cacheTtl: "none",
   },
   inventory: packInventory,
   machine: {

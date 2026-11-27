@@ -20,9 +20,18 @@
         "userUse": "exact",
         "instructions": "exact",
         "mcp": "exact",
-        "tokens": "exact"
+        "tokens": "exact",
+        "usage": "exact",
+        "cacheTtl": "exact"
       },
-      "contextWindow": 200000
+      "contextWindow": 200000,
+      "settings": {
+        "cacheTtl": "5m",
+        "cacheTtlFrom": "default",
+        "caching": "on",
+        "retentionDays": 30,
+        "autoCompact": true
+      }
     },
     {
       "machine": "laptop",
@@ -38,9 +47,16 @@
         "userUse": "none",
         "instructions": "exact",
         "mcp": "exact",
-        "tokens": "exact"
+        "tokens": "exact",
+        "usage": "exact",
+        "cacheTtl": "none"
       },
-      "contextWindow": 258400
+      "contextWindow": 258400,
+      "settings": {
+        "caching": "on",
+        "docMaxBytes": 32768,
+        "autoCompact": true
+      }
     }
   ],
   "items": [
@@ -1177,5 +1193,123 @@
       "byModel": 3,
       "byUser": 0
     }
-  ]
+  ],
+  "usage": {
+    "sessions": [
+      {
+        "day": "2026-11-22",
+        "harness": "claude-code",
+        "via": "cli",
+        "project": "acme/web",
+        "thread": "main",
+        "sessions": 6,
+        "compacted": 2,
+        "compactions": 3,
+        "manualCompactions": 1
+      },
+      {
+        "day": "2026-11-22",
+        "harness": "claude-code",
+        "via": "cli",
+        "project": "acme/web",
+        "thread": "subagent",
+        "sessions": 9,
+        "compacted": 0,
+        "compactions": 0,
+        "manualCompactions": 0
+      },
+      {
+        "day": "2026-11-22",
+        "harness": "codex",
+        "via": "cli",
+        "project": "~/notes",
+        "thread": "main",
+        "sessions": 2,
+        "compacted": 0,
+        "compactions": 0,
+        "manualCompactions": 0
+      },
+      {
+        "day": "2026-11-23",
+        "harness": "claude-code",
+        "via": "cli",
+        "project": "acme/api",
+        "thread": "main",
+        "sessions": 4,
+        "compacted": 1,
+        "compactions": 1,
+        "manualCompactions": 0
+      }
+    ],
+    "tokens": [
+      {
+        "day": "2026-11-22",
+        "harness": "claude-code",
+        "via": "cli",
+        "project": "acme/web",
+        "thread": "main",
+        "model": "claude-opus-4-5",
+        "requests": 212,
+        "input": 1840,
+        "output": 96500,
+        "reasoning": 0,
+        "cacheRead": 18300000,
+        "cacheWrite": 1460000,
+        "cacheWrite5m": 1100000,
+        "cacheWrite1h": 360000,
+        "cacheRewrite": 410000
+      },
+      {
+        "day": "2026-11-22",
+        "harness": "claude-code",
+        "via": "cli",
+        "project": "acme/web",
+        "thread": "subagent",
+        "model": "claude-haiku-4-5",
+        "requests": 88,
+        "input": 920,
+        "output": 21400,
+        "reasoning": 0,
+        "cacheRead": 2900000,
+        "cacheWrite": 340000,
+        "cacheWrite5m": 340000,
+        "cacheWrite1h": 0,
+        "cacheRewrite": 0
+      },
+      {
+        "day": "2026-11-22",
+        "harness": "codex",
+        "via": "cli",
+        "project": "~/notes",
+        "thread": "main",
+        "model": "gpt-5.1-codex",
+        "requests": 31,
+        "input": 402000,
+        "output": 18700,
+        "reasoning": 9400,
+        "cacheRead": 2210000,
+        "cacheWrite": 0,
+        "cacheWrite5m": 0,
+        "cacheWrite1h": 0,
+        "cacheRewrite": 0
+      },
+      {
+        "day": "2026-11-23",
+        "harness": "claude-code",
+        "via": "cli",
+        "project": "acme/api",
+        "thread": "main",
+        "model": "claude-opus-4-5",
+        "requests": 97,
+        "input": 610,
+        "output": 40200,
+        "reasoning": 0,
+        "cacheRead": 7400000,
+        "cacheWrite": 690000,
+        "cacheWrite5m": 520000,
+        "cacheWrite1h": 170000,
+        "cacheRewrite": 150000
+      }
+    ]
+  }
 }

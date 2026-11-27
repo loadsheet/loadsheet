@@ -25,6 +25,8 @@ const SIGNALS: Record<Signal, Grade> = {
   instructions: "exact",
   mcp: "none",
   tokens: "exact",
+  usage: "exact",
+  cacheTtl: "none",
 };
 
 const line = (name: string, tokens: number, extra: Partial<Line> = {}): Line => ({

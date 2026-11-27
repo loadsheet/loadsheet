@@ -10,6 +10,7 @@ import {
   type HarnessScan,
   type MachineReader,
   type Place,
+  type ProjectHint,
   type Tally,
   type TranscriptFormat,
 } from "../index.ts";
@@ -245,6 +246,7 @@ const readPlans = async (
   options: {
     concurrency: number;
     pool: TranscriptPool | undefined;
+    place: Place;
     onProgress?: (progress: ScanProgress) => void;
   },
 ): Promise<void> => {
@@ -268,6 +270,7 @@ const readPlans = async (
         harness: plan.harness,
         path: file.path,
         ...(resume ? { position: resume.position } : {}),
+        place: options.place,
       };
       const result = await (pool ? pool.read(job, bytes) : readTranscriptTally(plan.format, job));
       if (result === null) return;
@@ -333,6 +336,7 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
     harness.machine ? [{ harness, machine: harness.machine }] : [],
   );
   const parts: HarnessScan[] = [];
+  const hints: ProjectHint[] = [];
   try {
     const plans = new Map<string, TranscriptPlan>();
     for (const { harness, machine } of machines) {
@@ -348,6 +352,7 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
     const reading = readPlans([...plans.values()], {
       concurrency: options.concurrency ?? 16,
       pool,
+      place,
       ...(options.onProgress ? { onProgress: options.onProgress } : {}),
     });
     reading.catch(() => {});
@@ -363,13 +368,15 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
           : undefined;
       const items = files ? await machine.inventory(files, place) : [];
       const contextWindow = files ? await machine.contextWindow?.(files) : undefined;
-      inventories.push({ harness, installed, items, contextWindow });
+      const settings = files ? await machine.settings?.(files, place) : undefined;
+      if (files) hints.push(...((await machine.projects?.(files, place)) ?? []));
+      inventories.push({ harness, installed, items, contextWindow, settings });
     }
 
     await reading;
     // Nothing is left to read, so the threads go before the caches are written.
     await pool?.close();
-    for (const { harness, installed, items, contextWindow } of inventories) {
+    for (const { harness, installed, items, contextWindow, settings } of inventories) {
       const plan = plans.get(harness.id);
       const tallies = plan ? plan.tallies : [];
       if (plan?.cache && plan.fromCache.length)
@@ -383,6 +390,7 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
         items,
         tally: sumTallies(tallies, window),
         ...(contextWindow === undefined ? {} : { contextWindow }),
+        ...(settings === undefined ? {} : { settings }),
       });
     }
   } finally {
@@ -396,7 +404,7 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
     place.home,
   );
 
-  return buildScan({
+  const scan = buildScan({
     tool: options.tool,
     machine: options.machine ?? hostname(),
     scannedAt: now.toISOString(),
@@ -406,4 +414,15 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
       items: part.items.map((item) => withReach(item, reaches)),
     })),
   });
+  return resolveProjects(scan, hints, place);
 };
+
+/**
+ * The Scan with each usage project folder named by its repository, where the disk or a harness's
+ * hints tell it. For now it returns the Scan as it is: transcripts' projects stay as they were read.
+ */
+export const resolveProjects = async (
+  scan: Scan,
+  _hints: readonly ProjectHint[],
+  _place: Place,
+): Promise<Scan> => scan;

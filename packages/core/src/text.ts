@@ -194,16 +194,18 @@ const sheetLegend = (report: Report) =>
 // Coverage
 
 const GRADE: Record<Grade, string> = { exact: "exact", inferred: "inferred", none: "-" };
+/** The signals behind the sheets and rules; usage history and its settings have a view of their own. */
+const SHEET_SIGNALS = SIGNALS.filter((signal) => signal !== "usage" && signal !== "cacheTtl");
 
 const coverageBlock = (report: Report): string[] => {
   if (!report.coverage.length) return [];
   const rows = [
-    ["machine", "harness", "sessions", ...SIGNALS],
+    ["machine", "harness", "sessions", ...SHEET_SIGNALS],
     ...report.coverage.map((entry) => [
       entry.machine,
       entry.harness,
       entry.installed ? num(entry.sessions) : "-",
-      ...SIGNALS.map((signal) => GRADE[entry.signals[signal]]),
+      ...SHEET_SIGNALS.map((signal) => GRADE[entry.signals[signal]]),
     ]),
   ];
   const absent = report.coverage.some((entry) => !entry.installed);

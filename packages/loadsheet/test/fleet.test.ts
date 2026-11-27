@@ -1,11 +1,19 @@
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseReport, parseScan } from "@loadsheet/schema";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
-import { fleetScans } from "../src/fleet.ts";
+import { fleetScans, scanOf } from "../src/fleet.ts";
 
 // Runs the built CLI, so `pnpm build` comes first.
 const cli = fileURLToPath(new URL("../dist/cli.mjs", import.meta.url));
@@ -316,5 +324,31 @@ describe("loadsheet with a fleet", () => {
     expect(run.status).toBe(2);
     expect(run.stderr).toBe("loadsheet fleet: fleet run has no --dry-run\n");
     expect(sshCalls()).toBe(false);
+  });
+});
+
+describe("a host's Scan", () => {
+  const example = JSON.parse(
+    readFileSync(new URL("../../../examples/scan.example.json", import.meta.url), "utf8"),
+  ) as Record<string, unknown>;
+
+  it("keeps usage, settings and both new signals, and drops keys the schema does not name", () => {
+    const sent = structuredClone(example) as ReturnType<typeof parseScan> & Record<string, unknown>;
+    sent.extra = "dropped";
+    (sent.usage!.tokens[0] as unknown as Record<string, unknown>).note = "dropped";
+    (sent.coverage[0]!.settings as Record<string, unknown>).raw = "dropped";
+    const scan = scanOf({
+      host: "box",
+      reachable: true,
+      exitCode: 0,
+      stdout: JSON.stringify(sent),
+      stderr: "",
+    });
+    const { $schema: _schema, ...expected } = parseScan(example) as unknown as Record<
+      string,
+      unknown
+    >;
+    expect(scan).toEqual(expected);
+    expect(JSON.stringify(scan)).not.toContain("dropped");
   });
 });

@@ -14,7 +14,11 @@ import type {
   RuleId,
   Scan,
   SessionCell,
+  Settings,
   Signal,
+  Usage,
+  UsageSessionCell,
+  UsageTokenCell,
 } from "./types.ts";
 
 /** The rule ids, in the order a Report lists them. */
@@ -40,6 +44,8 @@ export const SIGNALS = [
   "instructions",
   "mcp",
   "tokens",
+  "usage",
+  "cacheTtl",
 ] as const satisfies readonly Signal[];
 
 const KINDS = ["skill", "instructions", "mcp", "subagent"] as const;
@@ -302,6 +308,56 @@ const SessionCellSchema = v.pipe(
   ),
 );
 
+// A store's name, such as `opencode.db` or `t3-code`: never a path.
+const STORE = /^[a-z0-9][a-z0-9._-]*$/;
+// A knob, such as `settings.promptCacheTtl` or `env.FORCE_PROMPT_CACHING_5M`: never its value.
+const KNOB = /^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*$/;
+// owner/repo as GitHub spells it, a `~` path, an absolute path that is not a home, or unknown.
+const PROJECT = new RegExp(
+  String.raw`^(?!${HOME})(?:[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+|~(?:/[^\0\n\r]*)?|/[^\0\n\r]*|unknown)$`,
+);
+const TtlSchema = v.picklist(["5m", "1h"]);
+
+const SettingsSchema = v.pipe(
+  v.looseObject({
+    cacheTtl: v.optional(
+      describe(
+        TtlSchema,
+        "How long the main conversation's prompt cache lives, as the settings set it.",
+      ),
+    ),
+    cacheTtlFrom: v.optional(
+      v.pipe(
+        v.string(),
+        v.regex(KNOB, "must name a setting or variable, such as settings.promptCacheTtl"),
+        v.description(
+          "Which knob set cacheTtl, such as `settings.promptCacheTtl`, `env.FORCE_PROMPT_CACHING_5M` or `default`.",
+        ),
+      ),
+    ),
+    subagentCacheTtl: v.optional(
+      describe(TtlSchema, "How long a subagent's prompt cache lives, as the settings set it."),
+    ),
+    caching: v.optional(
+      describe(v.picklist(["on", "off"]), "Whether prompt caching is on or turned off."),
+    ),
+    retentionDays: v.optional(count("Days the harness keeps a transcript before it deletes it.")),
+    docMaxBytes: v.optional(count("The most bytes of an instruction file the harness reads.")),
+    autoCompact: v.optional(
+      describe(
+        v.boolean(),
+        "Whether the harness compacts a conversation on its own when its context fills.",
+      ),
+    ),
+    autoCompactWindow: v.optional(
+      count("The context size in tokens at which the harness compacts on its own."),
+    ),
+  }),
+  v.description(
+    "What a harness's settings and environment set, as derived values: never a setting's text or an environment variable's value.",
+  ),
+);
+
 const CoverageSchema = v.pipe(
   v.looseObject({
     machine: nonEmpty("The machine's name."),
@@ -319,6 +375,9 @@ const CoverageSchema = v.pipe(
         instructions: GradeSchema,
         mcp: GradeSchema,
         tokens: GradeSchema,
+        // Signals added after 0.1: a Scan or Report written before them could not tell either.
+        usage: v.optional(GradeSchema, "none"),
+        cacheTtl: v.optional(GradeSchema, "none"),
       }),
       v.description("How well each signal is provided."),
     ),
@@ -332,8 +391,117 @@ const CoverageSchema = v.pipe(
         ),
       ),
     ),
+    settings: v.optional(
+      describe(
+        SettingsSchema,
+        "What the harness's settings and environment set, as derived values, never their text; absent when the harness reads none.",
+      ),
+    ),
+    unread: v.optional(
+      describe(
+        v.array(
+          v.pipe(
+            v.string(),
+            v.regex(STORE, "must be a store name: lowercase letters, digits, dots and hyphens"),
+          ),
+        ),
+        "The session stores of this harness that could not be read, by name, such as `opencode.db`; absent when every store was read.",
+      ),
+    ),
   }),
   v.description("What one harness on one machine could tell."),
+);
+
+const THREADS = ["main", "subagent"] as const;
+const ThreadSchema = describe(
+  v.picklist(THREADS),
+  "Which conversation of a session a usage counter is about: the main one, or a subagent's.",
+);
+
+const PROJECT_TEXT =
+  "The project the sessions ran in: `owner/repo`, a folder under the home directory (`~/...`), an absolute path outside it, or `unknown`.";
+const project = () =>
+  v.pipe(
+    v.string(),
+    v.regex(
+      PROJECT,
+      "must be owner/repo, ~/..., unknown, or an absolute path that is not an absolute home path",
+    ),
+    v.description(PROJECT_TEXT),
+  );
+
+const UsageSessionCellSchema = v.pipe(
+  v.looseObject({
+    day: day("The day the sessions started."),
+    harness: nonEmpty("The harness id."),
+    via: nonEmpty("The entrypoint or originator that started the sessions."),
+    project: project(),
+    thread: describe(
+      ThreadSchema,
+      "Whether these are main conversations or subagents' conversations.",
+    ),
+    sessions: count("Sessions started; a subagent's conversation counts as one."),
+    compacted: count("Of those sessions, how many compacted their context at least once."),
+    compactions: count("Compactions in those sessions, automatic and manual."),
+    manualCompactions: count("Of those compactions, how many the user asked for."),
+  }),
+  v.check((cell) => cell.compacted <= cell.compactions, "compacted must not exceed compactions"),
+  v.check(
+    (cell) => cell.manualCompactions <= cell.compactions,
+    "manualCompactions must not exceed compactions",
+  ),
+  v.description("Additive session counters for one project, harness, day, entrypoint and thread."),
+);
+
+const UsageTokenCellSchema = v.pipe(
+  v.looseObject({
+    day: day("The day the requests were made."),
+    harness: nonEmpty("The harness id."),
+    via: nonEmpty("The entrypoint or originator that started the sessions."),
+    project: project(),
+    thread: describe(
+      ThreadSchema,
+      "Whether the requests came from main conversations or subagents' conversations.",
+    ),
+    model: name("The model the requests went to, as the harness names it."),
+    requests: count("Model requests counted."),
+    input: count(
+      "Input tokens sent without the prompt cache: neither read from it nor written to it.",
+    ),
+    output: count("Output tokens, reasoning included."),
+    reasoning: count("Of the output tokens, how many were reasoning."),
+    cacheRead: count("Input tokens read from the prompt cache."),
+    cacheWrite: count("Input tokens written to the prompt cache."),
+    cacheWrite5m: count("Of the cache writes, the tokens written to a cache that lives 5 minutes."),
+    cacheWrite1h: count(
+      "Of the cache writes, the tokens written to a cache that lives 1 hour; with cacheWrite5m at most cacheWrite, and the rest unsplit.",
+    ),
+    cacheRewrite: count(
+      "Of the cache writes, the tokens of requests made 5 to 60 minutes after the previous request of their conversation: what a 1-hour cache would have read instead.",
+    ),
+  }),
+  v.check((cell) => cell.reasoning <= cell.output, "reasoning must not exceed output"),
+  v.check(
+    (cell) => cell.cacheWrite5m + cell.cacheWrite1h <= cell.cacheWrite,
+    "cacheWrite5m and cacheWrite1h must not exceed cacheWrite",
+  ),
+  v.check(
+    (cell) => cell.cacheRewrite <= cell.cacheWrite,
+    "cacheRewrite must not exceed cacheWrite",
+  ),
+  v.description(
+    "Additive token counters for one project, harness, day, entrypoint, thread and model.",
+  ),
+);
+
+const UsageSchema = v.pipe(
+  v.looseObject({
+    sessions: describe(v.array(UsageSessionCellSchema), "Session counters."),
+    tokens: describe(v.array(UsageTokenCellSchema), "Token counters."),
+  }),
+  v.description(
+    "A machine's or a Report's usage history: sessions and tokens per project, as additive counters with no text.",
+  ),
 );
 
 const scanSchema = v.pipe(
@@ -361,6 +529,12 @@ const scanSchema = v.pipe(
     ),
     sessions: describe(v.array(SessionCellSchema), "Session totals."),
     cells: describe(v.array(CellSchema), "Usage counters."),
+    usage: v.optional(
+      describe(
+        UsageSchema,
+        "Sessions and tokens per project; absent when no harness read reports them.",
+      ),
+    ),
   }),
   v.description(
     "One machine's counters for a window: what is installed and how it was used, with no text. Scans of the same machine merge by summing their counters; Scans of different machines stay separate, and a Report is built from the list.",
@@ -746,6 +920,12 @@ const reportSchema = v.pipe(
     sheet: describe(v.array(SheetSchema), "One sheet per harness, aggregated over machines."),
     findings: describe(v.array(FindingSchema), "What the rules found."),
     skipped: describe(v.array(SkippedSchema), "Rules that did not run, per harness."),
+    usage: v.optional(
+      describe(
+        UsageSchema,
+        "Sessions and tokens per project, summed over machines and filtered as the sheets are; absent when no machine reports them, and from a Report shared through loadsheet.dev.",
+      ),
+    ),
   }),
   v.forward(
     v.check(
@@ -816,6 +996,10 @@ export type SchemasMatchTypes = [
   Assert<Same<v.InferOutput<typeof CellSchema>, Cell>>,
   Assert<Same<v.InferOutput<typeof SessionCellSchema>, SessionCell>>,
   Assert<Same<v.InferOutput<typeof CoverageSchema>, Coverage>>,
+  Assert<Same<v.InferOutput<typeof SettingsSchema>, Settings>>,
+  Assert<Same<v.InferOutput<typeof UsageSchema>, Usage>>,
+  Assert<Same<v.InferOutput<typeof UsageSessionCellSchema>, UsageSessionCell>>,
+  Assert<Same<v.InferOutput<typeof UsageTokenCellSchema>, UsageTokenCell>>,
   Assert<Same<v.InferOutput<typeof LineSchema>, Line>>,
   Assert<Same<v.InferOutput<typeof ResolvedConfigSchema>, ResolvedConfig>>,
   Assert<Same<v.InferOutput<typeof configSchema>, Config>>,

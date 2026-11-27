@@ -38,6 +38,42 @@ const cell = (day: string, via: string, item: string, n: number) => ({
   byUser: 0,
 });
 
+const usageSession = (day: string, project: string, thread: "main" | "subagent", n: number) => ({
+  day,
+  harness: "fake",
+  via: "cli",
+  project,
+  thread,
+  sessions: n,
+  compacted: n % 2,
+  compactions: n * 2,
+  manualCompactions: n % 3,
+});
+
+const usageTokens = (
+  day: string,
+  project: string,
+  thread: "main" | "subagent",
+  model: string,
+  n: number,
+) => ({
+  day,
+  harness: "fake",
+  via: "cli",
+  project,
+  thread,
+  model,
+  requests: n,
+  input: n * 10,
+  output: n * 20,
+  reasoning: n * 5,
+  cacheRead: n * 1000,
+  cacheWrite: n * 300,
+  cacheWrite5m: n * 100,
+  cacheWrite1h: n * 150,
+  cacheRewrite: n * 40,
+});
+
 /** A cached file with cells in several groups and a state that uses every JSON type. */
 const cachedFile = (seed: number): CachedFile => ({
   size: 1000 + seed,
@@ -88,6 +124,18 @@ const cachedFile = (seed: number): CachedFile => ({
     ],
     versions: [{ harness: "fake", day: "2026-11-22", version: "1.2.0" }],
     windows: [{ harness: "fake", day: "2026-11-23", tokens: 200_000 + seed }],
+    usage: {
+      sessions: [
+        usageSession("2026-11-22", "acme/web", "main", 1),
+        usageSession("2026-11-22", "acme/web", "subagent", 2 + seed),
+        usageSession("2026-11-23", "~/scratch", "main", seed),
+      ],
+      tokens: [
+        usageTokens("2026-11-22", "acme/web", "main", "model-a", 1),
+        usageTokens("2026-11-22", "acme/web", "main", "model-b", seed),
+        usageTokens("2026-11-23", "unknown", "subagent", "model-a", 3),
+      ],
+    },
   },
 });
 
@@ -115,7 +163,7 @@ const readStored = async () => (await readFile()).doc;
 const writeStored = async (stored: Stored, sum?: string) => {
   const doc = JSON.stringify(stored);
   sum ??= NodeCrypto.createHash("sha256").update(doc).digest("hex");
-  await NodeFSP.writeFile(cacheFile(), `{"layout":3,"sum":"${sum}","doc":${doc}}`);
+  await NodeFSP.writeFile(cacheFile(), `{"layout":4,"sum":"${sum}","doc":${doc}}`);
 };
 
 describe("the scan cache file", () => {
@@ -236,7 +284,7 @@ describe("the scan cache file", () => {
   it("opens empty a file saved in another layout", async () => {
     await (await open()).save(new Map([["one", cachedFile(1)]]));
     const file = await readFile();
-    expect(file.layout).toBe(3);
+    expect(file.layout).toBe(4);
     // Layout 2 kept the document's fields beside its sum.
     await NodeFSP.writeFile(cacheFile(), JSON.stringify({ layout: 2, ...file.doc, sum: file.sum }));
     expect((await open()).get("one")).toBeUndefined();
@@ -244,7 +292,7 @@ describe("the scan cache file", () => {
     await writeStored(file.doc);
     expect((await open()).get("one")).toEqual(cachedFile(1));
     const text = await NodeFSP.readFile(cacheFile(), "utf8");
-    await NodeFSP.writeFile(cacheFile(), text.replace('"layout":3', '"layout":4'));
+    await NodeFSP.writeFile(cacheFile(), text.replace('"layout":4', '"layout":5'));
     expect((await open()).get("one")).toBeUndefined();
   });
 
@@ -270,7 +318,7 @@ describe("the scan cache file", () => {
       )},`,
     );
     const sum = NodeCrypto.createHash("sha256").update(doc).digest("hex");
-    await NodeFSP.writeFile(cacheFile(), `{"layout":3,"sum":"${sum}","doc":${doc}}`);
+    await NodeFSP.writeFile(cacheFile(), `{"layout":4,"sum":"${sum}","doc":${doc}}`);
     const cache = await open();
     expect(cache.get("deep")).toBeUndefined();
     expect(cache.get("one")).toEqual(cachedFile(1));
@@ -291,6 +339,16 @@ describe("the scan cache file", () => {
       expect(cache.sum(files, window)).toEqual(sumTallies(tallies, window));
     }
     expect(cache.sum([], ["2026-11-01", "2026-11-30"])).toEqual(sumTallies([]));
+  });
+
+  it("opens as a miss an entry whose usage thread is neither main nor subagent", async () => {
+    await (await open()).save(new Map([["one", cachedFile(1)]]));
+    const stored = await readStored();
+    const tally = stored.files.one![8] as number[][];
+    // The first usage session's thread, swapped for the string its via names.
+    tally[4]![4] = tally[4]![2]!;
+    await writeStored(stored);
+    expect((await open()).get("one")).toBeUndefined();
   });
 
   it("opens empty a file saved for a format with another skip", async () => {

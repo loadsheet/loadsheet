@@ -15,6 +15,7 @@ import type {
 import { parseId, SIGNALS } from "@loadsheet/schema";
 import { NO_SIGNALS, runRules } from "./engine.ts";
 import { estimateTokens, type Install, type RuleSheet, type Unfiltered } from "./rules/rule.ts";
+import { sumUsage } from "./usage.ts";
 
 /** Input for buildReport. */
 export interface BuildReportInput {
@@ -338,6 +339,11 @@ export const buildReport = ({
     unfiltered: unfilteredOf(scans, wholeFleet, inWindow),
   });
 
+  const usage = sumUsage(
+    scans.map((scan) => scan.usage),
+    (cell) => (!wanted || wanted.has(cell.harness)) && keep(cell),
+  );
+
   return {
     schema: 1,
     tool,
@@ -359,5 +365,6 @@ export const buildReport = ({
     sheet: built.map(({ sheet }) => sheet),
     findings,
     skipped,
+    ...(usage ? { usage } : {}),
   };
 };

@@ -114,6 +114,18 @@
                 "enum": ["exact", "inferred", "none"],
                 "type": "string",
                 "description": "How well a harness provides a signal: read directly, inferred from indirect evidence, or not at all."
+              },
+              "usage": {
+                "enum": ["exact", "inferred", "none"],
+                "type": "string",
+                "description": "How well a harness provides a signal: read directly, inferred from indirect evidence, or not at all.",
+                "default": "none"
+              },
+              "cacheTtl": {
+                "enum": ["exact", "inferred", "none"],
+                "type": "string",
+                "description": "How well a harness provides a signal: read directly, inferred from indirect evidence, or not at all.",
+                "default": "none"
               }
             },
             "required": ["listing", "modelUse", "userUse", "instructions", "mcp", "tokens"],
@@ -123,6 +135,60 @@
             "type": "integer",
             "minimum": 1,
             "description": "The model's context window in tokens, as the harness reports it in its latest session or, failing that, its settings; absent when unknown."
+          },
+          "settings": {
+            "type": "object",
+            "properties": {
+              "cacheTtl": {
+                "enum": ["5m", "1h"],
+                "type": "string",
+                "description": "How long the main conversation's prompt cache lives, as the settings set it."
+              },
+              "cacheTtlFrom": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z0-9_]+)*$",
+                "description": "Which knob set cacheTtl, such as `settings.promptCacheTtl`, `env.FORCE_PROMPT_CACHING_5M` or `default`."
+              },
+              "subagentCacheTtl": {
+                "enum": ["5m", "1h"],
+                "type": "string",
+                "description": "How long a subagent's prompt cache lives, as the settings set it."
+              },
+              "caching": {
+                "enum": ["on", "off"],
+                "type": "string",
+                "description": "Whether prompt caching is on or turned off."
+              },
+              "retentionDays": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Days the harness keeps a transcript before it deletes it."
+              },
+              "docMaxBytes": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "The most bytes of an instruction file the harness reads."
+              },
+              "autoCompact": {
+                "type": "boolean",
+                "description": "Whether the harness compacts a conversation on its own when its context fills."
+              },
+              "autoCompactWindow": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "The context size in tokens at which the harness compacts on its own."
+              }
+            },
+            "required": [],
+            "description": "What the harness's settings and environment set, as derived values, never their text; absent when the harness reads none."
+          },
+          "unread": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]*$"
+            },
+            "description": "The session stores of this harness that could not be read, by name, such as `opencode.db`; absent when every store was read."
           }
         },
         "required": ["machine", "harness", "installed", "sessions", "versions", "signals"],
@@ -349,6 +415,182 @@
         "description": "Additive usage counters for one item, in one harness, on one day, through one entrypoint."
       },
       "description": "Usage counters."
+    },
+    "usage": {
+      "type": "object",
+      "properties": {
+        "sessions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "day": {
+                "type": "string",
+                "format": "date",
+                "description": "The day the sessions started."
+              },
+              "harness": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The harness id."
+              },
+              "via": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The entrypoint or originator that started the sessions."
+              },
+              "project": {
+                "type": "string",
+                "pattern": "^(?!(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))(?:[A-Za-z0-9][A-Za-z0-9-]*\\/[A-Za-z0-9._-]+|~(?:\\/[^\\0\\n\\r]*)?|\\/[^\\0\\n\\r]*|unknown)$",
+                "description": "The project the sessions ran in: `owner/repo`, a folder under the home directory (`~/...`), an absolute path outside it, or `unknown`."
+              },
+              "thread": {
+                "enum": ["main", "subagent"],
+                "type": "string",
+                "description": "Whether these are main conversations or subagents' conversations."
+              },
+              "sessions": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Sessions started; a subagent's conversation counts as one."
+              },
+              "compacted": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Of those sessions, how many compacted their context at least once."
+              },
+              "compactions": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Compactions in those sessions, automatic and manual."
+              },
+              "manualCompactions": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Of those compactions, how many the user asked for."
+              }
+            },
+            "required": [
+              "day",
+              "harness",
+              "via",
+              "project",
+              "thread",
+              "sessions",
+              "compacted",
+              "compactions",
+              "manualCompactions"
+            ],
+            "description": "Additive session counters for one project, harness, day, entrypoint and thread."
+          },
+          "description": "Session counters."
+        },
+        "tokens": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "day": {
+                "type": "string",
+                "format": "date",
+                "description": "The day the requests were made."
+              },
+              "harness": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The harness id."
+              },
+              "via": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The entrypoint or originator that started the sessions."
+              },
+              "project": {
+                "type": "string",
+                "pattern": "^(?!(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))(?:[A-Za-z0-9][A-Za-z0-9-]*\\/[A-Za-z0-9._-]+|~(?:\\/[^\\0\\n\\r]*)?|\\/[^\\0\\n\\r]*|unknown)$",
+                "description": "The project the sessions ran in: `owner/repo`, a folder under the home directory (`~/...`), an absolute path outside it, or `unknown`."
+              },
+              "thread": {
+                "enum": ["main", "subagent"],
+                "type": "string",
+                "description": "Whether the requests came from main conversations or subagents' conversations."
+              },
+              "model": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?!(?:(?:\\/(?:\\.{1,2}(?=\\/))?)+(?:home|Users|var(?:\\/(?:\\.{1,2}(?=\\/))?)+home)(?:\\/(?:\\.{1,2}(?=\\/))?)+|(?:\\/(?:\\.{1,2}(?=\\/))?)+root(?:\\/|$)|[A-Za-z]:[\\\\/]))",
+                "description": "The model the requests went to, as the harness names it."
+              },
+              "requests": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Model requests counted."
+              },
+              "input": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Input tokens sent without the prompt cache: neither read from it nor written to it."
+              },
+              "output": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Output tokens, reasoning included."
+              },
+              "reasoning": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Of the output tokens, how many were reasoning."
+              },
+              "cacheRead": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Input tokens read from the prompt cache."
+              },
+              "cacheWrite": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Input tokens written to the prompt cache."
+              },
+              "cacheWrite5m": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Of the cache writes, the tokens written to a cache that lives 5 minutes."
+              },
+              "cacheWrite1h": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Of the cache writes, the tokens written to a cache that lives 1 hour; with cacheWrite5m at most cacheWrite, and the rest unsplit."
+              },
+              "cacheRewrite": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Of the cache writes, the tokens of requests made 5 to 60 minutes after the previous request of their conversation: what a 1-hour cache would have read instead."
+              }
+            },
+            "required": [
+              "day",
+              "harness",
+              "via",
+              "project",
+              "thread",
+              "model",
+              "requests",
+              "input",
+              "output",
+              "reasoning",
+              "cacheRead",
+              "cacheWrite",
+              "cacheWrite5m",
+              "cacheWrite1h",
+              "cacheRewrite"
+            ],
+            "description": "Additive token counters for one project, harness, day, entrypoint, thread and model."
+          },
+          "description": "Token counters."
+        }
+      },
+      "required": ["sessions", "tokens"],
+      "description": "Sessions and tokens per project; absent when no harness read reports them."
     }
   },
   "required": [

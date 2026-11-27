@@ -177,6 +177,95 @@ describe("parsing", () => {
     ]);
   });
 
+  it("reads a Scan and a Report written before usage: no usage, and neither signal graded", () => {
+    const scan = clone(example("scan.example.json")) as Scan;
+    const report = fleet();
+    for (const doc of [scan, report]) {
+      delete doc.usage;
+      for (const row of doc.coverage) {
+        const signals = row.signals as Partial<typeof row.signals>;
+        delete signals.usage;
+        delete signals.cacheTtl;
+        delete row.settings;
+      }
+    }
+    expect(validators.get("scan.v1.json")!(scan)).toBe(true);
+    expect(validators.get("report.v1.json")!(report)).toBe(true);
+    for (const parsed of [parseScan(scan), parseReport(report)]) {
+      expect("usage" in parsed).toBe(false);
+      for (const row of parsed.coverage) {
+        expect(row.signals).toMatchObject({ usage: "none", cacheTtl: "none" });
+      }
+    }
+  });
+
+  it("reads usage and settings as the examples write them", () => {
+    const scan = clone(example("scan.example.json")) as Scan;
+    const report = fleet();
+    expect(parseScan(scan).usage).toEqual(scan.usage);
+    expect(parseReport(report).usage).toEqual(report.usage);
+    expect(scan.usage!.sessions.length && scan.usage!.tokens.length).toBeTruthy();
+    expect(parseScan(scan).coverage.find((row) => row.settings)?.settings).toEqual(
+      scan.coverage.find((row) => row.settings)!.settings,
+    );
+  });
+
+  it.each(["/home/ada/work/web", "/Users/ada/web", "/root/web", "C:\\Users\\ada\\web"])(
+    "rejects the absolute home path %s as a usage project",
+    (path) => {
+      const scan = clone(example("scan.example.json")) as Scan;
+      scan.usage!.sessions[0]!.project = path;
+      scan.usage!.tokens[0]!.project = path;
+      expect(issuesOf(() => parseScan(scan)).map((issue) => issue.path)).toEqual([
+        "$.usage.sessions[0].project",
+        "$.usage.tokens[0].project",
+      ]);
+      expect(validators.get("scan.v1.json")!(scan)).toBe(false);
+    },
+  );
+
+  it.each(["acme/web", "~/notes", "~", "/srv/app", "unknown"])(
+    "takes %s as a usage project",
+    (path) => {
+      const scan = clone(example("scan.example.json")) as Scan;
+      scan.usage!.sessions[0]!.project = path;
+      expect(parseScan(scan).usage!.sessions[0]!.project).toBe(path);
+      expect(validators.get("scan.v1.json")!(scan)).toBe(true);
+    },
+  );
+
+  it("rejects a usage part above its whole, a thread it does not know and a store path", () => {
+    const scan = clone(example("scan.example.json")) as Scan;
+    const tokens = scan.usage!.tokens[0]!;
+    tokens.reasoning = tokens.output + 1;
+    tokens.cacheWrite1h = tokens.cacheWrite;
+    const sessions = scan.usage!.sessions[0]!;
+    sessions.compacted = sessions.compactions + 1;
+    (scan.usage!.sessions[1] as { thread: string }).thread = "side";
+    scan.coverage[0]!.unread = ["/home/ada/.local/share/opencode/opencode.db"];
+    expect(issuesOf(() => parseScan(scan)).map((issue) => issue.message)).toEqual(
+      expect.arrayContaining([
+        "reasoning must not exceed output",
+        "cacheWrite5m and cacheWrite1h must not exceed cacheWrite",
+        "compacted must not exceed compactions",
+        expect.stringMatching(/store name/),
+      ]),
+    );
+    expect(issuesOf(() => parseScan(scan)).map((issue) => issue.path)).toContain(
+      "$.usage.sessions[1].thread",
+    );
+  });
+
+  it("shares a Report without usage, so no project name leaves the user's machines", () => {
+    const report = fleet();
+    expect(report.usage).toBeDefined();
+    const shared = shareableReport(report);
+    expect("usage" in shared).toBe(false);
+    expect(JSON.stringify(shared)).not.toContain("acme/web");
+    expect(report.usage).toBeDefined();
+    expect(validators.get("report.v1.json")!(shared)).toBe(true);
+  });
+
   it("shares a Report without any description and leaves the original as it was", () => {
     const report = fleet();
     const shared = shareableReport(report);

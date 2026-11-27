@@ -1,5 +1,5 @@
 import { isMainThread, parentPort, Worker } from "node:worker_threads";
-import { foldFacts, type Fact, type Tally, type TranscriptFormat } from "../index.ts";
+import { foldFacts, type Fact, type Place, type Tally, type TranscriptFormat } from "../index.ts";
 import { readTranscript, type ReadOptions, type ReadPosition } from "./reader.ts";
 
 /** One transcript file to read, from `position` when its guard still matches. */
@@ -7,6 +7,8 @@ export interface TranscriptJob {
   readonly harness: string;
   readonly path: string;
   readonly position?: ReadPosition;
+  /** The machine the file is on, passed to every `parse`. */
+  readonly place?: Place;
 }
 
 /** The counters of one transcript file read from disk. */
@@ -30,9 +32,10 @@ export const readTranscriptTally = async (
   job: TranscriptJob,
   options?: ReadOptions,
 ): Promise<TranscriptRead | null> => {
-  let read = await readTranscript<unknown, Fact>(job.path, format, job.position, options);
+  const placed = job.place && !options?.place ? { ...options, place: job.place } : options;
+  let read = await readTranscript<unknown, Fact>(job.path, format, job.position, placed);
   if (read === null && job.position) {
-    read = await readTranscript<unknown, Fact>(job.path, format, undefined, options);
+    read = await readTranscript<unknown, Fact>(job.path, format, undefined, placed);
   }
   if (read === null) return null;
   return {

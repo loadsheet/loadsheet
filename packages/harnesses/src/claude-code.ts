@@ -32,6 +32,10 @@ export const claudeCode = defineHarness({
     instructions: "exact",
     mcp: "inferred",
     tokens: "exact",
+    // Every assistant message carries its usage, cache writes split by lifetime.
+    usage: "exact",
+    // settings.json and the environment set the prompt cache's lifetime.
+    cacheTtl: "exact",
   },
   inventory: (files) =>
     packInventory(files, {
