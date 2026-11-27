@@ -252,3 +252,4 @@ export interface Harness<State = unknown> {
 export const defineHarness = <H extends Harness>(harness: H): H => harness;
 
 export * from "./fold.ts";
+export * from "./project.ts";

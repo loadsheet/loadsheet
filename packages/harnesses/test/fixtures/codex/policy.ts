@@ -152,7 +152,24 @@ const worldTools: Action = (value) => {
 };
 
 const policy: Policy = {
-  keys: ["type", "payload", "timestamp", "role", "content", "text", "name", "input", "arguments"],
+  keys: [
+    "type",
+    "payload",
+    "timestamp",
+    "role",
+    "content",
+    "text",
+    "name",
+    "input",
+    "arguments",
+    // A token usage's counters, wherever it sits.
+    "input_tokens",
+    "cached_input_tokens",
+    "cache_write_input_tokens",
+    "output_tokens",
+    "reasoning_output_tokens",
+    "total_tokens",
+  ],
   rules: {
     type: "keep",
     timestamp: "keep",
@@ -173,7 +190,27 @@ const policy: Policy = {
       typeof value === "string" && PUBLIC_SERVERS.has(value.replace(/^mcp__/u, ""))
         ? value
         : CANARY,
-    "payload.info.last_token_usage.input_tokens": "keep",
+    "payload.info.last_token_usage.*": "keep",
+    "payload.info.total_token_usage.*": "keep",
+    "payload.info.model_context_window": "keep",
+    // A model name such as `gpt-6`; anything else could be text.
+    "payload.model": (value) =>
+      typeof value === "string" && /^[A-Za-z0-9_.:-]{1,64}$/u.test(value) ? value : CANARY,
+    "payload.thread_source": (value) => (value === "subagent" ? value : CANARY),
+    "payload.forked_from_id": { pseudonym: "thread" },
+    // Under a made-up home, so the folder still reads as absolute.
+    "payload.cwd": (value, { pseudonym }) =>
+      typeof value === "string"
+        ? mapPath(value, pseudonym).replace(/^~(?=\/|$)/u, "/home/u")
+        : CANARY,
+    // A remote of the same shape, so the reader still names the project `owner/repo`.
+    "payload.git.repository_url": (value, { pseudonym }) =>
+      typeof value === "string"
+        ? `https://git.example/${pseudonym("owner", value)}/${pseudonym("repo", value)}.git`
+        : CANARY,
+    // A compaction's summary and the history it replaced.
+    "payload.message": "opaque",
+    "payload.replacement_history": "opaque",
     "payload.state.host_skills.body": (value, { pseudonym }) =>
       typeof value === "string" ? listing(value, pseudonym) : CANARY,
     "payload.state.agents_md.text": (value) =>

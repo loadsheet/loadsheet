@@ -9,6 +9,9 @@
 import { readFileSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import type { ProjectHint } from "../index.ts";
+import { repoOfRemote } from "../project.ts";
+
+export { repoOfRemote };
 
 /** The two disk reads the resolver makes, so tests can count or fake them. */
 export interface ProjectFs {
@@ -42,28 +45,6 @@ const nodeFs: ProjectFs = {
 };
 
 const isPathKey = (key: string) => key === "~" || key.startsWith("~/") || isAbsolute(key);
-
-/** `owner/repo` from a remote URL, or undefined for a local path or a URL with fewer than two segments. */
-export const repoOfRemote = (url: string): string | undefined => {
-  const trimmed = url.trim();
-  let path: string;
-  const scheme = /^[a-z][a-z0-9+.-]*:\/\/([^/]*)(\/.*)?$/i.exec(trimmed);
-  if (scheme) {
-    if (/^file:/i.test(trimmed) || !scheme[1]) return undefined;
-    path = scheme[2] ?? "";
-  } else {
-    const scp = /^(?:[^@/\s]+@)?([^:/\s]+):(.*)$/.exec(trimmed);
-    if (!scp?.[2] || scp[2].startsWith("/")) return undefined;
-    path = scp[2];
-  }
-  const segments = path
-    .replace(/\/+$/, "")
-    .replace(/\.git$/i, "")
-    .split("/")
-    .filter(Boolean);
-  if (segments.length < 2) return undefined;
-  return segments.slice(-2).join("/").toLowerCase();
-};
 
 /** The remote URLs of a git config, `origin` first, then the others in file order. */
 const remoteUrls = (config: string): string[] => {

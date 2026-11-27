@@ -1,8 +1,12 @@
 /**
- * What loadsheet reads from Codex's `config.toml`: table names and their `enabled` switch, and the
- * selectors of `[[skills.config]]` entries; nothing else.
+ * What loadsheet reads from Codex's `config.toml`: table names and their `enabled` switch, the
+ * selectors of `[[skills.config]]` entries, and two whole-number top-level keys; nothing else.
  */
 export interface CodexConfig {
+  /** `project_doc_max_bytes`: the most bytes of AGENTS.md Codex reads; absent when unset. */
+  readonly projectDocMaxBytes?: number;
+  /** `model_auto_compact_token_limit`: the tokens at which Codex compacts on its own; absent when unset. */
+  readonly autoCompactTokenLimit?: number;
   /** MCP server name to whether it is enabled. */
   readonly mcpServers: ReadonlyMap<string, boolean>;
   /** Plugin id (`plugin@marketplace`) to whether it is enabled. */
@@ -112,6 +116,9 @@ const stillOpen = (line: string, triple: string): string | undefined => {
 const KEY_VALUE =
   /^\s*((?:"(?:[^"\\]|\\.)*"|'[^']*'|[^\s=#"'])(?:"(?:[^"\\]|\\.)*"|'[^']*'|[^=#"'])*?)\s*=\s*(.*)$/u;
 const BOOLEAN = /^(true|false)\s*(?:#.*)?$/u;
+/** A top-level key Codex takes a whole number for, and its decimal value, `_` separators and all. */
+const TOP_NUMBER =
+  /^\s*(project_doc_max_bytes|model_auto_compact_token_limit)\s*=\s*\+?(\d(?:_?\d){0,15})\s*(?:#.*)?$/u;
 /** A string, a comment or an array's closing bracket, in the text of a string array. */
 const ARRAY_TOKEN = /"((?:[^"\\]|\\.)*)"|'([^']*)'|(#)[^\n]*|(\])/gu;
 
@@ -194,6 +201,9 @@ export const readCodexConfig = (source: string): CodexConfig => {
   let target: Map<string, boolean> | undefined;
   let name: string | undefined;
   let multiline: string | undefined;
+  /** Before the first header, where a key is the file's own. */
+  let top = true;
+  const numbers = new Map<string, number>();
 
   for (const line of source.replace(/\r\n?/gu, "\n").split("\n")) {
     if (multiline !== undefined) {
@@ -201,6 +211,10 @@ export const readCodexConfig = (source: string): CodexConfig => {
       continue;
     }
     if (/^\s*#/u.test(line)) continue;
+    if (top && !HEADER.test(line) && !ARRAY_HEADER.test(line)) {
+      const entry = TOP_NUMBER.exec(line);
+      if (entry) numbers.set(entry[1]!, Number(entry[2]!.replaceAll("_", "")));
+    } else top = false;
     // A string's text is never a header, a selector or a switch, so open strings are tracked first.
     multiline = leftOpen(line);
     if (multiline !== undefined) continue;
@@ -251,5 +265,13 @@ export const readCodexConfig = (source: string): CodexConfig => {
       name ? { name, enabled: entry.enabled } : { path: entry.path!, enabled: entry.enabled },
     ];
   });
-  return { mcpServers, plugins, skills };
+  const projectDocMaxBytes = numbers.get("project_doc_max_bytes");
+  const autoCompactTokenLimit = numbers.get("model_auto_compact_token_limit");
+  return {
+    mcpServers,
+    plugins,
+    skills,
+    ...(projectDocMaxBytes === undefined ? {} : { projectDocMaxBytes }),
+    ...(autoCompactTokenLimit === undefined ? {} : { autoCompactTokenLimit }),
+  };
 };
