@@ -40,6 +40,7 @@ const label = (id: string) => props.labels[id] ?? id;
 
 type Section = { fix?: string; rows: McpCheckDiagnostic[]; tip?: boolean };
 const items = computed(() => props.problem.items);
+const rowIndexes = computed(() => new Map(items.value.map((row, index) => [row, index])));
 const same = computed(() => new Set(items.value.map((d) => d.fix)).size === 1);
 function groupFixes(rows: McpCheckDiagnostic[], fixes: string[], skipEmpty = false) {
   const groups = new Map<string, McpCheckDiagnostic[]>();
@@ -107,7 +108,7 @@ const on = (d: McpCheckDiagnostic, n: number) =>
 const unfolded = reactive(new Set<number>());
 const exact = reactive(new Set<McpCheckDiagnostic>());
 const prefix = useId();
-const exactId = (row: McpCheckDiagnostic) => `${prefix}-fix-${encodeURIComponent(mcpAnchor(row))}`;
+const exactId = (row: McpCheckDiagnostic) => `${prefix}-fix-${rowIndexes.value.get(row)}`;
 function toggleFix(row: McpCheckDiagnostic) {
   if (!exact.delete(row)) exact.add(row);
 }
@@ -164,7 +165,7 @@ async function showAll(index: number, event: MouseEvent) {
         <li
           v-for="d in shown(sec, n)"
           :id="rowId(d, n)"
-          :key="mcpAnchor(d)"
+          :key="rowIndexes.get(d)"
           :data-on="on(d, n)"
           :tabindex="d.tool === undefined ? -1 : undefined"
         >

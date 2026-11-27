@@ -4,7 +4,7 @@ import { expect, it, vi } from "vite-plus/test";
 import McpProblem from "../src/components/McpProblem.vue";
 import type { McpCheckDiagnostic, McpProblem as Problem } from "../src/lib/mcp";
 
-function render(fixes: string[], target?: string) {
+function render(fixes: string[], target?: string, toolNames?: string[]) {
   const code = "MCP0001";
   const problem: Problem = {
     code,
@@ -13,7 +13,7 @@ function render(fixes: string[], target?: string) {
     items: fixes.map((fix, index): McpCheckDiagnostic => ({
       code,
       severity: "warn",
-      tool: `get_records_${index}`,
+      tool: toolNames?.[index] ?? `get_records_${index}`,
       clients: [],
       findings: [],
       fix,
@@ -57,6 +57,26 @@ it("associates a templated tool link and its disclosure with the exact fix", asy
   expect(html).toContain(`aria-expanded="false" aria-controls="${id}"`);
   expect(html).toContain(`id="${id}" class="mc-exact" style="display:none;"`);
   expect(html).toContain("Set <code>title: &quot;Draft records&quot;</code>.");
+});
+
+it("gives duplicate tool names distinct exact-fix descriptions without changing their links", async () => {
+  const html = await render(
+    ['Set `title: "Draft records"`.', 'Set `title: "Final records"`.'],
+    undefined,
+    ["get_records", "get_records"],
+  );
+  const ids = [...html.matchAll(/href="#MCP0001-get_records" aria-describedby="([^"]+)"/g)].map(
+    ([, id]) => id,
+  );
+  expect(ids).toHaveLength(2);
+  expect(new Set(ids).size).toBe(2);
+  for (const [index, title] of ["Draft records", "Final records"].entries()) {
+    const id = ids[index];
+    expect(html).toContain(`aria-controls="${id}"`);
+    expect(html).toContain(
+      `id="${id}" class="mc-exact" style="display:none;">Set <code>title: &quot;${title}&quot;</code>.`,
+    );
+  }
 });
 
 it("groups mixed fixes and shared suffixes in input order without Map.groupBy", async () => {
