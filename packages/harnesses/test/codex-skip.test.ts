@@ -280,10 +280,10 @@ describe("codexTranscripts.skip", () => {
   it("decides the lines the scan spends its time on", () => {
     const settled = STATES.settled!;
     for (const each of [OUTPUT, REASONING, ITEM, META]) expect(skipped(each, settled)).toBe(true);
-    expect(skipped(call("custom_tool_call", "exec", "ls"), settled)).toBe(true);
     expect(skipped(OUTPUT, STATES["first line of a file"]!)).toBe(true);
-    // A fork's copied compaction is its parent's.
+    // A fork's copied compaction and tool calls are its parent's.
     expect(skipped(COMPACTED, STATES["copying a fork"]!)).toBe(true);
+    expect(skipped(call("custom_tool_call", "exec", "ls"), STATES["copying a fork"]!)).toBe(true);
 
     expect(skipped(META, STATES["first line of a file"]!)).toBe(false);
     expect(skipped(tokenCount(5), STATES.started!)).toBe(false);
@@ -293,6 +293,8 @@ describe("codexTranscripts.skip", () => {
     expect(skipped(COMPACTED, settled)).toBe(false);
     expect(skipped(line("turn_context", { model: "gpt-6" }), settled)).toBe(false);
     expect(skipped(taskStarted(SINCE + 1), STATES["copying a fork"]!)).toBe(false);
+    // Every tool call of the session's own counts.
+    expect(skipped(call("custom_tool_call", "exec", "ls"), settled)).toBe(false);
     expect(skipped(call("custom_tool_call", "exec", `cat ${SKILL_PATH}`), settled)).toBe(false);
     expect(skipped(call("function_call", "go", "{}", { namespace: "mcp__srv" }), settled)).toBe(
       false,

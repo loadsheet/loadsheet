@@ -23,6 +23,10 @@ const EXACT: Record<Signal, Grade> = {
   tokens: "exact",
   usage: "exact",
   cacheTtl: "exact",
+  turns: "none",
+  hours: "none",
+  tools: "none",
+  limits: "none",
 };
 const NOW = new Date("2026-11-24T12:00:00.000Z");
 const FIRST = "2026-10-26";

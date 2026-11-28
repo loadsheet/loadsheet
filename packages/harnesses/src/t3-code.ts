@@ -10,12 +10,23 @@
 // request. A thread with a parent in its lineage is a subagent's; its compactions are its
 // `compaction` turn items. Its project is its worktree, else its project's workspace root.
 //
+// Each provider turn is a turn, with or without usage, keyed by the day and hour it started; one
+// with both stamps is timed, and one whose status is `interrupted` was stopped by the user.
+//
 // Every value is picked out with `json_extract` in the query, so no message, title or id leaves
 // SQLite. The threads are filtered first: the turns' and items' indexes by thread keep the query
 // at about 50 ms on a 40 GB database.
 import type { Place, SqliteStore, StoreFact, StoreRow } from "@loadsheet/kit";
 import { trimSlash } from "./inventory.ts";
-import { count, modelName, noTokens, projectOfCwd, tokensOf, utcDay } from "./store-facts.ts";
+import {
+  count,
+  instantOf,
+  modelName,
+  noTokens,
+  projectOfCwd,
+  tokensOf,
+  utcDay,
+} from "./store-facts.ts";
 
 /** The id under which T3 Code's database is listed in a Coverage when it cannot be read. */
 export const T3_CODE = "t3-code";
@@ -47,7 +58,8 @@ const QUERY = `SELECT 'turn' AS kind, pth.provider AS provider,
   coalesce(pt.completed_at, pt.started_at) AS at, ${THREAD},
   ${USAGE("inputTokens")} AS input, ${USAGE("cachedInputTokens")} AS cacheRead,
   ${USAGE("cacheCreationTokens")} AS cacheWrite, ${USAGE("outputTokens")} AS output,
-  ${USAGE("reasoningTokens")} AS reasoning, NULL AS compactions
+  ${USAGE("reasoningTokens")} AS reasoning, NULL AS compactions,
+  pt.started_at AS startedAt, pt.completed_at AS completedAt, pt.status AS status
 FROM orchestration_v2_projection_threads t
 CROSS JOIN orchestration_v2_projection_provider_turns pt ON pt.thread_id = t.thread_id
 JOIN orchestration_v2_projection_provider_threads pth ON pth.provider_thread_id = pt.provider_thread_id
@@ -58,7 +70,8 @@ UNION ALL
 SELECT 'thread', t.default_provider, t.created_at, ${THREAD},
   NULL, NULL, NULL, NULL, NULL,
   (SELECT count(*) FROM orchestration_v2_projection_turn_items ti
-    WHERE ti.thread_id = t.thread_id AND ti.type = 'compaction')
+    WHERE ti.thread_id = t.thread_id AND ti.type = 'compaction'),
+  NULL, NULL, NULL
 FROM orchestration_v2_projection_threads t
 LEFT JOIN projection_projects p ON p.project_id = t.project_id
 WHERE t.default_provider NOT IN (${NATIVE_LIST}) AND t.created_at >= $since`;
@@ -95,8 +108,9 @@ const rowFacts = (row: StoreRow, place: Place): StoreFact[] => {
     }
     return facts;
   }
+  const facts = turnFacts(row, base);
   // A turn T3 has no usage for, such as one that failed before the provider answered.
-  if (row.input === null && row.output === null) return [];
+  if (row.input === null && row.output === null) return facts;
   const tokens = tokensOf({
     input: count(row.input),
     cacheRead: count(row.cacheRead),
@@ -104,8 +118,58 @@ const rowFacts = (row: StoreRow, place: Place): StoreFact[] => {
     output: count(row.output),
     reasoning: count(row.reasoning),
   });
-  if (noTokens(tokens)) return [];
-  return [{ type: "usage-tokens", ...base, model: modelName(row.model), requests: 1, ...tokens }];
+  if (noTokens(tokens)) return facts;
+  facts.push({
+    type: "usage-tokens",
+    ...base,
+    model: modelName(row.model),
+    requests: 1,
+    ...tokens,
+  });
+  const at = instantOf(row.at);
+  if (at) {
+    facts.push({
+      type: "usage-hour",
+      harness,
+      day: at.day,
+      hour: at.hour,
+      thread: base.thread,
+      requests: 1,
+    });
+  }
+  return facts;
+};
+
+/** A provider turn as a turn: started, timed when it says when it ended, maybe interrupted. */
+const turnFacts = (
+  row: StoreRow,
+  base: { harness: string; day: string; via: string; project: string; thread: "main" | "subagent" },
+): StoreFact[] => {
+  const started = instantOf(row.startedAt);
+  const ended = instantOf(row.completedAt);
+  const ms =
+    started && ended && ended.ms >= started.ms ? Math.round(ended.ms - started.ms) : undefined;
+  const facts: StoreFact[] = [
+    {
+      type: "usage-turn",
+      ...base,
+      day: started?.day ?? base.day,
+      turns: 1,
+      ...(row.status === "interrupted" ? { interrupted: 1 } : {}),
+      ...(ms === undefined ? {} : { timed: 1, durationMs: ms }),
+    },
+  ];
+  if (started) {
+    facts.push({
+      type: "usage-hour",
+      harness: base.harness,
+      day: started.day,
+      hour: started.hour,
+      thread: base.thread,
+      turns: 1,
+    });
+  }
+  return facts;
 };
 
 /** T3 Code's database, read for the usage of the agents loadsheet has no reader for. */

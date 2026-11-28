@@ -20,7 +20,7 @@ import { defaultCacheDir, openCache, type CachedFile, type HarnessCache } from "
 import { dirFiles } from "./files.ts";
 import { createProjectResolver } from "./projects.ts";
 import { reachesOf, withReach } from "./reach.ts";
-import { listTranscriptFiles, type TranscriptFile } from "./reader.ts";
+import { listTranscriptFiles, parentTranscript, type TranscriptFile } from "./reader.ts";
 import { readStore } from "./stores.ts";
 import {
   openTranscriptPool,
@@ -222,8 +222,16 @@ const planTranscripts = async (
   const fromCache: CachedFile[] = [];
   const toRead: ToRead[] = [];
   let cachedBytes = 0;
+  const parents = new Map<string, TranscriptFile | undefined>();
   for (const file of files) {
-    const key = cache?.key(file.path);
+    const source = cache && format.parent?.path(file.path);
+    if (source && !parents.has(source)) parents.set(source, await parentTranscript(source));
+    const parent = source ? parents.get(source) : undefined;
+    const key = cache?.key(
+      parent
+        ? JSON.stringify([file.path, parent.path, parent.size, parent.mtimeMs, parent.ctimeMs])
+        : file.path,
+    );
     const cached = key === undefined ? undefined : cache?.get(key);
     const unchanged =
       cached?.size === file.size &&
@@ -513,9 +521,12 @@ export const resolveProjects = (scan: Scan, hints: readonly ProjectHint[], place
   if (!scan.usage) return scan;
   const resolve = createProjectResolver({ home: place.home, hints });
   const counters = new Accumulator();
+  const { sessions, tokens, turns, ...rest } = scan.usage;
   counters.usage({
-    sessions: scan.usage.sessions.map((cell) => ({ ...cell, project: resolve(cell.project) })),
-    tokens: scan.usage.tokens.map((cell) => ({ ...cell, project: resolve(cell.project) })),
+    ...rest,
+    sessions: sessions.map((cell) => ({ ...cell, project: resolve(cell.project) })),
+    tokens: tokens.map((cell) => ({ ...cell, project: resolve(cell.project) })),
+    ...(turns ? { turns: turns.map((cell) => ({ ...cell, project: resolve(cell.project) })) } : {}),
   });
   const usage = counters.usageResult();
   return usage ? { ...scan, usage } : scan;

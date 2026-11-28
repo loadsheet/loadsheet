@@ -122,11 +122,77 @@ export interface UsageTokensFact extends FactOfThread {
 }
 
 /**
+ * Turns of a conversation, keyed by the UTC day each turn started, not of the session's start. A turn is one prompt and the work
+ * the agent did for it. Each counter defaults to 0, so a parser can say a turn started, then add
+ * its duration or tool calls as it reads them: `timed` and `durationMs` once the turn's length is
+ * known, `interrupted` when the user stopped it, `withSubagents` the first time it starts one.
+ */
+export interface UsageTurnFact extends FactOfThread {
+  readonly type: "usage-turn";
+  readonly turns?: number;
+  readonly interrupted?: number;
+  readonly timed?: number;
+  readonly durationMs?: number;
+  readonly toolCalls?: number;
+  readonly withSubagents?: number;
+}
+
+/** Activity in one UTC hour: model requests made and turns started in it. Counters default to 0. */
+export interface UsageHourFact {
+  readonly type: "usage-hour";
+  /** The UTC day of the activity, not of the session's start. */
+  readonly day: Day;
+  /** The UTC hour, 0 to 23. */
+  readonly hour: number;
+  readonly thread: Thread;
+  readonly requests?: number;
+  readonly turns?: number;
+}
+
+/** Calls of one tool (`calls`, default 1), on the UTC day they were made. `tool` is a `toolName`. */
+export interface UsageToolFact {
+  readonly type: "usage-tool";
+  readonly day: Day;
+  readonly thread: Thread;
+  readonly tool: string;
+  readonly calls?: number;
+}
+
+/**
+ * A reading of a rate-limit window, or the limit being reached (`reached`, default 0), on the UTC
+ * day it was read. `windowMinutes` is 0 when the harness does not say the window's length. It is a
+ * gauge: the reading with the later `at` wins.
+ */
+export interface UsageLimitFact {
+  readonly type: "usage-limit";
+  readonly day: Day;
+  readonly windowMinutes: number;
+  /** The share of the window used, in percent. */
+  readonly usedPercent?: number;
+  /** When it was read, in seconds since the epoch, with millisecond precision. */
+  readonly at?: number;
+  /** When the window resets, in seconds since the epoch. */
+  readonly resetsAt?: number;
+  readonly reached?: number;
+}
+
+/** A tool's name as usage keeps it: letters, digits, `_`, `.`, `:` and `-`, at most 64. */
+const TOOL = /^[A-Za-z0-9_.:-]{1,64}$/u;
+
+/**
+ * Validate the spelling of a verified built-in or MCP label. Adapters must establish the label
+ * from their built-in tools or harness metadata before passing it here.
+ */
+export const toolName = (label: string | undefined): string =>
+  label !== undefined && TOOL.test(label) ? label : "other";
+
+/**
  * What one transcript line says, in names, days and counters only: no text, no session id, no
  * path. A Scan is a sum over Facts: `session` and `tokens` fill a SessionCell and the Coverage,
- * `window` the Coverage's context window, `listed` and `used` fill the Cell of their item, and
- * `usage-session`, `compaction` and `usage-tokens` fill the Scan's usage. Every one is counted
- * where it is read, so a transcript read in two parts sums to the same as one read whole.
+ * `window` the Coverage's context window, `listed` and `used` fill the Cell of their item, and the
+ * `usage-*` and `compaction` Facts fill the Scan's usage. Every one is counted where it is read, so
+ * a transcript read in two parts sums to the same as one read whole; `usage-limit` is the one
+ * gauge, and merges by its reading's time instead.
  */
 export type Fact =
   | SessionFact
@@ -136,7 +202,11 @@ export type Fact =
   | UsedFact
   | UsageSessionFact
   | CompactionFact
-  | UsageTokensFact;
+  | UsageTokensFact
+  | UsageTurnFact
+  | UsageHourFact
+  | UsageToolFact
+  | UsageLimitFact;
 
 /**
  * One transcript line's bytes, before they are decoded: a view the reader points at each line in
@@ -153,10 +223,14 @@ export interface LineBytes {
   slice(start: number, end?: number): string;
 }
 
-/**
- * How a harness's transcript lines become Facts. `readTranscript` in `@loadsheet/kit/node` takes
- * it as its line format.
- */
+/** How a child transcript finds and reads verified names from its parent. */
+export interface TranscriptParent {
+  path(child: string): string | undefined;
+  readonly markers: readonly [string, ...string[]];
+  collect(line: string, names: Set<string>): void;
+}
+
+/** How a harness's transcript lines become Facts for `readTranscript` in `@loadsheet/kit/node`. */
 export interface TranscriptFormat<State> {
   /** A line that contains none of these byte strings is skipped before it is decoded. */
   readonly markers: readonly [string, ...string[]];
@@ -176,7 +250,9 @@ export interface TranscriptFormat<State> {
    * the machine's, for writing a working directory the way the Files keys paths; nothing of it
    * goes into `state`. kit's readers always pass it; a test may leave it out.
    */
-  parse(line: string, state: State, place?: Place): readonly Fact[];
+  parse(line: string, state: State, place?: Place, parentNames?: ReadonlySet<string>): readonly Fact[];
+  /** Verified names a child can inherit from the main transcript of its session. */
+  readonly parent?: TranscriptParent;
 }
 
 /** Where things are on one machine. A harness derives its own paths from it and reads nothing. */
@@ -194,7 +270,13 @@ export interface Place {
  * another one, as when T3 Code's database holds the sessions of an agent it drives. A store says
  * only usage: its sessions never count as a harness's SessionCells.
  */
-export type StoreFact = (UsageSessionFact | CompactionFact | UsageTokensFact) & {
+export type StoreFact = (
+  | UsageSessionFact
+  | CompactionFact
+  | UsageTokensFact
+  | UsageTurnFact
+  | UsageHourFact
+) & {
   readonly harness?: string;
 };
 

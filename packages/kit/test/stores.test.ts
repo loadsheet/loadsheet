@@ -248,6 +248,10 @@ const NONE = {
   tokens: "none",
   usage: "exact",
   cacheTtl: "none",
+  turns: "none",
+  hours: "none",
+  tools: "none",
+  limits: "none",
 } satisfies Record<Signal, Grade>;
 
 /** A harness known only by its stores: a folder that reads, and a database that does not. */

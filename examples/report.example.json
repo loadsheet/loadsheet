@@ -99,7 +99,11 @@
         "mcp": "exact",
         "tokens": "exact",
         "usage": "exact",
-        "cacheTtl": "exact"
+        "cacheTtl": "exact",
+        "turns": "inferred",
+        "hours": "exact",
+        "tools": "exact",
+        "limits": "inferred"
       },
       "contextWindow": 200000,
       "settings": {
@@ -126,7 +130,11 @@
         "mcp": "exact",
         "tokens": "exact",
         "usage": "exact",
-        "cacheTtl": "none"
+        "cacheTtl": "none",
+        "turns": "exact",
+        "hours": "exact",
+        "tools": "exact",
+        "limits": "exact"
       },
       "contextWindow": 258400,
       "settings": {
@@ -149,7 +157,11 @@
         "mcp": "none",
         "tokens": "none",
         "usage": "none",
-        "cacheTtl": "none"
+        "cacheTtl": "none",
+        "turns": "none",
+        "hours": "none",
+        "tools": "none",
+        "limits": "none"
       }
     },
     {
@@ -168,7 +180,11 @@
         "mcp": "exact",
         "tokens": "exact",
         "usage": "exact",
-        "cacheTtl": "exact"
+        "cacheTtl": "exact",
+        "turns": "inferred",
+        "hours": "exact",
+        "tools": "exact",
+        "limits": "inferred"
       },
       "contextWindow": 200000
     },
@@ -188,7 +204,11 @@
         "mcp": "exact",
         "tokens": "exact",
         "usage": "exact",
-        "cacheTtl": "none"
+        "cacheTtl": "none",
+        "turns": "exact",
+        "hours": "exact",
+        "tools": "exact",
+        "limits": "exact"
       },
       "contextWindow": 258400
     },
@@ -206,7 +226,11 @@
         "mcp": "none",
         "tokens": "none",
         "usage": "none",
-        "cacheTtl": "none"
+        "cacheTtl": "none",
+        "turns": "none",
+        "hours": "none",
+        "tools": "none",
+        "limits": "none"
       }
     }
   ],

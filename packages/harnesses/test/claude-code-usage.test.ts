@@ -4,7 +4,7 @@ import * as NodePath from "node:path";
 import { findCanary } from "@loadsheet/fixtures";
 import type { Fact, Place, UsageTokensFact } from "@loadsheet/kit";
 import { memoryFiles } from "@loadsheet/kit";
-import { readTranscript, type ReadPosition } from "@loadsheet/kit/node";
+import { readTranscript, scanMachine, type ReadPosition } from "@loadsheet/kit/node";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { CLAUDE_CODE_RETENTION_DAYS, claudeCode, claudeTranscripts } from "../src/index.ts";
 
@@ -232,6 +232,86 @@ describe("Claude Code usage", () => {
   const tokens = (facts: readonly Fact[]) =>
     facts.filter((fact): fact is UsageTokensFact => fact.type === "usage-tokens");
 
+  it("keeps supported native tool labels", () => {
+    const names = ["Monitor", "PushNotification", "WaitForMcpServers", "private.canary"];
+    const { facts } = parseLines([
+      line({
+        type: "assistant",
+        message: { content: names.map((name) => ({ type: "tool_use", name })) },
+      }),
+    ]);
+    expect(facts.flatMap((fact) => (fact.type === "usage-tool" ? [fact.tool] : []))).toEqual([
+      "Monitor",
+      "PushNotification",
+      "WaitForMcpServers",
+      "other",
+    ]);
+  });
+
+  it("verifies MCP calls in a separate subagent transcript against its parent", async () => {
+    const dir = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "claude-parent-"));
+    try {
+      const projects = NodePath.join(dir, ".claude", "projects", "project");
+      const subagents = NodePath.join(projects, "session", "subagents");
+      await NodeFSP.mkdir(subagents, { recursive: true });
+      const parent = NodePath.join(projects, "session.jsonl");
+      const child = NodePath.join(subagents, "agent-test.jsonl");
+      const parentLines = [
+        line({
+          type: "attachment",
+          attachment: { type: "mcp_instructions_delta", addedNames: ["listed__server"] },
+        }),
+        line({ type: "user", message: { content: "hi" } }),
+      ];
+      const childLine = line({
+        type: "assistant",
+        isSidechain: true,
+        message: {
+          content: ["mcp__listed__server__read", "mcp__private__read"].map((name) => ({
+            type: "tool_use",
+            name,
+          })),
+        },
+      });
+      await NodeFSP.writeFile(parent, `${parentLines.join("\n")}\n`);
+      await NodeFSP.writeFile(child, `${childLine}\n`);
+      const read = await readTranscript(child, claudeTranscripts);
+      const facts = read!.records;
+      expect(facts.flatMap((fact) => (fact.type === "usage-tool" ? [fact.tool] : []))).toEqual([
+        "mcp:listed__server",
+        "other",
+      ]);
+      expect(facts.flatMap((fact) => (fact.type === "used" ? [fact.item] : []))).toEqual([
+        "mcp:listed__server",
+      ]);
+      expect(findCanary(read, ["private", "agent-test", "session.jsonl"])).toEqual([]);
+      const scan = () =>
+        scanMachine({
+          harnesses: [claudeCode],
+          place: { home: dir, env: {} },
+          now: new Date("2026-03-02T12:00:00Z"),
+          days: 2,
+          tool: "test",
+          cacheDir: NodePath.join(dir, "cache"),
+        });
+      const cold = await scan();
+      expect(cold.usage?.tools?.map((cell) => cell.tool)).toEqual(["mcp:listed__server", "other"]);
+      expect(cold.cells.find((cell) => cell.item === "mcp:listed__server")).toMatchObject({
+        sessions: 1,
+        byModel: 1,
+      });
+      expect(await scan()).toEqual(cold);
+      await NodeFSP.rm(parent);
+      const after = await scan();
+      expect(after.usage?.tools?.map(({ tool, calls }) => [tool, calls])).toEqual([["other", 2]]);
+      expect(after.cells.some((cell) => cell.item === "mcp:listed__server")).toBe(false);
+      const resumed = await readTranscript(child, claudeTranscripts, read!.position);
+      expect(resumed!.resumed).toBe(false);
+    } finally {
+      await NodeFSP.rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("counts a message written once per content block as one request", () => {
     const usage = { input_tokens: 3, output_tokens: 10, cache_creation_input_tokens: 7 };
     const { facts } = parseLines(
@@ -451,6 +531,322 @@ describe("Claude Code usage", () => {
       "us.anthropic.claude-opus-5-5",
     ]);
     expect(findCanary(facts, ["/home/jo"])).toEqual([]);
+  });
+});
+
+describe("Claude Code turns, hours, tools and limits", () => {
+  const jo: Place = { home: "/home/jo", env: {} };
+  const line = (value: Record<string, unknown>) =>
+    JSON.stringify({ entrypoint: "cli", version: "2.1.0", cwd: "/home/jo/work/app", ...value });
+  const prompt = (timestamp: string, content: unknown, extra: Record<string, unknown> = {}) =>
+    line({ type: "user", timestamp, message: { role: "user", content }, ...extra });
+  const reply = (
+    id: string,
+    timestamp: string,
+    content: unknown[] = [],
+    extra: Record<string, unknown> = {},
+    model = "claude-opus-5-5",
+  ) =>
+    line({
+      type: "assistant",
+      timestamp,
+      message: { model, id, content, usage: { input_tokens: 1, output_tokens: 1 } },
+      ...extra,
+    });
+  const use = (name: string, input: Record<string, unknown> = {}) => ({
+    type: "tool_use",
+    id: "toolu_secret",
+    name,
+    input,
+  });
+  const result = (timestamp: string, extra: Record<string, unknown> = {}) =>
+    line({
+      type: "user",
+      timestamp,
+      message: {
+        role: "user",
+        content: [{ type: "tool_result", tool_use_id: "toolu_secret", content: "secret output" }],
+      },
+      toolUseResult: { stdout: "secret output" },
+      ...extra,
+    });
+  const apiError = (timestamp: string, status: number, retryAttempt: number) =>
+    line({
+      type: "system",
+      subtype: "api_error",
+      level: "error",
+      timestamp,
+      error: { status, message: "secret error" },
+      retryAttempt,
+      maxRetries: 10,
+    });
+
+  /**
+   * Two prompts. The first runs 10 s over two replies with five tool calls (an MCP tool, two
+   * subagent starts in one message and a name that is not a tool's), then a notification ends it
+   * and its answer is no part of it. The second starts before midnight, hits the rate limit after
+   * it (two retries, then the failed reply), runs 40 s until the user stops it, and hits the limit
+   * again on the next request.
+   */
+  const SESSION = [
+    line({
+      type: "attachment",
+      timestamp: "2026-03-02T10:00:00Z",
+      attachment: { type: "mcp_instructions_delta", addedNames: ["linear"] },
+    }),
+    prompt("2026-03-02T10:00:00Z", "Fix the secret bug"),
+    reply("a", "2026-03-02T10:00:05Z", [
+      use("Bash", { command: "cat secret" }),
+      use("mcp__linear__list_issues"),
+    ]),
+    result("2026-03-02T10:00:06Z"),
+    reply("b", "2026-03-02T10:00:10Z", [
+      use("Agent", { subagent_type: "general-purpose", prompt: "secret" }),
+      use("Task", { prompt: "secret" }),
+      use("cat ~/secret"),
+    ]),
+    prompt("2026-03-02T10:05:00Z", "<task-notification>secret</task-notification>"),
+    reply("c", "2026-03-02T10:05:10Z"),
+    prompt("2026-03-02T23:59:50Z", [{ type: "text", text: "Next secret" }]),
+    reply("d", "2026-03-03T00:00:05Z"),
+    apiError("2026-03-03T00:00:10Z", 429, 1),
+    apiError("2026-03-03T00:00:15Z", 429, 2),
+    apiError("2026-03-03T00:00:16Z", 500, 1),
+    reply(
+      "e",
+      "2026-03-03T00:00:20Z",
+      [{ type: "text", text: "secret limit text" }],
+      { isApiErrorMessage: true, error: "rate_limit", apiErrorStatus: 429 },
+      "<synthetic>",
+    ),
+    prompt("2026-03-03T00:00:30Z", [{ type: "text", text: "[Request interrupted by user]" }]),
+    reply("f", "2026-03-03T00:00:45Z"),
+    apiError("2026-03-03T00:01:00Z", 429, 1),
+  ];
+
+  const ofType = <T extends Fact["type"]>(facts: readonly Fact[], type: T) =>
+    facts.filter((fact): fact is Extract<Fact, { type: T }> => fact.type === type);
+  const summed = (facts: readonly Fact[], key: (fact: Fact) => string) => {
+    const out: Record<string, Record<string, number>> = {};
+    for (const fact of facts) {
+      const cell = (out[key(fact)] ??= {});
+      for (const [name, value] of Object.entries(fact)) {
+        if (typeof value === "number" && name !== "hour" && name !== "windowMinutes")
+          cell[name] = (cell[name] ?? 0) + value;
+      }
+    }
+    return out;
+  };
+
+  it("counts each prompt as a turn on its day, timed to its last reply, stopped by the user", () => {
+    const turns = ofType(parseLines(SESSION, jo).facts, "usage-turn");
+    expect(
+      turns.every(
+        (fact) =>
+          fact.day === "2026-03-02" &&
+          fact.via === "cli" &&
+          fact.project === "~/work/app" &&
+          fact.thread === "main",
+      ),
+    ).toBe(true);
+    expect(summed(turns, () => "all")).toEqual({
+      all: {
+        turns: 2,
+        timed: 2,
+        durationMs: 10_000 + 40_000,
+        interrupted: 1,
+        toolCalls: 5,
+        withSubagents: 1,
+      },
+    });
+  });
+
+  it("counts a tool stopped by the user as the turn's interruption", () => {
+    const { facts } = parseLines(
+      [
+        prompt("2026-03-02T10:00:00Z", "Run it"),
+        reply("a", "2026-03-02T10:00:02Z", [use("Bash")]),
+        result("2026-03-02T10:00:09Z", { toolUseResult: { interrupted: true, stdout: "" } }),
+        result("2026-03-02T10:00:10Z", { toolUseResult: { interrupted: true, stdout: "" } }),
+        reply("b", "2026-03-02T10:00:15Z", [use("Read")]),
+      ],
+      jo,
+    );
+    const turns = ofType(facts, "usage-turn");
+    expect(summed(turns, () => "all")).toEqual({
+      all: { turns: 1, timed: 1, durationMs: 9_000, interrupted: 1, toolCalls: 1 },
+    });
+    expect(ofType(facts, "usage-tool").map((fact) => fact.tool)).toEqual(["Bash", "Read"]);
+    expect(ofType(facts, "usage-hour").filter((fact) => fact.requests)).toHaveLength(2);
+  });
+
+  it("starts a fresh turn for a prompt that begins with markup", () => {
+    const { facts } = parseLines(
+      [
+        prompt("2026-03-02T10:00:00Z", "First"),
+        reply("a", "2026-03-02T10:00:02Z"),
+        prompt("2026-03-02T11:00:00Z", "<div>Fix this</div>"),
+        reply("b", "2026-03-02T11:00:03Z"),
+      ],
+      jo,
+    );
+    expect(summed(ofType(facts, "usage-turn"), () => "all")).toEqual({
+      all: { turns: 2, timed: 2, durationMs: 5_000 },
+    });
+    expect(
+      ofType(facts, "usage-hour")
+        .filter((fact) => fact.turns)
+        .map((fact) => fact.hour),
+    ).toEqual([10, 11]);
+  });
+
+  it("starts no turn for a meta line, a tool result or a command", () => {
+    const turns = ofType(
+      parseLines(
+        [
+          prompt("2026-03-02T10:00:00Z", "<system-reminder>x</system-reminder>"),
+          prompt("2026-03-02T10:00:00Z", "Context", { isMeta: true }),
+          prompt("2026-03-02T10:00:01Z", "<command-name>/clear</command-name>"),
+          result("2026-03-02T10:00:02Z"),
+        ],
+        jo,
+      ).facts,
+      "usage-turn",
+    );
+    expect(turns).toEqual([]);
+  });
+
+  it("counts requests and prompts by the UTC hour they happened in", () => {
+    const hours = ofType(parseLines(SESSION, jo).facts, "usage-hour");
+    expect(summed(hours, (fact) => `${fact.day} ${(fact as { hour: number }).hour}`)).toEqual({
+      "2026-03-02 10": { turns: 1, requests: 3 },
+      "2026-03-02 23": { turns: 1 },
+      "2026-03-03 0": { requests: 2 },
+    });
+  });
+
+  it("counts calls by tool, an MCP tool under its server and any other name as other", () => {
+    const tools = ofType(parseLines(SESSION, jo).facts, "usage-tool");
+    expect(tools.every((fact) => fact.day === "2026-03-02" && fact.thread === "main")).toBe(true);
+    expect(tools.map((fact) => fact.tool)).toEqual([
+      "Bash",
+      "mcp:linear",
+      "Agent",
+      "Task",
+      "other",
+    ]);
+  });
+
+  it("counts each run of rate-limit retries as the limit reached once, with no window", () => {
+    expect(ofType(parseLines(SESSION, jo).facts, "usage-limit")).toEqual([
+      { type: "usage-limit", day: "2026-03-03", windowMinutes: 0, reached: 1 },
+      { type: "usage-limit", day: "2026-03-03", windowMinutes: 0, reached: 1 },
+    ]);
+  });
+
+  it("counts a failed reply as the limit reached when no retry said so", () => {
+    const limits = ofType(
+      parseLines(
+        [
+          reply(
+            "a",
+            "2026-03-02T10:00:00Z",
+            [],
+            {
+              isApiErrorMessage: true,
+              error: "rate_limit",
+              apiErrorStatus: 429,
+            },
+            "<synthetic>",
+          ),
+          reply(
+            "b",
+            "2026-03-02T10:00:01Z",
+            [],
+            {
+              isApiErrorMessage: true,
+              error: "rate_limit",
+              apiErrorStatus: 429,
+            },
+            "<synthetic>",
+          ),
+          reply("c", "2026-03-02T11:00:00Z"),
+          reply(
+            "d",
+            "2026-03-02T12:00:00Z",
+            [],
+            {
+              isApiErrorMessage: true,
+              error: "rate_limit",
+              apiErrorStatus: 429,
+            },
+            "<synthetic>",
+          ),
+        ],
+        jo,
+      ).facts,
+      "usage-limit",
+    );
+    expect(limits.map((fact) => fact.reached)).toEqual([1, 1]);
+  });
+
+  it("keeps prompts, tool input and output, and errors out of every Fact and the State", () => {
+    const { facts, state } = parseLines(SESSION, jo);
+    const forbidden = ["secret", "toolu", "/home/jo"];
+    expect(findCanary(facts, forbidden)).toEqual([]);
+    expect(findCanary(state, forbidden)).toEqual([]);
+  });
+
+  it("buckets identifier-shaped names from unverified tools and MCP servers", () => {
+    const { facts, state } = parseLines(
+      [
+        prompt("2026-03-02T10:00:00Z", "Run it"),
+        reply("a", "2026-03-02T10:00:01Z", [
+          use("private.customer-reference"),
+          use("mcp__private__read"),
+        ]),
+      ],
+      jo,
+    );
+    expect(ofType(facts, "usage-tool").map((fact) => fact.tool)).toEqual(["other", "other"]);
+    expect(findCanary({ facts, state }, ["private"])).toEqual([]);
+  });
+
+  describe("read through readTranscript", () => {
+    let dir: string;
+    beforeEach(async () => {
+      dir = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "loadsheet-claude-turns-"));
+    });
+    afterEach(async () => {
+      await NodeFSP.rm(dir, { recursive: true, force: true });
+    });
+
+    it("gives the same Facts and State resumed after any line as read whole", async () => {
+      const path = NodePath.join(dir, "session.jsonl");
+      await NodeFSP.writeFile(path, SESSION.map((value) => `${value}\n`).join(""));
+      const whole = await readTranscript(path, claudeTranscripts, undefined, { place: jo });
+      expect(whole!.records).toEqual(parseLines(SESSION, jo).facts);
+      for (let cut = 1; cut < SESSION.length; cut += 1) {
+        await NodeFSP.writeFile(
+          path,
+          SESSION.slice(0, cut)
+            .map((value) => `${value}\n`)
+            .join(""),
+        );
+        const first = await readTranscript(path, claudeTranscripts, undefined, { place: jo });
+        const saved = JSON.parse(JSON.stringify(first!.position)) as ReadPosition;
+        await NodeFSP.appendFile(
+          path,
+          SESSION.slice(cut)
+            .map((value) => `${value}\n`)
+            .join(""),
+        );
+        const second = await readTranscript(path, claudeTranscripts, saved, { place: jo });
+        expect(second!.resumed, `cut at ${cut}`).toBe(true);
+        expect([...first!.records, ...second!.records], `cut at ${cut}`).toEqual(whole!.records);
+        expect(second!.position, `cut at ${cut}`).toEqual(whole!.position);
+      }
+    });
   });
 });
 

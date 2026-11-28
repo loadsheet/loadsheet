@@ -22,12 +22,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import { createHash } from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import type { Transform } from "node:stream";
 import * as NodeZlib from "node:zlib";
-import type { LineBytes, Place } from "../index.ts";
+import type { LineBytes, Place, TranscriptParent } from "../index.ts";
 
 export interface TranscriptFile {
   readonly path: string;
@@ -52,7 +53,8 @@ export interface LineFormat<State, Entry> {
    * May mutate `state`. A throw fails the whole read (null), so catch malformed lines inside.
    * `place` is the one the read was given.
    */
-  parse(line: string, state: State, place?: Place): readonly Entry[];
+  parse(line: string, state: State, place?: Place, parentNames?: ReadonlySet<string>): readonly Entry[];
+  readonly parent?: TranscriptParent;
 }
 
 /** Resume only if the bytes before `offset` still hash to `guardHash`; a rewritten file is read in full. */
@@ -61,6 +63,7 @@ export interface ReadPosition {
   readonly guardLength: number;
   readonly guardHash: number;
   readonly state: unknown;
+  readonly parentNamesHash?: string;
 }
 
 export interface ReadResult<Entry> {
@@ -524,21 +527,58 @@ export async function readTranscript<State, Entry>(
 ): Promise<ReadResult<Entry> | null> {
   const maxLineBytes = options?.maxLineBytes ?? MAX_LINE_BYTES;
   const chunkBytes = options?.chunkBytes ?? CHUNK_BYTES;
-  const lines = options?.place ? placed(format, options.place) : format;
-  if (path.endsWith(".jsonl.zst")) return readCompressed(path, lines, maxLineBytes, chunkBytes);
-  if (options?.sync) return readPlainSync(path, lines, resumeFrom, maxLineBytes, chunkBytes);
-  return readPlain(path, lines, resumeFrom, maxLineBytes, chunkBytes);
+  const parent = format.parent;
+  const source = parent?.path(path);
+  let names: Set<string> | undefined;
+  let parentNamesHash: string | undefined;
+  if (source && parent) {
+    const collected = new Set<string>();
+    const collector: LineFormat<null, never> = {
+      markers: parent.markers,
+      initial: () => null,
+      parse(line) {
+        parent.collect(line, collected);
+        return [];
+      },
+    };
+    const metadata = await parentTranscript(source);
+    if (metadata && !(await readTranscript(metadata.path, collector, undefined, options))) {
+      collected.clear();
+    }
+    names = collected;
+    parentNamesHash = createHash("sha256")
+      .update(JSON.stringify([...names].sort()))
+      .digest("hex");
+  }
+  const resume = resumeFrom?.parentNamesHash === parentNamesHash ? resumeFrom : undefined;
+  const lines = options?.place || names ? placed(format, options?.place, names) : format;
+  const result = path.endsWith(".jsonl.zst")
+    ? await readCompressed(path, lines, maxLineBytes, chunkBytes)
+    : options?.sync
+      ? readPlainSync(path, lines, resume, maxLineBytes, chunkBytes)
+      : await readPlain(path, lines, resume, maxLineBytes, chunkBytes);
+  if (!result || parentNamesHash === undefined) return result;
+  return { ...result, position: { ...result.position, parentNamesHash } };
 }
 
-/** `format` with `place` passed to each `parse`. */
+/** The parent's ordinary or compressed transcript, including when it is outside the scan window. */
+export const parentTranscript = async (source: string): Promise<TranscriptFile | undefined> => {
+  for (const path of [source, `${source}.zst`]) {
+    const info = await NodeFSP.lstat(path).catch(() => undefined);
+    if (info?.isFile()) return { path, size: info.size, mtimeMs: info.mtimeMs, ctimeMs: info.ctimeMs };
+  }
+  return undefined;
+};
+
 const placed = <State, Entry>(
   format: LineFormat<State, Entry>,
-  place: Place,
+  place: Place | undefined,
+  parentNames: ReadonlySet<string> | undefined,
 ): LineFormat<State, Entry> => ({
   markers: format.markers,
   initial: () => format.initial(),
   ...(format.skip ? { skip: (line: LineBytes, state: State) => format.skip!(line, state) } : {}),
-  parse: (line, state) => format.parse(line, state, place),
+  parse: (line, state) => format.parse(line, state, place, parentNames),
 });
 
 /** The state to start from: the resumed position's, or the format's initial one, copied either way. */

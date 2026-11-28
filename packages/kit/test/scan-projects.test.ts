@@ -25,6 +25,10 @@ const proj: Harness<ProjState> = defineHarness({
     tokens: "none",
     usage: "exact",
     cacheTtl: "none",
+    turns: "none",
+    hours: "none",
+    tools: "none",
+    limits: "none",
   },
   inventory: async () => [],
   machine: {

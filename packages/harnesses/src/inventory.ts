@@ -18,6 +18,10 @@ export const NO_USAGE: Record<Signal, Grade> = {
   tokens: "none",
   usage: "none",
   cacheTtl: "none",
+  turns: "none",
+  hours: "none",
+  tools: "none",
+  limits: "none",
 };
 
 export const trimSlash = (path: string) => (path.length > 1 ? path.replace(/\/+$/u, "") : path);

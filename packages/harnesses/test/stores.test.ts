@@ -67,6 +67,21 @@ const sessionRows = (result: Scan) =>
     ]),
   );
 
+const turnRows = (result: Scan) =>
+  Object.fromEntries(
+    (result.usage!.turns ?? []).map((cell) => [
+      `${cell.harness} ${cell.via} ${cell.day} ${cell.project} ${cell.thread}`,
+      [cell.turns, cell.interrupted, cell.timed, cell.durationMs],
+    ]),
+  );
+const hourRows = (result: Scan) =>
+  Object.fromEntries(
+    (result.usage!.hours ?? []).map((cell) => [
+      `${cell.harness} ${cell.day} ${cell.hour} ${cell.thread}`,
+      [cell.requests, cell.turns],
+    ]),
+  );
+
 const grokSession = async (
   cwd: string,
   id: string,
@@ -261,7 +276,8 @@ CREATE TABLE orchestration_v2_projection_threads (thread_id TEXT PRIMARY KEY, pr
 CREATE TABLE orchestration_v2_projection_provider_threads (provider_thread_id TEXT PRIMARY KEY,
   provider TEXT, payload_json TEXT);
 CREATE TABLE orchestration_v2_projection_provider_turns (provider_turn_id TEXT PRIMARY KEY,
-  thread_id TEXT, provider_thread_id TEXT, started_at TEXT, completed_at TEXT, payload_json TEXT);
+  thread_id TEXT, provider_thread_id TEXT, started_at TEXT, completed_at TEXT, status TEXT,
+  payload_json TEXT);
 CREATE TABLE orchestration_v2_projection_turn_items (item_id TEXT PRIMARY KEY, thread_id TEXT,
   type TEXT, payload_json TEXT);
 CREATE INDEX provider_turns_thread_idx ON orchestration_v2_projection_provider_turns(thread_id);
@@ -290,7 +306,7 @@ const makeT3 = async () => {
     "INSERT INTO orchestration_v2_projection_provider_threads VALUES (?,?,?)",
   );
   const turn = db.prepare(
-    "INSERT INTO orchestration_v2_projection_provider_turns VALUES (?,?,?,?,?,?)",
+    "INSERT INTO orchestration_v2_projection_provider_turns VALUES (?,?,?,?,?,?,?)",
   );
   const item = db.prepare("INSERT INTO orchestration_v2_projection_turn_items VALUES (?,?,?,?)");
   let turns = 0;
@@ -300,28 +316,29 @@ const makeT3 = async () => {
     created: string,
     payload: object,
     projectId: string | null,
-    turnList: [string, string | null][],
+    turnList: [completed: string, usage: string | null, started?: string, status?: string][],
   ) => {
     thread.run(id, projectId, provider, created, JSON.stringify({ title: SECRET, ...payload }));
     providerThread.run(`${id}-pt`, provider, JSON.stringify({ text: SECRET }));
-    for (const [completed, payloadJson] of turnList) {
+    for (const [completed, payloadJson, started, status] of turnList) {
       turns += 1;
       turn.run(
         `id-canary-turn-${turns}`,
         id,
         `${id}-pt`,
+        started ?? null,
         completed,
-        completed,
+        status ?? "completed",
         payloadJson ?? "{}",
       );
     }
   };
   const model = { modelSelection: { model: "gemini-x" } };
   add("id-canary-t1", "antigravity", "2026-11-20T10:00:00.000Z", model, "id-canary-p1", [
-    ["2026-11-20T11:00:00.000Z", usage(1000, 700, 100, 40, 100)],
+    ["2026-11-20T11:00:00.000Z", usage(1000, 700, 100, 40, 100), "2026-11-20T10:59:00.000Z"],
     ["2026-11-21T11:00:00.000Z", usage(300, 100, 20, 0)],
-    // A turn T3 has no usage for.
-    ["2026-11-21T12:00:00.000Z", null],
+    // A turn T3 has no usage for, stopped by the user.
+    ["2026-11-21T12:00:00.000Z", null, "2026-11-21T11:59:30.000Z", "interrupted"],
   ]);
   item.run("id-canary-i1", "id-canary-t1", "compaction", JSON.stringify({ text: SECRET }));
   item.run("id-canary-i2", "id-canary-t1", "compaction", "{}");
@@ -385,6 +402,21 @@ describe("T3 Code's database", () => {
         "antigravity t3-code 2026-11-20 ~/code/app main": [1, 2, 1],
         "antigravity t3-code 2026-11-21 ~/wt/x subagent": [1, 0, 0],
         "cursor t3-code 2026-11-22 ~/code/app main": [1, 0, 0],
+      });
+      expect(turnRows(result)).toEqual({
+        "antigravity t3-code 2026-11-19 unknown main": [1, 0, 0, 0],
+        "antigravity t3-code 2026-11-20 ~/code/app main": [1, 0, 1, 60_000],
+        "antigravity t3-code 2026-11-21 ~/code/app main": [2, 1, 1, 30_000],
+        "antigravity t3-code 2026-11-21 ~/wt/x subagent": [1, 0, 0, 0],
+        "cursor t3-code 2026-11-22 ~/code/app main": [1, 0, 0, 0],
+      });
+      expect(hourRows(result)).toEqual({
+        "antigravity 2026-11-19 10 main": [1, 0],
+        "antigravity 2026-11-20 10 main": [0, 1],
+        "antigravity 2026-11-20 11 main": [1, 0],
+        "antigravity 2026-11-21 10 subagent": [1, 0],
+        "antigravity 2026-11-21 11 main": [1, 1],
+        "cursor 2026-11-22 10 main": [1, 0],
       });
       expect(findCanary(result, [tmp, SECRET, "id-canary", "999999"])).toEqual([]);
     } finally {

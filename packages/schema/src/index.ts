@@ -1,10 +1,47 @@
 import * as v from "valibot";
 import { ConfigSchema, ReportSchema, RULES, SIGNALS, ScanSchema } from "./schemas.ts";
-import type { Config, Id, Kind, Ref, Report, ResolvedConfig, Scan } from "./types.ts";
+import type {
+  Config,
+  Id,
+  Kind,
+  Ref,
+  Report,
+  ResolvedConfig,
+  Scan,
+  UsageLimitCell,
+} from "./types.ts";
 
 export type * from "./types.ts";
 export { ConfigSchema, ReportSchema, RULES, SIGNALS, ScanSchema };
 export { isProjectKey, isRepositoryKey } from "./schemas.ts";
+
+/**
+ * Adds `from`'s rate-limit reading to `into`, which shares its key. Reaches add up and the peak is
+ * the higher one; the reading taken later wins, a tie going to the fuller one, then to the later
+ * reset, so the result does not depend on the order cells come in.
+ */
+export const mergeUsageLimit = (into: UsageLimitCell, from: UsageLimitCell): void => {
+  into.reached += from.reached;
+  if (from.usedPercent === undefined || from.at === undefined) return;
+  const later =
+    into.at === undefined ||
+    into.usedPercent === undefined ||
+    from.at > into.at ||
+    (from.at === into.at &&
+      (from.usedPercent > into.usedPercent ||
+        (from.usedPercent === into.usedPercent && (from.resetsAt ?? -1) > (into.resetsAt ?? -1))));
+  if (later) {
+    into.usedPercent = from.usedPercent;
+    into.at = from.at;
+    if (from.resetsAt === undefined) delete into.resetsAt;
+    else into.resetsAt = from.resetsAt;
+  }
+  into.peakUsedPercent = Math.max(
+    into.peakUsedPercent ?? 0,
+    from.peakUsedPercent ?? 0,
+    from.usedPercent,
+  );
+};
 
 /** One reason a document did not validate, at a JSON path such as `$.sheet[0].lines[3].path`. */
 export interface SchemaIssue {

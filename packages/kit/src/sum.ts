@@ -1,13 +1,18 @@
 // Counters summed by key: what folding Facts, summing tallies and merging Scans share. Kept out of
 // kit's exports; the scan cache sums its encoded tallies into it without building a Tally first.
+import { mergeUsageLimit } from "@loadsheet/schema";
 import type {
   Cell,
   Day,
   SessionCell,
   Thread,
   Usage,
+  UsageHourCell,
+  UsageLimitCell,
   UsageSessionCell,
   UsageTokenCell,
+  UsageToolCell,
+  UsageTurnCell,
 } from "@loadsheet/schema";
 import type { Fact } from "./index.ts";
 import type { Tally, VersionSeen, WindowSeen } from "./fold.ts";
@@ -21,6 +26,14 @@ const usageSessionKey = (cell: UsageSessionCell) =>
   [cell.day, cell.harness, cell.via, cell.project, cell.thread].join(SEP);
 const usageTokenKey = (cell: UsageTokenCell) =>
   [cell.day, cell.harness, cell.via, cell.project, cell.thread, cell.model].join(SEP);
+const usageTurnKey = (cell: UsageTurnCell) =>
+  [cell.day, cell.harness, cell.via, cell.project, cell.thread].join(SEP);
+const usageHourKey = (cell: UsageHourCell) =>
+  [cell.day, cell.harness, cell.thread, String(cell.hour).padStart(2, "0")].join(SEP);
+const usageToolKey = (cell: UsageToolCell) =>
+  [cell.day, cell.harness, cell.thread, cell.tool].join(SEP);
+const usageLimitKey = (cell: UsageLimitCell) =>
+  [cell.day, cell.harness, String(cell.windowMinutes).padStart(9, "0")].join(SEP);
 const versionKey = (seen: VersionSeen) => [seen.harness, seen.day, seen.version].join(SEP);
 const windowKey = (seen: WindowSeen) =>
   [seen.harness, seen.day, String(seen.tokens).padStart(12, "0")].join(SEP);
@@ -51,6 +64,10 @@ export class Accumulator {
   readonly #windows = new Map<string, WindowSeen>();
   readonly #usageSessions = new Map<string, UsageSessionCell>();
   readonly #usageTokens = new Map<string, UsageTokenCell>();
+  readonly #usageTurns = new Map<string, UsageTurnCell>();
+  readonly #usageHours = new Map<string, UsageHourCell>();
+  readonly #usageTools = new Map<string, UsageToolCell>();
+  readonly #usageLimits = new Map<string, UsageLimitCell>();
 
   constructor(window?: readonly [Day, Day]) {
     this.keep = window ? (day) => day >= window[0] && day <= window[1] : () => true;
@@ -149,6 +166,54 @@ export class Accumulator {
     return cell;
   }
 
+  usageTurn(key: {
+    day: Day;
+    harness: string;
+    via: string;
+    project: string;
+    thread: Thread;
+  }): UsageTurnCell {
+    const { day, harness, via, project, thread } = key;
+    const blank: UsageTurnCell = {
+      day,
+      harness,
+      via,
+      project,
+      thread,
+      turns: 0,
+      interrupted: 0,
+      timed: 0,
+      durationMs: 0,
+      toolCalls: 0,
+      withSubagents: 0,
+    };
+    return cellIn(this.#usageTurns, usageTurnKey(blank), blank);
+  }
+
+  usageHour(key: { day: Day; harness: string; thread: Thread; hour: number }): UsageHourCell {
+    const { day, harness, thread, hour } = key;
+    const blank: UsageHourCell = { day, hour, harness, thread, requests: 0, turns: 0 };
+    return cellIn(this.#usageHours, usageHourKey(blank), blank);
+  }
+
+  usageTool(key: { day: Day; harness: string; thread: Thread; tool: string }): UsageToolCell {
+    const { day, harness, thread, tool } = key;
+    const blank: UsageToolCell = { day, harness, thread, tool, calls: 0 };
+    return cellIn(this.#usageTools, usageToolKey(blank), blank);
+  }
+
+  /**
+   * Merges a limit reading into its day's cell. A gauge: the later reading wins `usedPercent`,
+   * `at` and `resetsAt` (on a tie, the higher share, so the order of merging never matters), the
+   * peak is the highest share seen, and `reached` sums.
+   */
+  usageLimit(from: UsageLimitCell): void {
+    const { day, harness, windowMinutes } = from;
+    const blank: UsageLimitCell = { day, harness, windowMinutes, reached: 0 };
+    const cell = cellIn(this.#usageLimits, usageLimitKey(blank), blank);
+    mergeUsageLimit(cell, from);
+  }
+
   /** Adds a Usage's cells inside the window. */
   usage(usage: Usage): void {
     for (const from of usage.sessions) {
@@ -172,6 +237,27 @@ export class Accumulator {
       cell.cacheWrite1h += from.cacheWrite1h;
       cell.cacheRewrite += from.cacheRewrite;
     }
+    for (const from of usage.turns ?? []) {
+      if (!this.keep(from.day)) continue;
+      const cell = this.usageTurn(from);
+      cell.turns += from.turns;
+      cell.interrupted += from.interrupted;
+      cell.timed += from.timed;
+      cell.durationMs += from.durationMs;
+      cell.toolCalls += from.toolCalls;
+      cell.withSubagents += from.withSubagents;
+    }
+    for (const from of usage.hours ?? []) {
+      if (!this.keep(from.day)) continue;
+      const cell = this.usageHour(from);
+      cell.requests += from.requests;
+      cell.turns += from.turns;
+    }
+    for (const from of usage.tools ?? []) {
+      if (!this.keep(from.day)) continue;
+      this.usageTool(from).calls += from.calls;
+    }
+    for (const from of usage.limits ?? []) if (this.keep(from.day)) this.usageLimit(from);
   }
 
   version(seen: VersionSeen): void {
@@ -237,6 +323,38 @@ export class Accumulator {
         cell.cacheWrite5m += write5m;
         cell.cacheWrite1h += Math.min(fact.cacheWrite1h, fact.cacheWrite - write5m);
         cell.cacheRewrite += Math.min(fact.cacheRewrite, fact.cacheWrite);
+        return;
+      }
+      case "usage-turn": {
+        const cell = this.usageTurn({ ...fact, harness });
+        cell.turns += fact.turns ?? 0;
+        cell.interrupted += fact.interrupted ?? 0;
+        cell.timed += fact.timed ?? 0;
+        cell.durationMs += fact.durationMs ?? 0;
+        cell.toolCalls += fact.toolCalls ?? 0;
+        cell.withSubagents += fact.withSubagents ?? 0;
+        return;
+      }
+      case "usage-hour": {
+        const cell = this.usageHour({ ...fact, harness });
+        cell.requests += fact.requests ?? 0;
+        cell.turns += fact.turns ?? 0;
+        return;
+      }
+      case "usage-tool":
+        this.usageTool({ ...fact, harness }).calls += fact.calls ?? 1;
+        return;
+      case "usage-limit": {
+        const { day, windowMinutes, usedPercent, at, resetsAt } = fact;
+        const reading = usedPercent !== undefined && at !== undefined;
+        this.usageLimit({
+          day,
+          harness,
+          windowMinutes,
+          reached: fact.reached ?? 0,
+          ...(reading ? { usedPercent, at, peakUsedPercent: usedPercent } : {}),
+          ...(reading && resetsAt !== undefined ? { resetsAt } : {}),
+        });
       }
     }
   }
@@ -282,10 +400,37 @@ export class Accumulator {
 
   /** The usage cells summed so far, sorted; undefined when there are none. */
   usageResult(): Usage | undefined {
-    if (this.#usageSessions.size === 0 && this.#usageTokens.size === 0) return undefined;
+    const parts = [this.#usageTurns, this.#usageHours, this.#usageTools, this.#usageLimits];
+    if (
+      this.#usageSessions.size === 0 &&
+      this.#usageTokens.size === 0 &&
+      parts.every((part) => part.size === 0)
+    ) {
+      return undefined;
+    }
     return {
       sessions: sortedBy(this.#usageSessions.values(), usageSessionKey),
       tokens: sortedBy(this.#usageTokens.values(), usageTokenKey),
+      ...(this.#usageTurns.size
+        ? { turns: sortedBy(this.#usageTurns.values(), usageTurnKey) }
+        : {}),
+      ...(this.#usageHours.size
+        ? { hours: sortedBy(this.#usageHours.values(), usageHourKey) }
+        : {}),
+      ...(this.#usageTools.size
+        ? { tools: sortedBy(this.#usageTools.values(), usageToolKey) }
+        : {}),
+      ...(this.#usageLimits.size
+        ? { limits: sortedBy(this.#usageLimits.values(), usageLimitKey) }
+        : {}),
     };
   }
 }
+
+/** The cell at `key`, set to `blank` when there is none yet. */
+const cellIn = <T>(cells: Map<string, T>, key: string, blank: T): T => {
+  const cell = cells.get(key);
+  if (cell) return cell;
+  cells.set(key, blank);
+  return blank;
+};

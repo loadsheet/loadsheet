@@ -87,9 +87,12 @@ const skillsSection = (lines: string[], roots: string[]) =>
 const skillMd = (name: string, description: string) =>
   `---\nname: ${name}\ndescription: ${description}\n---\n\n# ${name}\n\nBody.\n`;
 
+/** Turns, hours, tool calls and rate limits are tested in codex-usage.test.ts. */
+const ACTIVITY = new Set(["usage-turn", "usage-hour", "usage-tool", "usage-limit"]);
 const count = (facts: readonly Fact[]) => {
   const out: Record<string, number> = {};
   for (const fact of facts) {
+    if (ACTIVITY.has(fact.type)) continue;
     const key = fact.type === "used" ? `used:${fact.by}` : fact.type;
     out[key] = (out[key] ?? 0) + 1;
   }
@@ -409,7 +412,10 @@ describe("codex sessions", () => {
       exec("tools.mcp__unlisted__x()"),
     ]);
     expect(
-      facts.filter((fact) => fact.type !== "session" && fact.type !== "usage-session"),
+      facts.filter(
+        (fact) =>
+          fact.type !== "session" && fact.type !== "usage-session" && !ACTIVITY.has(fact.type),
+      ),
     ).toEqual([
       {
         type: "listed",

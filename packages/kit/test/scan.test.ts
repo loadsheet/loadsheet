@@ -30,6 +30,10 @@ const fake: Harness<FakeState> = defineHarness({
     tokens: "exact",
     usage: "exact",
     cacheTtl: "none",
+    turns: "none",
+    hours: "none",
+    tools: "none",
+    limits: "none",
   },
   inventory: async () => [],
   machine: {

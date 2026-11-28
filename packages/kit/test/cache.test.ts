@@ -135,6 +135,51 @@ const cachedFile = (seed: number): CachedFile => ({
         usageTokens("2026-11-22", "acme/web", "main", "model-b", seed),
         usageTokens("2026-11-23", "unknown", "subagent", "model-a", 3),
       ],
+      turns: [
+        {
+          day: "2026-11-22",
+          harness: "fake",
+          via: "cli",
+          project: "acme/web",
+          thread: "main",
+          turns: 2 + seed,
+          interrupted: 1,
+          timed: 2,
+          durationMs: 61_000 * seed,
+          toolCalls: 9,
+          withSubagents: seed % 2,
+        },
+      ],
+      hours: [
+        { day: "2026-11-22", harness: "fake", thread: "main", hour: 0, requests: seed, turns: 1 },
+        { day: "2026-11-22", harness: "fake", thread: "subagent", hour: 23, requests: 4, turns: 0 },
+      ],
+      tools: [
+        { day: "2026-11-22", harness: "fake", thread: "main", tool: "Bash", calls: seed },
+        { day: "2026-11-23", harness: "fake", thread: "main", tool: "mcp:linear", calls: 2 },
+      ],
+      limits: [
+        { day: "2026-11-22", harness: "fake", windowMinutes: 0, reached: seed },
+        {
+          day: "2026-11-22",
+          harness: "fake",
+          windowMinutes: 300,
+          usedPercent: 37.5 + seed,
+          at: 1_763_980_000 + seed * (seed % 2 ? 1 : -1),
+          resetsAt: 1_763_990_000 + seed,
+          peakUsedPercent: 99.25,
+          reached: 0,
+        },
+        {
+          day: "2026-11-23",
+          harness: "fake",
+          windowMinutes: 10_080,
+          usedPercent: 0,
+          at: 1_764_000_000.125,
+          peakUsedPercent: 0,
+          reached: 1,
+        },
+      ],
     },
   },
 });
@@ -285,7 +330,7 @@ describe("the scan cache file", () => {
   it("opens empty a file saved in another layout", async () => {
     await (await open()).save(new Map([["one", cachedFile(1)]]));
     const file = await readFile();
-    expect(file.layout).toBe(5);
+    expect(file.layout).toBe(8);
     // Layout 2 kept the document's fields beside its sum.
     await NodeFSP.writeFile(cacheFile(), JSON.stringify({ layout: 2, ...file.doc, sum: file.sum }));
     expect((await open()).get("one")).toBeUndefined();
@@ -293,7 +338,7 @@ describe("the scan cache file", () => {
     await NodeFSP.writeFile(cacheFile(), JSON.stringify(file));
     expect((await open()).get("one")).toEqual(cachedFile(1));
     const text = await NodeFSP.readFile(cacheFile(), "utf8");
-    await NodeFSP.writeFile(cacheFile(), text.replace('"layout":5', '"layout":4'));
+    await NodeFSP.writeFile(cacheFile(), text.replace('"layout":8', '"layout":7'));
     expect((await open()).get("one")).toBeUndefined();
   });
 
@@ -349,6 +394,16 @@ describe("the scan cache file", () => {
     const tally = stored.files.one![8] as number[][];
     // The first usage session's thread, swapped for the string its via names.
     tally[4]![4] = tally[4]![2]!;
+    await writeStored(stored);
+    expect((await open()).get("one")).toBeUndefined();
+  });
+
+  it("opens as a miss an entry whose usage hour is not one of a day's", async () => {
+    await (await open()).save(new Map([["one", cachedFile(1)]]));
+    const stored = await readStored();
+    const tally = stored.files.one![8] as number[][];
+    // The first hour cell's hour.
+    tally[7]![3] = 24;
     await writeStored(stored);
     expect((await open()).get("one")).toBeUndefined();
   });

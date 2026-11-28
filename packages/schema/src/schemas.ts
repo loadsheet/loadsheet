@@ -17,8 +17,12 @@ import type {
   Settings,
   Signal,
   Usage,
+  UsageHourCell,
+  UsageLimitCell,
   UsageSessionCell,
   UsageTokenCell,
+  UsageToolCell,
+  UsageTurnCell,
 } from "./types.ts";
 
 /** The rule ids, in the order a Report lists them. */
@@ -48,6 +52,10 @@ export const SIGNALS = [
   "tokens",
   "usage",
   "cacheTtl",
+  "turns",
+  "hours",
+  "tools",
+  "limits",
 ] as const satisfies readonly Signal[];
 
 const KINDS = ["skill", "instructions", "mcp", "subagent"] as const;
@@ -403,6 +411,10 @@ const CoverageSchema = v.pipe(
         // Signals added after 0.1: a Scan or Report written before them could not tell either.
         usage: v.optional(GradeSchema, "none"),
         cacheTtl: v.optional(GradeSchema, "none"),
+        turns: v.optional(GradeSchema, "none"),
+        hours: v.optional(GradeSchema, "none"),
+        tools: v.optional(GradeSchema, "none"),
+        limits: v.optional(GradeSchema, "none"),
       }),
       v.description("How well each signal is provided."),
     ),
@@ -519,13 +531,133 @@ const UsageTokenCellSchema = v.pipe(
   ),
 );
 
+const UsageTurnCellSchema = v.pipe(
+  v.looseObject({
+    day: day("The day the turns started."),
+    harness: nonEmpty("The harness id."),
+    via: nonEmpty("The entrypoint or originator that started the sessions."),
+    project: project(),
+    thread: describe(
+      ThreadSchema,
+      "Whether the turns were in main conversations or subagents' conversations.",
+    ),
+    turns: count("Turns started."),
+    interrupted: count("Of those turns, how many the user interrupted."),
+    timed: count("Of those turns, how many have a measured duration."),
+    durationMs: count("The summed duration of the timed turns, in milliseconds."),
+    toolCalls: count("Tool calls the model made in those turns."),
+    withSubagents: count("Of those turns, how many started at least one subagent."),
+  }),
+  v.description(
+    "Additive turn counters for one project, harness, day, entrypoint and thread. A turn is one prompt and the work the agent did for it.",
+  ),
+);
+
+const UsageHourCellSchema = v.pipe(
+  v.looseObject({
+    day: day("The UTC day."),
+    hour: v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(0),
+      v.maxValue(23),
+      v.description("The UTC hour of the day, 0 to 23."),
+    ),
+    harness: nonEmpty("The harness id."),
+    thread: describe(
+      ThreadSchema,
+      "Whether the activity was in main conversations or subagents' conversations.",
+    ),
+    requests: count("Model requests made in that hour."),
+    turns: count("Turns started in that hour."),
+  }),
+  v.description("Additive activity counters for one harness, day, hour and thread."),
+);
+
+/** A tool as a usage cell keeps it: a built-in tool's name, `mcp:<server>`, or `other`. */
+const TOOL = /^[A-Za-z0-9_.:-]{1,64}$/;
+
+const UsageToolCellSchema = v.pipe(
+  v.looseObject({
+    day: day("The day of the calls."),
+    harness: nonEmpty("The harness id."),
+    thread: describe(
+      ThreadSchema,
+      "Whether the calls were made in main conversations or subagents' conversations.",
+    ),
+    tool: v.pipe(
+      v.string(),
+      v.regex(TOOL, "must be 1 to 64 letters, digits, `_`, `.`, `:` or `-`"),
+      v.description(
+        "The tool: a built-in tool's name, `mcp:<server>` for any tool of an MCP server, or `other` for a name loadsheet does not keep.",
+      ),
+    ),
+    calls: count("Calls made."),
+  }),
+  v.description("Additive tool-call counters for one harness, day, thread and tool."),
+);
+
+const gauge = (text: string) => v.optional(v.pipe(v.number(), v.minValue(0), v.description(text)));
+const epoch = (text: string) =>
+  v.optional(v.pipe(v.number(), v.integer(), v.minValue(0), v.description(text)));
+
+const UsageLimitCellSchema = v.pipe(
+  v.looseObject({
+    day: day("The day of the readings."),
+    harness: nonEmpty("The harness id."),
+    windowMinutes: count(
+      "The window's length in minutes, such as 300 or 10080; 0 when the harness does not say.",
+    ),
+    usedPercent: gauge(
+      "The share of the window used at the latest reading, in percent; absent when there was none.",
+    ),
+    at: gauge(
+      "When the latest reading was taken, in seconds since the epoch with millisecond precision; absent with usedPercent.",
+    ),
+    resetsAt: epoch(
+      "When the window resets, as of the latest reading, in seconds since the epoch; absent when unknown.",
+    ),
+    peakUsedPercent: gauge(
+      "The highest share used at any reading that day, in percent; absent with usedPercent.",
+    ),
+    reached: count("How many times the limit was reached."),
+  }),
+  v.description(
+    "One harness's rate-limit window on one day: the latest reading of how much of it is used, and how often the limit was hit. A gauge, not a sum: merging two keeps the later reading and the higher peak, and sums `reached`.",
+  ),
+);
+
 const UsageSchema = v.pipe(
   v.looseObject({
     sessions: describe(v.array(UsageSessionCellSchema), "Session counters."),
     tokens: describe(v.array(UsageTokenCellSchema), "Token counters."),
+    turns: v.optional(
+      describe(
+        v.array(UsageTurnCellSchema),
+        "Turn counters; absent when no harness read reports turns.",
+      ),
+    ),
+    hours: v.optional(
+      describe(
+        v.array(UsageHourCellSchema),
+        "Activity by hour of the day; absent when no harness read reports it.",
+      ),
+    ),
+    tools: v.optional(
+      describe(
+        v.array(UsageToolCellSchema),
+        "Tool calls by tool; absent when no harness read reports them.",
+      ),
+    ),
+    limits: v.optional(
+      describe(
+        v.array(UsageLimitCellSchema),
+        "Rate-limit readings; absent when no harness read reports them.",
+      ),
+    ),
   }),
   v.description(
-    "A machine's or a Report's usage history: sessions and tokens per project, as additive counters with no text.",
+    "A machine's or a Report's usage history: sessions, tokens, turns, hours, tools and rate limits, as counters with no text.",
   ),
 );
 
@@ -1040,6 +1172,10 @@ export type SchemasMatchTypes = [
   Assert<Same<v.InferOutput<typeof UsageSchema>, Usage>>,
   Assert<Same<v.InferOutput<typeof UsageSessionCellSchema>, UsageSessionCell>>,
   Assert<Same<v.InferOutput<typeof UsageTokenCellSchema>, UsageTokenCell>>,
+  Assert<Same<v.InferOutput<typeof UsageTurnCellSchema>, UsageTurnCell>>,
+  Assert<Same<v.InferOutput<typeof UsageHourCellSchema>, UsageHourCell>>,
+  Assert<Same<v.InferOutput<typeof UsageToolCellSchema>, UsageToolCell>>,
+  Assert<Same<v.InferOutput<typeof UsageLimitCellSchema>, UsageLimitCell>>,
   Assert<Same<v.InferOutput<typeof LineSchema>, Line>>,
   Assert<Same<v.InferOutput<typeof ResolvedConfigSchema>, ResolvedConfig>>,
   Assert<Same<v.InferOutput<typeof configSchema>, Config>>,
