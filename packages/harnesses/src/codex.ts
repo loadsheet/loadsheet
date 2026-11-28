@@ -1,8 +1,9 @@
 import { defineHarness, sha256, type Files, type Place } from "@loadsheet/kit";
 import type { Item, Settings } from "@loadsheet/schema";
 import { parse } from "tinyaml";
+import { codexStateDb } from "./codex-state.ts";
 import { readCodexConfig, type SkillRule } from "./codex-toml.ts";
-import { CODEX_INSTRUCTIONS, codexTranscripts } from "./codex-transcripts.ts";
+import { CODEX_INSTRUCTIONS, codexSessionId, codexTranscripts } from "./codex-transcripts.ts";
 import { readManagers, skillsLockPath, type Manager } from "./managed.ts";
 import { isAbsolute, normalPath } from "./path.ts";
 import { readSkillMd, type SkillMd } from "./skill-md.ts";
@@ -374,7 +375,10 @@ const codexHome = (place: Place) => {
   );
 };
 
-/** Codex (OpenAI's coding agent): its packs, its home directory and its rollout transcripts. */
+/**
+ * Codex (OpenAI's coding agent): its packs, its home directory, its rollout transcripts, and its
+ * state database for the threads whose rollouts are gone.
+ */
 export const codex = defineHarness({
   id: "codex",
   signals: {
@@ -414,5 +418,7 @@ export const codex = defineHarness({
     settings: machineSettings,
     roots: (place) => [`${codexHome(place)}/sessions`, `${codexHome(place)}/archived_sessions`],
     transcripts: codexTranscripts,
+    sessionId: codexSessionId,
+    stores: () => [codexStateDb(codexHome)],
   },
 });

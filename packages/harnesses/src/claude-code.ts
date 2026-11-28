@@ -6,6 +6,7 @@ import {
   claudeInventory,
   claudeProjects,
   claudeRoots,
+  claudeSessionId,
   claudeSettings,
   claudeSources,
 } from "./claude-code-machine.ts";
@@ -54,5 +55,6 @@ export const claudeCode = defineHarness({
     projects: claudeProjects,
     roots: claudeRoots,
     transcripts: claudeTranscripts,
+    sessionId: claudeSessionId,
   },
 });

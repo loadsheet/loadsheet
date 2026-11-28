@@ -650,7 +650,9 @@ describe("loadsheet usage", () => {
     expect(result.stderr).toBe("");
     expect(result.status).toBe(0);
     const text = result.stdout;
-    expect(text).toContain("Sessions, compactions and tokens by project, last 3,650 days");
+    expect(text).toContain(
+      "Sessions, compactions and tokens, 2026-11-20 to 2026-11-23, on this machine.",
+    );
     expect(text).toContain("plus 1 subagent session");
     // The printed totals are the cells' sums; shares by largest remainder sum to 100.
     expect(table(text, "Totals")).toEqual([
@@ -686,9 +688,12 @@ describe("loadsheet usage", () => {
       const { generatedAt: _, machines: __, ...rest } = JSON.parse(stdout);
       return rest;
     };
-    expect(strip(inUsage("usage", "--json", "--days", "3650").stdout)).toEqual(
-      strip(inUsage("--json", "--days", "3650").stdout),
-    );
+    const usage = strip(inUsage("usage", "--json", "--days", "3650").stdout);
+    // Only the usage view's --days bounds usage; the report keeps every day.
+    expect(usage.config.usageWindow).toBe(3650);
+    delete usage.config.usageWindow;
+    expect(usage).toEqual(strip(inUsage("--json", "--days", "3650").stdout));
+    expect(strip(inUsage("usage", "--json").stdout).config.usageWindow).toBeUndefined();
     const scan = parseScan(JSON.parse(inUsage("--scan", "--days", "3650").stdout));
     expect(scan.usage?.tokens.length).toBeGreaterThan(0);
   });

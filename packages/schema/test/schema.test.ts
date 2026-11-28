@@ -234,6 +234,31 @@ describe("parsing", () => {
     },
   );
 
+  it("a token cell with only unsplit validates", () => {
+    const scan = clone(example("scan.example.json")) as Scan;
+    const cell = {
+      ...scan.usage!.tokens[0]!,
+      requests: 0,
+      input: 0,
+      output: 0,
+      reasoning: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      cacheWrite5m: 0,
+      cacheWrite1h: 0,
+      cacheRewrite: 0,
+      unsplit: 1_234_567,
+    };
+    scan.usage!.tokens = [cell];
+    expect(parseScan(scan).usage!.tokens).toEqual([cell]);
+    expect(validators.get("scan.v1.json")!(scan)).toBe(true);
+    scan.usage!.tokens = [{ ...cell, unsplit: -1 }];
+    expect(issuesOf(() => parseScan(scan)).map((issue) => issue.path)).toEqual([
+      "$.usage.tokens[0].unsplit",
+    ]);
+    expect(validators.get("scan.v1.json")!(scan)).toBe(false);
+  });
+
   it("rejects a usage part above its whole, a thread it does not know and a store path", () => {
     const scan = clone(example("scan.example.json")) as Scan;
     const tokens = scan.usage!.tokens[0]!;

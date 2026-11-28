@@ -53,7 +53,8 @@ Options:
   --timeout <seconds>   With --fleet, how long to wait for each machine (default 300)
   --config <path>       Config file (default $XDG_CONFIG_HOME/loadsheet/config.json,
                         else ~/.config/loadsheet/config.json)
-  --days <n>            Days of history to read (default 30)
+  --days <n>            Days of history to read (default 30). Usage keeps every day the
+                        machine has a record of; with usage, only the last <n>
   --harness <id>        Report only this harness, repeatable (${ids}); a pack is weighed
                         for one (default ${claudeCode.id})
   --ignore <id>         Leave an item out of the findings, repeatable, as kind:name
@@ -242,6 +243,8 @@ const withFlags = (file: Config): Config => {
 };
 
 const config = resolveConfig(withFlags(await readConfigFile()));
+// Usage history holds every day the machine has a record of, unless `loadsheet usage --days` bounds it.
+if (usageView && values.days !== undefined) config.usageWindow = config.window;
 const tool = `loadsheet@${pkg.version}`;
 
 /** Colour when stdout is a terminal, unless NO_COLOR says otherwise; FORCE_COLOR asks for it. */
@@ -308,6 +311,7 @@ if (positionals.length === 0) {
       harnesses,
       stores: sessionStores,
       days: config.window,
+      ...(config.usageWindow === undefined ? {} : { usageDays: config.usageWindow }),
       tool,
       onProgress: progress.update,
       // Built next to this module, or beside its source when run from it.

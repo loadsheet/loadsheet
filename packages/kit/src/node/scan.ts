@@ -1,7 +1,14 @@
 import { readFile, stat } from "node:fs/promises";
 import { availableParallelism, homedir, hostname } from "node:os";
 import { posix } from "node:path";
-import { SIGNALS, type Day, type Grade, type Scan, type Signal } from "@loadsheet/schema";
+import {
+  SIGNALS,
+  type Backfill,
+  type Day,
+  type Grade,
+  type Scan,
+  type Signal,
+} from "@loadsheet/schema";
 import {
   buildScan,
   sumTallies,
@@ -21,7 +28,7 @@ import { dirFiles } from "./files.ts";
 import { createProjectResolver } from "./projects.ts";
 import { reachesOf, withReach } from "./reach.ts";
 import { listTranscriptFiles, type TranscriptFile } from "./reader.ts";
-import { readStore } from "./stores.ts";
+import { readStore, type InputDocuments } from "./stores.ts";
 import {
   openTranscriptPool,
   readTranscriptTally,
@@ -32,8 +39,13 @@ import {
 export interface ScanMachineOptions {
   /** The harnesses to read; those without a `machine` reader are skipped. */
   readonly harnesses: readonly Harness[];
-  /** Days of history, today included. */
+  /** Days of history for sessions, items and their counters, today included. */
   readonly days: number;
+  /**
+   * Days of usage history, today included; default every day the machine still has a record of.
+   * Usage is not cut by `days`: transcripts older than it, and stores, are read for usage only.
+   */
+  readonly usageDays?: number;
   /** The tool and version writing the Scan, such as `loadsheet@0.0.1`; a new one starts the cache cold. */
   readonly tool: string;
   /** The machine's name; default the hostname. */
@@ -187,7 +199,17 @@ interface ToRead {
   readonly key?: string;
   readonly resume?: CachedFile;
   readonly bytes: number;
+  /** Last changed before the window: it counts towards usage only. */
+  readonly old: boolean;
 }
+
+/** A tally's usage alone: what a transcript that last changed before the window gives. */
+const usageOnly = (tally: Tally): Tally => ({
+  sessions: [],
+  cells: [],
+  versions: [],
+  ...(tally.usage ? { usage: tally.usage } : {}),
+});
 
 /** One harness's transcript files: the cache, what it holds unchanged, and what to read. */
 interface TranscriptPlan {
@@ -195,19 +217,30 @@ interface TranscriptPlan {
   readonly format: TranscriptFormat<unknown>;
   readonly cache: HarnessCache | undefined;
   readonly kept: Map<string, CachedFile>;
+  /** Files the cache holds unchanged that changed in the window, and those that did not. */
   readonly fromCache: CachedFile[];
+  readonly fromCacheOld: CachedFile[];
   readonly toRead: ToRead[];
+  /**
+   * The native session ids of the files listed, for the stores that skip them. They stay in
+   * memory: never in a Scan or the cache.
+   */
+  readonly ids: Set<string>;
   /** Bytes of the files the cache holds unchanged, and of the parts of others it holds. */
   readonly cachedBytes: number;
   readonly tallies: Tally[];
 }
 
-/** Lists one harness's transcript files and sorts them into those the cache holds and those to read. */
+/**
+ * Lists one harness's transcript files changed since `since.listMs` and sorts them into those the
+ * cache holds and those to read. Those that last changed before the window, `since.windowMs`,
+ * count towards usage only.
+ */
 const planTranscripts = async (
   machine: MachineReader<unknown>,
   harness: string,
   place: Place,
-  sinceMs: number,
+  since: { listMs: number; windowMs: number },
   options: { tool: string; cacheDir: string | false },
 ): Promise<TranscriptPlan | undefined> => {
   const format = machine.transcripts;
@@ -217,12 +250,17 @@ const planTranscripts = async (
     options.cacheDir === false
       ? undefined
       : await openCache(options.cacheDir, harness, options.tool, format);
-  const files = await transcriptFiles(machine.roots(place), sinceMs);
+  const files = await transcriptFiles(machine.roots(place), since.listMs);
   const kept = new Map<string, CachedFile>();
   const fromCache: CachedFile[] = [];
+  const fromCacheOld: CachedFile[] = [];
   const toRead: ToRead[] = [];
+  const ids = new Set<string>();
   let cachedBytes = 0;
   for (const file of files) {
+    const id = machine.sessionId?.(file.path);
+    if (id !== undefined) ids.add(id);
+    const old = file.mtimeMs < since.windowMs;
     const key = cache?.key(file.path);
     const cached = key === undefined ? undefined : cache?.get(key);
     const unchanged =
@@ -231,7 +269,7 @@ const planTranscripts = async (
       cached.ctimeMs === file.ctimeMs;
     if (cached && unchanged && !cached.hasTail) {
       kept.set(key!, cached);
-      fromCache.push(cached);
+      (old ? fromCacheOld : fromCache).push(cached);
       cachedBytes += file.size;
       continue;
     }
@@ -242,12 +280,26 @@ const planTranscripts = async (
     toRead.push({
       file,
       bytes: file.size - from,
+      old,
       ...(key === undefined ? {} : { key }),
       ...(resume ? { resume } : {}),
     });
   }
-  return { harness, format, cache, kept, fromCache, toRead, cachedBytes, tallies: [] };
+  return {
+    harness,
+    format,
+    cache,
+    kept,
+    fromCache,
+    fromCacheOld,
+    toRead,
+    ids,
+    cachedBytes,
+    tallies: [],
+  };
 };
+
+const cachedCount = (plan: TranscriptPlan) => plan.fromCache.length + plan.fromCacheOld.length;
 
 /**
  * Reads every plan's files that the cache does not hold, largest first across harnesses, so the
@@ -267,8 +319,8 @@ const readPlans = async (
     .sort((a, b) => b.bytes - a.bytes);
   const toReadBytes = reads.reduce((sum, read) => sum + read.bytes, 0);
   const progress = {
-    done: plans.reduce((sum, plan) => sum + plan.fromCache.length, 0),
-    total: plans.reduce((sum, plan) => sum + plan.fromCache.length + plan.toRead.length, 0),
+    done: plans.reduce((sum, plan) => sum + cachedCount(plan), 0),
+    total: plans.reduce((sum, plan) => sum + cachedCount(plan) + plan.toRead.length, 0),
     doneBytes: plans.reduce((sum, plan) => sum + plan.cachedBytes, 0),
     totalBytes: 0,
   };
@@ -276,7 +328,7 @@ const readPlans = async (
   options.onProgress?.({ ...progress });
 
   const { pool } = options;
-  const readOne = async ({ plan, file, key, resume, bytes }: (typeof reads)[number]) => {
+  const readOne = async ({ plan, file, key, resume, bytes, old }: (typeof reads)[number]) => {
     try {
       const job: TranscriptJob = {
         harness: plan.harness,
@@ -288,7 +340,8 @@ const readPlans = async (
       if (result === null) return;
       const committed =
         result.resumed && resume ? sumTallies([resume.tally, result.fresh]) : result.fresh;
-      plan.tallies.push(committed, result.tail);
+      if (old) plan.tallies.push(usageOnly(committed), usageOnly(result.tail));
+      else plan.tallies.push(committed, result.tail);
       if (key !== undefined) {
         plan.kept.set(key, {
           size: file.size,
@@ -315,8 +368,9 @@ const readPlans = async (
 
 /**
  * Scans this machine: for each harness with a `machine` reader, whether it is installed, what is
- * installed for it, and the counters of its sessions that started in the last `days` days.
- * Only the cache directory is written.
+ * installed for it, the counters of its sessions that started in the last `days` days, and its
+ * usage over the last `usageDays` days, or every day it has a record of. Only the cache directory
+ * is written.
  */
 export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> => {
   const now = options.now ?? new Date();
@@ -328,6 +382,11 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
   const cacheDir = options.cacheDir ?? defaultCacheDir(place);
   const maxWorkers = options.workers ?? availableParallelism() - 1;
   const { window, sinceMs } = scanWindow(now, options.days);
+  const usage =
+    options.usageDays === undefined
+      ? { window: [dayOf(0), window[1]] as [Day, Day], sinceMs: 0 }
+      : scanWindow(now, options.usageDays);
+  const since = { listMs: Math.min(sinceMs, usage.sinceMs), windowMs: sinceMs };
 
   // Started once a listing shows enough to read, and grown by the next, so threads start while
   // the next harness is listed. Starting them before any listing costs a small first run more
@@ -349,11 +408,11 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
   );
   const parts: HarnessScan[] = [];
   const hints: ProjectHint[] = [];
-  let stored: StoresRead = { unread: new Map() };
+  let stored: StoresRead = { unread: new Map(), backfill: new Map() };
   try {
     const plans = new Map<string, TranscriptPlan>();
     for (const { harness, machine } of machines) {
-      const plan = await planTranscripts(machine, harness.id, place, sinceMs, {
+      const plan = await planTranscripts(machine, harness.id, place, since, {
         tool: options.tool,
         cacheDir,
       });
@@ -369,8 +428,10 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
       ...(options.onProgress ? { onProgress: options.onProgress } : {}),
     });
     reading.catch(() => {});
-    // Read beside the transcripts: a SELECT bound to the window, or a few small files per session.
-    const storesRead = readStores(machines, options.stores ?? [], place, sinceMs, window);
+    // Read beside the transcripts: a SELECT bound to the usage window's start, or a few small
+    // files per session.
+    const listed = new Map([...plans].map(([harness, plan]) => [harness, plan.ids]));
+    const storesRead = readStores(machines, options.stores ?? [], place, usage, listed);
 
     const inventories = [];
     for (const { harness, machine } of machines) {
@@ -396,18 +457,22 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
       const plan = plans.get(harness.id);
       const tallies = plan ? plan.tallies : [];
       if (plan?.cache && plan.fromCache.length)
-        tallies.push(plan.cache.sum(plan.fromCache, window));
-      // Files no longer listed, deleted or older than the window, leave the cache with their counters.
+        tallies.push(plan.cache.sum(plan.fromCache, window, usage.window));
+      if (plan?.cache && plan.fromCacheOld.length)
+        tallies.push(plan.cache.sum(plan.fromCacheOld, false, usage.window));
+      // Files no longer listed, deleted or older than the usage window, leave the cache with their
+      // counters.
       await plan?.cache?.save(plan.kept);
       parts.push({
         harness: harness.id,
         installed,
         signals: harness.signals,
         items,
-        tally: sumTallies(tallies, window),
+        tally: sumTallies(tallies, window, usage.window),
         ...(contextWindow === undefined ? {} : { contextWindow }),
         ...(settings === undefined ? {} : { settings }),
         ...(stored.unread.has(harness.id) ? { unread: stored.unread.get(harness.id) } : {}),
+        ...(stored.backfill.has(harness.id) ? { backfill: stored.backfill.get(harness.id) } : {}),
       });
     }
     // A store no harness owns gets a row only to say it could not be read. It is not installed,
@@ -444,7 +509,8 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
       items: part.items.map((item) => withReach(item, reaches)),
     })),
   });
-  const scan = stored.usage ? { ...built, usage: sumUsage(built.usage, stored.usage) } : built;
+  const summed = stored.usage && sumUsage(built.usage, stored.usage, usage.window);
+  const scan = summed ? { ...built, usage: summed } : built;
   return resolveProjects(scan, hints, place);
 };
 
@@ -456,51 +522,93 @@ const EMPTY: Tally = { sessions: [], cells: [], versions: [] };
 
 type Usage = NonNullable<Scan["usage"]>;
 
-/** What the stores said: their usage in the window, and the stores not read, by harness. */
+/** What the stores said: their usage, the stores not read, and what each backfilled, by harness. */
 interface StoresRead {
   readonly usage?: Usage;
   readonly unread: Map<string, string[]>;
+  readonly backfill: Map<string, Backfill[]>;
 }
 
 /**
  * Reads every harness's stores and the unowned ones. A store's Facts count as usage only: its
  * sessions never become SessionCells, which the rules read as sessions that loaded a listing.
+ * `listed` holds the native session ids of each harness whose transcripts this scan listed: a
+ * store is given its `native` harness's, and its Facts about a harness it `supplies` count only
+ * when that harness is there, so no session is counted from both its transcript and a store.
+ * What a store adds to a harness it supplies is that harness's backfill; a supplying store that
+ * cannot be read leaves that harness's usage incomplete, so it is unread there too.
  */
 const readStores = async (
   machines: readonly { harness: Harness; machine: MachineReader<unknown> }[],
   extra: readonly MachineStore[],
   place: Place,
-  sinceMs: number,
-  window: readonly [Day, Day],
+  usageWindow: { window: readonly [Day, Day]; sinceMs: number },
+  listed: ReadonlyMap<string, ReadonlySet<string>>,
 ): Promise<StoresRead> => {
+  const [firstDay, lastDay] = usageWindow.window;
   const stores = [
     ...machines.flatMap(({ harness, machine }) =>
       (machine.stores?.(place) ?? []).map((store) => ({ harness: harness.id, store })),
     ),
     ...extra.map((store) => ({ harness: store.harness, store })),
   ];
+  // Stores that read one JSON input share its parse.
+  const documents: InputDocuments = new Map();
   const reads = await Promise.all(
-    stores.map(({ store }) =>
-      readStore(store, place, sinceMs).catch(() => ({ unread: true }) as const),
-    ),
+    stores.map(({ store }) => {
+      const native = store.kind === "sqlite" && store.native ? listed.get(store.native) : undefined;
+      return readStore(store, place, usageWindow.sinceMs, [...(native ?? [])], documents).catch(
+        () => ({ unread: true }) as const,
+      );
+    }),
   );
-  const counters = new Accumulator(window);
+  const counters = new Accumulator();
   const unread = new Map<string, string[]>();
+  const backfill = new Map<string, Backfill[]>();
   reads.forEach((read, index) => {
     const { harness, store } = stores[index]!;
     if (!read) return;
-    if ("unread" in read) unread.set(harness, [...(unread.get(harness) ?? []), store.name]);
-    else for (const fact of read.facts) counters.fact(fact.harness ?? harness, fact);
+    const supplies = new Set(store.kind === "sqlite" ? (store.supplies ?? []) : []);
+    if (read.unread) {
+      for (const about of new Set([harness, ...[...supplies].filter((id) => listed.has(id))]))
+        unread.set(about, [...(unread.get(about) ?? []), store.name]);
+    }
+    if (!("facts" in read)) return;
+    const added = new Map<string, Backfill>();
+    for (const fact of read.facts) {
+      const about = fact.harness ?? harness;
+      if (supplies.has(about)) {
+        if (!listed.has(about)) continue;
+        if (fact.day >= firstDay && fact.day <= lastDay) {
+          const known = added.get(about);
+          const sessions = fact.type === "usage-session" ? 1 : 0;
+          added.set(
+            about,
+            known
+              ? {
+                  store: store.name,
+                  firstDay: fact.day < known.firstDay ? fact.day : known.firstDay,
+                  lastDay: fact.day > known.lastDay ? fact.day : known.lastDay,
+                  sessions: known.sessions + sessions,
+                }
+              : { store: store.name, firstDay: fact.day, lastDay: fact.day, sessions },
+          );
+        }
+      }
+      counters.fact(about, fact);
+    }
+    for (const [about, each] of added) backfill.set(about, [...(backfill.get(about) ?? []), each]);
   });
   const usage = counters.usageResult();
-  return usage ? { usage, unread } : { unread };
+  return usage ? { usage, unread, backfill } : { unread, backfill };
 };
 
-const sumUsage = (first: Usage | undefined, second: Usage): Usage => {
-  const counters = new Accumulator();
+/** The two Usages summed, keeping the days inside `usageWindow`. */
+const sumUsage = (first: Usage | undefined, second: Usage, usageWindow: readonly [Day, Day]) => {
+  const counters = new Accumulator(undefined, usageWindow);
   if (first) counters.usage(first);
   counters.usage(second);
-  return counters.usageResult()!;
+  return counters.usageResult();
 };
 
 /**

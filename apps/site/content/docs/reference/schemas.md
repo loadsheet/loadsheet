@@ -47,7 +47,7 @@ pack
 | `sheet`       | One sheet per harness: its `sessions`, `fixedTokens` for the tokens a session starts with, the model's `contextWindow`, and its `lines`. |
 | `findings`    | What the rules found.                                                                                                                    |
 | `skipped`     | The rules that did not run on a harness, and why.                                                                                        |
-| `usage`       | Sessions, compactions and tokens per project, summed over machines. Absent when no machine reports any, and from a shared Report.        |
+| `usage`       | Sessions, compactions and tokens per project, summed over machines, on every day they hold. Absent when none do, and when shared.        |
 
 Each line of a sheet has its `item` id, its size in `chars`, its `tokens`, the sessions that listed it in `exposure`, invocations by the model and by you in `use`, and for a skill or subagent its `description`.
 
@@ -55,7 +55,7 @@ Each finding has its `rule`, its `level`, the `item` or `pack` it is about, the 
 
 ## Scan
 
-What one machine sends with `--fleet`: its items and usage counters, before any rule runs. A Scan holds every session in the window. `--harness`, `--ignore`, `--via`, `--exclude-via` and `--rule` shape the Report built from it, not the Scan.
+What one machine sends with `--fleet`: its items and usage counters, before any rule runs. A Scan holds every session in the window, and usage on every day the machine has a record of. `--harness`, `--ignore`, `--via`, `--exclude-via` and `--rule` shape the Report built from it, not the Scan.
 
 ```sh
 npx loadsheet --scan | jq -r .schema
@@ -84,16 +84,17 @@ Each `coverage` entry is one harness on one machine: whether it is `installed`, 
 
 - `settings` holds what the harness's settings and environment set, as derived values, never their text: `cacheTtl` and `subagentCacheTtl` (`5m` or `1h`) with `cacheTtlFrom`, the knob that set it, such as `settings.promptCacheTtl`; `caching` (`on` or `off`) with `cachingFrom`; `retentionDays`, how long transcripts are kept; `docMaxBytes`, the most of an instruction file the harness reads; `autoCompact` and `autoCompactWindow`.
 - `unread` names the session stores that exist and could not be read, such as `opencode.db`. Without it, every store was read.
+- `backfill` names each store that filled in sessions whose own transcripts are gone, such as `statev2.sqlite` (T3 Code) or `codex-state` (Codex's state database), with the `firstDay` and `lastDay` it added usage on and the `sessions` it added, subagents' included.
 
 ## Usage
 
 `usage` holds two lists of counters. Each counter is keyed by `day` (UTC), `harness`, `via` (the entrypoint), `project` and `thread` (`main`, or `subagent` for a subagent's own conversation).
 
-| List       | Counters                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sessions` | `sessions` started that day, how many of them `compacted` at least once, their `compactions`, and of those the `manualCompactions` you asked for.                                                                                                                                                                                                                                                                     |
-| `tokens`   | Also keyed by `model`. `requests`, then `input` (sent without the cache), `output` (`reasoning` is part of it), `cacheRead` and `cacheWrite`. Of the writes, `cacheWrite5m` and `cacheWrite1h` went to a cache that lives 5 minutes or 1 hour. `cacheRewrite` counts 5-minute writes 5 to 60 minutes after a request to the same model in the conversation: potential reuse with a longer cache, not guaranteed hits. |
+| List       | Counters                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sessions` | `sessions` started that day, how many of them `compacted` at least once, their `compactions`, and of those the `manualCompactions` you asked for.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `tokens`   | Also keyed by `model`. `requests`, then `input` (sent without the cache), `output` (`reasoning` is part of it), `cacheRead` and `cacheWrite`. Of the writes, `cacheWrite5m` and `cacheWrite1h` went to a cache that lives 5 minutes or 1 hour. `cacheRewrite` counts 5-minute writes 5 to 60 minutes after a request to the same model in the conversation: potential reuse with a longer cache, not guaranteed hits. `unsplit`, when present, counts tokens a source keeps as one total with no split, such as a thread's whole count; they are in no other counter, totals include them, and the cache's figures leave them out. |
 
-A session counts on the day it started, a request on the day it was made. `project` is `owner/repo` when the folder's git remote or the transcript names one, else the folder as `~/...` under your home or an absolute path elsewhere, or `unknown`. Totals are the sum of the cells; there is no record per session.
+`usage` is not cut by the window: it holds every day the machines have a record of, unless `loadsheet usage --days` set `config.usageWindow`. A session counts on the day it started, a request on the day it was made. `project` is `owner/repo` when the folder's git remote or the transcript names one, else the folder as `~/...` under your home or an absolute path elsewhere, or `unknown`. Totals are the sum of the cells; there is no record per session.
 
 [Privacy](/docs/guide/privacy) lists what a Report and a Scan leave out.

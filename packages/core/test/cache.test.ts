@@ -74,6 +74,11 @@ const sessions = (
   ...extra,
 });
 
+const NONE = Object.fromEntries(Object.keys(EXACT).map((signal) => [signal, "none"])) as Record<
+  Signal,
+  Grade
+>;
+
 const coverage = (settings?: Settings, extra: Partial<Coverage> = {}): Coverage => ({
   machine: "laptop",
   harness: "claude-code",
@@ -372,6 +377,23 @@ describe("cache-off", () => {
     expect(report([built], "cache-off").findings).toHaveLength(count);
   });
 
+  it("cache-off ignores unsplit", () => {
+    // Tokens with no split say nothing of the cache: neither sent past it nor read from it.
+    const unknown = (sent: number) =>
+      scan([], undefined, {
+        usage: {
+          sessions: [sessions(LAST, 10)],
+          tokens: [
+            tokens(LAST, 0, 0, { input: sent, cacheWrite: 0, cacheRead: 0, unsplit: 5 * M }),
+          ],
+        },
+      });
+    expect(report([unknown(M - 1)], "cache-off").findings).toEqual([]);
+    expect(report([unknown(M)], "cache-off").findings).toMatchObject([
+      { evidence: { sessions: 10, tokens: M } },
+    ]);
+  });
+
   it("counts cache writes as tokens sent", () => {
     const written = scan([tokens(LAST, M / 2, M / 2, { input: 0, cacheRead: 0 })], undefined, {
       usage: {
@@ -417,14 +439,85 @@ describe("cache-off", () => {
   });
 });
 
-it("keeps unread T3 coverage when filtering for a provider T3 supplies", () => {
+describe("usage history", () => {
+  // Uncached sessions and tokens 40 days back, outside the 30-day window, and none inside it.
+  const old = ago(40);
+  const before = scan([], undefined, {
+    usage: {
+      sessions: [sessions(old, 10)],
+      tokens: [tokens(old, 0, 0, { input: M, cacheWrite: 0, cacheRead: 0 })],
+    },
+  });
+
+  it("rules read usage inside the window only", () => {
+    const built = report([before], "cache-off");
+    expect(built.window).toEqual([FIRST, LAST]);
+    expect(built.findings).toEqual([]);
+    // The same counters inside the window are found.
+    const inside = scan([], undefined, {
+      usage: {
+        sessions: [sessions(LAST, 10)],
+        tokens: [tokens(LAST, 0, 0, { input: M, cacheWrite: 0, cacheRead: 0 })],
+      },
+    });
+    expect(report([inside], "cache-off").findings).toHaveLength(1);
+  });
+
+  it("keeps usage older than the window, filtered by entrypoint, unless usageWindow bounds it", () => {
+    expect(report([before], "cache-off").usage).toEqual(before.usage);
+    expect(report([before], "cache-off", { via: { exclude: ["cli"] } }).usage).toBeUndefined();
+    const bounded = buildReport({
+      scans: [before],
+      config: { ...resolveConfig(only("cache-off")), usageWindow: 41 },
+      now: NOW,
+      tool: "loadsheet@0.0.1",
+    });
+    expect(parseReport(JSON.parse(JSON.stringify(bounded)))).toEqual(bounded);
+    expect(bounded.usage).toEqual(before.usage);
+    const cut = buildReport({
+      scans: [before],
+      config: { ...resolveConfig(only("cache-off")), usageWindow: 40 },
+      now: NOW,
+      tool: "loadsheet@0.0.1",
+    });
+    expect(cut.usage).toBeUndefined();
+  });
+});
+
+it("keeps unread T3 coverage when filtering for a harness that reads no usage of its own", () => {
+  const t3 = coverage(undefined, {
+    harness: "t3-code",
+    installed: false,
+    sessions: 0,
+    signals: NONE,
+    unread: ["statev2.sqlite"],
+  });
   const one = scan([], undefined, {
-    coverage: [coverage(undefined, { harness: "t3-code", unread: ["statev2.sqlite"] })],
+    coverage: [coverage(undefined, { harness: "codex" }), t3],
   });
   expect(report([one], "short-history", { harnesses: ["antigravity"] }).coverage).toMatchObject([
     { harness: "t3-code", unread: ["statev2.sqlite"] },
   ]);
-  expect(report([one], "short-history", { harnesses: ["codex"] }).coverage).toEqual([]);
+  expect(
+    report([one], "short-history", { harnesses: ["codex"] }).coverage.map((row) => row.harness),
+  ).toEqual(["codex"]);
+});
+
+it("does not keep an uninstalled harness's own unread store as an unowned store's row", () => {
+  // opencode is not installed, yet its database is there and can't be read. It is not a store
+  // that supplies other harnesses, so filtering for antigravity drops it.
+  const opencode = coverage(undefined, {
+    harness: "opencode",
+    installed: false,
+    sessions: 0,
+    signals: { ...NONE, usage: "inferred" },
+    unread: ["opencode.db"],
+  });
+  const one = scan([], undefined, { coverage: [opencode] });
+  expect(report([one], "short-history", { harnesses: ["antigravity"] }).coverage).toEqual([]);
+  expect(report([one], "short-history", { harnesses: ["opencode"] }).coverage).toMatchObject([
+    { harness: "opencode", unread: ["opencode.db"] },
+  ]);
 });
 
 describe("short-history fix", () => {
@@ -457,6 +550,29 @@ describe("short-history fix", () => {
     expect(renderSummary(built, { harness: "claude-code" })).not.toContain(
       "keep transcripts a year",
     );
+  });
+
+  it("short-history ignores store-only days", () => {
+    // A store filled in usage 25 and 60 days back, where no transcript is left: no SessionCell.
+    const backfilled = young({ retentionDays: 30 });
+    const store = { via: "t3-code" };
+    backfilled.usage = {
+      sessions: [sessions(ago(60), 4, store), sessions(ago(25), 4, store)],
+      tokens: [tokens(ago(25), 0, 0, store)],
+    };
+    backfilled.coverage = [
+      {
+        ...backfilled.coverage[0]!,
+        backfill: [{ store: "statev2.sqlite", firstDay: ago(60), lastDay: ago(25), sessions: 8 }],
+      },
+    ];
+    const built = report([backfilled], "short-history");
+    expect(built.findings).toMatchObject([
+      { level: "info", evidence: { days: 6, sessions: 30, minDays: 30 }, fixes: [] },
+    ]);
+    // The Report keeps the backfill, and the usage before the window.
+    expect(built.coverage[0]!.backfill).toEqual(backfilled.coverage[0]!.backfill);
+    expect(built.usage!.sessions.map((cell) => cell.day)).toEqual([ago(60), ago(25)]);
   });
 
   it("does not borrow another machine's history as evidence", () => {

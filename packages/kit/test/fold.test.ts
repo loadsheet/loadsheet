@@ -216,6 +216,20 @@ describe("foldFacts", () => {
     expect(foldFacts("h", facts).usage).toBeUndefined();
   });
 
+  it("sums unsplit tokens on their own, and leaves cells without any as they were", () => {
+    const zero = { ...tokens("2026-11-20", "main", 0), requests: 0 };
+    const tally = foldFacts("h", [
+      { ...zero, unsplit: 700 },
+      { ...zero, unsplit: 300 },
+      tokens("2026-11-21", "main", 1),
+    ]);
+    expect(tally.usage!.tokens.map(({ day, input, unsplit }) => [day, input, unsplit])).toEqual([
+      ["2026-11-20", 0, 1000],
+      ["2026-11-21", 1, undefined],
+    ]);
+    expect(sumTallies([tally, tally]).usage!.tokens[0]!.unsplit).toBe(2000);
+  });
+
   it("holds each token split to its whole, so a cell stays inside the schema's bounds", () => {
     const tally = foldFacts("h", [
       {
@@ -274,8 +288,13 @@ describe("foldFacts", () => {
     expect(coverage.unread).toEqual(["grok", "opencode.db"]);
   });
 
-  it("keeps only the days inside a window", () => {
-    const tally = sumTallies([foldFacts("h", all)], ["2026-11-21", "2026-11-30"]);
+  it("keeps only the days inside a window, and usage inside its own", () => {
+    const window = ["2026-11-21", "2026-11-30"] as const;
+    const whole = sumTallies([foldFacts("h", all)]);
+    // The window does not cut usage.
+    expect(sumTallies([foldFacts("h", all)], window).usage).toEqual(whole.usage);
+    expect(sumTallies([foldFacts("h", all)], false, window).sessions).toEqual([]);
+    const tally = sumTallies([foldFacts("h", all)], window, window);
     expect(tally.sessions.map((cell) => cell.day)).toEqual(["2026-11-21"]);
     expect(tally.usage!.sessions.map((cell) => cell.day)).toEqual(["2026-11-21"]);
     // A request on the 21st of a session that started on the 20th counts on its own day.

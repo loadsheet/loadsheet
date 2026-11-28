@@ -103,6 +103,7 @@ export interface CompactionFact extends FactOfThread {
  * Tokens of model requests. `day` is the UTC day of the requests, not of the session's start. Once
  * per request, or once per several requests summed (`requests`, default 1). The splits are parts:
  * `reasoning` of `output`, `cacheWrite5m`, `cacheWrite1h` and `cacheRewrite` of `cacheWrite`.
+ * `unsplit` is its own part of the total, beside input, output and the cache.
  */
 export interface UsageTokensFact extends FactOfThread {
   readonly type: "usage-tokens";
@@ -119,6 +120,8 @@ export interface UsageTokensFact extends FactOfThread {
   readonly cacheWrite1h: number;
   /** Cache-write tokens of a request 5 to 60 minutes after the previous one of its conversation. */
   readonly cacheRewrite: number;
+  /** Tokens whose split is unknown, such as a thread's total alone; counted in no other counter. */
+  readonly unsplit?: number;
 }
 
 /**
@@ -198,6 +201,39 @@ export type StoreFact = (UsageSessionFact | CompactionFact | UsageTokensFact) & 
   readonly harness?: string;
 };
 
+/**
+ * A file a harness names by version, such as Codex's `state_5.sqlite`: kit lists `dir` and takes
+ * the file whose name matches `pattern` with the highest number in its first capture group.
+ */
+export interface VersionedFile {
+  /** The folder, absolute. */
+  readonly dir: string;
+  /** A whole file name, with the version as its first capture group: `/^state_(\d+)\.sqlite$/`. */
+  readonly pattern: RegExp;
+}
+
+/**
+ * A local JSON file whose contents a SQLite store's query reads through a bound parameter, such as
+ * a cache another tool keeps of usage it read. kit reads and parses the file; `read` turns the
+ * document into the value bound, as JSON, to `param`. A missing or unparsable file binds `[]`, so
+ * the database alone still counts.
+ */
+export interface StoreInput {
+  /** The parameter the query names it by, such as `$scanCache`. */
+  readonly param: `$${string}`;
+  /** The file, absolute, or the newest of the files a folder holds by version. */
+  path(place: Place): string | VersionedFile;
+  /**
+   * The value to bind, from the parsed document; pure, so it runs anywhere. `native` holds the ids
+   * kit binds as `$native`, for skipping what the transcripts count. Like `$native`, it may hold
+   * ids, which stay in memory and in the query. The document is shared by every store of the scan
+   * that reads the file, so `read` leaves it as it is. A file that is not there binds `[]`; one
+   * kit cannot read or parse, or that `read` throws on, such as a version it does not know, binds
+   * `[]` and lists the store as unread.
+   */
+  read(document: unknown, native: ReadonlySet<string>): unknown;
+}
+
 /** One row of a store's SELECT, by column name. */
 export type StoreRow = Readonly<Record<string, number | bigint | string | null | Uint8Array>>;
 
@@ -210,15 +246,30 @@ export interface SqliteStore {
   readonly kind: "sqlite";
   /** Its name in `Coverage.unread`, such as `opencode.db`: never a path. */
   readonly name: string;
-  /** The database file, absolute. */
-  path(place: Place): string;
+  /** The database file, absolute, or the newest of the files a folder holds by version. */
+  path(place: Place): string | VersionedFile;
   /**
-   * One SELECT. `$since` is bound to the window's first instant, as epoch milliseconds or as an ISO
-   * 8601 timestamp (`since`). It selects numbers, model names and folders only: a title, message
-   * or payload stays in SQLite, so `json_extract` the one field needed.
+   * One SELECT. `$since` is bound to the usage window's first instant, as epoch milliseconds or as
+   * an ISO 8601 timestamp (`since`), and `$native`, when the store names a `native` harness, to a
+   * JSON array of ids for `json_each($native)`. It selects numbers, model names and folders only:
+   * a title, message, payload or id stays in SQLite, so `json_extract` the one field needed.
    */
   readonly query: string;
   readonly since: "ms" | "iso";
+  /**
+   * The harness whose sessions the store also holds copies of. kit binds `$native` to the ids
+   * (`MachineReader.sessionId`) of that harness's transcript files this scan listed, so the query
+   * can skip the sessions those files count. The ids stay in memory and in the query.
+   */
+  readonly native?: string;
+  /**
+   * The harnesses whose sessions the store fills in where their transcripts are gone. Its Facts
+   * about one of them count only when this scan listed that harness's transcripts, since only
+   * then does `$native` name every session they count.
+   */
+  readonly supplies?: readonly string[];
+  /** JSON files the query reads as parameters of their own. */
+  readonly inputs?: readonly StoreInput[];
   /** The rows as Facts; a project is keyed as the Files keys paths, through `place`. */
   facts(rows: readonly StoreRow[], place: Place): StoreFact[];
 }
@@ -296,6 +347,14 @@ export interface MachineReader<State> {
   roots?(place: Place): string[];
   /** How its transcript lines become Facts; absent, with `roots`, for an inventory-only harness. */
   readonly transcripts?: TranscriptFormat<State>;
+  /**
+   * The id of a transcript file under `roots`, for a store that keeps copies of its sessions to
+   * skip what the transcripts count (`SqliteStore.native`): a session's main transcript by the
+   * session's id as the harness names it, and another file, such as a subagent's, by an id of its
+   * own that holds the session's; undefined for a file no store keeps. kit passes the ids to
+   * stores only, never to a Scan or the cache.
+   */
+  sessionId?(path: string): string | undefined;
   /** Its session stores that are not JSONL transcripts, read for usage only. */
   stores?(place: Place): SessionStore[];
 }

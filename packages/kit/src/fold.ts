@@ -1,6 +1,7 @@
 // From Facts to a Scan's counters, and Scans of one machine back into one. Every step is a sum or
 // a union, so folding sessions A and B together equals merging the Scan of A with the Scan of B.
 import type {
+  Backfill,
   Cell,
   Coverage,
   Day,
@@ -53,9 +54,17 @@ export const foldFacts = (harness: string, facts: Iterable<Fact>): Tally => {
   return accumulator.result();
 };
 
-/** Sums tallies, keeping only the days inside `window` when it is given. */
-export const sumTallies = (tallies: Iterable<Tally>, window?: readonly [Day, Day]): Tally => {
-  const accumulator = new Accumulator(window);
+/**
+ * Sums tallies. Sessions, cells, versions and context windows keep only the days inside `window`
+ * when it is given, and none when it is false; usage keeps only the days inside `usageWindow`
+ * when it is given, whatever the window.
+ */
+export const sumTallies = (
+  tallies: Iterable<Tally>,
+  window?: readonly [Day, Day] | false,
+  usageWindow?: readonly [Day, Day],
+): Tally => {
+  const accumulator = new Accumulator(window, usageWindow);
   for (const tally of tallies) accumulator.tally(tally);
   return accumulator.result();
 };
@@ -72,6 +81,7 @@ export const coverageOf = (
     contextWindow?: number;
     settings?: Settings;
     unread?: readonly string[];
+    backfill?: readonly Backfill[];
   },
 ): Coverage => {
   const sessions = tally.sessions.filter(
@@ -102,7 +112,28 @@ export const coverageOf = (
     ...(contextWindow === undefined ? {} : { contextWindow }),
     ...(base.settings === undefined ? {} : { settings: { ...base.settings } }),
     ...(base.unread?.length ? { unread: [...new Set(base.unread)].sort() } : {}),
+    ...(base.backfill?.length ? { backfill: sumBackfill(base.backfill) } : {}),
   };
+};
+
+/** Backfills summed by store: their sessions added, their days spanned. */
+export const sumBackfill = (backfills: Iterable<Backfill>): Backfill[] => {
+  const byStore = new Map<string, Backfill>();
+  for (const each of backfills) {
+    const known = byStore.get(each.store);
+    byStore.set(
+      each.store,
+      known
+        ? {
+            store: each.store,
+            firstDay: each.firstDay < known.firstDay ? each.firstDay : known.firstDay,
+            lastDay: each.lastDay > known.lastDay ? each.lastDay : known.lastDay,
+            sessions: known.sessions + each.sessions,
+          }
+        : { ...each },
+    );
+  }
+  return [...byStore.values()].sort(byKey((each) => each.store));
 };
 
 const itemKey = (item: Item) => [item.id, item.path].join(SEP);
@@ -139,9 +170,14 @@ export interface HarnessScan {
   readonly settings?: Settings;
   /** The harness's session stores that could not be read, by name. */
   readonly unread?: readonly string[];
+  /** What each store that filled in the harness's gone sessions added. */
+  readonly backfill?: readonly Backfill[];
 }
 
-/** A machine's Scan from each harness's part, keeping only the counters inside `window`. */
+/**
+ * A machine's Scan from each harness's part, keeping only the counters inside `window`. Usage is
+ * not cut by it: a Scan's usage holds every day its parts hold.
+ */
 export const buildScan = (input: {
   tool: string;
   machine: string;
@@ -257,6 +293,9 @@ export const mergeScans = (first: Scan, ...rest: Scan[]): Scan => {
           : { settings: { ...(next.settings ?? known.settings)! } }),
         ...(known.unread?.length || next.unread?.length
           ? { unread: [...new Set([...(known.unread ?? []), ...(next.unread ?? [])])].sort() }
+          : {}),
+        ...(known.backfill?.length || next.backfill?.length
+          ? { backfill: sumBackfill([...(known.backfill ?? []), ...(next.backfill ?? [])]) }
           : {}),
       });
     }

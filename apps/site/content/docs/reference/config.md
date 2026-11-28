@@ -29,6 +29,8 @@ loadsheet reads `~/.config/loadsheet/config.json`, or `$XDG_CONFIG_HOME/loadshee
 | `ignore`      | Item ids never reported, as `kind:name`. The kinds are `skill`, `instructions`, `mcp` and `subagent`.    |
 | `rules`       | Per rule, `false` turns it off and an object changes its thresholds. See [Rules](/docs/reference/rules). |
 
+`window` bounds the sheets and the rules, not usage history: `loadsheet usage` counts every day your machines have a record of, unless you pass it `--days`, which the Report records as `config.usageWindow`.
+
 Flags override the file: `--days` replaces `window`, `--harness` replaces `harnesses`, and `--rule` replaces a rule's setting. `--ignore` adds to `ignore`.
 
 A file that is not valid JSON or does not match the schema stops loadsheet with exit code 2 and a message that names the field.

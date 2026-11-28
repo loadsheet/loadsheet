@@ -450,3 +450,18 @@ describe("Claude Code context window", () => {
     expect(await window(memoryFiles({}))).toBeUndefined();
   });
 });
+
+describe("Claude Code's session ids", () => {
+  it("names a main transcript by its session, and a subagent's by its path under the session", () => {
+    const projects = "/home/jo/.claude/projects/-home-jo-app";
+    const session = "1f2e3d4c-aaaa-bbbb-cccc-0123456789ab";
+    expect(machine.sessionId!(`${projects}/${session}.jsonl`)).toBe(session);
+    expect(machine.sessionId!(`${projects}/${session}/subagents/agent-a1.jsonl`)).toBe(
+      `${session}/subagents/agent-a1.jsonl`,
+    );
+    expect(machine.sessionId!(`${projects}/${session}/subagents/workflows/w/agent-b.jsonl`)).toBe(
+      `${session}/subagents/workflows/w/agent-b.jsonl`,
+    );
+    expect(machine.sessionId!(`${projects}/${session}/notes.txt`)).toBeUndefined();
+  });
+});

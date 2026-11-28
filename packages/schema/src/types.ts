@@ -144,6 +144,20 @@ export interface Coverage {
   settings?: Settings;
   /** The session stores of this harness that could not be read, by name, such as `opencode.db`; absent when every store was read. */
   unread?: string[];
+  /** The session stores that filled in this harness's sessions whose own files are gone, each with the days and sessions it added; absent when none did. */
+  backfill?: Backfill[];
+}
+
+/** What one session store added to a harness's usage, for sessions whose own files are gone. */
+export interface Backfill {
+  /** The store, by name, such as `statev2.sqlite`. */
+  store: string;
+  /** The first day it added usage on. */
+  firstDay: Day;
+  /** The last day it added usage on. */
+  lastDay: Day;
+  /** Conversations it added, subagents' included. */
+  sessions: number;
 }
 
 /** What a harness's settings and environment set, as derived values: never a setting's text or an environment variable's value. */
@@ -223,10 +237,12 @@ export interface UsageTokenCell {
   cacheWrite: number;
   /** Of the cache writes, the tokens written to a cache that lives 5 minutes. */
   cacheWrite5m: number;
-  /** Of the cache writes, the tokens written to a cache that lives 1 hour; with cacheWrite5m at most cacheWrite, and the rest unsplit. */
+  /** Of the cache writes, the tokens written to a cache that lives 1 hour; with cacheWrite5m at most cacheWrite, and the rest of unknown lifetime. */
   cacheWrite1h: number;
   /** Five-minute cache writes 5 to 60 minutes after a request to the same model in the conversation: possible reuse with a longer cache, not guaranteed hits. */
   cacheRewrite: number;
+  /** Tokens whose split into input, output and cache is unknown, counted in no other counter. Absent means 0. */
+  unsplit?: number;
 }
 
 /** A machine's or a Report's usage history: sessions and tokens per project, as additive counters with no text. */
@@ -257,7 +273,7 @@ export interface Scan {
   sessions: SessionCell[];
   /** Usage counters. */
   cells: Cell[];
-  /** Sessions and tokens per project; absent when no harness read reports them. */
+  /** Sessions and tokens per project, on every day the machine has a record of, not only the window's; absent when no harness read reports them. */
   usage?: Usage;
 }
 
@@ -366,6 +382,8 @@ export interface RuleOptions {
 export interface ResolvedConfig {
   /** Days of history read. */
   window: number;
+  /** Days of usage history kept, when `loadsheet usage --days` set them; absent, usage keeps every day the machines have a record of. */
+  usageWindow?: number;
   /** Only these harness ids were read, when set. */
   harnesses?: string[];
   /** The entrypoint filter. */
@@ -549,6 +567,6 @@ export interface Report {
   findings: Finding[];
   /** Rules that did not run, per harness. */
   skipped: Skipped[];
-  /** Sessions and tokens per project, summed over machines and filtered as the sheets are; absent when no machine reports them, and from a Report shared through loadsheet.dev. */
+  /** Sessions and tokens per project, summed over machines and filtered by harness and entrypoint as the sheets are, on every day the Scans hold or the last `config.usageWindow` days; absent when no machine reports them, and from a Report shared through loadsheet.dev. */
   usage?: Usage;
 }

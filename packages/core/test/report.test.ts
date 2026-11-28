@@ -1934,7 +1934,7 @@ describe("buildReport", () => {
     cacheRewrite: n,
   });
 
-  it("sums usage over machines, inside the window, the harnesses and the entrypoints kept", () => {
+  it("sums usage over machines, on every day, in the harnesses and the entrypoints kept", () => {
     const usageOf = (n: number): Scan["usage"] => ({
       sessions: [
         sessionsIn("2026-11-20", "claude-code", "cli", "acme/web", n),
@@ -1954,8 +1954,10 @@ describe("buildReport", () => {
       scan("desk"),
     ];
     const both = report(scans);
+    // A day before the window is usage history too.
     expect(both.usage!.sessions).toEqual(
       [
+        sessionsIn("2026-09-01", "claude-code", "cli", "acme/web", 5),
         sessionsIn("2026-11-20", "claude-code", "cli", "acme/web", 5),
         sessionsIn("2026-11-20", "claude-code", "sdk-ts", "acme/web", 5),
         sessionsIn("2026-11-20", "codex", "cli", "acme/web", 5),
@@ -1968,9 +1970,12 @@ describe("buildReport", () => {
     ]);
 
     const filtered = report(scans, { harnesses: ["claude-code"], via: { exclude: ["sdk-ts"] } });
-    expect(filtered.usage!.sessions).toEqual([
-      { ...sessionsIn("2026-11-20", "claude-code", "cli", "acme/web", 5), compacted: 2 },
-    ]);
+    expect(filtered.usage!.sessions).toEqual(
+      [
+        sessionsIn("2026-09-01", "claude-code", "cli", "acme/web", 5),
+        sessionsIn("2026-11-20", "claude-code", "cli", "acme/web", 5),
+      ].map((cell) => ({ ...cell, compacted: 2 })),
+    );
     expect(filtered.usage!.tokens.map((cell) => [cell.harness, cell.project])).toEqual([
       ["claude-code", "acme/web"],
       ["claude-code", "~/notes"],

@@ -50,7 +50,7 @@ describe("the usage page", () => {
   it("sums every harness, then lists one row per org, as loadsheet usage counts them", async () => {
     const html = await render("/report/usage");
     expect(html).toContain("22 sessions, 69.1M tokens");
-    expect(html).toContain("By org and project, last 30 days, on 2 of 3 machines.");
+    expect(html).toContain("By org and project, 2026-11-20 to 2026-11-22, on 2 of 3 machines.");
     expect(names(html)).toEqual(["All harnesses", "acme", "no repository"]);
     expect(html).toContain("plus 22 subagent sessions");
     // acme: 14 + 5 sessions, 3 + 1 compacted, 68.6M of 69.1M tokens.

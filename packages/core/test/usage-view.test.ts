@@ -7,7 +7,7 @@ import {
   type UsageTokenCell,
 } from "@loadsheet/schema";
 import { describe, expect, it } from "vite-plus/test";
-import { renderUsage, unreadUsageStores, usageTotals } from "../src/index.ts";
+import { renderUsage, sumUsage, unreadUsageStores, usageTotals } from "../src/index.ts";
 
 const fleet = parseReport(
   JSON.parse(
@@ -96,6 +96,22 @@ describe("usageTotals", () => {
     ]);
   });
 
+  it("totals include unsplit", () => {
+    const unsplit = { ...tokens("other/x", 0, "codex"), output: 0, cacheRead: 0, cacheWrite: 0 };
+    const usage = {
+      sessions: [],
+      tokens: [tokens("acme/app", 40), { ...unsplit, cacheWrite5m: 0, unsplit: 800 }],
+    };
+    const totals = usageTotals(usage);
+    expect(totals.all.tokens).toBe(1000);
+    expect(totals.harnesses.map((row) => [row.name, row.tokens, row.share])).toEqual([
+      ["codex", 800, 80],
+      ["claude-code", 200, 20],
+    ]);
+    // Summed over machines, the counter adds up like the others.
+    expect(sumUsage([usage, usage])!.tokens.map((cell) => cell.unsplit)).toEqual([undefined, 1600]);
+  });
+
   it("counts nothing for a Report without usage", () => {
     expect(usageTotals(undefined).all).toMatchObject({ sessions: 0, tokens: 0 });
   });
@@ -172,6 +188,50 @@ describe("renderUsage", () => {
       'Fixes\n  fix     consider keeping the prompt cache 1 hour\n          ~/.claude/settings.json  promptCacheTtl = "1h"\n',
     );
     expect(text).toContain("Apply fixes    ask your agent to run npx loadsheet --json --fleet");
+  });
+
+  it("usage view prints the range from the cells", () => {
+    const text = renderUsage(
+      withUsage({
+        sessions: [{ ...sessions("acme/app", 1), day: "2026-08-03" }, sessions("acme/app", 1)],
+        tokens: [{ ...tokens("acme/app", 1000), day: "2026-11-21" }],
+      }),
+    );
+    expect(text).toContain(
+      "\nSessions, compactions and tokens, 2026-08-03 to 2026-11-21, on 2 machines.\n",
+    );
+    expect(text).not.toContain("last 30 days");
+    expect(renderUsage(withUsage({ sessions: [sessions("acme/app", 1)], tokens: [] }))).toContain(
+      "Sessions, compactions and tokens, on 2026-11-20, on 2 machines.",
+    );
+    // Bounded by `loadsheet usage --days`, an empty history says so.
+    const bounded = withUsage(undefined);
+    bounded.config = { ...bounded.config, usageWindow: 7 };
+    expect(renderUsage(bounded)).toContain("No session in the last 7 days on 2 machines said");
+    expect(renderUsage(withUsage(undefined))).toContain("No session on 2 machines said");
+  });
+
+  it("says where a harness's older days came from and what they lack", () => {
+    const report = withUsage({
+      sessions: [sessions("acme/app", 1)],
+      tokens: [tokens("acme/app", 1000), tokens("acme/app", 1000, "codex")],
+    });
+    const backfill = (store: string) => [
+      { store, firstDay: "2026-08-01", lastDay: "2026-10-01", sessions: 3 },
+    ];
+    report.coverage = report.coverage.map((row) =>
+      row.harness === "claude-code"
+        ? { ...row, backfill: backfill("statev2.sqlite") }
+        : row.harness === "codex"
+          ? { ...row, backfill: backfill("codex-state") }
+          : row,
+    );
+    const text = renderUsage(report);
+    expect(text).toMatch(/transcripts kept  30 days; older days: T3 Code, no compactions\n/u);
+    expect(text).toMatch(
+      /auto-compact +Codex's default limit\n {33}older days: T3 Code or state db, no compactions\n/u,
+    );
+    for (const line of text.split("\n")) expect(line.length).toBeLessThanOrEqual(80);
   });
 
   it("says there is nothing to count without usage", () => {

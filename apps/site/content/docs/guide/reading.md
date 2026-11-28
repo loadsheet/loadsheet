@@ -58,7 +58,7 @@ skills · 9 listed                     0.4k     uses
 ## Usage by project
 
 ```txt
-Sessions, compactions and tokens by project, last 30 days, on 2 machines.
+Sessions, compactions and tokens, 2026-08-03 to 2026-11-21, on 2 machines.
 
 Totals                          sessions     compacted      tokens   share
   Claude Code                         17        3  18%       62.0M     90%
@@ -82,7 +82,11 @@ Settings
   Codex        auto-compact      Codex's default limit
 ```
 
-`npx loadsheet usage` counts the sessions you started, how many compacted their context at least once, and the tokens they used, per harness, per organisation and for the 10 biggest projects. Tokens are input, output, cache reads and cache writes, subagents' included; the share is of all of them. A project is its repository, `owner/repo`, from the git remote of the folder the session ran in. Folders that are no repository count under one row. A session counts on the day it started.
+`npx loadsheet usage` counts the sessions you started, how many compacted their context at least once, and the tokens they used, per harness, per organisation and for the 10 biggest projects. It covers every day your machines still have a record of, not only the last 30, and the first line names the first and last of those days. `--days 90` keeps only the last 90.
+
+Tokens are input, output, cache reads and cache writes, subagents' included; the share is of all of them. Some records keep only a session's total, with no split into input, output and cache; those totals count too.
+
+A harness deletes its own transcripts after a while, but other stores on your machine may still hold those sessions. loadsheet fills in a gone Claude Code session from T3 Code's usage cache, else from T3 Code's database. It fills in a gone Codex thread from T3 Code's usage cache when that has the thread, else from Codex's state database, which keeps one total per thread. Each session counts once: its own transcript wins over T3 Code's usage cache, and that wins over T3 Code's database and Codex's state database. When a store filled in a harness's older days, the harness's last line under Settings names it and what it lacks. A project is its repository, `owner/repo`, from the git remote of the folder the session ran in. Folders that are no repository count under one row. A session counts on the day it started.
 
 Settings shows what loadsheet read from each harness's settings that changes these numbers: how long the prompt cache lives, how long transcripts are kept, and when the harness compacts on its own. When a 1-hour cache followed 5-minute days, it says when the 5-minute writes stopped. Fixes for the [prompt cache rules](/docs/reference/rules#prompt-cache) and for transcripts kept too short follow it.
 

@@ -2,7 +2,7 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { findCanary } from "@loadsheet/fixtures";
+import { findCanary, findCanaryInDir } from "@loadsheet/fixtures";
 import { parseScan, type Signal, type Grade } from "@loadsheet/schema";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import {
@@ -183,6 +183,81 @@ describe("readStore on SQLite", () => {
   it("gives nothing for a database that is not there", async () => {
     expect(await readStore(sqliteStore(), place(), SINCE)).toBeUndefined();
   });
+
+  it("a store binds a parameter read from a JSON file", async () => {
+    await NodeFSP.mkdir(`${home}/.db`, { recursive: true });
+    makeDb(false).close();
+    const natives: string[][] = [];
+    // Extra tokens per folder, from the newest of the versioned JSON files beside the database.
+    const store = sqliteStore({
+      native: "cli",
+      query: `SELECT s.at, s.cwd, s.input + coalesce(json_extract(x.value, '$.add'), 0) AS input, s.output
+        FROM sessions s LEFT JOIN json_each($extra) x ON json_extract(x.value, '$.cwd') = s.cwd
+        WHERE s.at >= $since AND s.cwd NOT IN (SELECT value FROM json_each($native)) ORDER BY s.at`,
+      inputs: [
+        {
+          param: "$extra",
+          path: (at) => ({ dir: `${at.home}/.db`, pattern: /^extra-v(\d+)\.json$/ }),
+          read: (document, native) => {
+            natives.push([...native]);
+            return (document as { rows: object[] }).rows;
+          },
+        },
+      ],
+    });
+    const inputs = async (native: string[] = []) => {
+      const read = await readStore(store, place(), SINCE, native);
+      return read && "facts" in read
+        ? read.facts.flatMap((fact) => (fact.type === "usage-tokens" ? [fact.input] : []))
+        : read;
+    };
+
+    // No file binds `[]`: the database alone still counts.
+    expect(await inputs()).toEqual([100, 20]);
+    await NodeFSP.writeFile(`${home}/.db/extra-v1.json`, '{"rows":[{"cwd":"~/code/app","add":1}]}');
+    await NodeFSP.writeFile(`${home}/.db/extra-v2.json`, '{"rows":[{"cwd":"~/code/app","add":5}]}');
+    expect(await inputs(["~/elsewhere"])).toEqual([105, 25]);
+    expect(natives).toEqual([["~/elsewhere"]]);
+    expect(await listing()).toEqual(["extra-v1.json", "extra-v2.json", "sessions.db"]);
+  });
+
+  it("an input it cannot read binds `[]` and leaves the store unread", async () => {
+    await NodeFSP.mkdir(`${home}/.db`, { recursive: true });
+    makeDb(false).close();
+    const store = (read: (document: unknown) => unknown) =>
+      sqliteStore({
+        query: `SELECT at, cwd, input + (SELECT count(*) FROM json_each($extra)) AS input, output
+          FROM sessions WHERE at >= $since ORDER BY at`,
+        inputs: [{ param: "$extra", path: (at) => `${at.home}/.db/extra.json`, read }],
+      });
+    const rows = (document: unknown) => (document as { rows: unknown[] }).rows;
+    const read = async (from = store(rows)) => {
+      const result = await readStore(from, place(), SINCE);
+      return {
+        unread: result?.unread ?? false,
+        input:
+          result && "facts" in result
+            ? result.facts.flatMap((fact) => (fact.type === "usage-tokens" ? [fact.input] : []))
+            : undefined,
+      };
+    };
+
+    // A file that is not there is no failure.
+    expect(await read()).toEqual({ unread: false, input: [100, 20] });
+    await NodeFSP.writeFile(`${home}/.db/extra.json`, '{"rows":[1,2]}');
+    expect(await read()).toEqual({ unread: false, input: [102, 22] });
+    // One `read` refuses, as for a version it does not know.
+    const refuse = store(() => {
+      throw new Error("version 99");
+    });
+    expect(await read(refuse)).toEqual({ unread: true, input: [100, 20] });
+    // One that is not JSON, and one that cannot be read.
+    await NodeFSP.writeFile(`${home}/.db/extra.json`, '{"rows":[');
+    expect(await read()).toEqual({ unread: true, input: [100, 20] });
+    await NodeFSP.rm(`${home}/.db/extra.json`);
+    await NodeFSP.mkdir(`${home}/.db/extra.json`);
+    expect(await read()).toEqual({ unread: true, input: [100, 20] });
+  });
 });
 
 /** A store over `<home>/.fold/<project>/<id>/`: `meta.json` holds the day and tokens. */
@@ -317,5 +392,246 @@ describe("scanMachine's stores", () => {
       ["stored", "~/code/a", 6, 1],
     ]);
     expect(findCanary(scan, [tmp, home, "private title"])).toEqual([]);
+  });
+});
+
+describe("scanMachine's store inputs", () => {
+  it("stores reading one input share one parse, and one that cannot read it is unread", async () => {
+    await NodeFSP.mkdir(`${home}/.db`, { recursive: true });
+    makeDb(false).close();
+    await NodeFSP.writeFile(`${home}/.db/extra.json`, '{"version":2,"rows":[1]}');
+    const documents: unknown[] = [];
+    const store = (name: string, versions: number[]) => ({
+      ...sqliteStore({
+        name,
+        query: `SELECT at, cwd, input + (SELECT count(*) FROM json_each($extra)) AS input, output
+          FROM sessions WHERE at >= $since ORDER BY at`,
+        inputs: [
+          {
+            param: "$extra",
+            path: (at: { home: string }) => `${at.home}/.db/extra.json`,
+            read: (document: unknown) => {
+              documents.push(document);
+              const { version, rows } = document as { version: number; rows: unknown[] };
+              if (!versions.includes(version)) throw new Error(`version ${version}`);
+              return rows;
+            },
+          },
+        ],
+      }),
+      harness: "driver",
+    });
+
+    const scan = await scanMachine({
+      harnesses: [],
+      stores: [store("a.db", [2]), store("b.db", [2]), store("c.db", [1])],
+      days: 7,
+      tool: "loadsheet@0.0.0-test",
+      machine: "test-machine",
+      now: NOW,
+      place: place(),
+      cacheDir: false,
+    });
+
+    expect(parseScan(scan)).toEqual(scan);
+    expect(documents).toHaveLength(3);
+    expect(documents[1]).toBe(documents[0]);
+    expect(documents[2]).toBe(documents[0]);
+    expect(scan.coverage.map((row) => [row.harness, row.unread])).toEqual([["driver", ["c.db"]]]);
+    // a and b with the input's one row in each session; c's query still counts, without it.
+    const input = scan.usage!.tokens.reduce((sum, cell) => sum + cell.input, 0);
+    expect(input).toBe(2 * (101 + 21 + 1000) + (100 + 20 + 999));
+  });
+});
+
+// A harness whose transcripts are `<home>/.tx/sessions/<session id>.jsonl`, one usage session each,
+// and a database that also holds copies of its sessions, by id, as T3 Code's does.
+const LISTED_ID = "c0ffee00-listed-session-id";
+const GONE_ID = "dead0000-gone-session-id";
+const OTHER_ID = "beef0000-other-session-id";
+
+const transcribed: Harness = defineHarness({
+  id: "transcribed",
+  signals: { ...NONE, listing: "exact" },
+  inventory: async () => [],
+  machine: {
+    home: (at) => `${at.home}/.tx`,
+    sources: () => [],
+    inventory: async () => [],
+    roots: (at) => [`${at.home}/.tx/sessions`],
+    sessionId: (path) => /([^/]+)\.jsonl$/u.exec(path)?.[1],
+    transcripts: {
+      markers: ['"day"'],
+      initial: () => ({}),
+      parse: (line) => {
+        const { day } = JSON.parse(line) as { day: string };
+        return [{ type: "usage-session", day, via: "cli", project: "~/code/tx", thread: "main" }];
+      },
+    },
+  },
+});
+
+/** A store over `<home>/.db/copies.db` that skips the sessions `$native` names. */
+const copies: SqliteStore & { harness: string } = {
+  kind: "sqlite",
+  harness: "driver",
+  name: "copies.db",
+  native: "transcribed",
+  supplies: ["transcribed"],
+  path: (at) => `${at.home}/.db/copies.db`,
+  query: `SELECT provider, at FROM copies WHERE at >= $since
+    AND id NOT IN (SELECT value FROM json_each($native)) ORDER BY id`,
+  since: "ms",
+  facts: (rows) =>
+    rows.map((row) => ({
+      type: "usage-session",
+      harness: String(row.provider),
+      day: dayOf(Number(row.at)),
+      via: "driver",
+      project: "~/code/copies",
+      thread: "main",
+    })),
+};
+
+const makeCopies = async (transcripts: readonly string[]) => {
+  await NodeFSP.mkdir(`${home}/.tx/sessions`, { recursive: true });
+  for (const id of transcripts) {
+    await NodeFSP.writeFile(`${home}/.tx/sessions/${id}.jsonl`, `{"day":"2026-11-21"}\n`);
+  }
+  await NodeFSP.mkdir(`${home}/.db`, { recursive: true });
+  const db = new DatabaseSync(`${home}/.db/copies.db`);
+  db.exec("CREATE TABLE copies (id TEXT, provider TEXT, at INTEGER, title TEXT)");
+  const insert = db.prepare("INSERT INTO copies VALUES (?, ?, ?, ?)");
+  insert.run(LISTED_ID, "transcribed", IN, "a private title");
+  insert.run(GONE_ID, "transcribed", IN, "a private title");
+  // A harness the store does not supply counts whether or not it was listed.
+  insert.run(OTHER_ID, "elsewhere", IN, "a private title");
+  db.close();
+};
+
+const scanCopies = (harnesses: Harness[], cacheDir: string | false = false) =>
+  scanMachine({
+    harnesses,
+    stores: [copies],
+    days: 7,
+    tool: "loadsheet@0.0.0-test",
+    machine: "test-machine",
+    now: NOW,
+    place: place(),
+    cacheDir,
+  });
+
+/** Usage sessions by harness and via. */
+const sessionsBy = (scan: Awaited<ReturnType<typeof scanMachine>>) =>
+  Object.fromEntries(
+    (scan.usage?.sessions ?? []).map((cell) => [`${cell.harness} ${cell.via}`, cell.sessions]),
+  );
+
+describe("stores beside native transcripts", () => {
+  it("a store skips sessions whose transcript is listed", async () => {
+    await makeCopies([LISTED_ID]);
+    const scan = await scanCopies([transcribed]);
+    expect(parseScan(scan)).toEqual(scan);
+    expect(sessionsBy(scan)).toEqual({
+      "elsewhere driver": 1,
+      "transcribed cli": 1,
+      // The gone session alone: the listed one is its transcript's.
+      "transcribed driver": 1,
+    });
+  });
+
+  it("a store reads every row when no transcript names it", async () => {
+    await makeCopies([]);
+    expect(sessionsBy(await scanCopies([transcribed]))).toEqual({
+      "elsewhere driver": 1,
+      "transcribed driver": 2,
+    });
+  });
+
+  it("no fixture id appears in the Scan or the cache file", async () => {
+    await makeCopies([LISTED_ID]);
+    const cacheDir = `${tmp}/cache`;
+    const scan = await scanCopies([transcribed], cacheDir);
+    expect((await NodeFSP.readdir(cacheDir)).length).toBeGreaterThan(0);
+    const ids = [LISTED_ID, GONE_ID, OTHER_ID, "private title", home];
+    expect(findCanary(scan, ids)).toEqual([]);
+    expect(await findCanaryInDir(cacheDir, ids)).toEqual([]);
+  });
+
+  it("coverage names the store and day range that backfilled a harness", async () => {
+    await makeCopies([LISTED_ID]);
+    // A second gone session, before the 7-day window: usage history keeps it.
+    const db = new DatabaseSync(`${home}/.db/copies.db`);
+    db.prepare("INSERT INTO copies VALUES (?, ?, ?, ?)").run(
+      "aaaa0000-older-session-id",
+      "transcribed",
+      BEFORE,
+      "a private title",
+    );
+    db.close();
+    const scan = await scanCopies([transcribed]);
+    expect(parseScan(scan)).toEqual(scan);
+    const backfill = Object.fromEntries(scan.coverage.map((row) => [row.harness, row.backfill]));
+    expect(backfill).toEqual({
+      transcribed: [
+        { store: "copies.db", firstDay: dayOf(BEFORE), lastDay: dayOf(IN), sessions: 2 },
+      ],
+    });
+    // The store's sessions count as usage, never as the harness's sessions.
+    expect(scan.sessions).toEqual([]);
+  });
+
+  it("unreadable Codex state is unread on codex", async () => {
+    const state: SqliteStore = {
+      ...copies,
+      name: "codex-state",
+      native: "codex",
+      supplies: ["codex"],
+      path: (at) => `${at.home}/.codex/state_5.sqlite`,
+    };
+    await NodeFSP.mkdir(`${home}/.tx/sessions`, { recursive: true });
+    await NodeFSP.mkdir(`${home}/.codex`, { recursive: true });
+    await NodeFSP.writeFile(`${home}/.codex/state_5.sqlite`, "not a database\n");
+    const scan = await scanMachine({
+      // A harness with Codex's id whose transcripts were listed, and whose state cannot be read.
+      harnesses: [
+        defineHarness({
+          ...transcribed,
+          id: "codex",
+          machine: { ...transcribed.machine!, stores: () => [state] },
+        }),
+      ],
+      days: 7,
+      tool: "loadsheet@0.0.0-test",
+      machine: "test-machine",
+      now: NOW,
+      place: place(),
+      cacheDir: false,
+    });
+    expect(parseScan(scan)).toEqual(scan);
+    expect(scan.coverage.map((row) => [row.harness, row.unread, row.backfill])).toEqual([
+      ["codex", ["codex-state"], undefined],
+    ]);
+  });
+
+  it("an unreadable store no harness owns is unread on the harness it supplies, and on its own row", async () => {
+    await NodeFSP.mkdir(`${home}/.tx/sessions`, { recursive: true });
+    await NodeFSP.mkdir(`${home}/.db`, { recursive: true });
+    await NodeFSP.writeFile(`${home}/.db/copies.db`, "not a database\n");
+    const scan = await scanCopies([transcribed]);
+    expect(scan.coverage.map((row) => [row.harness, row.installed, row.unread])).toEqual([
+      ["driver", false, ["copies.db"]],
+      ["transcribed", true, ["copies.db"]],
+    ]);
+    // Without the harness listed, the store would backfill nothing for it.
+    expect((await scanCopies([])).coverage.map((row) => [row.harness, row.unread])).toEqual([
+      ["driver", ["copies.db"]],
+    ]);
+  });
+
+  it("a store does not backfill a harness that was not listed", async () => {
+    await makeCopies([LISTED_ID]);
+    // Without the harness, nothing says which of its sessions have transcripts.
+    expect(sessionsBy(await scanCopies([]))).toEqual({ "elsewhere driver": 1 });
   });
 });

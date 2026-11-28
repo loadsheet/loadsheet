@@ -24,7 +24,7 @@ These stay out of every Report and Scan:
 
 ## What it writes
 
-loadsheet edits none of your files. It writes its scan cache to `~/.cache/loadsheet`, or `$XDG_CACHE_HOME/loadsheet`. The cache holds counters, keyed by a salted hash of each transcript's path, and no transcript text, session id or file name. Its usage counters name the folder each session ran in, as `~/...`. To resume a transcript it keeps a hash of the last message id, never the id. It opens T3 Code's and OpenCode's databases read-only, so no file appears beside them, and caches nothing from them. `--no-cache` writes no cache.
+loadsheet edits none of your files. It writes its scan cache to `~/.cache/loadsheet`, or `$XDG_CACHE_HOME/loadsheet`. The cache holds counters, keyed by a salted hash of each transcript's path, and no transcript text, session id or file name. Its usage counters name the folder each session ran in, as `~/...`. To resume a transcript it keeps a hash of the last message id, never the id. It opens T3 Code's, OpenCode's and Codex's state databases read-only, so no file appears beside them, and reads T3 Code's usage cache file; it caches nothing from them. The session ids it compares with your transcripts, so that no session counts twice, stay in memory. `--no-cache` writes no cache.
 
 `loadsheet build` writes the web page into the folder you name. See [The report as a web page](/docs/guide/web-page).
 

@@ -39,9 +39,20 @@ const sortedBy = <T>(values: Iterable<T>, key: (value: T) => string): T[] =>
     .sort(byKey((entry) => entry.key))
     .map((entry) => entry.value);
 
-/** Sums counters by key; a tally's days outside `window`, when it is given, are left out. */
+/** A first and a last day, inclusive. */
+export type Span = readonly [Day, Day];
+
+const inSpan = (span: Span | false | undefined): ((day: Day) => boolean) =>
+  span === false ? () => false : span ? (day) => day >= span[0] && day <= span[1] : () => true;
+
+/**
+ * Sums counters by key. Sessions, cells, versions and context windows on days outside `window`,
+ * when it is given, are left out, and all of them when it is false; usage on days outside
+ * `usageWindow`, when it is given. The window does not cut usage: usage history keeps every day.
+ */
 export class Accumulator {
   readonly keep: (day: Day) => boolean;
+  readonly keepUsage: (day: Day) => boolean;
   readonly #sessions = new Map<string, SessionCell>();
   /** Cells by their day, harness and via, then by item. */
   readonly #groups = new Map<string, Map<string, Cell>>();
@@ -52,8 +63,9 @@ export class Accumulator {
   readonly #usageSessions = new Map<string, UsageSessionCell>();
   readonly #usageTokens = new Map<string, UsageTokenCell>();
 
-  constructor(window?: readonly [Day, Day]) {
-    this.keep = window ? (day) => day >= window[0] && day <= window[1] : () => true;
+  constructor(window?: Span | false, usageWindow?: Span) {
+    this.keep = inSpan(window);
+    this.keepUsage = inSpan(usageWindow);
   }
 
   session(day: Day, harness: string, via: string): SessionCell {
@@ -149,10 +161,10 @@ export class Accumulator {
     return cell;
   }
 
-  /** Adds a Usage's cells inside the window. */
+  /** Adds a Usage's cells inside the usage window. */
   usage(usage: Usage): void {
     for (const from of usage.sessions) {
-      if (!this.keep(from.day)) continue;
+      if (!this.keepUsage(from.day)) continue;
       const cell = this.usageSession(from);
       cell.sessions += from.sessions;
       cell.compacted += from.compacted;
@@ -160,7 +172,7 @@ export class Accumulator {
       cell.manualCompactions += from.manualCompactions;
     }
     for (const from of usage.tokens) {
-      if (!this.keep(from.day)) continue;
+      if (!this.keepUsage(from.day)) continue;
       const cell = this.usageTokens(from);
       cell.requests += from.requests;
       cell.input += from.input;
@@ -171,6 +183,7 @@ export class Accumulator {
       cell.cacheWrite5m += from.cacheWrite5m;
       cell.cacheWrite1h += from.cacheWrite1h;
       cell.cacheRewrite += from.cacheRewrite;
+      if (from.unsplit) cell.unsplit = (cell.unsplit ?? 0) + from.unsplit;
     }
   }
 
@@ -237,6 +250,8 @@ export class Accumulator {
         cell.cacheWrite5m += write5m;
         cell.cacheWrite1h += Math.min(fact.cacheWrite1h, fact.cacheWrite - write5m);
         cell.cacheRewrite += Math.min(fact.cacheRewrite, fact.cacheWrite);
+        // Written only when some are counted, so cells without any keep their shape.
+        if (fact.unsplit) cell.unsplit = (cell.unsplit ?? 0) + fact.unsplit;
       }
     }
   }

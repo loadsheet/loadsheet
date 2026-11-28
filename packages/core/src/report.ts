@@ -337,9 +337,20 @@ export const buildReport = ({
     for (const cell of scan.sessions) harnesses.add(cell.harness);
   }
   const wanted = config.harnesses ? new Set(config.harnesses) : undefined;
-  const t3SuppliesSelected = config.harnesses?.some(
-    (id) => !["claude-code", "codex", "grok", "opencode"].includes(id),
-  );
+  // A store no harness owns, such as T3 Code's, has a row only to say it could not be read, and
+  // grades no signal: a harness's own store reads usage, so its row grades `usage`. The store's
+  // usage is about harnesses it names itself: a selected one that reads no usage of its own on that
+  // machine could have had some from it. A harness the store supplies carries the store in its own
+  // row's `unread`.
+  const unownedSupplies = (scan: Scan, row: Coverage) =>
+    !row.installed &&
+    row.sessions === 0 &&
+    !!row.unread?.length &&
+    Object.values(row.signals).every((grade) => grade === "none") &&
+    !!wanted &&
+    [...wanted].some((harness) =>
+      scan.coverage.every((each) => each.harness !== harness || each.signals.usage === "none"),
+    );
   const built = [...harnesses]
     .filter((harness) => !wanted || wanted.has(harness))
     .sort(compare)
@@ -355,9 +366,21 @@ export const buildReport = ({
     unfiltered: unfilteredOf(scans, wholeFleet, inWindow),
   });
 
+  // Usage history is not cut by the window, only by `usageWindow` when one is set; the rules
+  // read it through `usageOn`, inside the window.
+  const usageSince =
+    config.usageWindow === undefined
+      ? undefined
+      : new Date(Date.parse(`${last}T00:00:00Z`) - (config.usageWindow - 1) * DAY_MS)
+          .toISOString()
+          .slice(0, 10);
   const usage = sumUsage(
     scans.map((scan) => scan.usage),
-    (cell) => (!wanted || wanted.has(cell.harness)) && keep(cell),
+    (cell) =>
+      (!wanted || wanted.has(cell.harness)) &&
+      (usageSince === undefined || (cell.day >= usageSince && cell.day <= last)) &&
+      (include.size === 0 || include.has(cell.via)) &&
+      !exclude.has(cell.via),
   );
 
   return {
@@ -374,12 +397,7 @@ export const buildReport = ({
     coverage: scans
       .flatMap((scan) =>
         scan.coverage
-          .filter(
-            (row) =>
-              !wanted ||
-              wanted.has(row.harness) ||
-              (t3SuppliesSelected && row.harness === "t3-code" && row.unread?.length),
-          )
+          .filter((row) => !wanted || wanted.has(row.harness) || unownedSupplies(scan, row))
           .map((row) => keptCoverage(row, scan, keep)),
       )
       .sort((a, b) => compare(a.machine, b.machine) || compare(a.harness, b.harness)),

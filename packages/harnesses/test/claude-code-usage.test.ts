@@ -424,6 +424,14 @@ describe("Claude Code usage", () => {
     expect(project("/home/jo/work/app", null)).toBe("unknown");
     expect(project("/srv/build/app", null)).toBe("/srv/build/app");
     expect(project("C:\\Users\\jo\\app", { home: "C:\\Users\\jo", env: {} })).toBe("~/app");
+    // A folder made by joining the home with its own path is keyed under the home once.
+    expect(project("/home/jo/home/jo/.t3/scratch/a/app")).toBe("~/.t3/scratch/a/app");
+    expect(project("/home/jo/home/jo/home/jo/work")).toBe("~/work");
+    expect(project("/home/jo/home/jo")).toBe("~");
+    expect(project("/home/jo/home/joe/app")).toBe("~/home/joe/app");
+    expect(project("C:\\Users\\jo\\Users\\jo\\app", { home: "C:\\Users\\jo", env: {} })).toBe(
+      "~/app",
+    );
 
     // A later cd does not move the session.
     const moved = parseLines(

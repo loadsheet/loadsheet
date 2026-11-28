@@ -84,6 +84,11 @@
           "minimum": 1,
           "description": "Days of history read."
         },
+        "usageWindow": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Days of usage history kept, when `loadsheet usage --days` set them; absent, usage keeps every day the machines have a record of."
+        },
         "harnesses": {
           "type": "array",
           "items": {
@@ -510,6 +515,37 @@
               "pattern": "^[a-z0-9][a-z0-9._-]*$"
             },
             "description": "The session stores of this harness that could not be read, by name, such as `opencode.db`; absent when every store was read."
+          },
+          "backfill": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "store": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9._-]*$",
+                  "description": "The store, by name, such as `statev2.sqlite`."
+                },
+                "firstDay": {
+                  "type": "string",
+                  "format": "date",
+                  "description": "The first day it added usage on."
+                },
+                "lastDay": {
+                  "type": "string",
+                  "format": "date",
+                  "description": "The last day it added usage on."
+                },
+                "sessions": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Conversations it added, subagents' included."
+                }
+              },
+              "required": ["store", "firstDay", "lastDay", "sessions"],
+              "description": "What one session store added to a harness's usage, for sessions whose own files are gone."
+            },
+            "description": "The session stores that filled in this harness's sessions whose own files are gone, each with the days and sessions it added; absent when none did."
           }
         },
         "required": ["machine", "harness", "installed", "sessions", "versions", "signals"],
@@ -1058,12 +1094,17 @@
               "cacheWrite1h": {
                 "type": "integer",
                 "minimum": 0,
-                "description": "Of the cache writes, the tokens written to a cache that lives 1 hour; with cacheWrite5m at most cacheWrite, and the rest unsplit."
+                "description": "Of the cache writes, the tokens written to a cache that lives 1 hour; with cacheWrite5m at most cacheWrite, and the rest of unknown lifetime."
               },
               "cacheRewrite": {
                 "type": "integer",
                 "minimum": 0,
                 "description": "Five-minute cache writes 5 to 60 minutes after a request to the same model in the conversation: possible reuse with a longer cache, not guaranteed hits."
+              },
+              "unsplit": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Tokens whose split into input, output and cache is unknown, counted in no other counter. Absent means 0."
               }
             },
             "required": [
@@ -1089,7 +1130,7 @@
         }
       },
       "required": ["sessions", "tokens"],
-      "description": "Sessions and tokens per project, summed over machines and filtered as the sheets are; absent when no machine reports them, and from a Report shared through loadsheet.dev."
+      "description": "Sessions and tokens per project, summed over machines and filtered by harness and entrypoint as the sheets are, on every day the Scans hold or the last `config.usageWindow` days; absent when no machine reports them, and from a Report shared through loadsheet.dev."
     }
   },
   "required": [

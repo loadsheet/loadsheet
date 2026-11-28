@@ -53,6 +53,20 @@ export const claudeSources = (place: Place): string[] => {
 
 export const claudeRoots = (place: Place): string[] => [`${claudeConfigDir(place)}/projects`];
 
+/**
+ * A transcript's id under the roots, for the stores that keep copies of it: a main session's file
+ * is `projects/<folder>/<session id>.jsonl`, named by its session id, and a subagent's is any file
+ * under `<session id>/subagents/`, named `<session id>/subagents/<rest of its path>`, as T3 Code's
+ * usage cache keeps each file apart.
+ */
+export const claudeSessionId = (path: string): string | undefined => {
+  const subagent = /(?:^|\/)([^/]+\/subagents\/.+\.jsonl)$/u.exec(path);
+  if (subagent) return subagent[1];
+  const name = path.split("/").pop();
+  if (!name?.endsWith(".jsonl")) return undefined;
+  return name.slice(0, -".jsonl".length) || undefined;
+};
+
 // The config directory's own files; a plugin has none of these at its root.
 const HOME_FILE = /^(.*)\/(?:settings\.json|CLAUDE\.md|plugins\/installed_plugins\.json)$/u;
 const HOME_FOLDER = /^(.*?)\/(?:skills\/[^/]+\/SKILL\.md|(?:commands|agents|rules)\/.+\.md)$/u;

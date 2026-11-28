@@ -40,6 +40,7 @@ export {
   renderUsage,
   unreadUsageStores,
   tokens as usageTokens,
+  usageRange,
   usageTotals,
   type UsageRow,
   type UsageTotals,

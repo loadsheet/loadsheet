@@ -102,6 +102,18 @@ describe("createProjectResolver", () => {
       remotes({ origin: "https://github.com/far/away.git" }),
     );
     mkdirSync(join(outside, "plain"), { recursive: true });
+    mkdirSync(join(home, ".t3/worktrees/kept"), { recursive: true });
+    // Flat T3 worktrees, `<repo>-<branch>`: two of acme/portal, one of a repository named
+    // portal-kit, one whose remote is not named after its folder, and two owners of twin.
+    for (const [name, url] of Object.entries({
+      "portal-live-a": "https://github.com/acme/portal",
+      "portal-live-b": "git@github.com:acme/portal.git",
+      "portal-kit-live": "https://github.com/acme/portal-kit",
+      "pad-live": "https://github.com/acme/other",
+      "twin-a": "https://github.com/one/twin",
+      "twin-b": "https://github.com/two/twin",
+    }))
+      write(join(home, ".t3/worktrees", name, ".git/config"), remotes({ origin: url }));
     // A config with a section per branch, past 64 KiB.
     const branches = Array.from(
       { length: 3000 },
@@ -175,7 +187,7 @@ describe("createProjectResolver", () => {
     ]);
     expect(resolve("~/.t3/worktrees/gone/feat-x/packages")).toBe("acme/long");
     expect(resolve("~/.t3/worktrees/gone/feat-y")).toBe("acme/short");
-    expect(resolve("~/.t3/worktrees/gone-too/feat")).toBe("~/.t3/worktrees/gone-too");
+    expect(resolve("~/.t3/worktrees/gone-too/feat")).toBe("~/.t3/worktrees");
     expect(resolve("~/old/thing")).toBe("acme/old");
   });
 
@@ -187,9 +199,8 @@ describe("createProjectResolver", () => {
 
   it("folds worktree folders to their repository", () => {
     const resolve = resolver();
-    expect(resolve("~/.t3/worktrees/loadsheet/feat-gone/packages/kit")).toBe(
-      "~/.t3/worktrees/loadsheet",
-    );
+    // The repository's folder is still there, so it names the project.
+    expect(resolve("~/.t3/worktrees/kept/feat-gone/packages/kit")).toBe("~/.t3/worktrees/kept");
     expect(resolve("~/work/app/.claude/worktrees/agent-1/src")).toBe("~/work/app");
   });
 
@@ -199,6 +210,22 @@ describe("createProjectResolver", () => {
 
   it("names a deleted T3 worktree by a live worktree beside it", () => {
     expect(resolver()("~/.t3/worktrees/main/feat-gone/src")).toBe("acme/main");
+  });
+
+  it("names a deleted flat T3 worktree by a live worktree of the same repository", () => {
+    const resolve = resolver();
+    expect(resolve("~/.t3/worktrees/portal-date-picker-gone/src")).toBe("acme/portal");
+    expect(resolve("~/.t3/worktrees/portal-kit-gone")).toBe("acme/portal-kit");
+    expect(resolve("~/.t3/worktrees/portal")).toBe("acme/portal");
+  });
+
+  it("folds a deleted T3 worktree no live worktree names to one key", () => {
+    const resolve = resolver();
+    // pad-live's remote is acme/other, so it says nothing of a repository named pad.
+    expect(resolve("~/.t3/worktrees/pad-gone")).toBe("~/.t3/worktrees");
+    // Two owners of twin, one worktree each: neither decides.
+    expect(resolve("~/.t3/worktrees/twin-gone/src")).toBe("~/.t3/worktrees");
+    expect(resolve("~/.t3/worktrees/t3-1a2b3c4d")).toBe("~/.t3/worktrees");
   });
 
   it("folds scratch and temporary folders to their parent", () => {

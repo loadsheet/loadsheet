@@ -4,6 +4,7 @@
 // objects so a typo is an error.
 import * as v from "valibot";
 import type {
+  Backfill,
   Cell,
   Config,
   Coverage,
@@ -383,6 +384,24 @@ const SettingsSchema = v.pipe(
   ),
 );
 
+const StoreNameSchema = v.pipe(
+  v.string(),
+  v.regex(STORE, "must be a store name: lowercase letters, digits, dots and hyphens"),
+);
+
+const BackfillSchema = v.pipe(
+  v.looseObject({
+    store: describe(StoreNameSchema, "The store, by name, such as `statev2.sqlite`."),
+    firstDay: day("The first day it added usage on."),
+    lastDay: day("The last day it added usage on."),
+    sessions: count("Conversations it added, subagents' included."),
+  }),
+  v.check((each) => each.firstDay <= each.lastDay, "the first day must not be after the last"),
+  v.description(
+    "What one session store added to a harness's usage, for sessions whose own files are gone.",
+  ),
+);
+
 const CoverageSchema = v.pipe(
   v.looseObject({
     machine: nonEmpty("The machine's name."),
@@ -424,13 +443,14 @@ const CoverageSchema = v.pipe(
     ),
     unread: v.optional(
       describe(
-        v.array(
-          v.pipe(
-            v.string(),
-            v.regex(STORE, "must be a store name: lowercase letters, digits, dots and hyphens"),
-          ),
-        ),
+        v.array(StoreNameSchema),
         "The session stores of this harness that could not be read, by name, such as `opencode.db`; absent when every store was read.",
+      ),
+    ),
+    backfill: v.optional(
+      describe(
+        v.array(BackfillSchema),
+        "The session stores that filled in this harness's sessions whose own files are gone, each with the days and sessions it added; absent when none did.",
       ),
     ),
   }),
@@ -499,10 +519,15 @@ const UsageTokenCellSchema = v.pipe(
     cacheWrite: count("Input tokens written to the prompt cache."),
     cacheWrite5m: count("Of the cache writes, the tokens written to a cache that lives 5 minutes."),
     cacheWrite1h: count(
-      "Of the cache writes, the tokens written to a cache that lives 1 hour; with cacheWrite5m at most cacheWrite, and the rest unsplit.",
+      "Of the cache writes, the tokens written to a cache that lives 1 hour; with cacheWrite5m at most cacheWrite, and the rest of unknown lifetime.",
     ),
     cacheRewrite: count(
       "Five-minute cache writes 5 to 60 minutes after a request to the same model in the conversation: possible reuse with a longer cache, not guaranteed hits.",
+    ),
+    unsplit: v.optional(
+      count(
+        "Tokens whose split into input, output and cache is unknown, counted in no other counter. Absent means 0.",
+      ),
     ),
   }),
   v.check((cell) => cell.reasoning <= cell.output, "reasoning must not exceed output"),
@@ -557,7 +582,7 @@ const scanSchema = v.pipe(
     usage: v.optional(
       describe(
         UsageSchema,
-        "Sessions and tokens per project; absent when no harness read reports them.",
+        "Sessions and tokens per project, on every day the machine has a record of, not only the window's; absent when no harness read reports them.",
       ),
     ),
   }),
@@ -691,6 +716,16 @@ const configSchema = v.pipe(
 const ResolvedConfigSchema = v.pipe(
   v.looseObject({
     window: v.pipe(v.number(), v.integer(), v.minValue(1), v.description("Days of history read.")),
+    usageWindow: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.description(
+          "Days of usage history kept, when `loadsheet usage --days` set them; absent, usage keeps every day the machines have a record of.",
+        ),
+      ),
+    ),
     harnesses: v.optional(harnessIds("Only these harness ids were read, when set.")),
     via: v.pipe(
       v.looseObject({
@@ -963,7 +998,7 @@ const reportSchema = v.pipe(
     usage: v.optional(
       describe(
         UsageSchema,
-        "Sessions and tokens per project, summed over machines and filtered as the sheets are; absent when no machine reports them, and from a Report shared through loadsheet.dev.",
+        "Sessions and tokens per project, summed over machines and filtered by harness and entrypoint as the sheets are, on every day the Scans hold or the last `config.usageWindow` days; absent when no machine reports them, and from a Report shared through loadsheet.dev.",
       ),
     ),
   }),
@@ -1036,6 +1071,7 @@ export type SchemasMatchTypes = [
   Assert<Same<v.InferOutput<typeof CellSchema>, Cell>>,
   Assert<Same<v.InferOutput<typeof SessionCellSchema>, SessionCell>>,
   Assert<Same<v.InferOutput<typeof CoverageSchema>, Coverage>>,
+  Assert<Same<v.InferOutput<typeof BackfillSchema>, Backfill>>,
   Assert<Same<v.InferOutput<typeof SettingsSchema>, Settings>>,
   Assert<Same<v.InferOutput<typeof UsageSchema>, Usage>>,
   Assert<Same<v.InferOutput<typeof UsageSessionCellSchema>, UsageSessionCell>>,
