@@ -227,9 +227,9 @@ describe("renderUsage", () => {
           : row,
     );
     const text = renderUsage(report);
-    expect(text).toMatch(/transcripts kept  30 days; older days: T3 Code, no subagents\n/u);
+    expect(text).toMatch(/transcripts kept  30 days; older days: T3 Code, no compactions\n/u);
     expect(text).toMatch(
-      /auto-compact +Codex's default limit\n {33}older days: state db, no split or compactions\n/u,
+      /auto-compact +Codex's default limit\n {33}older days: T3 Code or state db, no compactions\n/u,
     );
     for (const line of text.split("\n")) expect(line.length).toBeLessThanOrEqual(80);
   });

@@ -97,12 +97,13 @@ export const usageRange = (usage: Usage | undefined): string | undefined => {
 };
 
 /**
- * What a store that backfills a harness's gone sessions lacks, by store name: T3 Code keeps Claude
- * Code's main conversations only, Codex's state database one token total per thread.
+ * Where a store that backfills a harness's gone sessions read them, and what they lack, by store
+ * name: neither T3 Code's usage cache nor Codex's state database records compactions, and the state
+ * database keeps one token total per thread the cache doesn't have.
  */
 const BACKFILL_WORDS: Readonly<Record<string, string>> = {
-  "statev2.sqlite": "T3 Code, no subagents",
-  "codex-state": "state db, no split or compactions",
+  "statev2.sqlite": "T3 Code, no compactions",
+  "codex-state": "T3 Code or state db, no compactions",
 };
 
 /** Where a harness's older days came from and what they lack, in one clause; empty without any. */
