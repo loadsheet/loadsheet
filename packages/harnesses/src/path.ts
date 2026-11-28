@@ -30,12 +30,32 @@ export const filesKey = (path: string, home: string): string => {
   return key.startsWith(prefix) ? `~/${at.slice(prefix.length)}` : at;
 };
 
+/**
+ * A key under the home with the home's own path repeated at its start dropped, as often as it
+ * repeats. A folder made by joining the home with its absolute path (`/home/u/home/u/x`) would
+ * otherwise key as `~/home/u/x` and carry the home path.
+ */
+const dropRepeatedHome = (key: string, home: string): string => {
+  const rest = normalPath(home.replaceAll("\\", "/")).replace(/^(?:[A-Za-z]:)?\//u, "");
+  if (rest === "" || rest === ".") return key;
+  const windows = /^[A-Za-z]:/u.test(home);
+  const same = (a: string) => (windows ? a.toLowerCase() === rest.toLowerCase() : a === rest);
+  let at = key;
+  for (;;) {
+    const tail = at.slice(2);
+    if (!at.startsWith("~/") || !same(tail.slice(0, rest.length))) return at;
+    if (tail.length === rest.length) return "~";
+    if (tail[rest.length] !== "/") return at;
+    at = `~${tail.slice(rest.length)}`;
+  }
+};
+
 /** A usage project key, redacted before it can reach a tally or a cache. */
 export const projectOfCwd = (cwd: unknown, place?: { home: string }): string => {
   if (typeof cwd !== "string" || /\p{C}/u.test(cwd)) return "unknown";
   const path = cwd.replaceAll("\\", "/");
   if (!isAbsolute(path) || (path.startsWith("//") && cwd.startsWith("\\"))) return "unknown";
-  const key = place ? filesKey(path, place.home) : normalPath(path);
+  const key = place ? dropRepeatedHome(filesKey(path, place.home), place.home) : normalPath(path);
   return isProjectKey(key) ? key : "unknown";
 };
 import { isProjectKey } from "@loadsheet/schema";
