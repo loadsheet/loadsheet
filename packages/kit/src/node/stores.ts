@@ -11,6 +11,7 @@ import type {
   SqliteStore,
   StoreFact,
   StoreRow,
+  VersionedFile,
 } from "../index.ts";
 
 /** What reading a store gave: its Facts, that it exists and could not be read, or undefined when it does not exist. */
@@ -36,6 +37,19 @@ const isFile = (path: string) =>
     () => false,
   );
 
+/** The file with the highest version in the folder; undefined when none matches or it cannot be listed. */
+const newestFile = async ({ dir, pattern }: VersionedFile): Promise<string | undefined> => {
+  const names = await readdir(dir).catch(() => []);
+  let newest: { name: string; version: number } | undefined;
+  for (const name of names) {
+    const version = Number(pattern.exec(name)?.[1]);
+    if (Number.isInteger(version) && (!newest || version > newest.version)) {
+      newest = { name, version };
+    }
+  }
+  return newest && join(dir, newest.name);
+};
+
 /**
  * A database is opened so that no file appears beside it. One in WAL mode whose `-wal` and `-shm`
  * are there holds rows its main file does not yet: it is opened read-only and reads them through
@@ -48,8 +62,9 @@ const readSqlite = async (
   sinceMs: number,
   native: readonly string[],
 ): Promise<StoreRead> => {
-  const path = store.path(place);
-  if (!(await isFile(path))) return undefined;
+  const where = store.path(place);
+  const path = typeof where === "string" ? where : await newestFile(where);
+  if (!path || !(await isFile(path))) return undefined;
   const module = await loadSqlite();
   if (!module) return { unread: true };
   const live = await isFile(`${path}-wal`);

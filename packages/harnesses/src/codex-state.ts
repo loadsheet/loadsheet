@@ -1,8 +1,7 @@
-// Codex's state database, `$CODEX_HOME/state_5.sqlite`: one `threads` row per thread, kept after
+// Codex's state database, `$CODEX_HOME/state_N.sqlite`: one `threads` row per thread, kept after
 // its rollout file is deleted. It fills in the threads whose rollouts are gone; a thread whose
-// rollout this scan listed is skipped through `$native`, the thread ids in rollout names. The `5`
-// is the schema version Codex names the file by: a store's path cannot list a folder, so a later
-// `state_6.sqlite` is not read until this name changes.
+// rollout this scan listed is skipped through `$native`, the thread ids in rollout names. `N` is
+// the schema version Codex names the file by, so kit reads the highest one there.
 //
 // A row keeps one token total per thread (`tokens_used`, the rollout's last `total_tokens`) and
 // no split, so it counts as `unsplit` on the day the thread was created, with no request counted.
@@ -61,8 +60,8 @@ const rowFacts = (row: StoreRow, place: Place): StoreFact[] => {
 /** Codex's state database under its home, read for the threads whose rollouts are gone. */
 export const codexStateDb = (home: (place: Place) => string): SqliteStore => ({
   kind: "sqlite",
-  name: "state_5.sqlite",
-  path: (place) => `${home(place)}/state_5.sqlite`,
+  name: "codex-state",
+  path: (place) => ({ dir: home(place), pattern: /^state_(\d+)\.sqlite$/ }),
   query: QUERY,
   since: "ms",
   native: "codex",

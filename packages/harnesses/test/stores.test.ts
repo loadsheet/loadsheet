@@ -555,9 +555,9 @@ describe("T3 Code's database", () => {
 });
 
 /** A Codex state database with the columns the store reads, and the ids, titles and messages it must not. */
-const makeCodexState = async () => {
+const makeCodexState = async (file = "state_5.sqlite") => {
   const db = await sqlite(
-    `${home}/.codex/state_5.sqlite`,
+    `${home}/.codex/${file}`,
     `CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL, created_at INTEGER NOT NULL,
       source TEXT NOT NULL, cwd TEXT NOT NULL, title TEXT NOT NULL, tokens_used INTEGER NOT NULL DEFAULT 0,
       git_origin_url TEXT, first_user_message TEXT NOT NULL DEFAULT '', model TEXT,
@@ -704,6 +704,31 @@ describe("Codex's state database", () => {
       "codex T3 Code 2026-11-22 ~/code/app main": [1, 0, 0],
     });
     expect(findCanary(result, [tmp, SECRET, "id-canary", id])).toEqual([]);
+  });
+
+  it("reads the newest Codex state database", async () => {
+    const old = await makeCodexState("state_4.sqlite");
+    old.row("id-canary-stale", IN, plain, 4444, null);
+    old.db.close();
+    const newest = await makeCodexState("state_5.sqlite");
+    newest.row("id-canary-gone", IN, plain, 5000, null);
+    newest.db.close();
+    // A name that only looks like a version is not read.
+    await write(`${home}/.codex/state_9.sqlite.bak`, "not a database\n");
+
+    const result = await scan([codex]);
+
+    expect(unsplitRows(result)).toEqual([
+      "codex T3 Code 2026-11-22 ~/code/app main gpt-z 0 0 5000",
+    ]);
+    expect(result.coverage.find((row) => row.harness === "codex")?.unread).toBeUndefined();
+  });
+
+  it("no state database is not unread", async () => {
+    await write(`${home}/.codex/config.toml`, "");
+    const result = await scan([codex]);
+    expect(result.usage?.tokens ?? []).toEqual([]);
+    expect(result.coverage.find((row) => row.harness === "codex")?.unread).toBeUndefined();
   });
 
   it("backfills nothing when Codex's rollouts were not listed", async () => {

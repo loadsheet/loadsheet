@@ -460,7 +460,7 @@ describe("stores beside native transcripts", () => {
   it("unreadable Codex state is unread on codex", async () => {
     const state: SqliteStore = {
       ...copies,
-      name: "state_5.sqlite",
+      name: "codex-state",
       native: "codex",
       supplies: ["codex"],
       path: (at) => `${at.home}/.codex/state_5.sqlite`,
@@ -486,7 +486,7 @@ describe("stores beside native transcripts", () => {
     });
     expect(parseScan(scan)).toEqual(scan);
     expect(scan.coverage.map((row) => [row.harness, row.unread, row.backfill])).toEqual([
-      ["codex", ["state_5.sqlite"], undefined],
+      ["codex", ["codex-state"], undefined],
     ]);
   });
 

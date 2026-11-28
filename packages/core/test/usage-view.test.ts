@@ -223,7 +223,7 @@ describe("renderUsage", () => {
       row.harness === "claude-code"
         ? { ...row, backfill: backfill("statev2.sqlite") }
         : row.harness === "codex"
-          ? { ...row, backfill: backfill("state_5.sqlite") }
+          ? { ...row, backfill: backfill("codex-state") }
           : row,
     );
     const text = renderUsage(report);

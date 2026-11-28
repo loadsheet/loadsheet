@@ -201,6 +201,17 @@ export type StoreFact = (UsageSessionFact | CompactionFact | UsageTokensFact) & 
   readonly harness?: string;
 };
 
+/**
+ * A file a harness names by version, such as Codex's `state_5.sqlite`: kit lists `dir` and takes
+ * the file whose name matches `pattern` with the highest number in its first capture group.
+ */
+export interface VersionedFile {
+  /** The folder, absolute. */
+  readonly dir: string;
+  /** A whole file name, with the version as its first capture group: `/^state_(\d+)\.sqlite$/`. */
+  readonly pattern: RegExp;
+}
+
 /** One row of a store's SELECT, by column name. */
 export type StoreRow = Readonly<Record<string, number | bigint | string | null | Uint8Array>>;
 
@@ -213,8 +224,8 @@ export interface SqliteStore {
   readonly kind: "sqlite";
   /** Its name in `Coverage.unread`, such as `opencode.db`: never a path. */
   readonly name: string;
-  /** The database file, absolute. */
-  path(place: Place): string;
+  /** The database file, absolute, or the newest of the files a folder holds by version. */
+  path(place: Place): string | VersionedFile;
   /**
    * One SELECT. `$since` is bound to the usage window's first instant, as epoch milliseconds or as
    * an ISO 8601 timestamp (`since`), and `$native`, when the store names a `native` harness, to a

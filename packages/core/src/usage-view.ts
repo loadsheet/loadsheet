@@ -102,7 +102,7 @@ export const usageRange = (usage: Usage | undefined): string | undefined => {
  */
 const BACKFILL_WORDS: Readonly<Record<string, string>> = {
   "statev2.sqlite": "T3 Code, no subagents",
-  "state_5.sqlite": "state db, no split or compactions",
+  "codex-state": "state db, no split or compactions",
 };
 
 /** Where a harness's older days came from and what they lack, in one clause; empty without any. */
