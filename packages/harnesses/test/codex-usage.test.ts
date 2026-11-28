@@ -2,7 +2,7 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import { findCanary } from "@loadsheet/fixtures";
-import { memoryFiles, type Fact, type Place } from "@loadsheet/kit";
+import { foldFacts, memoryFiles, type Fact, type Place } from "@loadsheet/kit";
 import { readTranscript, scanMachine, type ReadPosition } from "@loadsheet/kit/node";
 import { parseScan } from "@loadsheet/schema";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -159,6 +159,11 @@ const window = (used: number, minutes: number, resets: string) => ({
  */
 const TURNS = [
   meta(),
+  {
+    timestamp: at("09:59:01"),
+    type: "world_state",
+    payload: { state: { tools: { mcp__executor: "", mcp__linear: "" } } },
+  },
   context("gpt-6"),
   started(at("10:00:00")),
   call("10:00:01", { name: "exec_command" }),
@@ -245,6 +250,21 @@ describe("codex turns, hours, tools and limits", () => {
     expect(summed(turns, () => "all")).toEqual({ all: { turns: 2, timed: 1, durationMs: 9000 } });
   });
 
+  it("times non-interrupt aborts without counting them as user interruptions", () => {
+    const { facts } = parseAll([
+      meta(),
+      ...["replaced", "review_ended", "budget_limited", "interrupted", undefined].flatMap(
+        (reason) => [
+          started(at("10:00:00")),
+          ended(at("10:00:01"), "turn_aborted", { duration_ms: 1000, reason }),
+        ],
+      ),
+    ]);
+    expect(summed(ofType(facts, "usage-turn"), () => "all")).toEqual({
+      all: { turns: 5, timed: 5, durationMs: 5000, interrupted: 1 },
+    });
+  });
+
   it("counts requests and turns by the UTC hour they happened in", () => {
     const hours = ofType(parseAll(TURNS).facts, "usage-hour");
     expect(summed(hours, (fact) => `${fact.day} ${(fact as { hour: number }).hour}`)).toEqual({
@@ -318,6 +338,41 @@ describe("codex turns, hours, tools and limits", () => {
     ]);
   });
 
+  it("merges same-second default quota readings without mixing in other buckets", () => {
+    const reading = (millis: string, used: number, fields: Record<string, unknown>) =>
+      limits(`2026-11-10T10:00:07.${millis}Z`, usage(100, 0, 10), usage(100, 0, 10), {
+        primary: window(used, 300, at("14:00:00")),
+        ...fields,
+      });
+    const facts = ofType(
+      parseAll([
+        meta(),
+        reading("010", 20, { limit_id: "codex_other", rate_limit_reached_type: "primary" }),
+        reading("100", 100, { limit_id: "codex", rate_limit_reached_type: "primary" }),
+        reading("200", 1, { limit_id: "codex_other" }),
+        reading("300", 100, { rate_limit_reached_type: "primary" }),
+        reading("800", 2, {}),
+        reading("900", 110, { limit_id: "codex_other", rate_limit_reached_type: "primary" }),
+      ]).facts,
+      "usage-limit",
+    );
+    expect(facts).toHaveLength(3);
+    const merged = foldFacts("codex", facts).usage?.limits;
+    expect(merged).toEqual(foldFacts("codex", facts.toReversed()).usage?.limits);
+    expect(merged).toEqual([
+      {
+        day: "2026-11-10",
+        harness: "codex",
+        windowMinutes: 300,
+        at: seconds(at("10:00:07")) + 0.8,
+        resetsAt: seconds(at("14:00:00")),
+        usedPercent: 2,
+        peakUsedPercent: 100,
+        reached: 1,
+      },
+    ]);
+  });
+
   it("counts none of a fork's copied tasks or calls", () => {
     const { facts } = parseAll([
       meta({ forked_from_id: "parent-id", thread_source: "subagent" }),
@@ -340,6 +395,21 @@ describe("codex turns, hours, tools and limits", () => {
     const forbidden = ["secret", "/home/u", "session-id"];
     expect(findCanary(facts, forbidden)).toEqual([]);
     expect(findCanary(state, forbidden)).toEqual([]);
+  });
+
+  it("buckets identifier-shaped names from unverified tools and MCP servers", () => {
+    const { facts, state } = parseAll([
+      meta(),
+      call("10:00:01", { name: "private.customer-reference" }),
+      call("10:00:02", { name: "mcp__private__read" }),
+      call("10:00:03", { name: "search", namespace: "mcp__private" }),
+    ]);
+    expect(ofType(facts, "usage-tool").map((fact) => fact.tool)).toEqual([
+      "other",
+      "other",
+      "other",
+    ]);
+    expect(findCanary({ facts, state }, ["private"])).toEqual([]);
   });
 });
 
@@ -584,6 +654,28 @@ describe("codex usage", () => {
     });
     afterEach(async () => {
       await NodeFSP.rm(dir, { recursive: true, force: true });
+    });
+
+    it("counts a native tool search through the reader's marker gate", async () => {
+      const path = NodePath.join(dir, "rollout.jsonl");
+      const lines = [
+        meta(),
+        started(at("10:00:00")),
+        {
+          timestamp: at("10:00:01"),
+          type: "response_item",
+          payload: { type: "tool_search_call", arguments: { query: "secret" } },
+        },
+      ];
+      await NodeFSP.writeFile(path, lines.map((value) => `${JSON.stringify(value)}\n`).join(""));
+      const result = await readTranscript(path, codexTranscripts, undefined, { place });
+      expect(ofType(result!.records, "usage-tool").map((fact) => fact.tool)).toEqual([
+        "tool_search",
+      ]);
+      expect(summed(ofType(result!.records, "usage-turn"), () => "all")).toEqual({
+        all: { turns: 1, toolCalls: 1 },
+      });
+      expect(findCanary(result!.records, ["secret"])).toEqual([]);
     });
 
     it.each([

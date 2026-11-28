@@ -169,7 +169,7 @@ export interface UsageLimitFact {
   readonly windowMinutes: number;
   /** The share of the window used, in percent. */
   readonly usedPercent?: number;
-  /** When it was read, in seconds since the epoch; given with `usedPercent`. */
+  /** When it was read, in seconds since the epoch, with millisecond precision. */
   readonly at?: number;
   /** When the window resets, in seconds since the epoch. */
   readonly resetsAt?: number;
@@ -180,13 +180,11 @@ export interface UsageLimitFact {
 const TOOL = /^[A-Za-z0-9_.:-]{1,64}$/u;
 
 /**
- * The name a tool call is counted under: `mcp:<server>` for an MCP server's tool, else the tool's
- * own name, and `other` for a name usage does not keep, so no free text becomes a key.
+ * Validate the spelling of a verified built-in or MCP label. Adapters must establish the label
+ * from their built-in tools or harness metadata before passing it here.
  */
-export const toolName = (name: string, server?: string): string => {
-  const tool = server === undefined ? name : `mcp:${server}`;
-  return TOOL.test(tool) ? tool : "other";
-};
+export const toolName = (label: string | undefined): string =>
+  label !== undefined && TOOL.test(label) ? label : "other";
 
 /**
  * What one transcript line says, in names, days and counters only: no text, no session id, no

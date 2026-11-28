@@ -13,7 +13,7 @@ import { Accumulator } from "../sum.ts";
 import type { ReadPosition } from "./reader.ts";
 
 /** The layout of a cache file; a change here starts every cache cold. */
-const CACHE_LAYOUT = 6;
+const CACHE_LAYOUT = 7;
 
 /** What the cache keeps for one transcript file. */
 export interface CachedFile {

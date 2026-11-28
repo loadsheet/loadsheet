@@ -509,6 +509,11 @@ describe("Claude Code turns, hours, tools and limits", () => {
    * again on the next request.
    */
   const SESSION = [
+    line({
+      type: "attachment",
+      timestamp: "2026-03-02T10:00:00Z",
+      attachment: { type: "mcp_instructions_delta", addedNames: ["linear"] },
+    }),
     prompt("2026-03-02T10:00:00Z", "Fix the secret bug"),
     reply("a", "2026-03-02T10:00:05Z", [
       use("Bash", { command: "cat secret" }),
@@ -535,6 +540,7 @@ describe("Claude Code turns, hours, tools and limits", () => {
       "<synthetic>",
     ),
     prompt("2026-03-03T00:00:30Z", [{ type: "text", text: "[Request interrupted by user]" }]),
+    reply("f", "2026-03-03T00:00:45Z"),
     apiError("2026-03-03T00:01:00Z", 429, 1),
   ];
 
@@ -576,21 +582,42 @@ describe("Claude Code turns, hours, tools and limits", () => {
   });
 
   it("counts a tool stopped by the user as the turn's interruption", () => {
-    const turns = ofType(
-      parseLines(
-        [
-          prompt("2026-03-02T10:00:00Z", "Run it"),
-          reply("a", "2026-03-02T10:00:02Z", [use("Bash")]),
-          result("2026-03-02T10:00:09Z", { toolUseResult: { interrupted: true, stdout: "" } }),
-          result("2026-03-02T10:00:10Z", { toolUseResult: { interrupted: true, stdout: "" } }),
-        ],
-        jo,
-      ).facts,
-      "usage-turn",
+    const { facts } = parseLines(
+      [
+        prompt("2026-03-02T10:00:00Z", "Run it"),
+        reply("a", "2026-03-02T10:00:02Z", [use("Bash")]),
+        result("2026-03-02T10:00:09Z", { toolUseResult: { interrupted: true, stdout: "" } }),
+        result("2026-03-02T10:00:10Z", { toolUseResult: { interrupted: true, stdout: "" } }),
+        reply("b", "2026-03-02T10:00:15Z", [use("Read")]),
+      ],
+      jo,
     );
+    const turns = ofType(facts, "usage-turn");
     expect(summed(turns, () => "all")).toEqual({
-      all: { turns: 1, timed: 1, durationMs: 10_000, interrupted: 1, toolCalls: 1 },
+      all: { turns: 1, timed: 1, durationMs: 9_000, interrupted: 1, toolCalls: 1 },
     });
+    expect(ofType(facts, "usage-tool").map((fact) => fact.tool)).toEqual(["Bash", "Read"]);
+    expect(ofType(facts, "usage-hour").filter((fact) => fact.requests)).toHaveLength(2);
+  });
+
+  it("starts a fresh turn for a prompt that begins with markup", () => {
+    const { facts } = parseLines(
+      [
+        prompt("2026-03-02T10:00:00Z", "First"),
+        reply("a", "2026-03-02T10:00:02Z"),
+        prompt("2026-03-02T11:00:00Z", "<div>Fix this</div>"),
+        reply("b", "2026-03-02T11:00:03Z"),
+      ],
+      jo,
+    );
+    expect(summed(ofType(facts, "usage-turn"), () => "all")).toEqual({
+      all: { turns: 2, timed: 2, durationMs: 5_000 },
+    });
+    expect(
+      ofType(facts, "usage-hour")
+        .filter((fact) => fact.turns)
+        .map((fact) => fact.hour),
+    ).toEqual([10, 11]);
   });
 
   it("starts no turn for a meta line, a tool result or a command", () => {
@@ -614,7 +641,7 @@ describe("Claude Code turns, hours, tools and limits", () => {
     expect(summed(hours, (fact) => `${fact.day} ${(fact as { hour: number }).hour}`)).toEqual({
       "2026-03-02 10": { turns: 1, requests: 3 },
       "2026-03-02 23": { turns: 1 },
-      "2026-03-03 0": { requests: 1 },
+      "2026-03-03 0": { requests: 2 },
     });
   });
 
@@ -688,6 +715,21 @@ describe("Claude Code turns, hours, tools and limits", () => {
     const forbidden = ["secret", "toolu", "/home/jo"];
     expect(findCanary(facts, forbidden)).toEqual([]);
     expect(findCanary(state, forbidden)).toEqual([]);
+  });
+
+  it("buckets identifier-shaped names from unverified tools and MCP servers", () => {
+    const { facts, state } = parseLines(
+      [
+        prompt("2026-03-02T10:00:00Z", "Run it"),
+        reply("a", "2026-03-02T10:00:01Z", [
+          use("private.customer-reference"),
+          use("mcp__private__read"),
+        ]),
+      ],
+      jo,
+    );
+    expect(ofType(facts, "usage-tool").map((fact) => fact.tool)).toEqual(["other", "other"]);
+    expect(findCanary({ facts, state }, ["private"])).toEqual([]);
   });
 
   describe("read through readTranscript", () => {

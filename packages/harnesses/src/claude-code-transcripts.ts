@@ -25,6 +25,7 @@ export interface ClaudeState {
   builtIn: Record<string, true>;
   /** MCP servers seen in this turn's attachments, and their characters, until the turn starts. */
   mcp: Record<string, number>;
+  knownMcp?: Partial<Record<Id, true>>;
   /** Project instruction ids seen in this turn's attachments, and their characters, likewise. */
   project: Record<Id, number>;
   /** A slash command whose expansion the next line should carry. */
@@ -57,7 +58,6 @@ interface OpenTurn {
   /** When its latest line counted was written, in ms since the epoch; absent when the prompt said no time. */
   end?: number;
   timed: boolean;
-  interrupted: boolean;
   subagents: boolean;
 }
 
@@ -123,9 +123,66 @@ const mcpServer = (tool: string) => /^mcp__([A-Za-z0-9_-]{1,128}?)__./u.exec(too
 
 /** What Claude Code writes, as a user line, where the user stopped a turn. Only this prefix is read. */
 const INTERRUPTED = "[Request interrupted by user";
-const INTERRUPTED_TOKEN = '"interrupted":true';
+const INTERRUPTED_TOKEN = '"interrupted"';
 /** What a user line Claude Code writes for something other than a prompt starts with: no turn runs on through it. */
 const NOT_PROMPTS = ["<task-notification>", "<bash-input>"];
+const WRAPPERS = [
+  ...NOT_PROMPTS,
+  "<bash-stdout>",
+  "<bash-stderr>",
+  "<system-reminder>",
+  "<command-name>",
+  "<command-message>",
+  "<command-args>",
+  "<local-command-caveat>",
+  "<local-command-stdout>",
+  "<local-command-stderr>",
+];
+const PEER_MESSAGE = /^<teammate-message(?:\s|>)/u;
+const BUILT_IN_TOOLS = new Set([
+  "Agent",
+  "AskUserQuestion",
+  "Bash",
+  "CronCreate",
+  "CronDelete",
+  "CronList",
+  "Edit",
+  "EnterPlanMode",
+  "EnterWorktree",
+  "ExitPlanMode",
+  "ExitWorktree",
+  "Glob",
+  "Grep",
+  "LSP",
+  "ListMcpResourcesTool",
+  "NotebookEdit",
+  "Read",
+  "ReadMcpResourceTool",
+  "SendMessage",
+  "Skill",
+  "Task",
+  "TaskCreate",
+  "TaskGet",
+  "TaskList",
+  "TaskOutput",
+  "TaskStop",
+  "TaskUpdate",
+  "TeamCreate",
+  "TeamDelete",
+  "TodoWrite",
+  "ToolSearch",
+  "WebFetch",
+  "WebSearch",
+  "Write",
+]);
+const knownServer = (name: string, known: ClaudeState["knownMcp"]): string | undefined => {
+  if (!known || !name.startsWith("mcp__")) return undefined;
+  for (let split = name.lastIndexOf("__"); split > 5; split = name.lastIndexOf("__", split - 1)) {
+    const server = name.slice(5, split);
+    if (split + 2 < name.length && known[`mcp:${server}`]) return server;
+  }
+  return undefined;
+};
 const TOOL_RESULT_TOKEN = '"tool_use_id"';
 /** The system line Claude Code writes for each failed request it retries. */
 const API_ERROR = "api_error";
@@ -152,7 +209,12 @@ const isPrompt = (record: Json) => {
   const text = userText(message);
   if (text === undefined) return Array.isArray(content) && content.length > 0;
   const start = text.trimStart();
-  return start.length > 0 && !start.startsWith("<") && !start.startsWith(INTERRUPTED);
+  return (
+    start.length > 0 &&
+    !WRAPPERS.some((tag) => start.startsWith(tag)) &&
+    !PEER_MESSAGE.test(start) &&
+    !start.startsWith(INTERRUPTED)
+  );
 };
 
 /** A line's UTC day and hour; undefined when it says no time. */
@@ -486,7 +548,11 @@ const skip = (line: LineBytes, state: ClaudeState): boolean => {
     bytesHash(bytes, head.id[0], head.id[1]) === state.last;
   const noop = (as: string) => {
     if (as === "attachment") {
-      if (side) return true;
+      if (side && head.attachment !== undefined) {
+        return (
+          head.attachment !== "mcp_instructions_delta" && head.attachment !== "deferred_tools_delta"
+        );
+      }
       return head.attachment === undefined
         ? !LISTING_TOKENS.some((listing) => line.includes(listing))
         : !LISTINGS.includes(head.attachment);
@@ -650,8 +716,13 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
 
     if (type === "attachment") {
       // A subagent's listing is its parent's to count, and the parent counts it.
-      if (side) return facts;
       const attachment = isRecord(record.attachment) ? record.attachment : {};
+      if (
+        side &&
+        attachment.type !== "mcp_instructions_delta" &&
+        attachment.type !== "deferred_tools_delta"
+      )
+        return facts;
       switch (attachment.type) {
         case "skill_listing": {
           const content = typeof attachment.content === "string" ? attachment.content : "";
@@ -686,6 +757,8 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
             // A server is named in a config file, so a name with a path in it is not one.
             const server = /[/\\]/u.test(name) ? "" : mcpToolName(name);
             if (!MCP_NAME.test(server)) return;
+            (state.knownMcp ??= {})[`mcp:${server}`] = true;
+            if (side) return;
             const block = blocks[index];
             state.mcp[server] =
               (state.mcp[server] ?? 0) + (typeof block === "string" ? block.length : 0);
@@ -695,8 +768,10 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
         case "deferred_tools_delta": {
           const lines = Array.isArray(attachment.addedLines) ? attachment.addedLines : [];
           strings(attachment.addedNames).forEach((tool, index) => {
-            const server = mcpServer(tool);
+            const server = knownServer(tool, state.knownMcp) ?? mcpServer(tool);
             if (server === undefined) return;
+            (state.knownMcp ??= {})[`mcp:${server}`] = true;
+            if (side) return;
             const text = lines[index];
             state.mcp[server] =
               (state.mcp[server] ?? 0) + (typeof text === "string" ? text.length + 1 : 0);
@@ -757,16 +832,13 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
       const result = isRecord(record.toolUseResult) ? record.toolUseResult : undefined;
       if (open && (text?.trimStart().startsWith(INTERRUPTED) || result?.interrupted === true)) {
         extend(open);
-        if (!open.interrupted) {
-          open.interrupted = true;
-          turnFact(open, { interrupted: 1 });
-        }
+        turnFact(open, { interrupted: 1 });
+        delete state.open![thread];
       } else if (expansion || (match === null && isPrompt(record))) {
         const turn: OpenTurn = {
           day: moment?.day ?? day,
           ...(Number.isNaN(time) ? {} : { end: time }),
           timed: false,
-          interrupted: false,
           subagents: false,
         };
         state.open = { ...state.open, [thread]: turn };
@@ -776,7 +848,8 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
         open &&
         (record.origin !== undefined ||
           match !== null ||
-          NOT_PROMPTS.some((tag) => text?.trimStart().startsWith(tag)))
+          NOT_PROMPTS.some((tag) => text?.trimStart().startsWith(tag)) ||
+          PEER_MESSAGE.test(text?.trimStart() ?? ""))
       ) {
         // A notification, a peer's message or a built-in command came in after the turn's last
         // reply: what answers it is no part of that turn.
@@ -844,12 +917,18 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
         if (!isRecord(block) || block.type !== "tool_use" || typeof block.name !== "string")
           continue;
         const input = isRecord(block.input) ? block.input : {};
-        const server = mcpServer(block.name);
+        const server = knownServer(block.name, state.knownMcp);
         facts.push({
           type: "usage-tool",
           day: moment?.day ?? day,
           thread,
-          tool: toolName(block.name, server),
+          tool: toolName(
+            server !== undefined
+              ? `mcp:${server}`
+              : BUILT_IN_TOOLS.has(block.name)
+                ? block.name
+                : undefined,
+          ),
         });
         if (open) {
           const spawns = (block.name === "Agent" || block.name === "Task") && !open.subagents;

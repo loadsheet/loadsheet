@@ -597,8 +597,7 @@ const UsageToolCellSchema = v.pipe(
   v.description("Additive tool-call counters for one harness, day, thread and tool."),
 );
 
-const percent = (text: string) =>
-  v.optional(v.pipe(v.number(), v.minValue(0), v.description(text)));
+const gauge = (text: string) => v.optional(v.pipe(v.number(), v.minValue(0), v.description(text)));
 const epoch = (text: string) =>
   v.optional(v.pipe(v.number(), v.integer(), v.minValue(0), v.description(text)));
 
@@ -609,16 +608,16 @@ const UsageLimitCellSchema = v.pipe(
     windowMinutes: count(
       "The window's length in minutes, such as 300 or 10080; 0 when the harness does not say.",
     ),
-    usedPercent: percent(
+    usedPercent: gauge(
       "The share of the window used at the latest reading, in percent; absent when there was none.",
     ),
-    at: epoch(
-      "When the latest reading was taken, in seconds since the epoch; absent with usedPercent.",
+    at: gauge(
+      "When the latest reading was taken, in seconds since the epoch with millisecond precision; absent with usedPercent.",
     ),
     resetsAt: epoch(
       "When the window resets, as of the latest reading, in seconds since the epoch; absent when unknown.",
     ),
-    peakUsedPercent: percent(
+    peakUsedPercent: gauge(
       "The highest share used at any reading that day, in percent; absent with usedPercent.",
     ),
     reached: count("How many times the limit was reached."),

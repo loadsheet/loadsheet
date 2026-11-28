@@ -804,9 +804,9 @@
                 "description": "The share of the window used at the latest reading, in percent; absent when there was none."
               },
               "at": {
-                "type": "integer",
+                "type": "number",
                 "minimum": 0,
-                "description": "When the latest reading was taken, in seconds since the epoch; absent with usedPercent."
+                "description": "When the latest reading was taken, in seconds since the epoch with millisecond precision; absent with usedPercent."
               },
               "resetsAt": {
                 "type": "integer",

@@ -299,7 +299,7 @@ export interface UsageLimitCell {
   windowMinutes: number;
   /** The share of the window used at the latest reading, in percent; absent when there was none. */
   usedPercent?: number;
-  /** When the latest reading was taken, in seconds since the epoch; absent with usedPercent. */
+  /** When the latest reading was taken, in seconds since the epoch with millisecond precision; absent with usedPercent. */
   at?: number;
   /** When the window resets, as of the latest reading, in seconds since the epoch; absent when unknown. */
   resetsAt?: number;

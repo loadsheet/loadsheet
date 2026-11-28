@@ -258,8 +258,39 @@ const CALLS: Readonly<Record<string, string | undefined>> = {
   custom_tool_call: undefined,
   local_shell_call: "local_shell",
   web_search_call: "web_search",
+  tool_search_call: "tool_search",
 };
 const isCall = (kind: string) => Object.hasOwn(CALLS, kind);
+const BUILT_IN_TOOLS = new Set([
+  "apply_patch",
+  "close_agent",
+  "code_mode",
+  CODE_TOOL,
+  "exec_command",
+  "grep_files",
+  "js_repl",
+  "js_repl_reset",
+  "list_dir",
+  "list_mcp_resource_templates",
+  "list_mcp_resources",
+  "open_image",
+  "read_file",
+  "read_mcp_resource",
+  "request_user_input",
+  "resume_agent",
+  "send_input",
+  "shell",
+  "shell_command",
+  "spawn_agent",
+  "tool_search",
+  "update_plan",
+  "view_image",
+  "wait",
+  "wait_agent",
+  "web",
+  "web_search",
+  "write_stdin",
+]);
 /** The tool that starts a subagent. */
 const SPAWN_AGENT = "spawn_agent";
 
@@ -446,7 +477,7 @@ const momentOf = (value: unknown): { day: string; hour: number; at: number } | u
   return {
     day: date.toISOString().slice(0, 10),
     hour: date.getUTCHours(),
-    at: Math.floor(time / 1000),
+    at: time / 1000,
   };
 };
 
@@ -478,6 +509,9 @@ const limitFacts = (
   moment: { day: string; at: number },
   state: CodexState,
 ): Fact[] => {
+  // The usage key has no quota bucket dimension. Non-default quotas must not change this gauge
+  // or reset its reached state. Older snapshots omit the default bucket's ID.
+  if (limits.limit_id != null && limits.limit_id !== "codex") return [];
   const windows = [windowOf(limits.primary), windowOf(limits.secondary)].filter(
     (window) => window !== undefined,
   );
@@ -501,20 +535,25 @@ const limitFacts = (
 
 /**
  * The name a tool call counts under: `mcp:<server>` for a tool in an `mcp__<server>` namespace or
- * named `mcp__<server>__<tool>` (the server listed, or the name's first part), else its own name.
+ * named `mcp__<server>__<tool>` only if the server was listed, else a known built-in or `other`.
  */
 const callTool = (payload: Record<string, unknown>, state: CodexState): string => {
-  const name = typeof payload.name === "string" ? payload.name : CALLS[payload.type as string];
+  const native = CALLS[payload.type as string];
+  if (native !== undefined) return native;
+  const name = typeof payload.name === "string" ? payload.name : undefined;
   const namespace = payload.namespace;
   if (typeof namespace === "string" && namespace.startsWith("mcp__")) {
-    return toolName(name ?? "", namespace.slice(5));
+    const server = namespace.slice(5);
+    return toolName(state.servers.includes(server) ? `mcp:${server}` : undefined);
   }
   if (name?.startsWith("mcp__")) {
     const token = name.slice(5);
-    const server = serverOf(token, state) ?? /^(.+?)__./u.exec(token)?.[1];
-    if (server !== undefined) return toolName(name, server);
+    const server = serverOf(token, state);
+    return toolName(
+      server !== undefined && token.length > server.length + 2 ? `mcp:${server}` : undefined,
+    );
   }
-  return toolName(name ?? "");
+  return toolName(name !== undefined && BUILT_IN_TOOLS.has(name) ? name : undefined);
 };
 
 /** A count Codex wrote: a whole number of 0 or more. */
@@ -590,7 +629,7 @@ const taskEnd = (payload: Record<string, unknown>, state: CodexState): Fact[] =>
       : typeof started === "number" && typeof completed === "number" && completed >= started
         ? Math.round((completed - started) * 1000)
         : undefined;
-  const interrupted = payload.type === "turn_aborted";
+  const interrupted = payload.type === "turn_aborted" && payload.reason === "interrupted";
   if (ms === undefined && !interrupted) return [];
   return [
     {
@@ -638,6 +677,7 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
     '"function_call"',
     '"local_shell_call"',
     '"web_search_call"',
+    '"tool_search_call"',
     "<skill>",
     '"turn_context"',
     '"compacted"',
