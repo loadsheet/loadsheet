@@ -728,3 +728,107 @@ describe("the scan cache", () => {
     expect(await findCanaryInDir(cacheDir(), forbidden(home, SESSIONS))).toEqual([]);
   });
 });
+
+describe("usage history", () => {
+  // The fake harness, whose session start also says a usage session and its first request's tokens.
+  const usageFake: Harness<FakeState> = defineHarness({
+    ...fake,
+    machine: {
+      ...fake.machine!,
+      transcripts: {
+        ...fake.machine!.transcripts!,
+        parse(line, state, place) {
+          const facts = fake.machine!.transcripts!.parse(line, state, place);
+          const start = facts.find((fact) => fact.type === "session");
+          if (!start) return facts;
+          const at = {
+            day: start.day,
+            via: start.via,
+            project: "acme/app",
+            thread: "main",
+          } as const;
+          return [
+            ...facts,
+            { type: "usage-session", ...at },
+            {
+              type: "usage-tokens",
+              ...at,
+              model: "m",
+              input: 10,
+              output: 1,
+              reasoning: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              cacheWrite5m: 0,
+              cacheWrite1h: 0,
+              cacheRewrite: 0,
+            },
+          ];
+        },
+      },
+    },
+  });
+  const usageScan = (home: string, cacheDir: string | false, usageDays?: number) =>
+    scanMachine({
+      harnesses: [usageFake as Harness],
+      days: DAYS,
+      ...(usageDays === undefined ? {} : { usageDays }),
+      tool: "loadsheet@0.0.0-test",
+      machine: "test-machine",
+      now: NOW,
+      place: { home, env: {} },
+      cacheDir,
+    });
+
+  /** A home with one session in the window and one whose transcript last changed long before it. */
+  const homeWithOld = async () => {
+    const home = await makeHome("history", [SESSIONS[0]!]);
+    const old = { sid: "sid-0ld5e55-private", day: "2026-09-30", tokens: 7 };
+    await writeTranscript(
+      home,
+      old.sid,
+      transcript({ ...old, listed: [["skill:alpha", 30, false]] }),
+      OLD,
+    );
+    return home;
+  };
+
+  it("usage keeps days older than the window, session cells do not", async () => {
+    const home = await homeWithOld();
+    const cacheDir = NodePath.join(tmp, "cache");
+    const result = await usageScan(home, cacheDir);
+
+    expect(parseScan(result)).toEqual(result);
+    expect(result.window).toEqual(["2026-11-18", "2026-11-24"]);
+    expect(result.sessions.map((cell) => [cell.day, cell.sessions])).toEqual([["2026-11-22", 1]]);
+    expect(result.cells.every((cell) => cell.day === "2026-11-22")).toBe(true);
+    expect(result.coverage[0]).toMatchObject({
+      sessions: 1,
+      firstDay: "2026-11-22",
+      lastDay: "2026-11-22",
+    });
+    expect(result.usage!.sessions.map((cell) => [cell.day, cell.sessions])).toEqual([
+      ["2026-09-30", 1],
+      ["2026-11-22", 1],
+    ]);
+    expect(result.usage!.tokens.map((cell) => [cell.day, cell.input])).toEqual([
+      ["2026-09-30", 10],
+      ["2026-11-22", 10],
+    ]);
+
+    // From the cache, the old file still counts towards usage alone, and is not read again.
+    parsed = 0;
+    expect(await usageScan(home, cacheDir)).toEqual(result);
+    expect(parsed).toBe(0);
+    expect(await usageScan(home, false)).toEqual(result);
+    expect(await findCanaryInDir(cacheDir, forbidden(home, SESSIONS))).toEqual([]);
+  });
+
+  it("keeps only the last `usageDays` days of usage when they are given", async () => {
+    const home = await homeWithOld();
+    const result = await usageScan(home, NodePath.join(tmp, "cache"), 30);
+    expect(result.usage!.sessions.map((cell) => cell.day)).toEqual(["2026-11-22"]);
+    expect(result.usage!.tokens.map((cell) => cell.day)).toEqual(["2026-11-22"]);
+    expect(result.sessions.map((cell) => cell.day)).toEqual(["2026-11-22"]);
+  });
+});

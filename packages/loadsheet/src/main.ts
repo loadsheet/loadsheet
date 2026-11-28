@@ -242,6 +242,8 @@ const withFlags = (file: Config): Config => {
 };
 
 const config = resolveConfig(withFlags(await readConfigFile()));
+// Usage history holds every day the machine has a record of, unless `loadsheet usage --days` bounds it.
+if (usageView && values.days !== undefined) config.usageWindow = config.window;
 const tool = `loadsheet@${pkg.version}`;
 
 /** Colour when stdout is a terminal, unless NO_COLOR says otherwise; FORCE_COLOR asks for it. */
@@ -308,6 +310,7 @@ if (positionals.length === 0) {
       harnesses,
       stores: sessionStores,
       days: config.window,
+      ...(config.usageWindow === undefined ? {} : { usageDays: config.usageWindow }),
       tool,
       onProgress: progress.update,
       // Built next to this module, or beside its source when run from it.

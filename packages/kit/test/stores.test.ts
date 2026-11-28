@@ -2,7 +2,7 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { findCanary } from "@loadsheet/fixtures";
+import { findCanary, findCanaryInDir } from "@loadsheet/fixtures";
 import { parseScan, type Signal, type Grade } from "@loadsheet/schema";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import {
@@ -317,5 +317,126 @@ describe("scanMachine's stores", () => {
       ["stored", "~/code/a", 6, 1],
     ]);
     expect(findCanary(scan, [tmp, home, "private title"])).toEqual([]);
+  });
+});
+
+// A harness whose transcripts are `<home>/.tx/sessions/<session id>.jsonl`, one usage session each,
+// and a database that also holds copies of its sessions, by id, as T3 Code's does.
+const LISTED_ID = "c0ffee00-listed-session-id";
+const GONE_ID = "dead0000-gone-session-id";
+const OTHER_ID = "beef0000-other-session-id";
+
+const transcribed: Harness = defineHarness({
+  id: "transcribed",
+  signals: { ...NONE, listing: "exact" },
+  inventory: async () => [],
+  machine: {
+    home: (at) => `${at.home}/.tx`,
+    sources: () => [],
+    inventory: async () => [],
+    roots: (at) => [`${at.home}/.tx/sessions`],
+    sessionId: (path) => /([^/]+)\.jsonl$/u.exec(path)?.[1],
+    transcripts: {
+      markers: ['"day"'],
+      initial: () => ({}),
+      parse: (line) => {
+        const { day } = JSON.parse(line) as { day: string };
+        return [{ type: "usage-session", day, via: "cli", project: "~/code/tx", thread: "main" }];
+      },
+    },
+  },
+});
+
+/** A store over `<home>/.db/copies.db` that skips the sessions `$native` names. */
+const copies: SqliteStore & { harness: string } = {
+  kind: "sqlite",
+  harness: "driver",
+  name: "copies.db",
+  native: "transcribed",
+  supplies: ["transcribed"],
+  path: (at) => `${at.home}/.db/copies.db`,
+  query: `SELECT provider, at FROM copies WHERE at >= $since
+    AND id NOT IN (SELECT value FROM json_each($native)) ORDER BY id`,
+  since: "ms",
+  facts: (rows) =>
+    rows.map((row) => ({
+      type: "usage-session",
+      harness: String(row.provider),
+      day: dayOf(Number(row.at)),
+      via: "driver",
+      project: "~/code/copies",
+      thread: "main",
+    })),
+};
+
+const makeCopies = async (transcripts: readonly string[]) => {
+  await NodeFSP.mkdir(`${home}/.tx/sessions`, { recursive: true });
+  for (const id of transcripts) {
+    await NodeFSP.writeFile(`${home}/.tx/sessions/${id}.jsonl`, `{"day":"2026-11-21"}\n`);
+  }
+  await NodeFSP.mkdir(`${home}/.db`, { recursive: true });
+  const db = new DatabaseSync(`${home}/.db/copies.db`);
+  db.exec("CREATE TABLE copies (id TEXT, provider TEXT, at INTEGER, title TEXT)");
+  const insert = db.prepare("INSERT INTO copies VALUES (?, ?, ?, ?)");
+  insert.run(LISTED_ID, "transcribed", IN, "a private title");
+  insert.run(GONE_ID, "transcribed", IN, "a private title");
+  // A harness the store does not supply counts whether or not it was listed.
+  insert.run(OTHER_ID, "elsewhere", IN, "a private title");
+  db.close();
+};
+
+const scanCopies = (harnesses: Harness[], cacheDir: string | false = false) =>
+  scanMachine({
+    harnesses,
+    stores: [copies],
+    days: 7,
+    tool: "loadsheet@0.0.0-test",
+    machine: "test-machine",
+    now: NOW,
+    place: place(),
+    cacheDir,
+  });
+
+/** Usage sessions by harness and via. */
+const sessionsBy = (scan: Awaited<ReturnType<typeof scanMachine>>) =>
+  Object.fromEntries(
+    (scan.usage?.sessions ?? []).map((cell) => [`${cell.harness} ${cell.via}`, cell.sessions]),
+  );
+
+describe("stores beside native transcripts", () => {
+  it("a store skips sessions whose transcript is listed", async () => {
+    await makeCopies([LISTED_ID]);
+    const scan = await scanCopies([transcribed]);
+    expect(parseScan(scan)).toEqual(scan);
+    expect(sessionsBy(scan)).toEqual({
+      "elsewhere driver": 1,
+      "transcribed cli": 1,
+      // The gone session alone: the listed one is its transcript's.
+      "transcribed driver": 1,
+    });
+  });
+
+  it("a store reads every row when no transcript names it", async () => {
+    await makeCopies([]);
+    expect(sessionsBy(await scanCopies([transcribed]))).toEqual({
+      "elsewhere driver": 1,
+      "transcribed driver": 2,
+    });
+  });
+
+  it("no fixture id appears in the Scan or the cache file", async () => {
+    await makeCopies([LISTED_ID]);
+    const cacheDir = `${tmp}/cache`;
+    const scan = await scanCopies([transcribed], cacheDir);
+    expect((await NodeFSP.readdir(cacheDir)).length).toBeGreaterThan(0);
+    const ids = [LISTED_ID, GONE_ID, OTHER_ID, "private title", home];
+    expect(findCanary(scan, ids)).toEqual([]);
+    expect(await findCanaryInDir(cacheDir, ids)).toEqual([]);
+  });
+
+  it("a store does not backfill a harness that was not listed", async () => {
+    await makeCopies([LISTED_ID]);
+    // Without the harness, nothing says which of its sessions have transcripts.
+    expect(sessionsBy(await scanCopies([]))).toEqual({ "elsewhere driver": 1 });
   });
 });

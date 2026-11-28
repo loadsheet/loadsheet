@@ -53,9 +53,17 @@ export const foldFacts = (harness: string, facts: Iterable<Fact>): Tally => {
   return accumulator.result();
 };
 
-/** Sums tallies, keeping only the days inside `window` when it is given. */
-export const sumTallies = (tallies: Iterable<Tally>, window?: readonly [Day, Day]): Tally => {
-  const accumulator = new Accumulator(window);
+/**
+ * Sums tallies. Sessions, cells, versions and context windows keep only the days inside `window`
+ * when it is given, and none when it is false; usage keeps only the days inside `usageWindow`
+ * when it is given, whatever the window.
+ */
+export const sumTallies = (
+  tallies: Iterable<Tally>,
+  window?: readonly [Day, Day] | false,
+  usageWindow?: readonly [Day, Day],
+): Tally => {
+  const accumulator = new Accumulator(window, usageWindow);
   for (const tally of tallies) accumulator.tally(tally);
   return accumulator.result();
 };
@@ -141,7 +149,10 @@ export interface HarnessScan {
   readonly unread?: readonly string[];
 }
 
-/** A machine's Scan from each harness's part, keeping only the counters inside `window`. */
+/**
+ * A machine's Scan from each harness's part, keeping only the counters inside `window`. Usage is
+ * not cut by it: a Scan's usage holds every day its parts hold.
+ */
 export const buildScan = (input: {
   tool: string;
   machine: string;

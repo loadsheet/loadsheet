@@ -1075,3 +1075,17 @@ describe("codex machine", () => {
     ]);
   });
 });
+
+describe("Codex's session ids", () => {
+  it("names a rollout's thread, compressed or not", () => {
+    const id = "01a1f8fe-d947-7011-bba1-af08e696f8af";
+    const sessionId = codex.machine!.sessionId!;
+    expect(
+      sessionId(`/home/jo/.codex/sessions/2026/11/20/rollout-2026-11-20T13-46-53-${id}.jsonl`),
+    ).toBe(id);
+    expect(
+      sessionId(`/home/jo/.codex/archived_sessions/rollout-2026-11-20T13-46-53-${id}.jsonl.zst`),
+    ).toBe(id);
+    expect(sessionId("/home/jo/.codex/sessions/notes.jsonl")).toBeUndefined();
+  });
+});

@@ -35,10 +35,14 @@ export interface HarnessCache {
   key(path: string): string;
   get(key: string): CachedFile | undefined;
   /**
-   * The sum of `files`' tallies, keeping only the days inside `window`. Those `get` returned are
-   * summed as the cache file holds them, without building their Tally.
+   * The sum of `files`' tallies, as `sumTallies(tallies, window, usageWindow)` gives it. Those
+   * `get` returned are summed as the cache file holds them, without building their Tally.
    */
-  sum(files: Iterable<CachedFile>, window: readonly [Day, Day]): Tally;
+  sum(
+    files: Iterable<CachedFile>,
+    window: readonly [Day, Day] | false,
+    usageWindow?: readonly [Day, Day],
+  ): Tally;
   /**
    * Writes `files` as the whole cache, atomically; files it leaves out are forgotten. Writes
    * nothing when `files` holds exactly the entries `get` returned from the file on disk.
@@ -391,7 +395,7 @@ const checkTally = (raw: unknown, decoder: Decoder): EncodedTally => {
   return raw as EncodedTally;
 };
 
-/** Adds an encoded tally's counters inside the sum's window to it, building no Tally. */
+/** Adds an encoded tally's counters inside the sum's windows to it, building no Tally. */
 const addTally = (sum: Accumulator, raw: EncodedTally, strings: readonly string[]): void => {
   const [sessions, groups, versions, windows, usageSessions, usageTokens] = raw;
   for (let index = 0; index < sessions.length; index += 6) {
@@ -430,7 +434,7 @@ const addTally = (sum: Accumulator, raw: EncodedTally, strings: readonly string[
   }
   for (let index = 0; index < usageSessions.length; index += USAGE_SESSION_STRIDE) {
     const day = strings[usageSessions[index]!]!;
-    if (!sum.keep(day)) continue;
+    if (!sum.keepUsage(day)) continue;
     const at = (offset: number) => usageSessions[index + offset]!;
     const cell = sum.usageSession({
       day,
@@ -446,7 +450,7 @@ const addTally = (sum: Accumulator, raw: EncodedTally, strings: readonly string[
   }
   for (let index = 0; index < usageTokens.length; index += USAGE_TOKEN_STRIDE) {
     const day = strings[usageTokens[index]!]!;
-    if (!sum.keep(day)) continue;
+    if (!sum.keepUsage(day)) continue;
     const at = (offset: number) => usageTokens[index + offset]!;
     const cell = sum.usageTokens({
       day,
@@ -641,8 +645,8 @@ export const openCache = async (
       }
       return entry ?? undefined;
     },
-    sum(files, window) {
-      const sum = new Accumulator(window);
+    sum(files, window, usageWindow) {
+      const sum = new Accumulator(window, usageWindow);
       for (const entry of files) {
         const encoded = held.get(entry)?.tally;
         if (encoded) addTally(sum, encoded, decoder.strings);

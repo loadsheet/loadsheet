@@ -605,7 +605,7 @@
         }
       },
       "required": ["sessions", "tokens"],
-      "description": "Sessions and tokens per project; absent when no harness read reports them."
+      "description": "Sessions and tokens per project, on every day the machine has a record of, not only the window's; absent when no harness read reports them."
     }
   },
   "required": [

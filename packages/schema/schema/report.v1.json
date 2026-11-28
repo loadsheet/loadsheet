@@ -84,6 +84,11 @@
           "minimum": 1,
           "description": "Days of history read."
         },
+        "usageWindow": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Days of usage history kept, when `loadsheet usage --days` set them; absent, usage keeps every day the machines have a record of."
+        },
         "harnesses": {
           "type": "array",
           "items": {
@@ -1094,7 +1099,7 @@
         }
       },
       "required": ["sessions", "tokens"],
-      "description": "Sessions and tokens per project, summed over machines and filtered as the sheets are; absent when no machine reports them, and from a Report shared through loadsheet.dev."
+      "description": "Sessions and tokens per project, summed over machines and filtered by harness and entrypoint as the sheets are, on every day the Scans hold or the last `config.usageWindow` days; absent when no machine reports them, and from a Report shared through loadsheet.dev."
     }
   },
   "required": [

@@ -686,9 +686,12 @@ describe("loadsheet usage", () => {
       const { generatedAt: _, machines: __, ...rest } = JSON.parse(stdout);
       return rest;
     };
-    expect(strip(inUsage("usage", "--json", "--days", "3650").stdout)).toEqual(
-      strip(inUsage("--json", "--days", "3650").stdout),
-    );
+    const usage = strip(inUsage("usage", "--json", "--days", "3650").stdout);
+    // Only the usage view's --days bounds usage; the report keeps every day.
+    expect(usage.config.usageWindow).toBe(3650);
+    delete usage.config.usageWindow;
+    expect(usage).toEqual(strip(inUsage("--json", "--days", "3650").stdout));
+    expect(strip(inUsage("usage", "--json").stdout).config.usageWindow).toBeUndefined();
     const scan = parseScan(JSON.parse(inUsage("--scan", "--days", "3650").stdout));
     expect(scan.usage?.tokens.length).toBeGreaterThan(0);
   });

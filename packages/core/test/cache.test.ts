@@ -434,6 +434,51 @@ describe("cache-off", () => {
   });
 });
 
+describe("usage history", () => {
+  // Uncached sessions and tokens 40 days back, outside the 30-day window, and none inside it.
+  const old = ago(40);
+  const before = scan([], undefined, {
+    usage: {
+      sessions: [sessions(old, 10)],
+      tokens: [tokens(old, 0, 0, { input: M, cacheWrite: 0, cacheRead: 0 })],
+    },
+  });
+
+  it("rules read usage inside the window only", () => {
+    const built = report([before], "cache-off");
+    expect(built.window).toEqual([FIRST, LAST]);
+    expect(built.findings).toEqual([]);
+    // The same counters inside the window are found.
+    const inside = scan([], undefined, {
+      usage: {
+        sessions: [sessions(LAST, 10)],
+        tokens: [tokens(LAST, 0, 0, { input: M, cacheWrite: 0, cacheRead: 0 })],
+      },
+    });
+    expect(report([inside], "cache-off").findings).toHaveLength(1);
+  });
+
+  it("keeps usage older than the window, filtered by entrypoint, unless usageWindow bounds it", () => {
+    expect(report([before], "cache-off").usage).toEqual(before.usage);
+    expect(report([before], "cache-off", { via: { exclude: ["cli"] } }).usage).toBeUndefined();
+    const bounded = buildReport({
+      scans: [before],
+      config: { ...resolveConfig(only("cache-off")), usageWindow: 41 },
+      now: NOW,
+      tool: "loadsheet@0.0.1",
+    });
+    expect(parseReport(JSON.parse(JSON.stringify(bounded)))).toEqual(bounded);
+    expect(bounded.usage).toEqual(before.usage);
+    const cut = buildReport({
+      scans: [before],
+      config: { ...resolveConfig(only("cache-off")), usageWindow: 40 },
+      now: NOW,
+      tool: "loadsheet@0.0.1",
+    });
+    expect(cut.usage).toBeUndefined();
+  });
+});
+
 it("keeps unread T3 coverage when filtering for a provider T3 supplies", () => {
   const one = scan([], undefined, {
     coverage: [coverage(undefined, { harness: "t3-code", unread: ["statev2.sqlite"] })],

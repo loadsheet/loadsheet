@@ -355,9 +355,21 @@ export const buildReport = ({
     unfiltered: unfilteredOf(scans, wholeFleet, inWindow),
   });
 
+  // Usage history is not cut by the window, only by `usageWindow` when one is set; the rules
+  // read it through `usageOn`, inside the window.
+  const usageSince =
+    config.usageWindow === undefined
+      ? undefined
+      : new Date(Date.parse(`${last}T00:00:00Z`) - (config.usageWindow - 1) * DAY_MS)
+          .toISOString()
+          .slice(0, 10);
   const usage = sumUsage(
     scans.map((scan) => scan.usage),
-    (cell) => (!wanted || wanted.has(cell.harness)) && keep(cell),
+    (cell) =>
+      (!wanted || wanted.has(cell.harness)) &&
+      (usageSince === undefined || (cell.day >= usageSince && cell.day <= last)) &&
+      (include.size === 0 || include.has(cell.via)) &&
+      !exclude.has(cell.via),
   );
 
   return {

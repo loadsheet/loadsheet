@@ -374,6 +374,10 @@ const codexHome = (place: Place) => {
   );
 };
 
+/** The thread id in a rollout's name, `rollout-<YYYY-MM-DDTHH-MM-SS>-<thread id>.jsonl`. */
+export const codexSessionId = (path: string): string | undefined =>
+  /(?:^|\/)rollout-\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d-([^/]+?)\.jsonl(?:\.zst)?$/u.exec(path)?.[1];
+
 /** Codex (OpenAI's coding agent): its packs, its home directory and its rollout transcripts. */
 export const codex = defineHarness({
   id: "codex",
@@ -414,5 +418,6 @@ export const codex = defineHarness({
     settings: machineSettings,
     roots: (place) => [`${codexHome(place)}/sessions`, `${codexHome(place)}/archived_sessions`],
     transcripts: codexTranscripts,
+    sessionId: codexSessionId,
   },
 });

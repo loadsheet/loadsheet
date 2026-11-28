@@ -40,6 +40,8 @@ const scan = (harnesses: Harness[], stores: typeof sessionStores | [] = []) =>
     harnesses,
     stores,
     days: 7,
+    // Bounded as `loadsheet usage --days 7` bounds it, so a row before the window is not read.
+    usageDays: 7,
     tool: "loadsheet@0.0.0-test",
     machine: "test-machine",
     now: NOW,

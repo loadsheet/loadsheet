@@ -53,6 +53,17 @@ export const claudeSources = (place: Place): string[] => {
 
 export const claudeRoots = (place: Place): string[] => [`${claudeConfigDir(place)}/projects`];
 
+/**
+ * The session id of a transcript under the roots: a main session's file is
+ * `projects/<folder>/<session id>.jsonl`, and a subagent's `<session id>/subagents/agent-<id>.jsonl`,
+ * which is no session of its own.
+ */
+export const claudeSessionId = (path: string): string | undefined => {
+  const [name, parent] = path.split("/").reverse();
+  if (!name?.endsWith(".jsonl") || parent === "subagents") return undefined;
+  return name.slice(0, -".jsonl".length) || undefined;
+};
+
 // The config directory's own files; a plugin has none of these at its root.
 const HOME_FILE = /^(.*)\/(?:settings\.json|CLAUDE\.md|plugins\/installed_plugins\.json)$/u;
 const HOME_FOLDER = /^(.*?)\/(?:skills\/[^/]+\/SKILL\.md|(?:commands|agents|rules)\/.+\.md)$/u;

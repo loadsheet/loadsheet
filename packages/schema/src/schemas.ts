@@ -562,7 +562,7 @@ const scanSchema = v.pipe(
     usage: v.optional(
       describe(
         UsageSchema,
-        "Sessions and tokens per project; absent when no harness read reports them.",
+        "Sessions and tokens per project, on every day the machine has a record of, not only the window's; absent when no harness read reports them.",
       ),
     ),
   }),
@@ -696,6 +696,16 @@ const configSchema = v.pipe(
 const ResolvedConfigSchema = v.pipe(
   v.looseObject({
     window: v.pipe(v.number(), v.integer(), v.minValue(1), v.description("Days of history read.")),
+    usageWindow: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.description(
+          "Days of usage history kept, when `loadsheet usage --days` set them; absent, usage keeps every day the machines have a record of.",
+        ),
+      ),
+    ),
     harnesses: v.optional(harnessIds("Only these harness ids were read, when set.")),
     via: v.pipe(
       v.looseObject({
@@ -968,7 +978,7 @@ const reportSchema = v.pipe(
     usage: v.optional(
       describe(
         UsageSchema,
-        "Sessions and tokens per project, summed over machines and filtered as the sheets are; absent when no machine reports them, and from a Report shared through loadsheet.dev.",
+        "Sessions and tokens per project, summed over machines and filtered by harness and entrypoint as the sheets are, on every day the Scans hold or the last `config.usageWindow` days; absent when no machine reports them, and from a Report shared through loadsheet.dev.",
       ),
     ),
   }),

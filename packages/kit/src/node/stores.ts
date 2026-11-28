@@ -46,6 +46,7 @@ const readSqlite = async (
   store: SqliteStore,
   place: Place,
   sinceMs: number,
+  native: readonly string[],
 ): Promise<StoreRead> => {
   const path = store.path(place);
   if (!(await isFile(path))) return undefined;
@@ -55,12 +56,15 @@ const readSqlite = async (
   if (live && !(await isFile(`${path}-shm`))) return { unread: true };
   const uri = `${pathToFileURL(path).href}?${live ? "mode=ro" : "immutable=1"}`;
   const since = store.since === "ms" ? sinceMs : new Date(sinceMs).toISOString();
+  // node:sqlite refuses a parameter the query does not name, so `$native` is bound only when asked.
+  const params: Record<string, string | number> = { $since: since };
+  if (store.native !== undefined) params.$native = JSON.stringify(native);
   let rows: StoreRow[];
   let db: InstanceType<Sqlite["DatabaseSync"]> | undefined;
   try {
     db = new module.DatabaseSync(uri, { readOnly: true });
     db.exec(`PRAGMA busy_timeout = ${BUSY_MS}`);
-    rows = db.prepare(store.query).all({ $since: since }) as StoreRow[];
+    rows = db.prepare(store.query).all(params) as StoreRow[];
   } catch {
     // Locked, corrupt, not a database, or a schema the query does not fit.
     return { unread: true };
@@ -124,7 +128,15 @@ const readFolder = async (
 
 /**
  * Reads one store: its usage Facts since `sinceMs`, or that it could not be read. A store that is
- * not on the disk gives undefined.
+ * not on the disk gives undefined. `native` is the ids a SQLite store with a `native` harness gets
+ * as `$native`.
  */
-export const readStore = (store: SessionStore, place: Place, sinceMs: number): Promise<StoreRead> =>
-  store.kind === "sqlite" ? readSqlite(store, place, sinceMs) : readFolder(store, place, sinceMs);
+export const readStore = (
+  store: SessionStore,
+  place: Place,
+  sinceMs: number,
+  native: readonly string[] = [],
+): Promise<StoreRead> =>
+  store.kind === "sqlite"
+    ? readSqlite(store, place, sinceMs, native)
+    : readFolder(store, place, sinceMs);

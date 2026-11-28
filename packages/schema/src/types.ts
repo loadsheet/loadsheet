@@ -259,7 +259,7 @@ export interface Scan {
   sessions: SessionCell[];
   /** Usage counters. */
   cells: Cell[];
-  /** Sessions and tokens per project; absent when no harness read reports them. */
+  /** Sessions and tokens per project, on every day the machine has a record of, not only the window's; absent when no harness read reports them. */
   usage?: Usage;
 }
 
@@ -368,6 +368,8 @@ export interface RuleOptions {
 export interface ResolvedConfig {
   /** Days of history read. */
   window: number;
+  /** Days of usage history kept, when `loadsheet usage --days` set them; absent, usage keeps every day the machines have a record of. */
+  usageWindow?: number;
   /** Only these harness ids were read, when set. */
   harnesses?: string[];
   /** The entrypoint filter. */
@@ -551,6 +553,6 @@ export interface Report {
   findings: Finding[];
   /** Rules that did not run, per harness. */
   skipped: Skipped[];
-  /** Sessions and tokens per project, summed over machines and filtered as the sheets are; absent when no machine reports them, and from a Report shared through loadsheet.dev. */
+  /** Sessions and tokens per project, summed over machines and filtered by harness and entrypoint as the sheets are, on every day the Scans hold or the last `config.usageWindow` days; absent when no machine reports them, and from a Report shared through loadsheet.dev. */
   usage?: Usage;
 }

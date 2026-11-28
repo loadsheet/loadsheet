@@ -288,8 +288,13 @@ describe("foldFacts", () => {
     expect(coverage.unread).toEqual(["grok", "opencode.db"]);
   });
 
-  it("keeps only the days inside a window", () => {
-    const tally = sumTallies([foldFacts("h", all)], ["2026-11-21", "2026-11-30"]);
+  it("keeps only the days inside a window, and usage inside its own", () => {
+    const window = ["2026-11-21", "2026-11-30"] as const;
+    const whole = sumTallies([foldFacts("h", all)]);
+    // The window does not cut usage.
+    expect(sumTallies([foldFacts("h", all)], window).usage).toEqual(whole.usage);
+    expect(sumTallies([foldFacts("h", all)], false, window).sessions).toEqual([]);
+    const tally = sumTallies([foldFacts("h", all)], window, window);
     expect(tally.sessions.map((cell) => cell.day)).toEqual(["2026-11-21"]);
     expect(tally.usage!.sessions.map((cell) => cell.day)).toEqual(["2026-11-21"]);
     // A request on the 21st of a session that started on the 20th counts on its own day.

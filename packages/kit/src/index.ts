@@ -216,12 +216,25 @@ export interface SqliteStore {
   /** The database file, absolute. */
   path(place: Place): string;
   /**
-   * One SELECT. `$since` is bound to the window's first instant, as epoch milliseconds or as an ISO
-   * 8601 timestamp (`since`). It selects numbers, model names and folders only: a title, message
-   * or payload stays in SQLite, so `json_extract` the one field needed.
+   * One SELECT. `$since` is bound to the usage window's first instant, as epoch milliseconds or as
+   * an ISO 8601 timestamp (`since`), and `$native`, when the store names a `native` harness, to a
+   * JSON array of ids for `json_each($native)`. It selects numbers, model names and folders only:
+   * a title, message, payload or id stays in SQLite, so `json_extract` the one field needed.
    */
   readonly query: string;
   readonly since: "ms" | "iso";
+  /**
+   * The harness whose sessions the store also holds copies of. kit binds `$native` to the ids
+   * (`MachineReader.sessionId`) of that harness's transcript files this scan listed, so the query
+   * can skip the sessions those files count. The ids stay in memory and in the query.
+   */
+  readonly native?: string;
+  /**
+   * The harnesses whose sessions the store fills in where their transcripts are gone. Its Facts
+   * about one of them count only when this scan listed that harness's transcripts, since only
+   * then does `$native` name every session they count.
+   */
+  readonly supplies?: readonly string[];
   /** The rows as Facts; a project is keyed as the Files keys paths, through `place`. */
   facts(rows: readonly StoreRow[], place: Place): StoreFact[];
 }
@@ -299,6 +312,13 @@ export interface MachineReader<State> {
   roots?(place: Place): string[];
   /** How its transcript lines become Facts; absent, with `roots`, for an inventory-only harness. */
   readonly transcripts?: TranscriptFormat<State>;
+  /**
+   * The id of the session a transcript file under `roots` holds, as the harness names it, for a
+   * store that keeps copies of its sessions to skip them (`SqliteStore.native`); undefined for a
+   * file that is not a session's main transcript, such as a subagent's. kit passes the ids to
+   * stores only, never to a Scan or the cache.
+   */
+  sessionId?(path: string): string | undefined;
   /** Its session stores that are not JSONL transcripts, read for usage only. */
   stores?(place: Place): SessionStore[];
 }
