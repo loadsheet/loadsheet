@@ -282,7 +282,9 @@ CREATE INDEX provider_turns_thread_idx ON orchestration_v2_projection_provider_t
 CREATE INDEX turn_items_thread_type_idx ON orchestration_v2_projection_turn_items(thread_id, type);
 CREATE UNIQUE INDEX provider_turns_provider_thread_idx
   ON orchestration_v2_projection_provider_turns(provider_thread_id, provider_turn_id);
-CREATE INDEX threads_provider_idx ON orchestration_v2_projection_threads(default_provider);`;
+CREATE INDEX threads_provider_idx ON orchestration_v2_projection_threads(default_provider);
+CREATE TABLE provider_session_runtime (thread_id TEXT PRIMARY KEY, provider_name TEXT,
+  resume_cursor_json TEXT, runtime_payload_json TEXT);`;
 
 const usage = (input: number, cached: number, output: number, reasoning: number, creation = 0) =>
   JSON.stringify({
@@ -434,7 +436,7 @@ describe("T3 Code's database", () => {
     try {
       const plan = db
         .prepare(`EXPLAIN QUERY PLAN ${t3Code.query}`)
-        .all({ $since: "2026-11-18T00:00:00.000Z", $native: "[]" })
+        .all({ $since: "2026-11-18T00:00:00.000Z", $native: "[]", $scanCache: "[]" })
         .map((row) => String(row.detail));
       expect(plan.some((detail) => /provider_turns_thread_idx/u.test(detail))).toBe(true);
       expect(plan.some((detail) => /turn_items_thread_type_idx/u.test(detail))).toBe(true);
@@ -542,6 +544,248 @@ describe("T3 Code's database", () => {
     // Without Claude Code's transcripts listed, T3 does not stand in for them.
     const unlisted = await scan([], sessionStores);
     expect(tokenRows(unlisted).some((row) => row.key.startsWith("claude-code"))).toBe(false);
+  });
+
+  /** T3 Code's usage cache: each file's records, `[at, model, session, uncached, cached, creation, output, reasoning, key, cost, speed, rate model, tier, 1h, calls]`. */
+  const scanCache = (files: Record<string, { r?: unknown[]; t?: unknown[]; p?: string }>) =>
+    write(`${home}/.t3/userdata/usage-scan-cache-v17.json`, {
+      files: Object.fromEntries(
+        Object.entries(files).map(([path, { r = [], t = [], p = "claude" }]) => [
+          path,
+          { s: 1, m: 1, p, r, t, mr: 0, o: 0, gl: 0, gh: 0, cs: null },
+        ]),
+      ),
+      version: 17,
+      models: ["claude-x", "<synthetic>"],
+      sessions: ["id-canary-session"],
+    });
+  const request = (
+    iso: string,
+    [uncached, cached, creation, output]: number[],
+    key: string | null,
+    { hour = 0, calls = 1, model = 0 } = {},
+  ) => [
+    Date.parse(iso),
+    model,
+    0,
+    uncached,
+    cached,
+    creation,
+    output,
+    0,
+    key,
+    null,
+    0,
+    null,
+    null,
+    hour,
+    calls,
+  ];
+  const claudeRef = (nativeId: string) => ({
+    nativeThreadRef: { driver: "claudeAgent", nativeId },
+    createdAt: "2026-11-20T08:00:00.000Z",
+  });
+  /** Claude Code's folder for a project: every character but a letter or digit as `-`. */
+  const folderOf = (path: string) => path.replace(/[^a-zA-Z0-9]/gu, "-");
+  const claudeRows = (result: Scan) =>
+    tokenRows(result).filter((row) => row.key.startsWith("claude-code"));
+  const claudeSessions = (result: Scan) =>
+    Object.fromEntries(
+      Object.entries(sessionRows(result)).filter(([key]) => key.startsWith("claude-code")),
+    );
+  const listTranscript = async (id: string) => {
+    const transcript = `${home}/.claude/projects/-code-app/${id}.jsonl`;
+    await write(transcript, '{"type":"summary"}\n');
+    await NodeFSP.utimes(transcript, IN, IN);
+  };
+
+  it("backfills a gone Claude session from T3's scan cache with its subagents", async () => {
+    const { db, add } = await makeT3();
+    const claude = { modelSelection: { model: "claude-x" } };
+    // T3 drove it: its project and compactions come from T3, its tokens from the cache.
+    add(
+      "id-canary-c1",
+      "claudeAgent",
+      "2026-11-20T08:00:00.000Z",
+      claude,
+      "id-canary-p1",
+      [["2026-11-21T09:30:00.000Z", usage(9000, 0, 900, 0)]],
+      claudeRef("id-canary-gone-1"),
+    );
+    db.prepare("INSERT INTO orchestration_v2_projection_turn_items VALUES (?,?,?,?,?)").run(
+      "id-canary-i9",
+      "id-canary-c1",
+      "id-canary-c1-pt",
+      "compaction",
+      "{}",
+    );
+    // Its runtime record names the resumed session's folder.
+    db.prepare("INSERT INTO provider_session_runtime VALUES (?,?,?,?)").run(
+      "id-canary-r1",
+      "claudeAgent",
+      JSON.stringify({ resume: "id-canary-gone-3", threadId: SECRET }),
+      JSON.stringify({ cwd: `${home}/code/other`, lastError: SECRET }),
+    );
+    db.close();
+    const app = `${home}/.claude/projects/${folderOf(`${home}/code/app`)}`;
+    await scanCache({
+      [`${app}/id-canary-gone-1.jsonl`]: {
+        r: [
+          request("2026-11-21T09:00:00.000Z", [10, 600, 50, 100], "id-canary-k1", { hour: 20 }),
+          // Ten minutes later on the same model: its 5-minute write is written again.
+          request("2026-11-21T09:10:00.000Z", [5, 700, 30, 40], "id-canary-k2"),
+          // A local placeholder that never reached the API.
+          request("2026-11-21T09:11:00.000Z", [1, 1, 1, 1], "id-canary-k0", { model: 1 }),
+        ],
+      },
+      [`${app}/id-canary-gone-1/subagents/agent-id-canary-a.jsonl`]: {
+        r: [request("2026-11-21T09:05:00.000Z", [3, 100, 10, 20], "id-canary-k3", { calls: 2 })],
+      },
+      // A workflow's subagent, its last record in the unterminated tail.
+      [`${app}/id-canary-gone-1/subagents/workflows/id-canary-w/agent-id-canary-b.jsonl`]: {
+        t: [request("2026-11-22T09:05:00.000Z", [2, 0, 0, 2], null)],
+      },
+      // A resumed copy: the copied request counts once, at its largest, in the first file.
+      [`${app}/id-canary-gone-2.jsonl`]: {
+        r: [
+          request("2026-11-21T09:00:00.000Z", [10, 600, 50, 130], "id-canary-k1", { hour: 20 }),
+          request("2026-11-22T10:00:00.000Z", [1, 2, 3, 4], "id-canary-k5"),
+        ],
+      },
+      // A listed transcript's request, and a gone file's copy of it, which the transcript counts.
+      [`${home}/.claude/projects/-code-app/id-canary-listed.jsonl`]: {
+        r: [request("2026-11-22T08:00:00.000Z", [7, 7, 7, 7], "id-canary-k6")],
+      },
+      [`${home}/.claude/projects/-elsewhere/id-canary-gone-3.jsonl`]: {
+        r: [
+          request("2026-11-22T08:00:00.000Z", [7, 7, 7, 7], "id-canary-k6"),
+          request("2026-11-22T08:01:00.000Z", [1, 0, 0, 1], "id-canary-k7"),
+        ],
+      },
+      [`${home}/.claude/projects/-elsewhere/id-canary-gone-4.jsonl`]: {
+        r: [request("2026-11-22T08:00:00.000Z", [1, 0, 0, 1], "id-canary-k8")],
+      },
+      // Another provider's file is left to that provider.
+      [`${home}/.codex/sessions/rollout-id-canary-x.jsonl`]: {
+        p: "codex",
+        r: [request("2026-11-22T08:00:00.000Z", [5, 5, 0, 5], "id-canary-k9")],
+      },
+    });
+    await listTranscript("id-canary-listed");
+
+    const result = await scan([claudeCode], sessionStores);
+
+    expect(parseScan(result)).toEqual(result);
+    expect(claudeRows(result)).toEqual([
+      {
+        key: "claude-code t3-code 2026-11-21 ~/code/app main claude-x",
+        counts: [2, 15, 170, 0, 1300, 80],
+      },
+      {
+        key: "claude-code t3-code 2026-11-21 ~/code/app subagent claude-x",
+        counts: [2, 3, 20, 0, 100, 10],
+      },
+      {
+        key: "claude-code t3-code 2026-11-22 ~/code/app subagent claude-x",
+        counts: [1, 2, 2, 0, 0, 0],
+      },
+      {
+        key: "claude-code t3-code 2026-11-22 ~/code/other main claude-x",
+        counts: [1, 1, 1, 0, 0, 0],
+      },
+      { key: "claude-code unknown 2026-11-22 unknown main claude-x", counts: [1, 1, 1, 0, 0, 0] },
+      {
+        key: "claude-code unknown 2026-11-22 ~/code/app main claude-x",
+        counts: [1, 1, 4, 0, 2, 3],
+      },
+    ]);
+    const split = result.usage!.tokens.find(
+      (cell) =>
+        cell.harness === "claude-code" && cell.thread === "main" && cell.day === "2026-11-21",
+    );
+    expect([split?.cacheWrite5m, split?.cacheWrite1h, split?.cacheRewrite]).toEqual([60, 20, 30]);
+    expect(claudeSessions(result)).toEqual({
+      "claude-code t3-code 2026-11-21 ~/code/app main": [1, 1, 1],
+      "claude-code t3-code 2026-11-21 ~/code/app subagent": [1, 0, 0],
+      "claude-code t3-code 2026-11-22 ~/code/app subagent": [1, 0, 0],
+      "claude-code t3-code 2026-11-22 ~/code/other main": [1, 0, 0],
+      "claude-code unknown 2026-11-21 ~/code/app main": [1, 0, 0],
+      "claude-code unknown 2026-11-22 unknown main": [1, 0, 0],
+    });
+    expect(findCanary(result, [tmp, SECRET, "id-canary", "999999"])).toEqual([]);
+  });
+
+  it("prefers the transcript, then the scan cache, then T3's turns", async () => {
+    const { db, add } = await makeT3();
+    const claude = { modelSelection: { model: "claude-x" } };
+    const turns: [string, string][] = [["2026-11-21T09:30:00.000Z", usage(9000, 0, 900, 0)]];
+    for (const [id, session] of [
+      ["id-canary-a", "id-canary-listed"],
+      ["id-canary-b", "id-canary-cached"],
+      ["id-canary-c", "id-canary-turns"],
+    ] as const) {
+      add(
+        id,
+        "claudeAgent",
+        "2026-11-20T08:00:00.000Z",
+        claude,
+        "id-canary-p1",
+        turns,
+        claudeRef(session),
+      );
+    }
+    db.close();
+    const app = `${home}/.claude/projects/-code-app`;
+    await scanCache({
+      [`${app}/id-canary-listed.jsonl`]: {
+        r: [request("2026-11-21T09:00:00.000Z", [7, 0, 0, 7], "id-canary-k1")],
+      },
+      [`${app}/id-canary-cached.jsonl`]: {
+        r: [request("2026-11-21T09:00:00.000Z", [5, 0, 0, 5], "id-canary-k2")],
+      },
+    });
+    await listTranscript("id-canary-listed");
+
+    const result = await scan([claudeCode], sessionStores);
+
+    // The cached session's tokens are the cache's, the third's T3's turn; the listed one is neither.
+    expect(claudeRows(result)).toEqual([
+      {
+        key: "claude-code t3-code 2026-11-21 ~/code/app main claude-x",
+        counts: [2, 5 + 9000, 5 + 900, 0, 0, 0],
+      },
+    ]);
+    expect(claudeSessions(result)).toEqual({
+      "claude-code t3-code 2026-11-20 ~/code/app main": [1, 0, 0],
+      "claude-code t3-code 2026-11-21 ~/code/app main": [1, 0, 0],
+    });
+    expect(findCanary(result, [tmp, SECRET, "id-canary", "999999"])).toEqual([]);
+  });
+
+  it("a missing scan cache leaves T3's turns", async () => {
+    const { db, add } = await makeT3();
+    add(
+      "id-canary-c1",
+      "claudeAgent",
+      "2026-11-20T08:00:00.000Z",
+      { modelSelection: { model: "claude-x" } },
+      "id-canary-p1",
+      [["2026-11-21T09:30:00.000Z", usage(400, 300, 20, 0)]],
+      claudeRef("id-canary-gone-1"),
+    );
+    db.close();
+    await listTranscript("id-canary-listed");
+    const expected = [
+      {
+        key: "claude-code t3-code 2026-11-21 ~/code/app main claude-x",
+        counts: [1, 100, 20, 0, 300, 0],
+      },
+    ];
+
+    expect(claudeRows(await scan([claudeCode], sessionStores))).toEqual(expected);
+    // One T3 cannot read leaves them too.
+    await write(`${home}/.t3/userdata/usage-scan-cache-v17.json`, '{"files":{');
+    expect(claudeRows(await scan([claudeCode], sessionStores))).toEqual(expected);
   });
 
   it("gets a Coverage row only to say it could not be read", async () => {
