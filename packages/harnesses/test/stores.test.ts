@@ -7,7 +7,7 @@ import type { Harness } from "@loadsheet/kit";
 import { scanMachine } from "@loadsheet/kit/node";
 import { parseScan, type Scan } from "@loadsheet/schema";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
-import { claudeCode, grok, opencode, sessionStores, t3Code } from "../src/index.ts";
+import { claudeCode, codex, grok, opencode, sessionStores, t3Code } from "../src/index.ts";
 import { noTokens, tokensOf } from "../src/store-facts.ts";
 
 // Every session below is invented for these tests; nothing comes from a real machine.
@@ -551,5 +551,166 @@ describe("T3 Code's database", () => {
     expect(result.coverage).toEqual([
       expect.objectContaining({ harness: "t3-code", installed: false, unread: ["statev2.sqlite"] }),
     ]);
+  });
+});
+
+/** A Codex state database with the columns the store reads, and the ids, titles and messages it must not. */
+const makeCodexState = async () => {
+  const db = await sqlite(
+    `${home}/.codex/state_5.sqlite`,
+    `CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL, created_at INTEGER NOT NULL,
+      source TEXT NOT NULL, cwd TEXT NOT NULL, title TEXT NOT NULL, tokens_used INTEGER NOT NULL DEFAULT 0,
+      git_origin_url TEXT, first_user_message TEXT NOT NULL DEFAULT '', model TEXT,
+      created_at_ms INTEGER, thread_source TEXT, originator TEXT)`,
+  );
+  const insert = db.prepare("INSERT INTO threads VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
+  const row = (
+    id: string,
+    at: Date,
+    thread: { source: string; threadSource: string | null; originator: string | null },
+    tokens: number,
+    remote: string | null,
+  ) =>
+    insert.run(
+      id,
+      `${home}/.codex/sessions/rollout-${id}.jsonl`,
+      Math.floor(at.getTime() / 1000),
+      thread.source,
+      `${home}/code/app`,
+      SECRET,
+      tokens,
+      remote,
+      SECRET,
+      "gpt-z",
+      at.getTime(),
+      thread.threadSource,
+      thread.originator,
+    );
+  return { db, row };
+};
+
+const codexRollout = async (id: string, iso: string) => {
+  const stamp = iso.slice(0, 19).replaceAll(":", "-");
+  const lines = [
+    {
+      timestamp: iso,
+      type: "session_meta",
+      payload: {
+        id,
+        timestamp: iso,
+        cwd: `${home}/code/app`,
+        originator: "codex_cli_rs",
+        source: "cli",
+      },
+    },
+    {
+      timestamp: iso,
+      type: "event_msg",
+      payload: { type: "task_started", started_at: Math.floor(Date.parse(iso) / 1000) },
+    },
+    {
+      timestamp: iso,
+      type: "event_msg",
+      payload: {
+        type: "token_count",
+        info: {
+          total_token_usage: {
+            input_tokens: 100,
+            cached_input_tokens: 40,
+            output_tokens: 10,
+            reasoning_output_tokens: 0,
+            total_tokens: 110,
+          },
+          last_token_usage: {
+            input_tokens: 100,
+            cached_input_tokens: 40,
+            output_tokens: 10,
+            reasoning_output_tokens: 0,
+            total_tokens: 110,
+          },
+        },
+      },
+    },
+  ];
+  await write(
+    `${home}/.codex/sessions/${iso.slice(0, 4)}/${iso.slice(5, 7)}/${iso.slice(8, 10)}/rollout-${stamp}-${id}.jsonl`,
+    lines.map((line) => JSON.stringify(line)).join("\n") + "\n",
+  );
+};
+
+const unsplitRows = (result: Scan) =>
+  result.usage!.tokens.map(
+    (cell: TokenCell) =>
+      `${cell.harness} ${cell.via} ${cell.day} ${cell.project} ${cell.thread} ${cell.model} ${cell.requests} ${cell.input + cell.output + cell.cacheRead + cell.cacheWrite} ${cell.unsplit ?? 0}`,
+  );
+
+describe("Codex's state database", () => {
+  const plain = { source: "vscode", threadSource: null, originator: "T3 Code" };
+  const spawned = {
+    source: JSON.stringify({
+      subagent: { thread_spawn: { parent_thread_id: "id-canary-parent", depth: 1 } },
+    }),
+    threadSource: "subagent",
+    originator: "codex_exec",
+  };
+
+  it("counts a thread whose rollout is gone as unsplit on its created day, with originator as via", async () => {
+    const { db, row } = await makeCodexState();
+    row("id-canary-gone-1", IN, plain, 5000, "git@github.com:acme/app.git");
+    row("id-canary-gone-2", new Date("2026-11-21T23:59:00.000Z"), spawned, 700, null);
+    row(
+      "id-canary-gone-3",
+      new Date("2026-11-21T08:00:00.000Z"),
+      { ...plain, originator: null },
+      0,
+      null,
+    );
+    row("id-canary-old", OLD, plain, 9999, null);
+    db.close();
+
+    const result = await scan([codex]);
+
+    expect(parseScan(result)).toEqual(result);
+    expect(result.sessions).toEqual([]);
+    expect(unsplitRows(result)).toEqual([
+      "codex codex_exec 2026-11-21 ~/code/app subagent gpt-z 0 0 700",
+      "codex T3 Code 2026-11-22 acme/app main gpt-z 0 0 5000",
+    ]);
+    expect(sessionRows(result)).toEqual({
+      "codex codex_exec 2026-11-21 ~/code/app subagent": [1, 0, 0],
+      "codex vscode 2026-11-21 ~/code/app main": [1, 0, 0],
+      "codex T3 Code 2026-11-22 acme/app main": [1, 0, 0],
+    });
+    expect(findCanary(result, [tmp, SECRET, "id-canary"])).toEqual([]);
+  });
+
+  it("skips a thread whose rollout is listed", async () => {
+    const id = "019a0000-0000-7000-8000-00000000c0de";
+    await codexRollout(id, "2026-11-22T10:00:00.000Z");
+    const { db, row } = await makeCodexState();
+    row(id, IN, { source: "cli", threadSource: "user", originator: "codex_cli_rs" }, 110, null);
+    row("id-canary-gone", IN, plain, 5000, null);
+    db.close();
+
+    const result = await scan([codex]);
+
+    expect(parseScan(result)).toEqual(result);
+    expect(unsplitRows(result)).toEqual([
+      "codex T3 Code 2026-11-22 ~/code/app main gpt-z 0 0 5000",
+      "codex codex_cli_rs 2026-11-22 ~/code/app main unknown 1 110 0",
+    ]);
+    expect(sessionRows(result)).toEqual({
+      "codex codex_cli_rs 2026-11-22 ~/code/app main": [1, 0, 0],
+      "codex T3 Code 2026-11-22 ~/code/app main": [1, 0, 0],
+    });
+    expect(findCanary(result, [tmp, SECRET, "id-canary", id])).toEqual([]);
+  });
+
+  it("backfills nothing when Codex's rollouts were not listed", async () => {
+    const { db, row } = await makeCodexState();
+    row("id-canary-gone", IN, plain, 5000, null);
+    db.close();
+    const result = await scan([]);
+    expect(result.usage?.tokens ?? []).toEqual([]);
   });
 });

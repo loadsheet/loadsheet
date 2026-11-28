@@ -65,6 +65,17 @@ const SKILL_NAME = /^(?=.{1,128}$)[^\s<>/\\\p{C}]+(?: [^\s<>/\\\p{C}]+)*$/u;
 const CODE_TOOL = "exec";
 /** An originator or source such as `codex_cli_rs` or `T3 Code`; anything else is not kept. */
 const CLIENT = /^(?=.{1,64}$)[A-Za-z0-9_.-]+(?: [A-Za-z0-9_.-]+)*$/u;
+
+const client = (text: unknown) =>
+  typeof text === "string" && CLIENT.test(text) ? text : undefined;
+
+/**
+ * A Codex session's `via`: the client that started it (`originator`), else its source when that
+ * is a plain name, else `subagent` for a spawned subagent, else `unknown`. The rollouts and the
+ * state database read it the same way.
+ */
+export const codexVia = (originator: unknown, source: unknown, spawned: boolean): string =>
+  client(originator) ?? client(source) ?? (spawned ? "subagent" : "unknown");
 const VERSION = /^[A-Za-z0-9_.+-]{1,32}$/u;
 /** A model name such as `gpt-6.1-sol`; anything else counts as `unknown`. */
 const MODEL = /^[A-Za-z0-9_.:@+/-]{1,64}$/u;
@@ -540,12 +551,7 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
       const day = isoDay(stamp);
       if (day === undefined) return [];
       const source = payload.source;
-      const client = (text: unknown) =>
-        typeof text === "string" && CLIENT.test(text) ? text : undefined;
-      const via =
-        client(payload.originator) ??
-        client(source) ??
-        (record(source)?.subagent !== undefined ? "subagent" : "unknown");
+      const via = codexVia(payload.originator, source, record(source)?.subagent !== undefined);
       state.started = true;
       state.day = day;
       state.via = via;
