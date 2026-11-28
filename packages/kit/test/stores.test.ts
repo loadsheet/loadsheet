@@ -218,15 +218,45 @@ describe("readStore on SQLite", () => {
     await NodeFSP.writeFile(`${home}/.db/extra-v2.json`, '{"rows":[{"cwd":"~/code/app","add":5}]}');
     expect(await inputs(["~/elsewhere"])).toEqual([105, 25]);
     expect(natives).toEqual([["~/elsewhere"]]);
-    // A file that is not JSON binds `[]` too.
-    await NodeFSP.writeFile(`${home}/.db/extra-v3.json`, '{"rows":[');
-    expect(await inputs()).toEqual([100, 20]);
-    expect(await listing()).toEqual([
-      "extra-v1.json",
-      "extra-v2.json",
-      "extra-v3.json",
-      "sessions.db",
-    ]);
+    expect(await listing()).toEqual(["extra-v1.json", "extra-v2.json", "sessions.db"]);
+  });
+
+  it("an input it cannot read binds `[]` and leaves the store unread", async () => {
+    await NodeFSP.mkdir(`${home}/.db`, { recursive: true });
+    makeDb(false).close();
+    const store = (read: (document: unknown) => unknown) =>
+      sqliteStore({
+        query: `SELECT at, cwd, input + (SELECT count(*) FROM json_each($extra)) AS input, output
+          FROM sessions WHERE at >= $since ORDER BY at`,
+        inputs: [{ param: "$extra", path: (at) => `${at.home}/.db/extra.json`, read }],
+      });
+    const rows = (document: unknown) => (document as { rows: unknown[] }).rows;
+    const read = async (from = store(rows)) => {
+      const result = await readStore(from, place(), SINCE);
+      return {
+        unread: result?.unread ?? false,
+        input:
+          result && "facts" in result
+            ? result.facts.flatMap((fact) => (fact.type === "usage-tokens" ? [fact.input] : []))
+            : undefined,
+      };
+    };
+
+    // A file that is not there is no failure.
+    expect(await read()).toEqual({ unread: false, input: [100, 20] });
+    await NodeFSP.writeFile(`${home}/.db/extra.json`, '{"rows":[1,2]}');
+    expect(await read()).toEqual({ unread: false, input: [102, 22] });
+    // One `read` refuses, as for a version it does not know.
+    const refuse = store(() => {
+      throw new Error("version 99");
+    });
+    expect(await read(refuse)).toEqual({ unread: true, input: [100, 20] });
+    // One that is not JSON, and one that cannot be read.
+    await NodeFSP.writeFile(`${home}/.db/extra.json`, '{"rows":[');
+    expect(await read()).toEqual({ unread: true, input: [100, 20] });
+    await NodeFSP.rm(`${home}/.db/extra.json`);
+    await NodeFSP.mkdir(`${home}/.db/extra.json`);
+    expect(await read()).toEqual({ unread: true, input: [100, 20] });
   });
 });
 
@@ -362,6 +392,55 @@ describe("scanMachine's stores", () => {
       ["stored", "~/code/a", 6, 1],
     ]);
     expect(findCanary(scan, [tmp, home, "private title"])).toEqual([]);
+  });
+});
+
+describe("scanMachine's store inputs", () => {
+  it("stores reading one input share one parse, and one that cannot read it is unread", async () => {
+    await NodeFSP.mkdir(`${home}/.db`, { recursive: true });
+    makeDb(false).close();
+    await NodeFSP.writeFile(`${home}/.db/extra.json`, '{"version":2,"rows":[1]}');
+    const documents: unknown[] = [];
+    const store = (name: string, versions: number[]) => ({
+      ...sqliteStore({
+        name,
+        query: `SELECT at, cwd, input + (SELECT count(*) FROM json_each($extra)) AS input, output
+          FROM sessions WHERE at >= $since ORDER BY at`,
+        inputs: [
+          {
+            param: "$extra",
+            path: (at: { home: string }) => `${at.home}/.db/extra.json`,
+            read: (document: unknown) => {
+              documents.push(document);
+              const { version, rows } = document as { version: number; rows: unknown[] };
+              if (!versions.includes(version)) throw new Error(`version ${version}`);
+              return rows;
+            },
+          },
+        ],
+      }),
+      harness: "driver",
+    });
+
+    const scan = await scanMachine({
+      harnesses: [],
+      stores: [store("a.db", [2]), store("b.db", [2]), store("c.db", [1])],
+      days: 7,
+      tool: "loadsheet@0.0.0-test",
+      machine: "test-machine",
+      now: NOW,
+      place: place(),
+      cacheDir: false,
+    });
+
+    expect(parseScan(scan)).toEqual(scan);
+    expect(documents).toHaveLength(3);
+    expect(documents[1]).toBe(documents[0]);
+    expect(documents[2]).toBe(documents[0]);
+    expect(scan.coverage.map((row) => [row.harness, row.unread])).toEqual([["driver", ["c.db"]]]);
+    // a and b with the input's one row in each session; c's query still counts, without it.
+    const input = scan.usage!.tokens.reduce((sum, cell) => sum + cell.input, 0);
+    expect(input).toBe(2 * (101 + 21 + 1000) + (100 + 20 + 999));
   });
 });
 

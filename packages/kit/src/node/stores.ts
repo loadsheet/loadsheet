@@ -1,7 +1,8 @@
 // Reads the session stores that are not JSONL transcripts: a SQLite database through node:sqlite,
 // or a folder of per-session JSON files. Nothing is cached: one SELECT bound to the window's start,
 // or a few small files per session changed in the window, costs less than a cache would. A SQLite
-// store's JSON inputs are read whole: T3 Code's 100 MB usage cache adds about 470 MB at its peak.
+// store's JSON inputs are read whole, once per scan however many stores read one: T3 Code's 100 MB
+// usage cache adds about 470 MB at its peak.
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -16,8 +17,26 @@ import type {
   VersionedFile,
 } from "../index.ts";
 
-/** What reading a store gave: its Facts, that it exists and could not be read, or undefined when it does not exist. */
-export type StoreRead = { readonly facts: StoreFact[] } | { readonly unread: true } | undefined;
+/**
+ * What reading a store gave: its Facts, that it exists and could not be read, or undefined when it
+ * does not exist. Facts with `unread` are what it gave without a JSON input it could not read.
+ */
+export type StoreRead =
+  | { readonly facts: StoreFact[]; readonly unread?: true }
+  | { readonly unread: true }
+  | undefined;
+
+/** A JSON input file as parsed: its document, that it is not there, or that it could not be read. */
+type Parsed =
+  | { readonly document: unknown }
+  | { readonly missing: true }
+  | { readonly failed: true };
+
+/**
+ * The JSON inputs one scan's stores read, parsed once per file and shared by every store that
+ * reads it, so stores read at once do not each hold a parse.
+ */
+export type InputDocuments = Map<string, Promise<Parsed>>;
 
 /** A session folder's file larger than this is left out, as a source file past its limit is. */
 const MAX_FOLDER_FILE_BYTES = 8 * 1024 * 1024;
@@ -55,21 +74,42 @@ const newestFile = async ({ dir, pattern }: VersionedFile): Promise<string | und
 const pathOf = async (where: string | VersionedFile): Promise<string | undefined> =>
   typeof where === "string" ? where : newestFile(where);
 
-/** An input's value as bound: its `read` of the parsed file, or `[]` when the file is missing or not JSON. */
+const parse = async (path: string): Promise<Parsed> => {
+  try {
+    return { document: JSON.parse(await readFile(path, "utf8")) };
+  } catch (error) {
+    // Anything else, such as a file past V8's longest string, is a file that is there unread.
+    return (error as NodeJS.ErrnoException).code === "ENOENT"
+      ? { missing: true }
+      : { failed: true };
+  }
+};
+
+/**
+ * An input's value as bound: its `read` of the parsed file, or `[]` when the file is not there.
+ * Undefined when the file cannot be read or parsed, or `read` throws.
+ */
 const inputValue = async (
   input: StoreInput,
   place: Place,
   native: ReadonlySet<string>,
-): Promise<string> => {
+  documents: InputDocuments,
+): Promise<string | undefined> => {
   const path = await pathOf(input.path(place));
-  let document: unknown;
-  try {
-    if (!path) return "[]";
-    document = JSON.parse(await readFile(path, "utf8"));
-  } catch {
-    return "[]";
+  if (!path) return "[]";
+  let parsed = documents.get(path);
+  if (!parsed) {
+    parsed = parse(path);
+    documents.set(path, parsed);
   }
-  return JSON.stringify(input.read(document, native) ?? []);
+  const result = await parsed;
+  if ("missing" in result) return "[]";
+  if ("failed" in result) return undefined;
+  try {
+    return JSON.stringify(input.read(result.document, native) ?? []);
+  } catch {
+    return undefined;
+  }
 };
 
 /**
@@ -83,6 +123,7 @@ const readSqlite = async (
   place: Place,
   sinceMs: number,
   native: readonly string[],
+  documents: InputDocuments,
 ): Promise<StoreRead> => {
   const path = await pathOf(store.path(place));
   if (!path || !(await isFile(path))) return undefined;
@@ -96,7 +137,13 @@ const readSqlite = async (
   const params: Record<string, string | number> = { $since: since };
   if (store.native !== undefined) params.$native = JSON.stringify(native);
   const ids = new Set(native);
-  for (const input of store.inputs ?? []) params[input.param] = await inputValue(input, place, ids);
+  // An input that cannot be read binds `[]`, and the store is unread though its query counts.
+  let unread = false;
+  for (const input of store.inputs ?? []) {
+    const value = await inputValue(input, place, ids, documents);
+    if (value === undefined) unread = true;
+    params[input.param] = value ?? "[]";
+  }
   let rows: StoreRow[];
   let db: InstanceType<Sqlite["DatabaseSync"]> | undefined;
   try {
@@ -112,7 +159,8 @@ const readSqlite = async (
     } catch {}
   }
   if (!live && (await isFile(`${path}-wal`))) return { unread: true };
-  return { facts: store.facts(rows, place) };
+  const facts = store.facts(rows, place);
+  return unread ? { facts, unread } : { facts };
 };
 
 const readSmall = async (path: string): Promise<string | undefined> => {
@@ -167,14 +215,15 @@ const readFolder = async (
 /**
  * Reads one store: its usage Facts since `sinceMs`, or that it could not be read. A store that is
  * not on the disk gives undefined. `native` is the ids a SQLite store with a `native` harness gets
- * as `$native`.
+ * as `$native`; `documents` holds the JSON inputs parsed so far, for the stores of one scan to share.
  */
 export const readStore = (
   store: SessionStore,
   place: Place,
   sinceMs: number,
   native: readonly string[] = [],
+  documents: InputDocuments = new Map(),
 ): Promise<StoreRead> =>
   store.kind === "sqlite"
-    ? readSqlite(store, place, sinceMs, native)
+    ? readSqlite(store, place, sinceMs, native, documents)
     : readFolder(store, place, sinceMs);

@@ -28,7 +28,7 @@ import { dirFiles } from "./files.ts";
 import { createProjectResolver } from "./projects.ts";
 import { reachesOf, withReach } from "./reach.ts";
 import { listTranscriptFiles, type TranscriptFile } from "./reader.ts";
-import { readStore } from "./stores.ts";
+import { readStore, type InputDocuments } from "./stores.ts";
 import {
   openTranscriptPool,
   readTranscriptTally,
@@ -552,10 +552,12 @@ const readStores = async (
     ),
     ...extra.map((store) => ({ harness: store.harness, store })),
   ];
+  // Stores that read one JSON input share its parse.
+  const documents: InputDocuments = new Map();
   const reads = await Promise.all(
     stores.map(({ store }) => {
       const native = store.kind === "sqlite" && store.native ? listed.get(store.native) : undefined;
-      return readStore(store, place, usageWindow.sinceMs, [...(native ?? [])]).catch(
+      return readStore(store, place, usageWindow.sinceMs, [...(native ?? [])], documents).catch(
         () => ({ unread: true }) as const,
       );
     }),
@@ -567,11 +569,11 @@ const readStores = async (
     const { harness, store } = stores[index]!;
     if (!read) return;
     const supplies = new Set(store.kind === "sqlite" ? (store.supplies ?? []) : []);
-    if ("unread" in read) {
+    if (read.unread) {
       for (const about of new Set([harness, ...[...supplies].filter((id) => listed.has(id))]))
         unread.set(about, [...(unread.get(about) ?? []), store.name]);
-      return;
     }
+    if (!("facts" in read)) return;
     const added = new Map<string, Backfill>();
     for (const fact of read.facts) {
       const about = fact.harness ?? harness;

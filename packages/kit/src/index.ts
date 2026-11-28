@@ -226,7 +226,10 @@ export interface StoreInput {
   /**
    * The value to bind, from the parsed document; pure, so it runs anywhere. `native` holds the ids
    * kit binds as `$native`, for skipping what the transcripts count. Like `$native`, it may hold
-   * ids, which stay in memory and in the query.
+   * ids, which stay in memory and in the query. The document is shared by every store of the scan
+   * that reads the file, so `read` leaves it as it is. A file that is not there binds `[]`; one
+   * kit cannot read or parse, or that `read` throws on, such as a version it does not know, binds
+   * `[]` and lists the store as unread.
    */
   read(document: unknown, native: ReadonlySet<string>): unknown;
 }
@@ -345,9 +348,10 @@ export interface MachineReader<State> {
   /** How its transcript lines become Facts; absent, with `roots`, for an inventory-only harness. */
   readonly transcripts?: TranscriptFormat<State>;
   /**
-   * The id of the session a transcript file under `roots` holds, as the harness names it, for a
-   * store that keeps copies of its sessions to skip them (`SqliteStore.native`); undefined for a
-   * file that is not a session's main transcript, such as a subagent's. kit passes the ids to
+   * The id of a transcript file under `roots`, for a store that keeps copies of its sessions to
+   * skip what the transcripts count (`SqliteStore.native`): a session's main transcript by the
+   * session's id as the harness names it, and another file, such as a subagent's, by an id of its
+   * own that holds the session's; undefined for a file no store keeps. kit passes the ids to
    * stores only, never to a Scan or the cache.
    */
   sessionId?(path: string): string | undefined;
