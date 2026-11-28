@@ -328,7 +328,7 @@ describe("renderSummary for one harness", () => {
     );
   });
 
-  it("says loadsheet doesn't read the sessions of a harness it only inventories", () => {
+  it("says loadsheet doesn't read the chats of a harness it only inventories", () => {
     const none = {
       listing: "none",
       modelUse: "none",
@@ -336,6 +336,8 @@ describe("renderSummary for one harness", () => {
       instructions: "none",
       mcp: "none",
       tokens: "none",
+      usage: "none",
+      cacheTtl: "none",
     } as const;
     const at = (installed: boolean) => ({
       ...local(),
@@ -345,10 +347,11 @@ describe("renderSummary for one harness", () => {
       sheet: [...local().sheet, { harness: "pi", sessions: 0, lines: [line("notes", 50, 0)] }],
     });
     expect(renderSummary(at(true), { harness: "pi" })).toBe(
-      "loadsheet 1.2.3\n\nloadsheet doesn't read pi sessions, only what's installed: run it again with --full to list it.\n",
+      "loadsheet 1.2.3\n\nLearn what you send to Pi with the first message of every chat.\n\n" +
+        "loadsheet doesn't read Pi chats, only what's installed: run it again with --full to list it.\n",
     );
     expect(renderSummary(at(false), { harness: "pi" })).toContain(
-      "loadsheet doesn't read pi sessions, and finds no pi install to list.",
+      "loadsheet doesn't read Pi chats, and finds no Pi install to list.",
     );
   });
 });
