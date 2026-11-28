@@ -4,7 +4,7 @@ import * as NodePath from "node:path";
 import { findCanary } from "@loadsheet/fixtures";
 import type { Fact, Place, UsageTokensFact } from "@loadsheet/kit";
 import { memoryFiles } from "@loadsheet/kit";
-import { readTranscript, type ReadPosition } from "@loadsheet/kit/node";
+import { readTranscript, scanMachine, type ReadPosition } from "@loadsheet/kit/node";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { CLAUDE_CODE_RETENTION_DAYS, claudeCode, claudeTranscripts } from "../src/index.ts";
 
@@ -231,6 +231,86 @@ describe("Claude Code usage", () => {
   const jo: Place = { home: "/home/jo", env: {} };
   const tokens = (facts: readonly Fact[]) =>
     facts.filter((fact): fact is UsageTokensFact => fact.type === "usage-tokens");
+
+  it("keeps supported native tool labels", () => {
+    const names = ["Monitor", "PushNotification", "WaitForMcpServers", "private.canary"];
+    const { facts } = parseLines([
+      line({
+        type: "assistant",
+        message: { content: names.map((name) => ({ type: "tool_use", name })) },
+      }),
+    ]);
+    expect(facts.flatMap((fact) => (fact.type === "usage-tool" ? [fact.tool] : []))).toEqual([
+      "Monitor",
+      "PushNotification",
+      "WaitForMcpServers",
+      "other",
+    ]);
+  });
+
+  it("verifies MCP calls in a separate subagent transcript against its parent", async () => {
+    const dir = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "claude-parent-"));
+    try {
+      const projects = NodePath.join(dir, ".claude", "projects", "project");
+      const subagents = NodePath.join(projects, "session", "subagents");
+      await NodeFSP.mkdir(subagents, { recursive: true });
+      const parent = NodePath.join(projects, "session.jsonl");
+      const child = NodePath.join(subagents, "agent-test.jsonl");
+      const parentLines = [
+        line({
+          type: "attachment",
+          attachment: { type: "mcp_instructions_delta", addedNames: ["listed__server"] },
+        }),
+        line({ type: "user", message: { content: "hi" } }),
+      ];
+      const childLine = line({
+        type: "assistant",
+        isSidechain: true,
+        message: {
+          content: ["mcp__listed__server__read", "mcp__private__read"].map((name) => ({
+            type: "tool_use",
+            name,
+          })),
+        },
+      });
+      await NodeFSP.writeFile(parent, `${parentLines.join("\n")}\n`);
+      await NodeFSP.writeFile(child, `${childLine}\n`);
+      const read = await readTranscript(child, claudeTranscripts);
+      const facts = read!.records;
+      expect(facts.flatMap((fact) => (fact.type === "usage-tool" ? [fact.tool] : []))).toEqual([
+        "mcp:listed__server",
+        "other",
+      ]);
+      expect(facts.flatMap((fact) => (fact.type === "used" ? [fact.item] : []))).toEqual([
+        "mcp:listed__server",
+      ]);
+      expect(findCanary(read, ["private", "agent-test", "session.jsonl"])).toEqual([]);
+      const scan = () =>
+        scanMachine({
+          harnesses: [claudeCode],
+          place: { home: dir, env: {} },
+          now: new Date("2026-03-02T12:00:00Z"),
+          days: 2,
+          tool: "test",
+          cacheDir: NodePath.join(dir, "cache"),
+        });
+      const cold = await scan();
+      expect(cold.usage?.tools?.map((cell) => cell.tool)).toEqual(["mcp:listed__server", "other"]);
+      expect(cold.cells.find((cell) => cell.item === "mcp:listed__server")).toMatchObject({
+        sessions: 1,
+        byModel: 1,
+      });
+      expect(await scan()).toEqual(cold);
+      await NodeFSP.rm(parent);
+      const after = await scan();
+      expect(after.usage?.tools?.map(({ tool, calls }) => [tool, calls])).toEqual([["other", 2]]);
+      expect(after.cells.some((cell) => cell.item === "mcp:listed__server")).toBe(false);
+      const resumed = await readTranscript(child, claudeTranscripts, read!.position);
+      expect(resumed!.resumed).toBe(false);
+    } finally {
+      await NodeFSP.rm(dir, { recursive: true, force: true });
+    }
+  });
 
   it("counts a message written once per content block as one request", () => {
     const usage = { input_tokens: 3, output_tokens: 10, cache_creation_input_tokens: 7 };

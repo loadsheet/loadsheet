@@ -223,10 +223,14 @@ export interface LineBytes {
   slice(start: number, end?: number): string;
 }
 
-/**
- * How a harness's transcript lines become Facts. `readTranscript` in `@loadsheet/kit/node` takes
- * it as its line format.
- */
+/** How a child transcript finds and reads verified names from its parent. */
+export interface TranscriptParent {
+  path(child: string): string | undefined;
+  readonly markers: readonly [string, ...string[]];
+  collect(line: string, names: Set<string>): void;
+}
+
+/** How a harness's transcript lines become Facts for `readTranscript` in `@loadsheet/kit/node`. */
 export interface TranscriptFormat<State> {
   /** A line that contains none of these byte strings is skipped before it is decoded. */
   readonly markers: readonly [string, ...string[]];
@@ -246,7 +250,9 @@ export interface TranscriptFormat<State> {
    * the machine's, for writing a working directory the way the Files keys paths; nothing of it
    * goes into `state`. kit's readers always pass it; a test may leave it out.
    */
-  parse(line: string, state: State, place?: Place): readonly Fact[];
+  parse(line: string, state: State, place?: Place, parentNames?: ReadonlySet<string>): readonly Fact[];
+  /** Verified names a child can inherit from the main transcript of its session. */
+  readonly parent?: TranscriptParent;
 }
 
 /** Where things are on one machine. A harness derives its own paths from it and reads nothing. */

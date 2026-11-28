@@ -403,10 +403,14 @@ describe("codex turns, hours, tools and limits", () => {
       call("10:00:01", { name: "private.customer-reference" }),
       call("10:00:02", { name: "mcp__private__read" }),
       call("10:00:03", { name: "search", namespace: "mcp__private" }),
+      call("10:00:04", { name: "sleep", namespace: "clock" }),
+      call("10:00:05", { name: "sleep", namespace: "private" }),
     ]);
     expect(ofType(facts, "usage-tool").map((fact) => fact.tool)).toEqual([
       "other",
       "other",
+      "other",
+      "clock.sleep",
       "other",
     ]);
     expect(findCanary({ facts, state }, ["private"])).toEqual([]);

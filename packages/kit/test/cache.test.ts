@@ -330,7 +330,7 @@ describe("the scan cache file", () => {
   it("opens empty a file saved in another layout", async () => {
     await (await open()).save(new Map([["one", cachedFile(1)]]));
     const file = await readFile();
-    expect(file.layout).toBe(7);
+    expect(file.layout).toBe(8);
     // Layout 2 kept the document's fields beside its sum.
     await NodeFSP.writeFile(cacheFile(), JSON.stringify({ layout: 2, ...file.doc, sum: file.sum }));
     expect((await open()).get("one")).toBeUndefined();
@@ -338,7 +338,7 @@ describe("the scan cache file", () => {
     await NodeFSP.writeFile(cacheFile(), JSON.stringify(file));
     expect((await open()).get("one")).toEqual(cachedFile(1));
     const text = await NodeFSP.readFile(cacheFile(), "utf8");
-    await NodeFSP.writeFile(cacheFile(), text.replace('"layout":7', '"layout":6'));
+    await NodeFSP.writeFile(cacheFile(), text.replace('"layout":8', '"layout":7'));
     expect((await open()).get("one")).toBeUndefined();
   });
 

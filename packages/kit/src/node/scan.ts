@@ -20,7 +20,7 @@ import { defaultCacheDir, openCache, type CachedFile, type HarnessCache } from "
 import { dirFiles } from "./files.ts";
 import { createProjectResolver } from "./projects.ts";
 import { reachesOf, withReach } from "./reach.ts";
-import { listTranscriptFiles, type TranscriptFile } from "./reader.ts";
+import { listTranscriptFiles, parentTranscript, type TranscriptFile } from "./reader.ts";
 import { readStore } from "./stores.ts";
 import {
   openTranscriptPool,
@@ -222,8 +222,16 @@ const planTranscripts = async (
   const fromCache: CachedFile[] = [];
   const toRead: ToRead[] = [];
   let cachedBytes = 0;
+  const parents = new Map<string, TranscriptFile | undefined>();
   for (const file of files) {
-    const key = cache?.key(file.path);
+    const source = cache && format.parent?.path(file.path);
+    if (source && !parents.has(source)) parents.set(source, await parentTranscript(source));
+    const parent = source ? parents.get(source) : undefined;
+    const key = cache?.key(
+      parent
+        ? JSON.stringify([file.path, parent.path, parent.size, parent.mtimeMs, parent.ctimeMs])
+        : file.path,
+    );
     const cached = key === undefined ? undefined : cache?.get(key);
     const unchanged =
       cached?.size === file.size &&

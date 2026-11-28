@@ -291,6 +291,7 @@ const BUILT_IN_TOOLS = new Set([
   "web_search",
   "write_stdin",
 ]);
+const BUILT_IN_NAMESPACED_TOOLS = new Map([["clock", new Set(["sleep"])]]);
 /** The tool that starts a subagent. */
 const SPAWN_AGENT = "spawn_agent";
 
@@ -551,6 +552,13 @@ const callTool = (payload: Record<string, unknown>, state: CodexState): string =
     const server = serverOf(token, state);
     return toolName(
       server !== undefined && token.length > server.length + 2 ? `mcp:${server}` : undefined,
+    );
+  }
+  if (typeof namespace === "string" && namespace !== "") {
+    return toolName(
+      name !== undefined && BUILT_IN_NAMESPACED_TOOLS.get(namespace)?.has(name)
+        ? `${namespace}.${name}`
+        : undefined,
     );
   }
   return toolName(name !== undefined && BUILT_IN_TOOLS.has(name) ? name : undefined);

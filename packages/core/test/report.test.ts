@@ -930,6 +930,24 @@ describe("heavy-instructions", () => {
 });
 
 describe("idle-mcp", () => {
+  it("does not infer that an MCP server is idle from unattributed Claude Code calls", () => {
+    const result = findingsOf([
+      scan("laptop", {
+        items: [server("docs")],
+        cells: [serverCell("docs", 25)],
+        usage: {
+          sessions: [],
+          tokens: [],
+          tools: [{ day: LAST, harness: "claude-code", thread: "subagent", tool: "other", calls: 1 }],
+        },
+      }),
+    ], "idle-mcp");
+    expect(result.items).toEqual([]);
+    expect(result.skipped).toEqual([
+      { rule: "idle-mcp", harness: "claude-code", reason: "missing-signal", missing: ["mcp"] },
+    ]);
+  });
+
   it.each([
     ["fires for a server listed and never called", [serverCell("docs", 25)], ["mcp:docs"]],
     ["holds for a server called once", [serverCell("docs", 25, { byModel: 1 })], []],

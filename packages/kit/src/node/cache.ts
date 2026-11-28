@@ -13,7 +13,7 @@ import { Accumulator } from "../sum.ts";
 import type { ReadPosition } from "./reader.ts";
 
 /** The layout of a cache file; a change here starts every cache cold. */
-const CACHE_LAYOUT = 7;
+const CACHE_LAYOUT = 8;
 
 /** What the cache keeps for one transcript file. */
 export interface CachedFile {
@@ -54,7 +54,7 @@ export const defaultCacheDir = (place: {
 
 const sha256 = (text: string | Uint8Array) => createHash("sha256").update(text).digest("hex");
 
-// A cache file is `{"layout":6,"sum":"<sha256 of the document's text>","doc":<document>}`, so one
+// A cache file is `{"layout":8,"sum":"<sha256 of the document's text>","doc":<document>}`, so one
 // cut short or changed by anything else opens empty, and checking it hashes the bytes as read.
 const HEAD = `{"layout":${CACHE_LAYOUT},"sum":"`;
 const DOC = '","doc":';
@@ -91,6 +91,9 @@ const formatFingerprint = (format: TranscriptFormat<unknown>) => {
       format.initial(),
       format.parse.toString(),
       typeof skip === "function" ? skip.toString() : null,
+      format.parent?.markers,
+      format.parent?.path.toString(),
+      format.parent?.collect.toString(),
     ]),
   );
 };
@@ -736,7 +739,7 @@ const retableTally = (
 };
 
 // A CachedFile encodes as
-// [size, mtimeMs, ctimeMs, hasTail (0 or 1), offset, guardLength, guardHash, state, tally].
+// [size, mtimeMs, ctimeMs, hasTail (0 or 1), offset, guardLength, guardHash, state, tally, parent hash?].
 
 const encodeFile = (file: CachedFile, state: unknown, tally: unknown): unknown[] => {
   const { position } = file;
@@ -750,6 +753,7 @@ const encodeFile = (file: CachedFile, state: unknown, tally: unknown): unknown[]
     position.guardHash,
     state,
     tally,
+    ...(position.parentNamesHash === undefined ? [] : [position.parentNamesHash]),
   ];
 };
 
@@ -761,8 +765,15 @@ interface OpenedFile {
 }
 
 const decodeFile = (raw: unknown, decoder: Decoder): OpenedFile => {
-  if (!Array.isArray(raw) || raw.length !== 9) throw new Malformed();
-  const [size, mtimeMs, ctimeMs, hasTail, offset, guardLength, guardHash, state, tally] = raw;
+  if (!Array.isArray(raw) || (raw.length !== 9 && raw.length !== 10)) throw new Malformed();
+  const [size, mtimeMs, ctimeMs, hasTail, offset, guardLength, guardHash, state, tally, parentNamesHash] =
+    raw;
+  if (
+    parentNamesHash !== undefined &&
+    (typeof parentNamesHash !== "string" || !/^[\da-f]{64}$/u.test(parentNamesHash))
+  ) {
+    throw new Malformed();
+  }
   if (typeof mtimeMs !== "number" || typeof ctimeMs !== "number") throw new Malformed();
   if (hasTail !== 0 && hasTail !== 1) throw new Malformed();
   checkValue(state, decoder);
@@ -779,6 +790,7 @@ const decodeFile = (raw: unknown, decoder: Decoder): OpenedFile => {
       offset: decoder.count(offset),
       guardLength: decoder.count(guardLength),
       guardHash: decoder.count(guardHash),
+      ...(parentNamesHash === undefined ? {} : { parentNamesHash }),
       get state() {
         decoded ??= { value: decodeValue(state, strings) };
         return decoded.value;

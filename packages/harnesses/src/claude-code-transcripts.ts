@@ -1,7 +1,13 @@
 // How Claude Code's JSONL transcript lines become Facts. Line shapes were read from Claude Code
 // 2.1 transcripts: `attachment` lines carry what a session listed, `assistant` lines the model's
 // tool calls and usage, `user` lines slash commands, `system` lines compactions.
-import { toolName, type Fact, type LineBytes, type TranscriptFormat } from "@loadsheet/kit";
+import {
+  toolName,
+  type Fact,
+  type LineBytes,
+  type TranscriptFormat,
+  type TranscriptParent,
+} from "@loadsheet/kit";
 import type { Day, Id, Thread } from "@loadsheet/schema";
 import { MCP_NAME, mcpToolName, NAME } from "./claude-code-machine.ts";
 import { projectOfCwd } from "./path.ts";
@@ -155,7 +161,9 @@ const BUILT_IN_TOOLS = new Set([
   "Grep",
   "LSP",
   "ListMcpResourcesTool",
+  "Monitor",
   "NotebookEdit",
+  "PushNotification",
   "Read",
   "ReadMcpResourceTool",
   "SendMessage",
@@ -171,17 +179,56 @@ const BUILT_IN_TOOLS = new Set([
   "TeamDelete",
   "TodoWrite",
   "ToolSearch",
+  "WaitForMcpServers",
   "WebFetch",
   "WebSearch",
   "Write",
 ]);
-const knownServer = (name: string, known: ClaudeState["knownMcp"]): string | undefined => {
-  if (!known || !name.startsWith("mcp__")) return undefined;
+const knownServer = (
+  name: string,
+  known: ClaudeState["knownMcp"],
+  parent?: ReadonlySet<string>,
+): string | undefined => {
+  if (!name.startsWith("mcp__")) return undefined;
   for (let split = name.lastIndexOf("__"); split > 5; split = name.lastIndexOf("__", split - 1)) {
     const server = name.slice(5, split);
-    if (split + 2 < name.length && known[`mcp:${server}`]) return server;
+    if (split + 2 < name.length && (known?.[`mcp:${server}`] || parent?.has(server))) {
+      return server;
+    }
   }
   return undefined;
+};
+
+const instructionServer = (name: string): string | undefined => {
+  const server = /[/\\]/u.test(name) ? "" : mcpToolName(name);
+  return MCP_NAME.test(server) ? server : undefined;
+};
+
+const parent: TranscriptParent = {
+  path: (child) => {
+    const match = /^(.*)[/\\]subagents[/\\]agent-[^/\\]+\.jsonl(?:\.zst)?$/u.exec(child);
+    return match ? `${match[1]}.jsonl` : undefined;
+  },
+  markers: ['"mcp_instructions_delta"', '"deferred_tools_delta"'],
+  collect(line, names) {
+    let record: unknown;
+    try {
+      record = JSON.parse(line);
+    } catch {
+      return;
+    }
+    if (!isRecord(record) || record.type !== "attachment" || !isRecord(record.attachment)) return;
+    const { type, addedNames } = record.attachment;
+    if (type === "mcp_instructions_delta" || type === "deferred_tools_delta") {
+      for (const name of strings(addedNames)) {
+        const server =
+          type === "mcp_instructions_delta"
+            ? instructionServer(name)
+            : (knownServer(name, undefined, names) ?? mcpServer(name));
+        if (server !== undefined) names.add(server);
+      }
+    }
+  },
 };
 const TOOL_RESULT_TOKEN = '"tool_use_id"';
 /** The system line Claude Code writes for each failed request it retries. */
@@ -651,8 +698,9 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
   // Every line loadsheet reads carries its entrypoint; request logs and titles do not.
   markers: ['"entrypoint"'],
   initial: () => ({ started: false, tokens: false, listed: {}, builtIn: {}, mcp: {}, project: {} }),
+  parent,
   skip,
-  parse(line, state, place) {
+  parse(line, state, place, parentNames) {
     let record: unknown;
     try {
       record = JSON.parse(line);
@@ -754,9 +802,8 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
         case "mcp_instructions_delta": {
           const blocks = Array.isArray(attachment.addedBlocks) ? attachment.addedBlocks : [];
           strings(attachment.addedNames).forEach((name, index) => {
-            // A server is named in a config file, so a name with a path in it is not one.
-            const server = /[/\\]/u.test(name) ? "" : mcpToolName(name);
-            if (!MCP_NAME.test(server)) return;
+            const server = instructionServer(name);
+            if (server === undefined) return;
             (state.knownMcp ??= {})[`mcp:${server}`] = true;
             if (side) return;
             const block = blocks[index];
@@ -768,7 +815,7 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
         case "deferred_tools_delta": {
           const lines = Array.isArray(attachment.addedLines) ? attachment.addedLines : [];
           strings(attachment.addedNames).forEach((tool, index) => {
-            const server = knownServer(tool, state.knownMcp) ?? mcpServer(tool);
+            const server = knownServer(tool, state.knownMcp, parentNames) ?? mcpServer(tool);
             if (server === undefined) return;
             (state.knownMcp ??= {})[`mcp:${server}`] = true;
             if (side) return;
@@ -917,7 +964,7 @@ export const claudeTranscripts: TranscriptFormat<ClaudeState> = {
         if (!isRecord(block) || block.type !== "tool_use" || typeof block.name !== "string")
           continue;
         const input = isRecord(block.input) ? block.input : {};
-        const server = knownServer(block.name, state.knownMcp);
+        const server = knownServer(block.name, state.knownMcp, side ? parentNames : undefined);
         facts.push({
           type: "usage-tool",
           day: moment?.day ?? day,
