@@ -2,6 +2,7 @@
 import {
   NO_REPOSITORY,
   unreadUsageStores,
+  usageRange,
   usageTokens,
   usageTotals,
   type UsageRow,
@@ -14,7 +15,7 @@ import { useLoadsheet } from "../lib/state";
 import { usageRows } from "../lib/usage";
 
 /**
-  Sessions, compactions and tokens over the window, as `loadsheet usage` counts them: one table with every harness
+  Sessions, compactions and tokens over the days the usage holds, as `loadsheet usage` counts them: one table with every harness
   summed on top, then one row per organisation that opens onto its projects. A shared report carries no usage.
 */
 const { report, shared } = useLoadsheet();
@@ -32,7 +33,13 @@ const sub = computed(() => {
       ? plural(read, "machine")
       : `${fmt(read)} of ${plural(r.machines.length, "machine")}`;
   const where = r.machines.length > 1 ? `on ${machines}` : "on this machine";
-  return `By org and project, last ${plural(r.config.window, "day")}, ${where}.`;
+  return `By org and project, ${usageRange(r.usage)}, ${where}.`;
+});
+
+/** The days `loadsheet usage --days` bounded the usage to; empty when it holds every day. */
+const bound = computed(() => {
+  const days = report.value.config.usageWindow;
+  return days === undefined ? "" : ` in the last ${plural(days, "day")}`;
 });
 
 const open = reactive(new Set<string>());
@@ -171,7 +178,7 @@ const percent = (row: UsageRow) =>
       </template>
     </StateBox>
     <StateBox v-else-if="!unread.length" title="Nothing to count yet">
-      No session in the last {{ plural(report.config.window, "day") }} said its project or tokens.
+      No session{{ bound }} said its project or tokens.
     </StateBox>
   </main>
 </template>

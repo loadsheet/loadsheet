@@ -190,6 +190,50 @@ describe("renderUsage", () => {
     expect(text).toContain("Apply fixes    ask your agent to run npx loadsheet --json --fleet");
   });
 
+  it("usage view prints the range from the cells", () => {
+    const text = renderUsage(
+      withUsage({
+        sessions: [{ ...sessions("acme/app", 1), day: "2026-08-03" }, sessions("acme/app", 1)],
+        tokens: [{ ...tokens("acme/app", 1000), day: "2026-11-21" }],
+      }),
+    );
+    expect(text).toContain(
+      "\nSessions, compactions and tokens, 2026-08-03 to 2026-11-21, on 2 machines.\n",
+    );
+    expect(text).not.toContain("last 30 days");
+    expect(renderUsage(withUsage({ sessions: [sessions("acme/app", 1)], tokens: [] }))).toContain(
+      "Sessions, compactions and tokens, on 2026-11-20, on 2 machines.",
+    );
+    // Bounded by `loadsheet usage --days`, an empty history says so.
+    const bounded = withUsage(undefined);
+    bounded.config = { ...bounded.config, usageWindow: 7 };
+    expect(renderUsage(bounded)).toContain("No session in the last 7 days on 2 machines said");
+    expect(renderUsage(withUsage(undefined))).toContain("No session on 2 machines said");
+  });
+
+  it("says where a harness's older days came from and what they lack", () => {
+    const report = withUsage({
+      sessions: [sessions("acme/app", 1)],
+      tokens: [tokens("acme/app", 1000), tokens("acme/app", 1000, "codex")],
+    });
+    const backfill = (store: string) => [
+      { store, firstDay: "2026-08-01", lastDay: "2026-10-01", sessions: 3 },
+    ];
+    report.coverage = report.coverage.map((row) =>
+      row.harness === "claude-code"
+        ? { ...row, backfill: backfill("statev2.sqlite") }
+        : row.harness === "codex"
+          ? { ...row, backfill: backfill("state_5.sqlite") }
+          : row,
+    );
+    const text = renderUsage(report);
+    expect(text).toMatch(/transcripts kept  30 days; older days: T3 Code, no subagents\n/u);
+    expect(text).toMatch(
+      /auto-compact +Codex's default limit\n {33}older days: state db, no split or compactions\n/u,
+    );
+    for (const line of text.split("\n")) expect(line.length).toBeLessThanOrEqual(80);
+  });
+
   it("says there is nothing to count without usage", () => {
     expect(renderUsage(withUsage(undefined))).toContain("nothing to count yet");
   });

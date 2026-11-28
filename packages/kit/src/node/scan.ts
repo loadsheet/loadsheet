@@ -1,7 +1,14 @@
 import { readFile, stat } from "node:fs/promises";
 import { availableParallelism, homedir, hostname } from "node:os";
 import { posix } from "node:path";
-import { SIGNALS, type Day, type Grade, type Scan, type Signal } from "@loadsheet/schema";
+import {
+  SIGNALS,
+  type Backfill,
+  type Day,
+  type Grade,
+  type Scan,
+  type Signal,
+} from "@loadsheet/schema";
 import {
   buildScan,
   sumTallies,
@@ -401,7 +408,7 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
   );
   const parts: HarnessScan[] = [];
   const hints: ProjectHint[] = [];
-  let stored: StoresRead = { unread: new Map() };
+  let stored: StoresRead = { unread: new Map(), backfill: new Map() };
   try {
     const plans = new Map<string, TranscriptPlan>();
     for (const { harness, machine } of machines) {
@@ -424,7 +431,7 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
     // Read beside the transcripts: a SELECT bound to the usage window's start, or a few small
     // files per session.
     const listed = new Map([...plans].map(([harness, plan]) => [harness, plan.ids]));
-    const storesRead = readStores(machines, options.stores ?? [], place, usage.sinceMs, listed);
+    const storesRead = readStores(machines, options.stores ?? [], place, usage, listed);
 
     const inventories = [];
     for (const { harness, machine } of machines) {
@@ -465,6 +472,7 @@ export const scanMachine = async (options: ScanMachineOptions): Promise<Scan> =>
         ...(contextWindow === undefined ? {} : { contextWindow }),
         ...(settings === undefined ? {} : { settings }),
         ...(stored.unread.has(harness.id) ? { unread: stored.unread.get(harness.id) } : {}),
+        ...(stored.backfill.has(harness.id) ? { backfill: stored.backfill.get(harness.id) } : {}),
       });
     }
     // A store no harness owns gets a row only to say it could not be read. It is not installed,
@@ -514,10 +522,11 @@ const EMPTY: Tally = { sessions: [], cells: [], versions: [] };
 
 type Usage = NonNullable<Scan["usage"]>;
 
-/** What the stores said: their usage, and the stores not read, by harness. */
+/** What the stores said: their usage, the stores not read, and what each backfilled, by harness. */
 interface StoresRead {
   readonly usage?: Usage;
   readonly unread: Map<string, string[]>;
+  readonly backfill: Map<string, Backfill[]>;
 }
 
 /**
@@ -526,14 +535,17 @@ interface StoresRead {
  * `listed` holds the native session ids of each harness whose transcripts this scan listed: a
  * store is given its `native` harness's, and its Facts about a harness it `supplies` count only
  * when that harness is there, so no session is counted from both its transcript and a store.
+ * What a store adds to a harness it supplies is that harness's backfill; a supplying store that
+ * cannot be read leaves that harness's usage incomplete, so it is unread there too.
  */
 const readStores = async (
   machines: readonly { harness: Harness; machine: MachineReader<unknown> }[],
   extra: readonly MachineStore[],
   place: Place,
-  sinceMs: number,
+  usageWindow: { window: readonly [Day, Day]; sinceMs: number },
   listed: ReadonlyMap<string, ReadonlySet<string>>,
 ): Promise<StoresRead> => {
+  const [firstDay, lastDay] = usageWindow.window;
   const stores = [
     ...machines.flatMap(({ harness, machine }) =>
       (machine.stores?.(place) ?? []).map((store) => ({ harness: harness.id, store })),
@@ -543,29 +555,50 @@ const readStores = async (
   const reads = await Promise.all(
     stores.map(({ store }) => {
       const native = store.kind === "sqlite" && store.native ? listed.get(store.native) : undefined;
-      return readStore(store, place, sinceMs, [...(native ?? [])]).catch(
+      return readStore(store, place, usageWindow.sinceMs, [...(native ?? [])]).catch(
         () => ({ unread: true }) as const,
       );
     }),
   );
   const counters = new Accumulator();
   const unread = new Map<string, string[]>();
+  const backfill = new Map<string, Backfill[]>();
   reads.forEach((read, index) => {
     const { harness, store } = stores[index]!;
     if (!read) return;
+    const supplies = new Set(store.kind === "sqlite" ? (store.supplies ?? []) : []);
     if ("unread" in read) {
-      unread.set(harness, [...(unread.get(harness) ?? []), store.name]);
+      for (const about of new Set([harness, ...[...supplies].filter((id) => listed.has(id))]))
+        unread.set(about, [...(unread.get(about) ?? []), store.name]);
       return;
     }
-    const supplies = new Set(store.kind === "sqlite" ? (store.supplies ?? []) : []);
+    const added = new Map<string, Backfill>();
     for (const fact of read.facts) {
       const about = fact.harness ?? harness;
-      if (supplies.has(about) && !listed.has(about)) continue;
+      if (supplies.has(about)) {
+        if (!listed.has(about)) continue;
+        if (fact.day >= firstDay && fact.day <= lastDay) {
+          const known = added.get(about);
+          const sessions = fact.type === "usage-session" ? 1 : 0;
+          added.set(
+            about,
+            known
+              ? {
+                  store: store.name,
+                  firstDay: fact.day < known.firstDay ? fact.day : known.firstDay,
+                  lastDay: fact.day > known.lastDay ? fact.day : known.lastDay,
+                  sessions: known.sessions + sessions,
+                }
+              : { store: store.name, firstDay: fact.day, lastDay: fact.day, sessions },
+          );
+        }
+      }
       counters.fact(about, fact);
     }
+    for (const [about, each] of added) backfill.set(about, [...(backfill.get(about) ?? []), each]);
   });
   const usage = counters.usageResult();
-  return usage ? { usage, unread } : { unread };
+  return usage ? { usage, unread, backfill } : { unread, backfill };
 };
 
 /** The two Usages summed, keeping the days inside `usageWindow`. */

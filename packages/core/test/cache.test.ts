@@ -479,14 +479,22 @@ describe("usage history", () => {
   });
 });
 
-it("keeps unread T3 coverage when filtering for a provider T3 supplies", () => {
+it("keeps unread T3 coverage when filtering for a harness that reads no usage of its own", () => {
+  const t3 = coverage(undefined, {
+    harness: "t3-code",
+    installed: false,
+    sessions: 0,
+    unread: ["statev2.sqlite"],
+  });
   const one = scan([], undefined, {
-    coverage: [coverage(undefined, { harness: "t3-code", unread: ["statev2.sqlite"] })],
+    coverage: [coverage(undefined, { harness: "codex" }), t3],
   });
   expect(report([one], "short-history", { harnesses: ["antigravity"] }).coverage).toMatchObject([
     { harness: "t3-code", unread: ["statev2.sqlite"] },
   ]);
-  expect(report([one], "short-history", { harnesses: ["codex"] }).coverage).toEqual([]);
+  expect(
+    report([one], "short-history", { harnesses: ["codex"] }).coverage.map((row) => row.harness),
+  ).toEqual(["codex"]);
 });
 
 describe("short-history fix", () => {
@@ -519,6 +527,29 @@ describe("short-history fix", () => {
     expect(renderSummary(built, { harness: "claude-code" })).not.toContain(
       "keep transcripts a year",
     );
+  });
+
+  it("short-history ignores store-only days", () => {
+    // A store filled in usage 25 and 60 days back, where no transcript is left: no SessionCell.
+    const backfilled = young({ retentionDays: 30 });
+    const store = { via: "t3-code" };
+    backfilled.usage = {
+      sessions: [sessions(ago(60), 4, store), sessions(ago(25), 4, store)],
+      tokens: [tokens(ago(25), 0, 0, store)],
+    };
+    backfilled.coverage = [
+      {
+        ...backfilled.coverage[0]!,
+        backfill: [{ store: "statev2.sqlite", firstDay: ago(60), lastDay: ago(25), sessions: 8 }],
+      },
+    ];
+    const built = report([backfilled], "short-history");
+    expect(built.findings).toMatchObject([
+      { level: "info", evidence: { days: 6, sessions: 30, minDays: 30 }, fixes: [] },
+    ]);
+    // The Report keeps the backfill, and the usage before the window.
+    expect(built.coverage[0]!.backfill).toEqual(backfilled.coverage[0]!.backfill);
+    expect(built.usage!.sessions.map((cell) => cell.day)).toEqual([ago(60), ago(25)]);
   });
 
   it("does not borrow another machine's history as evidence", () => {

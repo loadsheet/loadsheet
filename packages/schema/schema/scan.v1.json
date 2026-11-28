@@ -199,6 +199,37 @@
               "pattern": "^[a-z0-9][a-z0-9._-]*$"
             },
             "description": "The session stores of this harness that could not be read, by name, such as `opencode.db`; absent when every store was read."
+          },
+          "backfill": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "store": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9._-]*$",
+                  "description": "The store, by name, such as `statev2.sqlite`."
+                },
+                "firstDay": {
+                  "type": "string",
+                  "format": "date",
+                  "description": "The first day it added usage on."
+                },
+                "lastDay": {
+                  "type": "string",
+                  "format": "date",
+                  "description": "The last day it added usage on."
+                },
+                "sessions": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Conversations it added, subagents' included."
+                }
+              },
+              "required": ["store", "firstDay", "lastDay", "sessions"],
+              "description": "What one session store added to a harness's usage, for sessions whose own files are gone."
+            },
+            "description": "The session stores that filled in this harness's sessions whose own files are gone, each with the days and sessions it added; absent when none did."
           }
         },
         "required": ["machine", "harness", "installed", "sessions", "versions", "signals"],

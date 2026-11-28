@@ -1,5 +1,5 @@
 import { orgOf } from "@loadsheet/schema";
-import type { Coverage, Finding, Report, Settings, Usage } from "@loadsheet/schema";
+import type { Backfill, Coverage, Day, Finding, Report, Settings, Usage } from "@loadsheet/schema";
 import type { Format, Style } from "./summary.ts";
 import { promptCacheDays } from "./prompt-cache.ts";
 import { harnessName } from "./summary.ts";
@@ -76,6 +76,41 @@ const rowsBy = (usage: Usage, key: (cell: { harness: string; project: string }) 
     sorted[index]!.share = share;
   });
   return sorted;
+};
+
+/** The first and last day any of the usage's cells counts; undefined when it has none. */
+const usageDays = (usage: Usage | undefined): [Day, Day] | undefined => {
+  let first: Day | undefined;
+  let last: Day | undefined;
+  for (const cell of [...(usage?.sessions ?? []), ...(usage?.tokens ?? [])]) {
+    if (!first || cell.day < first) first = cell.day;
+    if (!last || cell.day > last) last = cell.day;
+  }
+  return first && last ? [first, last] : undefined;
+};
+
+/** The days usage spans, `2026-08-01 to 2026-11-28` or `on 2026-11-28`; undefined without any. */
+export const usageRange = (usage: Usage | undefined): string | undefined => {
+  const days = usageDays(usage);
+  if (!days) return undefined;
+  return days[0] === days[1] ? `on ${days[0]}` : `${days[0]} to ${days[1]}`;
+};
+
+/**
+ * What a store that backfills a harness's gone sessions lacks, by store name: T3 Code keeps Claude
+ * Code's main conversations only, Codex's state database one token total per thread.
+ */
+const BACKFILL_WORDS: Readonly<Record<string, string>> = {
+  "statev2.sqlite": "T3 Code, no subagents",
+  "state_5.sqlite": "state db, no split or compactions",
+};
+
+/** Where a harness's older days came from and what they lack, in one clause; empty without any. */
+const backfillClause = (backfill: readonly Backfill[]): string => {
+  const stores = [...new Set(backfill.map((each) => each.store))].sort();
+  return stores.length
+    ? `older days: ${stores.map((store) => BACKFILL_WORDS[store] ?? store).join("; ")}`
+    : "";
 };
 
 const projectName = (project: string) => (isRepository(project) ? project : NO_REPOSITORY);
@@ -261,13 +296,25 @@ const settingsBlock = (report: Report, style: Style, used: Set<string>) => {
         each.length > 1 ? `${harnessName(harness)} on ${row.machine}` : harnessName(harness);
       const lines = settingLines(harness, row.settings!, report.usage);
       if (!lines.length) continue;
+      // Older days a store filled in are said on the harness's last line.
+      const clause = backfillClause(
+        (each.length > 1
+          ? [row]
+          : report.coverage.filter((other) => other.harness === harness)
+        ).flatMap((other) => other.backfill ?? []),
+      );
+      if (clause) {
+        const [label, value] = lines.at(-1)!;
+        lines[lines.length - 1] = [label, `${value}; ${clause}`];
+      }
       // A name too long for its column goes on a line of its own.
       const own = name.length + 2 > HARNESS;
       if (own) out.push(`  ${style("bold", name)}`);
       lines.forEach(([label, value], index) => {
         const head =
           index === 0 && !own ? `  ${cell(style, "bold", name, HARNESS - 2)}` : " ".repeat(HARNESS);
-        const from = value.indexOf(", from ");
+        const backfilled = value.indexOf("; older days: ");
+        const from = backfilled > 0 ? backfilled : value.indexOf(", from ");
         if (HARNESS + LABEL + value.length > WIDTH && from > 0) {
           out.push(`${head}${label.padEnd(LABEL)}${value.slice(0, from)}`);
           out.push(`${" ".repeat(HARNESS + LABEL)}${style("dim", value.slice(from + 2))}`);
@@ -296,8 +343,9 @@ export const unreadUsageStores = (report: Report): string[] => {
   const { include, exclude } = report.config.via;
   const unread = report.coverage.flatMap((row) =>
     (row.unread ?? []).filter((store) => {
+      // T3 Code's database is unread on its own row and on each harness it backfills.
       const via =
-        row.harness === "t3-code" && store === "statev2.sqlite"
+        store === "statev2.sqlite"
           ? "t3-code"
           : row.harness === "opencode" && store === "opencode.db"
             ? "cli"
@@ -341,8 +389,8 @@ const fixesBlock = (report: Report, style: Style) => {
 };
 
 /**
- * What a person reads after `npx loadsheet usage`: sessions, compactions and tokens over the
- * window, by harness, organisation and project, then the settings behind them and their fixes.
+ * What a person reads after `npx loadsheet usage`: sessions, compactions and tokens over the days
+ * the usage holds, by harness, organisation and project, then the settings behind them and their fixes.
  */
 export const renderUsage = (report: Report, options: UsageViewOptions = {}): string => {
   const style = options.style ?? plain;
@@ -351,7 +399,7 @@ export const renderUsage = (report: Report, options: UsageViewOptions = {}): str
     out.push(`not read: ${machine.name}${machine.error ? ` (${visible(machine.error)})` : ""}`);
   const read = report.machines.filter((machine) => machine.reachable).length;
   const where = read > 1 ? `on ${num(read)} machines` : "on this machine";
-  const days = plural(report.config.window, "day");
+  const range = usageRange(report.usage);
   const totals = usageTotals(report.usage);
   const unread = unreadUsageStores(report);
   if (unread.length) {
@@ -360,14 +408,18 @@ export const renderUsage = (report: Report, options: UsageViewOptions = {}): str
   }
   if (!totals.all.sessions && !totals.all.tokens && !totals.subagentSessions) {
     if (unread.length) return `${out.join("\n")}\n`;
+    const bound =
+      report.config.usageWindow === undefined
+        ? ""
+        : ` in the last ${plural(report.config.usageWindow, "day")}`;
     out.push(
       "",
-      `No session in the last ${days} ${where} said its project or tokens,`,
+      `No session${bound} ${where} said its project or tokens,`,
       "so there is nothing to count yet.",
     );
     return `${out.join("\n")}\n`;
   }
-  out.push("", `Sessions, compactions and tokens by project, last ${days}, ${where}.`);
+  out.push("", `Sessions, compactions and tokens, ${range}, ${where}.`);
 
   out.push("", tableHead(style, "Totals"));
   for (const row of totals.harnesses)

@@ -650,7 +650,9 @@ describe("loadsheet usage", () => {
     expect(result.stderr).toBe("");
     expect(result.status).toBe(0);
     const text = result.stdout;
-    expect(text).toContain("Sessions, compactions and tokens by project, last 3,650 days");
+    expect(text).toContain(
+      "Sessions, compactions and tokens, 2026-11-20 to 2026-11-23, on this machine.",
+    );
     expect(text).toContain("plus 1 subagent session");
     // The printed totals are the cells' sums; shares by largest remainder sum to 100.
     expect(table(text, "Totals")).toEqual([

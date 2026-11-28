@@ -4,6 +4,7 @@
 // objects so a typo is an error.
 import * as v from "valibot";
 import type {
+  Backfill,
   Cell,
   Config,
   Coverage,
@@ -383,6 +384,24 @@ const SettingsSchema = v.pipe(
   ),
 );
 
+const StoreNameSchema = v.pipe(
+  v.string(),
+  v.regex(STORE, "must be a store name: lowercase letters, digits, dots and hyphens"),
+);
+
+const BackfillSchema = v.pipe(
+  v.looseObject({
+    store: describe(StoreNameSchema, "The store, by name, such as `statev2.sqlite`."),
+    firstDay: day("The first day it added usage on."),
+    lastDay: day("The last day it added usage on."),
+    sessions: count("Conversations it added, subagents' included."),
+  }),
+  v.check((each) => each.firstDay <= each.lastDay, "the first day must not be after the last"),
+  v.description(
+    "What one session store added to a harness's usage, for sessions whose own files are gone.",
+  ),
+);
+
 const CoverageSchema = v.pipe(
   v.looseObject({
     machine: nonEmpty("The machine's name."),
@@ -424,13 +443,14 @@ const CoverageSchema = v.pipe(
     ),
     unread: v.optional(
       describe(
-        v.array(
-          v.pipe(
-            v.string(),
-            v.regex(STORE, "must be a store name: lowercase letters, digits, dots and hyphens"),
-          ),
-        ),
+        v.array(StoreNameSchema),
         "The session stores of this harness that could not be read, by name, such as `opencode.db`; absent when every store was read.",
+      ),
+    ),
+    backfill: v.optional(
+      describe(
+        v.array(BackfillSchema),
+        "The session stores that filled in this harness's sessions whose own files are gone, each with the days and sessions it added; absent when none did.",
       ),
     ),
   }),
@@ -1051,6 +1071,7 @@ export type SchemasMatchTypes = [
   Assert<Same<v.InferOutput<typeof CellSchema>, Cell>>,
   Assert<Same<v.InferOutput<typeof SessionCellSchema>, SessionCell>>,
   Assert<Same<v.InferOutput<typeof CoverageSchema>, Coverage>>,
+  Assert<Same<v.InferOutput<typeof BackfillSchema>, Backfill>>,
   Assert<Same<v.InferOutput<typeof SettingsSchema>, Settings>>,
   Assert<Same<v.InferOutput<typeof UsageSchema>, Usage>>,
   Assert<Same<v.InferOutput<typeof UsageSessionCellSchema>, UsageSessionCell>>,

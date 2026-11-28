@@ -144,6 +144,20 @@ export interface Coverage {
   settings?: Settings;
   /** The session stores of this harness that could not be read, by name, such as `opencode.db`; absent when every store was read. */
   unread?: string[];
+  /** The session stores that filled in this harness's sessions whose own files are gone, each with the days and sessions it added; absent when none did. */
+  backfill?: Backfill[];
+}
+
+/** What one session store added to a harness's usage, for sessions whose own files are gone. */
+export interface Backfill {
+  /** The store, by name, such as `statev2.sqlite`. */
+  store: string;
+  /** The first day it added usage on. */
+  firstDay: Day;
+  /** The last day it added usage on. */
+  lastDay: Day;
+  /** Conversations it added, subagents' included. */
+  sessions: number;
 }
 
 /** What a harness's settings and environment set, as derived values: never a setting's text or an environment variable's value. */

@@ -337,9 +337,18 @@ export const buildReport = ({
     for (const cell of scan.sessions) harnesses.add(cell.harness);
   }
   const wanted = config.harnesses ? new Set(config.harnesses) : undefined;
-  const t3SuppliesSelected = config.harnesses?.some(
-    (id) => !["claude-code", "codex", "grok", "opencode"].includes(id),
-  );
+  // A store no harness owns, such as T3 Code's, has a row only to say it could not be read. Its
+  // usage is about harnesses it names itself: a selected one that reads no usage of its own on that
+  // machine could have had some from it. A harness the store supplies carries the store in its own
+  // row's `unread`.
+  const unownedSupplies = (scan: Scan, row: Coverage) =>
+    !row.installed &&
+    row.sessions === 0 &&
+    !!row.unread?.length &&
+    !!wanted &&
+    [...wanted].some((harness) =>
+      scan.coverage.every((each) => each.harness !== harness || each.signals.usage === "none"),
+    );
   const built = [...harnesses]
     .filter((harness) => !wanted || wanted.has(harness))
     .sort(compare)
@@ -386,12 +395,7 @@ export const buildReport = ({
     coverage: scans
       .flatMap((scan) =>
         scan.coverage
-          .filter(
-            (row) =>
-              !wanted ||
-              wanted.has(row.harness) ||
-              (t3SuppliesSelected && row.harness === "t3-code" && row.unread?.length),
-          )
+          .filter((row) => !wanted || wanted.has(row.harness) || unownedSupplies(scan, row))
           .map((row) => keptCoverage(row, scan, keep)),
       )
       .sort((a, b) => compare(a.machine, b.machine) || compare(a.harness, b.harness)),

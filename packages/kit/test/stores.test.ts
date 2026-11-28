@@ -434,6 +434,77 @@ describe("stores beside native transcripts", () => {
     expect(await findCanaryInDir(cacheDir, ids)).toEqual([]);
   });
 
+  it("coverage names the store and day range that backfilled a harness", async () => {
+    await makeCopies([LISTED_ID]);
+    // A second gone session, before the 7-day window: usage history keeps it.
+    const db = new DatabaseSync(`${home}/.db/copies.db`);
+    db.prepare("INSERT INTO copies VALUES (?, ?, ?, ?)").run(
+      "aaaa0000-older-session-id",
+      "transcribed",
+      BEFORE,
+      "a private title",
+    );
+    db.close();
+    const scan = await scanCopies([transcribed]);
+    expect(parseScan(scan)).toEqual(scan);
+    const backfill = Object.fromEntries(scan.coverage.map((row) => [row.harness, row.backfill]));
+    expect(backfill).toEqual({
+      transcribed: [
+        { store: "copies.db", firstDay: dayOf(BEFORE), lastDay: dayOf(IN), sessions: 2 },
+      ],
+    });
+    // The store's sessions count as usage, never as the harness's sessions.
+    expect(scan.sessions).toEqual([]);
+  });
+
+  it("unreadable Codex state is unread on codex", async () => {
+    const state: SqliteStore = {
+      ...copies,
+      name: "state_5.sqlite",
+      native: "codex",
+      supplies: ["codex"],
+      path: (at) => `${at.home}/.codex/state_5.sqlite`,
+    };
+    await NodeFSP.mkdir(`${home}/.tx/sessions`, { recursive: true });
+    await NodeFSP.mkdir(`${home}/.codex`, { recursive: true });
+    await NodeFSP.writeFile(`${home}/.codex/state_5.sqlite`, "not a database\n");
+    const scan = await scanMachine({
+      // A harness with Codex's id whose transcripts were listed, and whose state cannot be read.
+      harnesses: [
+        defineHarness({
+          ...transcribed,
+          id: "codex",
+          machine: { ...transcribed.machine!, stores: () => [state] },
+        }),
+      ],
+      days: 7,
+      tool: "loadsheet@0.0.0-test",
+      machine: "test-machine",
+      now: NOW,
+      place: place(),
+      cacheDir: false,
+    });
+    expect(parseScan(scan)).toEqual(scan);
+    expect(scan.coverage.map((row) => [row.harness, row.unread, row.backfill])).toEqual([
+      ["codex", ["state_5.sqlite"], undefined],
+    ]);
+  });
+
+  it("an unreadable store no harness owns is unread on the harness it supplies, and on its own row", async () => {
+    await NodeFSP.mkdir(`${home}/.tx/sessions`, { recursive: true });
+    await NodeFSP.mkdir(`${home}/.db`, { recursive: true });
+    await NodeFSP.writeFile(`${home}/.db/copies.db`, "not a database\n");
+    const scan = await scanCopies([transcribed]);
+    expect(scan.coverage.map((row) => [row.harness, row.installed, row.unread])).toEqual([
+      ["driver", false, ["copies.db"]],
+      ["transcribed", true, ["copies.db"]],
+    ]);
+    // Without the harness listed, the store would backfill nothing for it.
+    expect((await scanCopies([])).coverage.map((row) => [row.harness, row.unread])).toEqual([
+      ["driver", ["copies.db"]],
+    ]);
+  });
+
   it("a store does not backfill a harness that was not listed", async () => {
     await makeCopies([LISTED_ID]);
     // Without the harness, nothing says which of its sessions have transcripts.
