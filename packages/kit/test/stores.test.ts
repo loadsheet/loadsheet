@@ -183,6 +183,51 @@ describe("readStore on SQLite", () => {
   it("gives nothing for a database that is not there", async () => {
     expect(await readStore(sqliteStore(), place(), SINCE)).toBeUndefined();
   });
+
+  it("a store binds a parameter read from a JSON file", async () => {
+    await NodeFSP.mkdir(`${home}/.db`, { recursive: true });
+    makeDb(false).close();
+    const natives: string[][] = [];
+    // Extra tokens per folder, from the newest of the versioned JSON files beside the database.
+    const store = sqliteStore({
+      native: "cli",
+      query: `SELECT s.at, s.cwd, s.input + coalesce(json_extract(x.value, '$.add'), 0) AS input, s.output
+        FROM sessions s LEFT JOIN json_each($extra) x ON json_extract(x.value, '$.cwd') = s.cwd
+        WHERE s.at >= $since AND s.cwd NOT IN (SELECT value FROM json_each($native)) ORDER BY s.at`,
+      inputs: [
+        {
+          param: "$extra",
+          path: (at) => ({ dir: `${at.home}/.db`, pattern: /^extra-v(\d+)\.json$/ }),
+          read: (document, native) => {
+            natives.push([...native]);
+            return (document as { rows: object[] }).rows;
+          },
+        },
+      ],
+    });
+    const inputs = async (native: string[] = []) => {
+      const read = await readStore(store, place(), SINCE, native);
+      return read && "facts" in read
+        ? read.facts.flatMap((fact) => (fact.type === "usage-tokens" ? [fact.input] : []))
+        : read;
+    };
+
+    // No file binds `[]`: the database alone still counts.
+    expect(await inputs()).toEqual([100, 20]);
+    await NodeFSP.writeFile(`${home}/.db/extra-v1.json`, '{"rows":[{"cwd":"~/code/app","add":1}]}');
+    await NodeFSP.writeFile(`${home}/.db/extra-v2.json`, '{"rows":[{"cwd":"~/code/app","add":5}]}');
+    expect(await inputs(["~/elsewhere"])).toEqual([105, 25]);
+    expect(natives).toEqual([["~/elsewhere"]]);
+    // A file that is not JSON binds `[]` too.
+    await NodeFSP.writeFile(`${home}/.db/extra-v3.json`, '{"rows":[');
+    expect(await inputs()).toEqual([100, 20]);
+    expect(await listing()).toEqual([
+      "extra-v1.json",
+      "extra-v2.json",
+      "extra-v3.json",
+      "sessions.db",
+    ]);
+  });
 });
 
 /** A store over `<home>/.fold/<project>/<id>/`: `meta.json` holds the day and tokens. */

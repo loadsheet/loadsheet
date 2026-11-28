@@ -1,6 +1,7 @@
 // Reads the session stores that are not JSONL transcripts: a SQLite database through node:sqlite,
 // or a folder of per-session JSON files. Nothing is cached: one SELECT bound to the window's start,
-// or a few small files per session changed in the window, costs less than a cache would.
+// or a few small files per session changed in the window, costs less than a cache would. A SQLite
+// store's JSON inputs are read whole: T3 Code's 100 MB usage cache adds about 470 MB at its peak.
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -10,6 +11,7 @@ import type {
   SessionStore,
   SqliteStore,
   StoreFact,
+  StoreInput,
   StoreRow,
   VersionedFile,
 } from "../index.ts";
@@ -50,6 +52,26 @@ const newestFile = async ({ dir, pattern }: VersionedFile): Promise<string | und
   return newest && join(dir, newest.name);
 };
 
+const pathOf = async (where: string | VersionedFile): Promise<string | undefined> =>
+  typeof where === "string" ? where : newestFile(where);
+
+/** An input's value as bound: its `read` of the parsed file, or `[]` when the file is missing or not JSON. */
+const inputValue = async (
+  input: StoreInput,
+  place: Place,
+  native: ReadonlySet<string>,
+): Promise<string> => {
+  const path = await pathOf(input.path(place));
+  let document: unknown;
+  try {
+    if (!path) return "[]";
+    document = JSON.parse(await readFile(path, "utf8"));
+  } catch {
+    return "[]";
+  }
+  return JSON.stringify(input.read(document, native) ?? []);
+};
+
 /**
  * A database is opened so that no file appears beside it. One in WAL mode whose `-wal` and `-shm`
  * are there holds rows its main file does not yet: it is opened read-only and reads them through
@@ -62,8 +84,7 @@ const readSqlite = async (
   sinceMs: number,
   native: readonly string[],
 ): Promise<StoreRead> => {
-  const where = store.path(place);
-  const path = typeof where === "string" ? where : await newestFile(where);
+  const path = await pathOf(store.path(place));
   if (!path || !(await isFile(path))) return undefined;
   const module = await loadSqlite();
   if (!module) return { unread: true };
@@ -74,6 +95,8 @@ const readSqlite = async (
   // node:sqlite refuses a parameter the query does not name, so `$native` is bound only when asked.
   const params: Record<string, string | number> = { $since: since };
   if (store.native !== undefined) params.$native = JSON.stringify(native);
+  const ids = new Set(native);
+  for (const input of store.inputs ?? []) params[input.param] = await inputValue(input, place, ids);
   let rows: StoreRow[];
   let db: InstanceType<Sqlite["DatabaseSync"]> | undefined;
   try {

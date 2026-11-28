@@ -212,6 +212,25 @@ export interface VersionedFile {
   readonly pattern: RegExp;
 }
 
+/**
+ * A local JSON file whose contents a SQLite store's query reads through a bound parameter, such as
+ * a cache another tool keeps of usage it read. kit reads and parses the file; `read` turns the
+ * document into the value bound, as JSON, to `param`. A missing or unparsable file binds `[]`, so
+ * the database alone still counts.
+ */
+export interface StoreInput {
+  /** The parameter the query names it by, such as `$scanCache`. */
+  readonly param: `$${string}`;
+  /** The file, absolute, or the newest of the files a folder holds by version. */
+  path(place: Place): string | VersionedFile;
+  /**
+   * The value to bind, from the parsed document; pure, so it runs anywhere. `native` holds the ids
+   * kit binds as `$native`, for skipping what the transcripts count. Like `$native`, it may hold
+   * ids, which stay in memory and in the query.
+   */
+  read(document: unknown, native: ReadonlySet<string>): unknown;
+}
+
 /** One row of a store's SELECT, by column name. */
 export type StoreRow = Readonly<Record<string, number | bigint | string | null | Uint8Array>>;
 
@@ -246,6 +265,8 @@ export interface SqliteStore {
    * then does `$native` name every session they count.
    */
   readonly supplies?: readonly string[];
+  /** JSON files the query reads as parameters of their own. */
+  readonly inputs?: readonly StoreInput[];
   /** The rows as Facts; a project is keyed as the Files keys paths, through `place`. */
   facts(rows: readonly StoreRow[], place: Place): StoreFact[];
 }
