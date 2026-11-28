@@ -22,7 +22,7 @@ npx loadsheet mcp <url | file> [options]        # check an MCP server's tools
 
 | Option                     | What it does                                                                                               |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `--days <n>`               | Days of history to read. Default 30.                                                                       |
+| `--days <n>`               | Days of history to read. Default 30. Usage keeps every day; with `usage`, it keeps only the last `<n>`.    |
 | `--harness <id>`           | Report only this harness. Repeat it for more. A pack is weighed for one harness, `claude-code` by default. |
 | `--ignore <kind:name>`     | Leave an item out of the findings, such as `--ignore skill:pdf`. Repeatable.                               |
 | `--rule <id>=off`          | Turn a rule off, or `=on` to turn it back on. Repeatable.                                                  |

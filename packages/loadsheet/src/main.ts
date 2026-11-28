@@ -53,7 +53,8 @@ Options:
   --timeout <seconds>   With --fleet, how long to wait for each machine (default 300)
   --config <path>       Config file (default $XDG_CONFIG_HOME/loadsheet/config.json,
                         else ~/.config/loadsheet/config.json)
-  --days <n>            Days of history to read (default 30)
+  --days <n>            Days of history to read (default 30). Usage keeps every day the
+                        machine has a record of; with usage, only the last <n>
   --harness <id>        Report only this harness, repeatable (${ids}); a pack is weighed
                         for one (default ${claudeCode.id})
   --ignore <id>         Leave an item out of the findings, repeatable, as kind:name

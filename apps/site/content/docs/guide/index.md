@@ -10,7 +10,7 @@ loadsheet needs Node.js 22.12 or later. Run it with `npx`, so there is nothing t
 npx loadsheet
 ```
 
-It reads the session transcripts of every harness it knows on this machine, from the last 30 days, and prints a report. A first run reads every transcript and can take a few minutes. When a scan takes longer than 2 seconds, it prints its progress on stderr, such as `Reading Claude Code sessions: 1,200 of 6,090 files`.
+It reads the session transcripts of every harness it knows on this machine, from the last 30 days, and prints a report. `npx loadsheet usage` looks further back, over every day the machine still has a record of. A first run reads every transcript and can take a few minutes. When a scan takes longer than 2 seconds, it prints its progress on stderr, such as `Reading Claude Code sessions: 1,200 of 6,090 files`.
 
 Later runs read only what was added to each transcript since the last run. loadsheet keeps that cache in `~/.cache/loadsheet`, or `$XDG_CACHE_HOME/loadsheet` when that is set. `--no-cache` reads everything again and writes no cache.
 
