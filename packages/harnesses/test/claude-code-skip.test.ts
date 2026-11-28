@@ -199,9 +199,13 @@ const CRAFTED = [
   JSON.stringify({ type: "system", subtype: "x", ...at }),
   ...[false, true].flatMap((side) => [
     user(side, [{ type: "tool_result", tool_use_id: "t", content: NESTED }]),
-    user(side, [{ type: "tool_result", content: [{ type: "text", text: NESTED }] }], {
-      toolUseResult: { stdout: NESTED },
-    }),
+    user(
+      side,
+      [{ type: "tool_result", tool_use_id: "t", content: [{ type: "text", text: NESTED }] }],
+      {
+        toolUseResult: { stdout: NESTED },
+      },
+    ),
     user(side, "<command-message>a</command-message>\n<command-name>/a</command-name>"),
     user(side, "<command-message>clear</command-message>\n<command-name>/clear</command-name>"),
     user(side, [{ type: "text", text: "expanded" }], { isMeta: true }),
@@ -381,8 +385,9 @@ describe("claudeTranscripts.skip", () => {
         if (skipped(line, each)) yes += 1;
       }
     }
-    // The property holds without being vacuous.
-    expect(yes).toBeGreaterThan(all / 5);
+    // The property holds without being vacuous. Prompts and the lines of an open turn count, so
+    // fewer lines skip than before turns were read.
+    expect(yes).toBeGreaterThan(all / 6);
   });
 
   it("keeps every line of the fixtures that does something, read in order", async () => {
@@ -412,23 +417,35 @@ describe("claudeTranscripts.skip", () => {
   it("decides the lines the scan spends its time on", () => {
     const settled = STATES.settled!;
     expect(skipped(CRAFTED[0]!, STATES["first line of a file"]!)).toBe(true);
-    expect(skipped(user(false, [{ type: "tool_result", content: NESTED }]), settled)).toBe(true);
     expect(
-      skipped(user(true, [{ type: "tool_result", content: NESTED }]), STATES["not started"]!),
+      skipped(user(false, [{ type: "tool_result", tool_use_id: "t", content: NESTED }]), settled),
     ).toBe(true);
-    expect(skipped(assistant(true, [tool("Bash")]), STATES["not started"]!)).toBe(true);
+    expect(
+      skipped(
+        user(true, [{ type: "tool_result", tool_use_id: "t", content: NESTED }]),
+        STATES["not started"]!,
+      ),
+    ).toBe(true);
     // Each content block of a counted request repeats its usage.
     expect(skipped(assistant(false, [{ type: "text", text: "x" }]), settled)).toBe(true);
     expect(skipped(assistant(true, [{ type: "thinking", thinking: NESTED }]), settled)).toBe(true);
     expect(skipped(attachment(false, ATTACHMENTS[6]!), settled)).toBe(true);
 
     expect(
-      skipped(user(false, [{ type: "tool_result", content: NESTED }]), STATES["pending command"]!),
+      skipped(
+        user(false, [{ type: "tool_result", tool_use_id: "t", content: NESTED }]),
+        STATES["pending command"]!,
+      ),
     ).toBe(false);
     expect(
-      skipped(user(false, [{ type: "tool_result", content: NESTED }]), STATES["pending mcp"]!),
+      skipped(
+        user(false, [{ type: "tool_result", tool_use_id: "t", content: NESTED }]),
+        STATES["pending mcp"]!,
+      ),
     ).toBe(false);
     expect(skipped(assistant(false, [tool("Bash")]), STATES["started, no tokens"]!)).toBe(false);
+    // Every tool call counts, a subagent's too.
+    expect(skipped(assistant(true, [tool("Bash")]), STATES["not started"]!)).toBe(false);
     expect(skipped(assistant(false, [tool("mcp__srv__go")]), settled)).toBe(false);
     const next = STATES["settled, before the request"]!;
     expect(skipped(assistant(false, [{ type: "text", text: "x" }]), next)).toBe(false);

@@ -112,6 +112,237 @@ const SESSION = [
 const base = { via: "codex_cli_rs", project: "owner/repo", thread: "main" };
 const zero = { cacheWrite5m: 0, cacheWrite1h: 0, cacheRewrite: 0 };
 
+const call = (time: string, payload: Record<string, unknown>) => ({
+  timestamp: at(time),
+  type: "response_item",
+  payload: {
+    type: "function_call",
+    arguments: '{"cmd":"cat secret.txt"}',
+    call_id: "c",
+    ...payload,
+  },
+});
+const ended = (iso: string, type: string, extra: Record<string, unknown> = {}) => ({
+  timestamp: iso,
+  type: "event_msg",
+  payload: { type, turn_id: "t", ...extra },
+});
+const seconds = (iso: string) => Math.floor(Date.parse(iso) / 1000);
+const limits = (
+  timestamp: string,
+  total: Usage,
+  last: Usage,
+  rateLimits: Record<string, unknown>,
+) => ({
+  timestamp,
+  type: "event_msg",
+  payload: {
+    type: "token_count",
+    info: { total_token_usage: total, last_token_usage: last, model_context_window: 258_400 },
+    rate_limits: {
+      plan_type: "secret-plan",
+      credits: { balance: "secret-credits" },
+      ...rateLimits,
+    },
+  },
+});
+const window = (used: number, minutes: number, resets: string) => ({
+  used_percent: used,
+  window_minutes: minutes,
+  resets_at: seconds(resets),
+});
+
+/**
+ * Two tasks: the first completes after 65 s with seven tool calls (two MCP tools, one name that is
+ * not a tool's, two subagent starts and a local shell); the second starts before midnight, reaches
+ * the five-hour limit after it, and is stopped by the user.
+ */
+const TURNS = [
+  meta(),
+  context("gpt-6"),
+  started(at("10:00:00")),
+  call("10:00:01", { name: "exec_command" }),
+  call("10:00:02", { name: "search", namespace: "mcp__executor" }),
+  call("10:00:03", { name: "mcp__linear__list_issues" }),
+  call("10:00:04", { name: "cat ~/secret" }),
+  call("10:00:05", { name: "spawn_agent" }),
+  call("10:00:06", { name: "spawn_agent" }),
+  {
+    timestamp: at("10:00:06"),
+    type: "response_item",
+    payload: { type: "local_shell_call", call_id: "c", action: { command: ["ls", "secret"] } },
+  },
+  limits(at("10:00:07"), usage(100, 0, 10), usage(100, 0, 10), {
+    primary: window(40, 300, at("14:00:00")),
+    secondary: window(10, 10_080, at("00:00:00", "2026-11-14")),
+    rate_limit_reached_type: null,
+  }),
+  ended(at("10:01:05"), "task_complete", { duration_ms: 65_000 }),
+  started(at("23:59:30")),
+  limits(at("00:00:10", "2026-11-11"), usage(300, 0, 30), usage(200, 0, 20), {
+    primary: window(100, 300, at("04:00:00", "2026-11-11")),
+    secondary: window(12, 10_080, at("00:00:00", "2026-11-14")),
+    rate_limit_reached_type: "primary",
+  }),
+  // The limit still holds: the same totals and the same reach, read again.
+  limits(at("00:00:20", "2026-11-11"), usage(300, 0, 30), usage(200, 0, 20), {
+    primary: window(100, 300, at("04:00:00", "2026-11-11")),
+    secondary: window(12, 10_080, at("00:00:00", "2026-11-14")),
+    rate_limit_reached_type: "primary",
+  }),
+  ended(at("00:00:30", "2026-11-11"), "turn_aborted", { reason: "interrupted" }),
+];
+
+const ofType = <T extends Fact["type"]>(facts: readonly Fact[], type: T) =>
+  facts.filter((fact): fact is Extract<Fact, { type: T }> => fact.type === type);
+
+/** Adds the counters of Facts that share a key, as the Accumulator does. */
+const summed = (facts: readonly Fact[], key: (fact: Fact) => string) => {
+  const out: Record<string, Record<string, number>> = {};
+  for (const fact of facts) {
+    const cell = (out[key(fact)] ??= {});
+    for (const [name, value] of Object.entries(fact)) {
+      if (typeof value === "number" && name !== "hour" && name !== "windowMinutes")
+        cell[name] = (cell[name] ?? 0) + value;
+    }
+  }
+  return out;
+};
+
+describe("codex turns, hours, tools and limits", () => {
+  it("counts each task on the day it started, timed, interrupted, with its tool calls", () => {
+    const turns = ofType(parseAll(TURNS).facts, "usage-turn");
+    expect(turns.every((fact) => fact.day === "2026-11-10")).toBe(true);
+    expect(turns.every((fact) => fact.project === "~/work/app" && fact.thread === "main")).toBe(
+      true,
+    );
+    expect(summed(turns, (fact) => fact.type)).toEqual({
+      "usage-turn": {
+        turns: 2,
+        timed: 1,
+        durationMs: 65_000,
+        interrupted: 1,
+        toolCalls: 7,
+        withSubagents: 1,
+      },
+    });
+  });
+
+  it("times a task by its start and end when it has no duration", () => {
+    const turns = ofType(
+      parseAll([
+        meta(),
+        started(at("10:00:00")),
+        ended(at("10:00:09"), "task_complete", {
+          started_at: seconds(at("10:00:00")),
+          completed_at: seconds(at("10:00:09")),
+        }),
+        started(at("10:01:00")),
+        ended(at("10:01:09"), "task_complete"),
+      ]).facts,
+      "usage-turn",
+    );
+    expect(summed(turns, () => "all")).toEqual({ all: { turns: 2, timed: 1, durationMs: 9000 } });
+  });
+
+  it("counts requests and turns by the UTC hour they happened in", () => {
+    const hours = ofType(parseAll(TURNS).facts, "usage-hour");
+    expect(summed(hours, (fact) => `${fact.day} ${(fact as { hour: number }).hour}`)).toEqual({
+      "2026-11-10 10": { turns: 1, requests: 1 },
+      "2026-11-10 23": { turns: 1 },
+      "2026-11-11 0": { requests: 1 },
+    });
+  });
+
+  it("counts calls by tool, an MCP tool under its server and any other name as other", () => {
+    const tools = ofType(parseAll(TURNS).facts, "usage-tool");
+    expect(tools.every((fact) => fact.day === "2026-11-10" && fact.calls === undefined)).toBe(true);
+    const calls: Record<string, number> = {};
+    for (const fact of tools) calls[fact.tool] = (calls[fact.tool] ?? 0) + 1;
+    expect(calls).toEqual({
+      exec_command: 1,
+      "mcp:executor": 1,
+      "mcp:linear": 1,
+      other: 1,
+      spawn_agent: 2,
+      local_shell: 1,
+    });
+  });
+
+  it("names a listed server's tool by the longest server it starts with", () => {
+    const tools = ofType(
+      parseAll([
+        meta(),
+        {
+          timestamp: at("10:00:00"),
+          type: "response_item",
+          payload: {
+            type: "message",
+            role: "developer",
+            content: [{ type: "input_text", text: "<tools>\n- mcp__my__server: x\n</tools>" }],
+          },
+        },
+        started(at("10:00:01")),
+        call("10:00:02", { name: "mcp__my__server__read" }),
+      ]).facts,
+      "usage-tool",
+    );
+    expect(tools.map((fact) => fact.tool)).toEqual(["mcp:my__server"]);
+  });
+
+  it("reads each window's gauge, and the limit reached once, on the fuller window", () => {
+    const facts = ofType(parseAll(TURNS).facts, "usage-limit");
+    const five = { windowMinutes: 300, resetsAt: seconds(at("04:00:00", "2026-11-11")) };
+    const week = { windowMinutes: 10_080, resetsAt: seconds(at("00:00:00", "2026-11-14")) };
+    const next = { type: "usage-limit", day: "2026-11-11" } as const;
+    expect(facts).toEqual([
+      {
+        type: "usage-limit",
+        day: "2026-11-10",
+        at: seconds(at("10:00:07")),
+        usedPercent: 40,
+        windowMinutes: 300,
+        resetsAt: seconds(at("14:00:00")),
+      },
+      {
+        type: "usage-limit",
+        day: "2026-11-10",
+        at: seconds(at("10:00:07")),
+        usedPercent: 10,
+        ...week,
+      },
+      { ...next, at: seconds(at("00:00:10", "2026-11-11")), usedPercent: 100, ...five, reached: 1 },
+      { ...next, at: seconds(at("00:00:10", "2026-11-11")), usedPercent: 12, ...week },
+      { ...next, at: seconds(at("00:00:20", "2026-11-11")), usedPercent: 100, ...five },
+      { ...next, at: seconds(at("00:00:20", "2026-11-11")), usedPercent: 12, ...week },
+    ]);
+  });
+
+  it("counts none of a fork's copied tasks or calls", () => {
+    const { facts } = parseAll([
+      meta({ forked_from_id: "parent-id", thread_source: "subagent" }),
+      started(at("09:00:00")),
+      call("09:00:01", { name: "exec_command" }),
+      ended(at("09:00:02"), "task_complete", { duration_ms: 2000 }),
+      started(at("10:00:00")),
+      call("10:00:01", { name: "apply_patch" }),
+    ]);
+    expect(summed(ofType(facts, "usage-turn"), () => "all")).toEqual({
+      all: { turns: 1, toolCalls: 1 },
+    });
+    expect(ofType(facts, "usage-tool")).toEqual([
+      { type: "usage-tool", day: "2026-11-10", thread: "subagent", tool: "apply_patch" },
+    ]);
+  });
+
+  it("keeps tool input, plan type and credits out of every Fact and the State", () => {
+    const { facts, state } = parseAll(TURNS);
+    const forbidden = ["secret", "/home/u", "session-id"];
+    expect(findCanary(facts, forbidden)).toEqual([]);
+    expect(findCanary(state, forbidden)).toEqual([]);
+  });
+});
+
 describe("codex usage", () => {
   it("counts each step of the running totals once, by the request's UTC day and model", () => {
     const { facts } = parseAll(SESSION);
@@ -355,12 +586,15 @@ describe("codex usage", () => {
       await NodeFSP.rm(dir, { recursive: true, force: true });
     });
 
-    it("gives the same Facts and State when it resumes after any line", async () => {
-      const lines = SESSION.map((value) => `${JSON.stringify(value)}\n`);
+    it.each([
+      ["tokens and compactions", SESSION, 3],
+      ["turns, tools and limits", TURNS, 2],
+    ])("gives the same %s and State when it resumes after any line", async (_, session, steps) => {
+      const lines = session.map((value) => `${JSON.stringify(value)}\n`);
       const path = NodePath.join(dir, "rollout.jsonl");
       await NodeFSP.writeFile(path, lines.join(""));
       const whole = await readTranscript(path, codexTranscripts, undefined, { place });
-      expect(usageOf(whole!.records)).toHaveLength(3);
+      expect(usageOf(whole!.records)).toHaveLength(steps);
       for (let split = 1; split < lines.length; split++) {
         await NodeFSP.writeFile(path, lines.slice(0, split).join(""));
         const first = await readTranscript(path, codexTranscripts, undefined, { place });

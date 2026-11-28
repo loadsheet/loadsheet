@@ -10,8 +10,7 @@ import { claudeTranscripts, instructionName, type ClaudeState } from "../src/ind
 const FIXTURE = NodePath.join(import.meta.dirname, "fixtures/claude-code/session.jsonl");
 
 /** The Facts that fill sessions and items; usage Facts are tested in claude-code-usage.test.ts. */
-const isItemFact = (fact: Fact) =>
-  fact.type !== "usage-session" && fact.type !== "compaction" && fact.type !== "usage-tokens";
+const isItemFact = (fact: Fact) => fact.type !== "compaction" && !fact.type.startsWith("usage-");
 
 /**
  * Facts from every line, the way readTranscript feeds them: only lines carrying a marker. `facts`

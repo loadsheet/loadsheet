@@ -454,6 +454,280 @@ describe("Claude Code usage", () => {
   });
 });
 
+describe("Claude Code turns, hours, tools and limits", () => {
+  const jo: Place = { home: "/home/jo", env: {} };
+  const line = (value: Record<string, unknown>) =>
+    JSON.stringify({ entrypoint: "cli", version: "2.1.0", cwd: "/home/jo/work/app", ...value });
+  const prompt = (timestamp: string, content: unknown, extra: Record<string, unknown> = {}) =>
+    line({ type: "user", timestamp, message: { role: "user", content }, ...extra });
+  const reply = (
+    id: string,
+    timestamp: string,
+    content: unknown[] = [],
+    extra: Record<string, unknown> = {},
+    model = "claude-opus-5-5",
+  ) =>
+    line({
+      type: "assistant",
+      timestamp,
+      message: { model, id, content, usage: { input_tokens: 1, output_tokens: 1 } },
+      ...extra,
+    });
+  const use = (name: string, input: Record<string, unknown> = {}) => ({
+    type: "tool_use",
+    id: "toolu_secret",
+    name,
+    input,
+  });
+  const result = (timestamp: string, extra: Record<string, unknown> = {}) =>
+    line({
+      type: "user",
+      timestamp,
+      message: {
+        role: "user",
+        content: [{ type: "tool_result", tool_use_id: "toolu_secret", content: "secret output" }],
+      },
+      toolUseResult: { stdout: "secret output" },
+      ...extra,
+    });
+  const apiError = (timestamp: string, status: number, retryAttempt: number) =>
+    line({
+      type: "system",
+      subtype: "api_error",
+      level: "error",
+      timestamp,
+      error: { status, message: "secret error" },
+      retryAttempt,
+      maxRetries: 10,
+    });
+
+  /**
+   * Two prompts. The first runs 10 s over two replies with five tool calls (an MCP tool, two
+   * subagent starts in one message and a name that is not a tool's), then a notification ends it
+   * and its answer is no part of it. The second starts before midnight, hits the rate limit after
+   * it (two retries, then the failed reply), runs 40 s until the user stops it, and hits the limit
+   * again on the next request.
+   */
+  const SESSION = [
+    prompt("2026-03-02T10:00:00Z", "Fix the secret bug"),
+    reply("a", "2026-03-02T10:00:05Z", [
+      use("Bash", { command: "cat secret" }),
+      use("mcp__linear__list_issues"),
+    ]),
+    result("2026-03-02T10:00:06Z"),
+    reply("b", "2026-03-02T10:00:10Z", [
+      use("Agent", { subagent_type: "general-purpose", prompt: "secret" }),
+      use("Task", { prompt: "secret" }),
+      use("cat ~/secret"),
+    ]),
+    prompt("2026-03-02T10:05:00Z", "<task-notification>secret</task-notification>"),
+    reply("c", "2026-03-02T10:05:10Z"),
+    prompt("2026-03-02T23:59:50Z", [{ type: "text", text: "Next secret" }]),
+    reply("d", "2026-03-03T00:00:05Z"),
+    apiError("2026-03-03T00:00:10Z", 429, 1),
+    apiError("2026-03-03T00:00:15Z", 429, 2),
+    apiError("2026-03-03T00:00:16Z", 500, 1),
+    reply(
+      "e",
+      "2026-03-03T00:00:20Z",
+      [{ type: "text", text: "secret limit text" }],
+      { isApiErrorMessage: true, error: "rate_limit", apiErrorStatus: 429 },
+      "<synthetic>",
+    ),
+    prompt("2026-03-03T00:00:30Z", [{ type: "text", text: "[Request interrupted by user]" }]),
+    apiError("2026-03-03T00:01:00Z", 429, 1),
+  ];
+
+  const ofType = <T extends Fact["type"]>(facts: readonly Fact[], type: T) =>
+    facts.filter((fact): fact is Extract<Fact, { type: T }> => fact.type === type);
+  const summed = (facts: readonly Fact[], key: (fact: Fact) => string) => {
+    const out: Record<string, Record<string, number>> = {};
+    for (const fact of facts) {
+      const cell = (out[key(fact)] ??= {});
+      for (const [name, value] of Object.entries(fact)) {
+        if (typeof value === "number" && name !== "hour" && name !== "windowMinutes")
+          cell[name] = (cell[name] ?? 0) + value;
+      }
+    }
+    return out;
+  };
+
+  it("counts each prompt as a turn on its day, timed to its last reply, stopped by the user", () => {
+    const turns = ofType(parseLines(SESSION, jo).facts, "usage-turn");
+    expect(
+      turns.every(
+        (fact) =>
+          fact.day === "2026-03-02" &&
+          fact.via === "cli" &&
+          fact.project === "~/work/app" &&
+          fact.thread === "main",
+      ),
+    ).toBe(true);
+    expect(summed(turns, () => "all")).toEqual({
+      all: {
+        turns: 2,
+        timed: 2,
+        durationMs: 10_000 + 40_000,
+        interrupted: 1,
+        toolCalls: 5,
+        withSubagents: 1,
+      },
+    });
+  });
+
+  it("counts a tool stopped by the user as the turn's interruption", () => {
+    const turns = ofType(
+      parseLines(
+        [
+          prompt("2026-03-02T10:00:00Z", "Run it"),
+          reply("a", "2026-03-02T10:00:02Z", [use("Bash")]),
+          result("2026-03-02T10:00:09Z", { toolUseResult: { interrupted: true, stdout: "" } }),
+          result("2026-03-02T10:00:10Z", { toolUseResult: { interrupted: true, stdout: "" } }),
+        ],
+        jo,
+      ).facts,
+      "usage-turn",
+    );
+    expect(summed(turns, () => "all")).toEqual({
+      all: { turns: 1, timed: 1, durationMs: 10_000, interrupted: 1, toolCalls: 1 },
+    });
+  });
+
+  it("starts no turn for a meta line, a tool result or a command", () => {
+    const turns = ofType(
+      parseLines(
+        [
+          prompt("2026-03-02T10:00:00Z", "<system-reminder>x</system-reminder>"),
+          prompt("2026-03-02T10:00:00Z", "Context", { isMeta: true }),
+          prompt("2026-03-02T10:00:01Z", "<command-name>/clear</command-name>"),
+          result("2026-03-02T10:00:02Z"),
+        ],
+        jo,
+      ).facts,
+      "usage-turn",
+    );
+    expect(turns).toEqual([]);
+  });
+
+  it("counts requests and prompts by the UTC hour they happened in", () => {
+    const hours = ofType(parseLines(SESSION, jo).facts, "usage-hour");
+    expect(summed(hours, (fact) => `${fact.day} ${(fact as { hour: number }).hour}`)).toEqual({
+      "2026-03-02 10": { turns: 1, requests: 3 },
+      "2026-03-02 23": { turns: 1 },
+      "2026-03-03 0": { requests: 1 },
+    });
+  });
+
+  it("counts calls by tool, an MCP tool under its server and any other name as other", () => {
+    const tools = ofType(parseLines(SESSION, jo).facts, "usage-tool");
+    expect(tools.every((fact) => fact.day === "2026-03-02" && fact.thread === "main")).toBe(true);
+    expect(tools.map((fact) => fact.tool)).toEqual([
+      "Bash",
+      "mcp:linear",
+      "Agent",
+      "Task",
+      "other",
+    ]);
+  });
+
+  it("counts each run of rate-limit retries as the limit reached once, with no window", () => {
+    expect(ofType(parseLines(SESSION, jo).facts, "usage-limit")).toEqual([
+      { type: "usage-limit", day: "2026-03-03", windowMinutes: 0, reached: 1 },
+      { type: "usage-limit", day: "2026-03-03", windowMinutes: 0, reached: 1 },
+    ]);
+  });
+
+  it("counts a failed reply as the limit reached when no retry said so", () => {
+    const limits = ofType(
+      parseLines(
+        [
+          reply(
+            "a",
+            "2026-03-02T10:00:00Z",
+            [],
+            {
+              isApiErrorMessage: true,
+              error: "rate_limit",
+              apiErrorStatus: 429,
+            },
+            "<synthetic>",
+          ),
+          reply(
+            "b",
+            "2026-03-02T10:00:01Z",
+            [],
+            {
+              isApiErrorMessage: true,
+              error: "rate_limit",
+              apiErrorStatus: 429,
+            },
+            "<synthetic>",
+          ),
+          reply("c", "2026-03-02T11:00:00Z"),
+          reply(
+            "d",
+            "2026-03-02T12:00:00Z",
+            [],
+            {
+              isApiErrorMessage: true,
+              error: "rate_limit",
+              apiErrorStatus: 429,
+            },
+            "<synthetic>",
+          ),
+        ],
+        jo,
+      ).facts,
+      "usage-limit",
+    );
+    expect(limits.map((fact) => fact.reached)).toEqual([1, 1]);
+  });
+
+  it("keeps prompts, tool input and output, and errors out of every Fact and the State", () => {
+    const { facts, state } = parseLines(SESSION, jo);
+    const forbidden = ["secret", "toolu", "/home/jo"];
+    expect(findCanary(facts, forbidden)).toEqual([]);
+    expect(findCanary(state, forbidden)).toEqual([]);
+  });
+
+  describe("read through readTranscript", () => {
+    let dir: string;
+    beforeEach(async () => {
+      dir = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "loadsheet-claude-turns-"));
+    });
+    afterEach(async () => {
+      await NodeFSP.rm(dir, { recursive: true, force: true });
+    });
+
+    it("gives the same Facts and State resumed after any line as read whole", async () => {
+      const path = NodePath.join(dir, "session.jsonl");
+      await NodeFSP.writeFile(path, SESSION.map((value) => `${value}\n`).join(""));
+      const whole = await readTranscript(path, claudeTranscripts, undefined, { place: jo });
+      expect(whole!.records).toEqual(parseLines(SESSION, jo).facts);
+      for (let cut = 1; cut < SESSION.length; cut += 1) {
+        await NodeFSP.writeFile(
+          path,
+          SESSION.slice(0, cut)
+            .map((value) => `${value}\n`)
+            .join(""),
+        );
+        const first = await readTranscript(path, claudeTranscripts, undefined, { place: jo });
+        const saved = JSON.parse(JSON.stringify(first!.position)) as ReadPosition;
+        await NodeFSP.appendFile(
+          path,
+          SESSION.slice(cut)
+            .map((value) => `${value}\n`)
+            .join(""),
+        );
+        const second = await readTranscript(path, claudeTranscripts, saved, { place: jo });
+        expect(second!.resumed, `cut at ${cut}`).toBe(true);
+        expect([...first!.records, ...second!.records], `cut at ${cut}`).toEqual(whole!.records);
+        expect(second!.position, `cut at ${cut}`).toEqual(whole!.position);
+      }
+    });
+  });
+});
+
 describe("Claude Code settings", () => {
   const settingsFiles = (settings?: Record<string, unknown>, dir = "~/.claude") =>
     memoryFiles(

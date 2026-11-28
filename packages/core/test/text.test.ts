@@ -27,6 +27,10 @@ const SIGNALS: Record<Signal, Grade> = {
   tokens: "exact",
   usage: "exact",
   cacheTtl: "none",
+  turns: "none",
+  hours: "none",
+  tools: "none",
+  limits: "none",
 };
 
 const line = (name: string, tokens: number, extra: Partial<Line> = {}): Line => ({

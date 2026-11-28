@@ -15,7 +15,10 @@ export const count = (value: unknown): number => {
  * The UTC day of an instant: epoch milliseconds, or an ISO 8601 timestamp with any number of
  * fraction digits and a `Z` or an offset. Undefined when it is neither.
  */
-export const utcDay = (value: unknown): Day | undefined => {
+export const utcDay = (value: unknown): Day | undefined => instantOf(value)?.day;
+
+/** An instant as utcDay reads it: its epoch milliseconds, UTC day and UTC hour. */
+export const instantOf = (value: unknown): { ms: number; day: Day; hour: number } | undefined => {
   let ms: number | undefined;
   if (typeof value === "number" || typeof value === "bigint") ms = Number(value);
   else if (typeof value === "string") {
@@ -24,7 +27,8 @@ export const utcDay = (value: unknown): Day | undefined => {
   }
   if (ms === undefined || !Number.isFinite(ms)) return undefined;
   const date = new Date(ms);
-  return Number.isNaN(date.getTime()) ? undefined : date.toISOString().slice(0, 10);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return { ms, day: date.toISOString().slice(0, 10), hour: date.getUTCHours() };
 };
 
 /** A model's name for a Fact: the harness's spelling, or `unknown`. */

@@ -21,6 +21,10 @@ const signals = {
   tokens: "exact",
   usage: "exact",
   cacheTtl: "none",
+  turns: "none",
+  hours: "none",
+  tools: "none",
+  limits: "none",
 } as const;
 
 // Two sessions on the 20th through cli, one on the 21st through an app.
@@ -74,7 +78,58 @@ const usage: Fact[] = [
   { ...tokens("2026-11-21", "main", 1), via: "app", project: "~/notes", model: "model-b" },
 ];
 
-const all = [...facts, ...usage];
+// The 20th's main thread: a turn of 4 s with two tool calls and a subagent, stopped by the user,
+// that runs past midnight into the 21st's hour 0; a second turn starts on the 21st. The 5-hour
+// limit read three times out of order, reached once, and a limit with no window reached twice.
+const activity: Fact[] = [
+  { type: "usage-turn", day: "2026-11-20", ...web, thread: "main", turns: 1 },
+  { type: "usage-hour", day: "2026-11-20", hour: 23, thread: "main", turns: 1, requests: 2 },
+  { type: "usage-tool", day: "2026-11-20", thread: "main", tool: "Bash" },
+  { type: "usage-turn", day: "2026-11-20", ...web, thread: "main", toolCalls: 1 },
+  { type: "usage-tool", day: "2026-11-20", thread: "main", tool: "Agent" },
+  { type: "usage-turn", day: "2026-11-20", ...web, thread: "main", toolCalls: 1, withSubagents: 1 },
+  {
+    type: "usage-limit",
+    day: "2026-11-20",
+    windowMinutes: 300,
+    usedPercent: 40,
+    at: 100,
+    resetsAt: 500,
+  },
+  {
+    type: "usage-limit",
+    day: "2026-11-20",
+    windowMinutes: 300,
+    usedPercent: 90,
+    at: 300,
+    resetsAt: 600,
+    reached: 1,
+  },
+  {
+    type: "usage-limit",
+    day: "2026-11-20",
+    windowMinutes: 300,
+    usedPercent: 10,
+    at: 200,
+    resetsAt: 550,
+  },
+  { type: "usage-limit", day: "2026-11-20", windowMinutes: 0, reached: 1 },
+  { type: "usage-hour", day: "2026-11-21", hour: 0, thread: "main", requests: 1 },
+  { type: "usage-tool", day: "2026-11-21", thread: "subagent", tool: "mcp:linear", calls: 3 },
+  {
+    type: "usage-turn",
+    day: "2026-11-20",
+    ...web,
+    thread: "main",
+    interrupted: 1,
+    timed: 1,
+    durationMs: 4000,
+  },
+  { type: "usage-limit", day: "2026-11-20", windowMinutes: 0, reached: 1 },
+  { type: "usage-turn", day: "2026-11-21", ...web, thread: "main", turns: 1 },
+];
+
+const all = [...facts, ...usage, ...activity];
 
 describe("foldFacts", () => {
   it("sums Facts into SessionCells and Cells that match a hand count", () => {
@@ -216,6 +271,80 @@ describe("foldFacts", () => {
     expect(foldFacts("h", facts).usage).toBeUndefined();
   });
 
+  it("sums turns, hours and tool calls, and keeps the latest and highest limit reading", () => {
+    const tally = foldFacts("h", activity);
+    const cell = { harness: "h", ...web, thread: "main" } as const;
+    const none = { turns: 0, interrupted: 0, timed: 0, durationMs: 0, toolCalls: 0 };
+    expect(tally.usage!.turns).toEqual([
+      {
+        day: "2026-11-20",
+        ...cell,
+        turns: 1,
+        interrupted: 1,
+        timed: 1,
+        durationMs: 4000,
+        toolCalls: 2,
+        withSubagents: 1,
+      },
+      { day: "2026-11-21", ...cell, ...none, turns: 1, withSubagents: 0 },
+    ]);
+    expect(tally.usage!.hours).toEqual([
+      { day: "2026-11-20", harness: "h", hour: 23, thread: "main", requests: 2, turns: 1 },
+      { day: "2026-11-21", harness: "h", hour: 0, thread: "main", requests: 1, turns: 0 },
+    ]);
+    expect(tally.usage!.tools).toEqual([
+      { day: "2026-11-20", harness: "h", thread: "main", tool: "Agent", calls: 1 },
+      { day: "2026-11-20", harness: "h", thread: "main", tool: "Bash", calls: 1 },
+      { day: "2026-11-21", harness: "h", thread: "subagent", tool: "mcp:linear", calls: 3 },
+    ]);
+    expect(tally.usage!.limits).toEqual([
+      { day: "2026-11-20", harness: "h", windowMinutes: 0, reached: 2 },
+      {
+        day: "2026-11-20",
+        harness: "h",
+        windowMinutes: 300,
+        usedPercent: 90,
+        at: 300,
+        resetsAt: 600,
+        peakUsedPercent: 90,
+        reached: 1,
+      },
+    ]);
+    // A Tally of only these Facts has no sessions or tokens, and still has usage.
+    expect(tally.usage!.sessions).toEqual([]);
+  });
+
+  it("merges limit readings in any order to the same cell", () => {
+    const limits = activity.filter((fact) => fact.type === "usage-limit");
+    const tie = (resetsAt: number): Fact => ({
+      type: "usage-limit",
+      day: "2026-11-20",
+      windowMinutes: 300,
+      usedPercent: 90,
+      at: 300,
+      resetsAt,
+    });
+    const readings = [...limits, tie(590), tie(610)];
+    const forward = foldFacts("h", readings);
+    const backward = foldFacts("h", readings.toReversed());
+    expect(backward).toEqual(forward);
+    expect(forward.usage!.limits![1]).toMatchObject({ usedPercent: 90, resetsAt: 610 });
+    const later = foldFacts("h", [
+      ...readings,
+      { type: "usage-limit", day: "2026-11-20", windowMinutes: 300, usedPercent: 5, at: 400 },
+    ]);
+    // A reading after the reset: the gauge drops and loses the old reset, the peak stays.
+    expect(later.usage!.limits![1]).toEqual({
+      day: "2026-11-20",
+      harness: "h",
+      windowMinutes: 300,
+      usedPercent: 5,
+      at: 400,
+      peakUsedPercent: 90,
+      reached: 1,
+    });
+  });
+
   it("holds each token split to its whole, so a cell stays inside the schema's bounds", () => {
     const tally = foldFacts("h", [
       {
@@ -280,6 +409,10 @@ describe("foldFacts", () => {
     expect(tally.usage!.sessions.map((cell) => cell.day)).toEqual(["2026-11-21"]);
     // A request on the 21st of a session that started on the 20th counts on its own day.
     expect(tally.usage!.tokens.map((cell) => cell.day)).toEqual(["2026-11-21", "2026-11-21"]);
+    expect(tally.usage!.turns!.map((cell) => cell.day)).toEqual(["2026-11-21"]);
+    expect(tally.usage!.hours!.map((cell) => cell.day)).toEqual(["2026-11-21"]);
+    expect(tally.usage!.tools!.map((cell) => cell.tool)).toEqual(["mcp:linear"]);
+    expect(tally.usage!.limits).toBeUndefined();
     expect(tally.cells.every((cell) => cell.day === "2026-11-21")).toBe(true);
     expect(tally.versions).toEqual([]);
   });

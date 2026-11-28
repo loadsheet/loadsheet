@@ -22,7 +22,11 @@
         "mcp": "exact",
         "tokens": "exact",
         "usage": "exact",
-        "cacheTtl": "exact"
+        "cacheTtl": "exact",
+        "turns": "inferred",
+        "hours": "exact",
+        "tools": "exact",
+        "limits": "inferred"
       },
       "contextWindow": 200000,
       "settings": {
@@ -49,7 +53,11 @@
         "mcp": "exact",
         "tokens": "exact",
         "usage": "exact",
-        "cacheTtl": "none"
+        "cacheTtl": "none",
+        "turns": "exact",
+        "hours": "exact",
+        "tools": "exact",
+        "limits": "exact"
       },
       "contextWindow": 258400,
       "settings": {

@@ -28,6 +28,10 @@ const harness = (id: string): Harness =>
       tokens: "none",
       usage: "none",
       cacheTtl: "none",
+      turns: "none",
+      hours: "none",
+      tools: "none",
+      limits: "none",
     },
     inventory: async () => [],
     machine: {

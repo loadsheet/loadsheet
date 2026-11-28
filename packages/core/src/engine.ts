@@ -28,6 +28,10 @@ export const NO_SIGNALS: Record<Signal, Grade> = {
   tokens: "none",
   usage: "none",
   cacheTtl: "none",
+  turns: "none",
+  hours: "none",
+  tools: "none",
+  limits: "none",
 };
 
 /** Input for one run of the rules over a Report's sheets. */

@@ -112,7 +112,7 @@ const unfilteredOf = (
 const keptCoverage = (
   row: Coverage,
   scan: Scan,
-  keep: (cell: { day: Day; via: string }) => boolean,
+  keep: (cell: { day: Day; via?: string }) => boolean,
 ): Coverage => {
   const kept: Coverage = { ...row, sessions: 0 };
   delete kept.firstDay;
@@ -131,7 +131,7 @@ const keptCoverage = (
 const buildSheet = (
   harness: string,
   scans: Scan[],
-  keep: (cell: { day: Day; via: string }) => boolean,
+  keep: (cell: { day: Day; via?: string }) => boolean,
   last: Day,
 ): { sheet: Sheet; rules: RuleSheet } => {
   const installs = new Map<Id, Install[]>();
@@ -324,8 +324,10 @@ export const buildReport = ({
   const inWindow = (day: Day) => day >= first && day <= last;
   const include = new Set(config.via.include);
   const exclude = new Set(config.via.exclude);
-  const keep = ({ day, via }: { day: Day; via: string }) =>
-    inWindow(day) && (include.size === 0 || include.has(via)) && !exclude.has(via);
+  // Hour, tool and limit cells name no entrypoint: only the window filters them.
+  const keep = ({ day, via }: { day: Day; via?: string }) =>
+    inWindow(day) &&
+    (via === undefined || ((include.size === 0 || include.has(via)) && !exclude.has(via)));
 
   // A harness gets a sheet when some machine has it installed, or has its items or sessions.
   const harnesses = new Set<string>();

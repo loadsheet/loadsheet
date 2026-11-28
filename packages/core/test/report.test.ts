@@ -29,6 +29,10 @@ const EXACT: Record<Signal, Grade> = {
   tokens: "exact",
   usage: "exact",
   cacheTtl: "none",
+  turns: "none",
+  hours: "none",
+  tools: "none",
+  limits: "none",
 };
 const NOW = new Date("2026-11-24T12:00:00.000Z");
 const LAST = "2026-11-24";
@@ -1978,6 +1982,104 @@ describe("buildReport", () => {
 
     expect(report(scans, { harnesses: ["opencode"] })).not.toHaveProperty("usage");
     expect(report([scan("laptop")])).not.toHaveProperty("usage");
+  });
+
+  it("sums turns, hours, tools and limits, keeping the cells without an entrypoint under a via filter", () => {
+    const turn = (day: string, harness: string, via: string, n: number) => ({
+      day,
+      harness,
+      via,
+      project: "acme/web",
+      thread: "main" as const,
+      turns: n,
+      interrupted: 0,
+      timed: n,
+      durationMs: 1000 * n,
+      toolCalls: 3 * n,
+      withSubagents: 1,
+    });
+    const usageOf = (n: number, at: number): Scan["usage"] => ({
+      sessions: [],
+      tokens: [],
+      turns: [
+        turn("2026-11-20", "claude-code", "cli", n),
+        turn("2026-11-20", "claude-code", "sdk-ts", n),
+        turn("2026-11-20", "codex", "cli", n),
+        turn("2026-09-01", "claude-code", "cli", n),
+      ],
+      hours: [
+        {
+          day: "2026-11-20",
+          harness: "claude-code",
+          hour: 9,
+          thread: "main",
+          requests: n,
+          turns: 1,
+        },
+        { day: "2026-11-20", harness: "codex", hour: 9, thread: "main", requests: n, turns: 0 },
+      ],
+      tools: [
+        { day: "2026-11-20", harness: "claude-code", thread: "main", tool: "Bash", calls: n },
+        { day: "2026-09-01", harness: "claude-code", thread: "main", tool: "Bash", calls: n },
+      ],
+      limits: [
+        {
+          day: "2026-11-20",
+          harness: "codex",
+          windowMinutes: 300,
+          usedPercent: 10 * n,
+          at,
+          resetsAt: at + 1000,
+          peakUsedPercent: 10 * n,
+          reached: 1,
+        },
+      ],
+    });
+    const scans = [
+      scan("laptop", { usage: usageOf(2, 2000) }),
+      scan("server", { usage: usageOf(3, 1000) }),
+    ];
+    const both = report(scans).usage!;
+    expect(both.sessions).toEqual([]);
+    expect(both.turns).toEqual(
+      [
+        turn("2026-11-20", "claude-code", "cli", 5),
+        turn("2026-11-20", "claude-code", "sdk-ts", 5),
+        turn("2026-11-20", "codex", "cli", 5),
+      ].map((cell) => ({ ...cell, withSubagents: 2 })),
+    );
+    expect(both.hours).toEqual([
+      { day: "2026-11-20", harness: "claude-code", hour: 9, thread: "main", requests: 5, turns: 2 },
+      { day: "2026-11-20", harness: "codex", hour: 9, thread: "main", requests: 5, turns: 0 },
+    ]);
+    expect(both.tools).toEqual([
+      { day: "2026-11-20", harness: "claude-code", thread: "main", tool: "Bash", calls: 5 },
+    ]);
+    // The laptop read the limit later, at 20%; the server's 30% is the peak.
+    expect(both.limits).toEqual([
+      {
+        day: "2026-11-20",
+        harness: "codex",
+        windowMinutes: 300,
+        usedPercent: 20,
+        at: 2000,
+        resetsAt: 3000,
+        peakUsedPercent: 30,
+        reached: 2,
+      },
+    ]);
+
+    const filtered = report(scans, {
+      harnesses: ["claude-code"],
+      via: { exclude: ["sdk-ts"] },
+    }).usage!;
+    expect(filtered.turns!.map((cell) => [cell.harness, cell.via])).toEqual([
+      ["claude-code", "cli"],
+    ]);
+    expect(filtered.hours!.map((cell) => cell.harness)).toEqual(["claude-code"]);
+    expect(filtered.tools!.map((cell) => cell.calls)).toEqual([5]);
+    expect(filtered).not.toHaveProperty("limits");
+    expect(report(scans, { harnesses: ["opencode"] })).not.toHaveProperty("usage");
   });
 
   it("throws on two Scans of the same machine", () => {

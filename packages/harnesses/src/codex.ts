@@ -394,6 +394,10 @@ export const codex = defineHarness({
     usage: "exact",
     // Codex has no prompt cache lifetime to set.
     cacheTtl: "none",
+    turns: "exact",
+    hours: "exact",
+    tools: "exact",
+    limits: "exact",
   },
   inventory: packInventory,
   machine: {

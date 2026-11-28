@@ -13,7 +13,11 @@ export type Signal =
   | "mcp"
   | "tokens"
   | "usage"
-  | "cacheTtl";
+  | "cacheTtl"
+  | "turns"
+  | "hours"
+  | "tools"
+  | "limits";
 
 /** How well a harness provides a signal: read directly, inferred from indirect evidence, or not at all. */
 export type Grade = "exact" | "inferred" | "none";
@@ -229,12 +233,96 @@ export interface UsageTokenCell {
   cacheRewrite: number;
 }
 
-/** A machine's or a Report's usage history: sessions and tokens per project, as additive counters with no text. */
+/** Additive turn counters for one project, harness, day, entrypoint and thread. A turn is one prompt and the work the agent did for it. */
+export interface UsageTurnCell {
+  /** The day the turns started. */
+  day: Day;
+  /** The harness id. */
+  harness: string;
+  /** The entrypoint or originator that started the sessions. */
+  via: string;
+  /** The project the sessions ran in: `owner/repo`, a folder under the home directory (`~/...`), an absolute path outside it, or `unknown`. */
+  project: string;
+  /** Whether the turns were in main conversations or subagents' conversations. */
+  thread: Thread;
+  /** Turns started. */
+  turns: number;
+  /** Of those turns, how many the user interrupted. */
+  interrupted: number;
+  /** Of those turns, how many have a measured duration. */
+  timed: number;
+  /** The summed duration of the timed turns, in milliseconds. */
+  durationMs: number;
+  /** Tool calls the model made in those turns. */
+  toolCalls: number;
+  /** Of those turns, how many started at least one subagent. */
+  withSubagents: number;
+}
+
+/** Additive activity counters for one harness, day, hour and thread. */
+export interface UsageHourCell {
+  /** The UTC day. */
+  day: Day;
+  /** The UTC hour of the day, 0 to 23. */
+  hour: number;
+  /** The harness id. */
+  harness: string;
+  /** Whether the activity was in main conversations or subagents' conversations. */
+  thread: Thread;
+  /** Model requests made in that hour. */
+  requests: number;
+  /** Turns started in that hour. */
+  turns: number;
+}
+
+/** Additive tool-call counters for one harness, day, thread and tool. */
+export interface UsageToolCell {
+  /** The day of the calls. */
+  day: Day;
+  /** The harness id. */
+  harness: string;
+  /** Whether the calls were made in main conversations or subagents' conversations. */
+  thread: Thread;
+  /** The tool: a built-in tool's name, `mcp:<server>` for any tool of an MCP server, or `other` for a name loadsheet does not keep. */
+  tool: string;
+  /** Calls made. */
+  calls: number;
+}
+
+/** One harness's rate-limit window on one day: the latest reading of how much of it is used, and how often the limit was hit. A gauge, not a sum: merging two keeps the later reading and the higher peak, and sums `reached`. */
+export interface UsageLimitCell {
+  /** The day of the readings. */
+  day: Day;
+  /** The harness id. */
+  harness: string;
+  /** The window's length in minutes, such as 300 or 10080; 0 when the harness does not say. */
+  windowMinutes: number;
+  /** The share of the window used at the latest reading, in percent; absent when there was none. */
+  usedPercent?: number;
+  /** When the latest reading was taken, in seconds since the epoch; absent with usedPercent. */
+  at?: number;
+  /** When the window resets, as of the latest reading, in seconds since the epoch; absent when unknown. */
+  resetsAt?: number;
+  /** The highest share used at any reading that day, in percent; absent with usedPercent. */
+  peakUsedPercent?: number;
+  /** How many times the limit was reached. */
+  reached: number;
+}
+
+/** A machine's or a Report's usage history: sessions, tokens, turns, hours, tools and rate limits, as counters with no text. */
 export interface Usage {
   /** Session counters. */
   sessions: UsageSessionCell[];
   /** Token counters. */
   tokens: UsageTokenCell[];
+  /** Turn counters; absent when no harness read reports turns. */
+  turns?: UsageTurnCell[];
+  /** Activity by hour of the day; absent when no harness read reports it. */
+  hours?: UsageHourCell[];
+  /** Tool calls by tool; absent when no harness read reports them. */
+  tools?: UsageToolCell[];
+  /** Rate-limit readings; absent when no harness read reports them. */
+  limits?: UsageLimitCell[];
 }
 
 /** One machine's counters for a window: what is installed and how it was used, with no text. Scans of the same machine merge by summing their counters; Scans of different machines stay separate, and a Report is built from the list. */

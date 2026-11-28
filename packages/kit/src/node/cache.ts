@@ -13,7 +13,7 @@ import { Accumulator } from "../sum.ts";
 import type { ReadPosition } from "./reader.ts";
 
 /** The layout of a cache file; a change here starts every cache cold. */
-const CACHE_LAYOUT = 5;
+const CACHE_LAYOUT = 6;
 
 /** What the cache keeps for one transcript file. */
 export interface CachedFile {
@@ -54,7 +54,7 @@ export const defaultCacheDir = (place: {
 
 const sha256 = (text: string | Uint8Array) => createHash("sha256").update(text).digest("hex");
 
-// A cache file is `{"layout":5,"sum":"<sha256 of the document's text>","doc":<document>}`, so one
+// A cache file is `{"layout":6,"sum":"<sha256 of the document's text>","doc":<document>}`, so one
 // cut short or changed by anything else opens empty, and checking it hashes the bytes as read.
 const HEAD = `{"layout":${CACHE_LAYOUT},"sum":"`;
 const DOC = '","doc":';
@@ -170,6 +170,14 @@ class Decoder {
     return value;
   }
 
+  /** A limit reading's value: a finite number of at least 0, or -1 for none. */
+  gauge(value: unknown): number {
+    if (value !== -1 && !(typeof value === "number" && Number.isFinite(value) && value >= 0)) {
+      throw new Malformed();
+    }
+    return value;
+  }
+
   /** `value` as an array whose length is a multiple of `stride`. */
   tuples(value: unknown, stride: number): unknown[] {
     if (!Array.isArray(value) || value.length % stride !== 0) throw new Malformed();
@@ -246,7 +254,8 @@ const retable = (raw: unknown, from: readonly string[], to: StringTable): unknow
   return raw;
 };
 
-// A Tally encodes as [sessions, cells, versions, windows, usageSessions, usageTokens]:
+// A Tally encodes as [sessions, cells, versions, windows, usageSessions, usageTokens, usageTurns,
+// usageHours, usageTools, usageLimits]:
 //   sessions:      day, harness, via, sessions, fixedTokens, measured, ...
 //   cells:         day, harness, via, [item, sessions, bare, chars, byModel, byUser, ...], ...
 //   versions:      harness, day, version, ...
@@ -255,15 +264,44 @@ const retable = (raw: unknown, from: readonly string[], to: StringTable): unknow
 //                  manualCompactions, ...
 //   usageTokens:   day, harness, via, project, thread, model, requests, input, output, reasoning,
 //                  cacheRead, cacheWrite, cacheWrite5m, cacheWrite1h, cacheRewrite, ...
+//   usageTurns:    day, harness, via, project, thread, turns, interrupted, timed, durationMs,
+//                  toolCalls, withSubagents, ...
+//   usageHours:    day, harness, thread, hour, requests, turns, ...
+//   usageTools:    day, harness, thread, tool, calls, ...
+//   usageLimits:   day, harness, windowMinutes, reached, usedPercent, at, resetsAt,
+//                  peakUsedPercent, ... with -1 for a reading's value that is absent
 // Within each tuple the strings come first: `refs` is how many.
 
 /** An encoded tally, as `checkTally` accepted it. */
-type EncodedTally = [number[], (number | number[])[], number[], number[], number[], number[]];
+type EncodedTally = [
+  number[],
+  (number | number[])[],
+  number[],
+  number[],
+  number[],
+  number[],
+  number[],
+  number[],
+  number[],
+  number[],
+];
 
 const USAGE_SESSION_STRIDE = 9;
 const USAGE_SESSION_REFS = 5;
 const USAGE_TOKEN_STRIDE = 15;
 const USAGE_TOKEN_REFS = 6;
+const USAGE_TURN_STRIDE = 11;
+const USAGE_TURN_REFS = 5;
+const USAGE_HOUR_STRIDE = 6;
+const USAGE_HOUR_REFS = 3;
+const USAGE_TOOL_STRIDE = 5;
+const USAGE_TOOL_REFS = 4;
+const USAGE_LIMIT_STRIDE = 8;
+const USAGE_LIMIT_REFS = 2;
+
+/** A limit reading's optional value as a tuple holds it. */
+const gauge = (value: number | undefined) => value ?? -1;
+const ungauge = (value: number) => (value === -1 ? undefined : value);
 
 const encodeTally = (tally: Tally, table: StringTable): unknown => {
   const sessions: number[] = [];
@@ -331,13 +369,86 @@ const encodeTally = (tally: Tally, table: StringTable): unknown => {
       cell.cacheRewrite,
     );
   }
-  return [sessions, cells, versions, windows, usageSessions, usageTokens];
+  const usage = tally.usage;
+  const usageTurns: number[] = [];
+  for (const cell of usage?.turns ?? []) {
+    usageTurns.push(
+      table.ref(cell.day),
+      table.ref(cell.harness),
+      table.ref(cell.via),
+      table.ref(cell.project),
+      table.ref(cell.thread),
+      cell.turns,
+      cell.interrupted,
+      cell.timed,
+      cell.durationMs,
+      cell.toolCalls,
+      cell.withSubagents,
+    );
+  }
+  const usageHours: number[] = [];
+  for (const cell of usage?.hours ?? []) {
+    usageHours.push(
+      table.ref(cell.day),
+      table.ref(cell.harness),
+      table.ref(cell.thread),
+      cell.hour,
+      cell.requests,
+      cell.turns,
+    );
+  }
+  const usageTools: number[] = [];
+  for (const cell of usage?.tools ?? []) {
+    usageTools.push(
+      table.ref(cell.day),
+      table.ref(cell.harness),
+      table.ref(cell.thread),
+      table.ref(cell.tool),
+      cell.calls,
+    );
+  }
+  const usageLimits: number[] = [];
+  for (const cell of usage?.limits ?? []) {
+    usageLimits.push(
+      table.ref(cell.day),
+      table.ref(cell.harness),
+      cell.windowMinutes,
+      cell.reached,
+      gauge(cell.usedPercent),
+      gauge(cell.at),
+      gauge(cell.resetsAt),
+      gauge(cell.peakUsedPercent),
+    );
+  }
+  return [
+    sessions,
+    cells,
+    versions,
+    windows,
+    usageSessions,
+    usageTokens,
+    usageTurns,
+    usageHours,
+    usageTools,
+    usageLimits,
+  ];
 };
 
 /** Throws Malformed unless `raw` is an encoded tally. */
 const checkTally = (raw: unknown, decoder: Decoder): EncodedTally => {
-  if (!Array.isArray(raw) || raw.length !== 6) throw new Malformed();
-  const [sessions, groups, versions, windows, usageSessions, usageTokens] = raw as unknown[];
+  if (!Array.isArray(raw) || raw.length !== 10) throw new Malformed();
+  const [
+    sessions,
+    groups,
+    versions,
+    windows,
+    usageSessions,
+    usageTokens,
+    usageTurns,
+    usageHours,
+    usageTools,
+    usageLimits,
+  ] = raw as unknown[];
   const flatSessions = decoder.tuples(sessions, 6);
   for (let index = 0; index < flatSessions.length; index += 6) {
     decoder.day(flatSessions[index]);
@@ -387,12 +498,56 @@ const checkTally = (raw: unknown, decoder: Decoder): EncodedTally => {
     for (let at = USAGE_TOKEN_REFS; at < USAGE_TOKEN_STRIDE; at += 1)
       decoder.count(flatUsageTokens[index + at]);
   }
+  const flatUsageTurns = decoder.tuples(usageTurns, USAGE_TURN_STRIDE);
+  for (let index = 0; index < flatUsageTurns.length; index += USAGE_TURN_STRIDE) {
+    decoder.day(flatUsageTurns[index]);
+    for (let at = 1; at < USAGE_TURN_REFS - 1; at += 1) decoder.text(flatUsageTurns[index + at]);
+    decoder.thread(flatUsageTurns[index + USAGE_TURN_REFS - 1]);
+    for (let at = USAGE_TURN_REFS; at < USAGE_TURN_STRIDE; at += 1)
+      decoder.count(flatUsageTurns[index + at]);
+  }
+  const flatUsageHours = decoder.tuples(usageHours, USAGE_HOUR_STRIDE);
+  for (let index = 0; index < flatUsageHours.length; index += USAGE_HOUR_STRIDE) {
+    decoder.day(flatUsageHours[index]);
+    decoder.text(flatUsageHours[index + 1]);
+    decoder.thread(flatUsageHours[index + 2]);
+    if (decoder.count(flatUsageHours[index + 3]) > 23) throw new Malformed();
+    decoder.count(flatUsageHours[index + 4]);
+    decoder.count(flatUsageHours[index + 5]);
+  }
+  const flatUsageTools = decoder.tuples(usageTools, USAGE_TOOL_STRIDE);
+  for (let index = 0; index < flatUsageTools.length; index += USAGE_TOOL_STRIDE) {
+    decoder.day(flatUsageTools[index]);
+    decoder.text(flatUsageTools[index + 1]);
+    decoder.thread(flatUsageTools[index + 2]);
+    decoder.text(flatUsageTools[index + 3]);
+    decoder.count(flatUsageTools[index + 4]);
+  }
+  const flatUsageLimits = decoder.tuples(usageLimits, USAGE_LIMIT_STRIDE);
+  for (let index = 0; index < flatUsageLimits.length; index += USAGE_LIMIT_STRIDE) {
+    decoder.day(flatUsageLimits[index]);
+    decoder.text(flatUsageLimits[index + 1]);
+    decoder.count(flatUsageLimits[index + 2]);
+    decoder.count(flatUsageLimits[index + 3]);
+    for (let at = 4; at < USAGE_LIMIT_STRIDE; at += 1) decoder.gauge(flatUsageLimits[index + at]);
+  }
   return raw as EncodedTally;
 };
 
 /** Adds an encoded tally's counters inside the sum's window to it, building no Tally. */
 const addTally = (sum: Accumulator, raw: EncodedTally, strings: readonly string[]): void => {
-  const [sessions, groups, versions, windows, usageSessions, usageTokens] = raw;
+  const [
+    sessions,
+    groups,
+    versions,
+    windows,
+    usageSessions,
+    usageTokens,
+    usageTurns,
+    usageHours,
+    usageTools,
+    usageLimits,
+  ] = raw;
   for (let index = 0; index < sessions.length; index += 6) {
     const day = strings[sessions[index]!]!;
     if (!sum.keep(day)) continue;
@@ -465,6 +620,67 @@ const addTally = (sum: Accumulator, raw: EncodedTally, strings: readonly string[
     cell.cacheWrite1h += at(13);
     cell.cacheRewrite += at(14);
   }
+  for (let index = 0; index < usageTurns.length; index += USAGE_TURN_STRIDE) {
+    const day = strings[usageTurns[index]!]!;
+    if (!sum.keep(day)) continue;
+    const at = (offset: number) => usageTurns[index + offset]!;
+    const cell = sum.usageTurn({
+      day,
+      harness: strings[at(1)]!,
+      via: strings[at(2)]!,
+      project: strings[at(3)]!,
+      thread: strings[at(4)] as Thread,
+    });
+    cell.turns += at(5);
+    cell.interrupted += at(6);
+    cell.timed += at(7);
+    cell.durationMs += at(8);
+    cell.toolCalls += at(9);
+    cell.withSubagents += at(10);
+  }
+  for (let index = 0; index < usageHours.length; index += USAGE_HOUR_STRIDE) {
+    const day = strings[usageHours[index]!]!;
+    if (!sum.keep(day)) continue;
+    const at = (offset: number) => usageHours[index + offset]!;
+    const cell = sum.usageHour({
+      day,
+      harness: strings[at(1)]!,
+      thread: strings[at(2)] as Thread,
+      hour: at(3),
+    });
+    cell.requests += at(4);
+    cell.turns += at(5);
+  }
+  for (let index = 0; index < usageTools.length; index += USAGE_TOOL_STRIDE) {
+    const day = strings[usageTools[index]!]!;
+    if (!sum.keep(day)) continue;
+    const at = (offset: number) => usageTools[index + offset]!;
+    sum.usageTool({
+      day,
+      harness: strings[at(1)]!,
+      thread: strings[at(2)] as Thread,
+      tool: strings[at(3)]!,
+    }).calls += at(4);
+  }
+  for (let index = 0; index < usageLimits.length; index += USAGE_LIMIT_STRIDE) {
+    const day = strings[usageLimits[index]!]!;
+    if (!sum.keep(day)) continue;
+    const at = (offset: number) => usageLimits[index + offset]!;
+    const usedPercent = ungauge(at(4));
+    const readAt = ungauge(at(5));
+    const resetsAt = ungauge(at(6));
+    const peakUsedPercent = ungauge(at(7));
+    sum.usageLimit({
+      day,
+      harness: strings[at(1)]!,
+      windowMinutes: at(2),
+      reached: at(3),
+      ...(usedPercent === undefined ? {} : { usedPercent }),
+      ...(readAt === undefined ? {} : { at: readAt }),
+      ...(resetsAt === undefined ? {} : { resetsAt }),
+      ...(peakUsedPercent === undefined ? {} : { peakUsedPercent }),
+    });
+  }
 };
 
 /** The Tally of an encoded tally. */
@@ -489,7 +705,18 @@ const retableTally = (
   from: readonly string[],
   to: StringTable,
 ): EncodedTally => {
-  const [sessions, groups, versions, windows, usageSessions, usageTokens] = raw;
+  const [
+    sessions,
+    groups,
+    versions,
+    windows,
+    usageSessions,
+    usageTokens,
+    usageTurns,
+    usageHours,
+    usageTools,
+    usageLimits,
+  ] = raw;
   return [
     retableTuples(sessions, 6, 3, from, to),
     groups.map((value, index) =>
@@ -501,6 +728,10 @@ const retableTally = (
     retableTuples(windows, 3, 2, from, to),
     retableTuples(usageSessions, USAGE_SESSION_STRIDE, USAGE_SESSION_REFS, from, to),
     retableTuples(usageTokens, USAGE_TOKEN_STRIDE, USAGE_TOKEN_REFS, from, to),
+    retableTuples(usageTurns, USAGE_TURN_STRIDE, USAGE_TURN_REFS, from, to),
+    retableTuples(usageHours, USAGE_HOUR_STRIDE, USAGE_HOUR_REFS, from, to),
+    retableTuples(usageTools, USAGE_TOOL_STRIDE, USAGE_TOOL_REFS, from, to),
+    retableTuples(usageLimits, USAGE_LIMIT_STRIDE, USAGE_LIMIT_REFS, from, to),
   ];
 };
 

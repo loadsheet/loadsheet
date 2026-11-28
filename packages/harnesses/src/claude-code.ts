@@ -38,6 +38,11 @@ export const claudeCode = defineHarness({
     usage: "exact",
     // settings.json and the environment set the prompt cache's lifetime.
     cacheTtl: "exact",
+    // A turn runs from a prompt to its last line; limits say only when one was hit.
+    turns: "inferred",
+    hours: "exact",
+    tools: "exact",
+    limits: "inferred",
   },
   inventory: (files) =>
     packInventory(files, {

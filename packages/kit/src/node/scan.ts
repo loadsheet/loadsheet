@@ -513,9 +513,12 @@ export const resolveProjects = (scan: Scan, hints: readonly ProjectHint[], place
   if (!scan.usage) return scan;
   const resolve = createProjectResolver({ home: place.home, hints });
   const counters = new Accumulator();
+  const { sessions, tokens, turns, ...rest } = scan.usage;
   counters.usage({
-    sessions: scan.usage.sessions.map((cell) => ({ ...cell, project: resolve(cell.project) })),
-    tokens: scan.usage.tokens.map((cell) => ({ ...cell, project: resolve(cell.project) })),
+    ...rest,
+    sessions: sessions.map((cell) => ({ ...cell, project: resolve(cell.project) })),
+    tokens: tokens.map((cell) => ({ ...cell, project: resolve(cell.project) })),
+    ...(turns ? { turns: turns.map((cell) => ({ ...cell, project: resolve(cell.project) })) } : {}),
   });
   const usage = counters.usageResult();
   return usage ? { ...scan, usage } : scan;

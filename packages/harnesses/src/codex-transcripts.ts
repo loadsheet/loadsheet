@@ -1,5 +1,6 @@
 import {
   repoOfRemote,
+  toolName,
   type Fact,
   type LineBytes,
   type Place,
@@ -47,6 +48,13 @@ export interface CodexState {
   totals?: number[];
   /** The session compacted its context at least once. */
   compacted?: boolean;
+  /**
+   * The task running now, from its `task_started` to its `task_complete` or `turn_aborted`: the
+   * UTC day it started on, and whether it started a subagent yet.
+   */
+  task?: { day: string; subagents: boolean };
+  /** The latest `token_count` said a rate limit was reached. */
+  limited?: boolean;
 }
 
 const LOCATOR_KINDS = "file|executor package|cloud package|custom resource";
@@ -244,6 +252,17 @@ const toolText = (payload: Record<string, unknown>): string | undefined => {
   return typeof value === "string" ? value : undefined;
 };
 
+/** The response items that are tool calls, by the tool name a call without a `name` counts under. */
+const CALLS: Readonly<Record<string, string | undefined>> = {
+  function_call: undefined,
+  custom_tool_call: undefined,
+  local_shell_call: "local_shell",
+  web_search_call: "web_search",
+};
+const isCall = (kind: string) => Object.hasOwn(CALLS, kind);
+/** The tool that starts a subagent. */
+const SPAWN_AGENT = "spawn_agent";
+
 /** The line types `parse` reads; it returns nothing for any other. */
 const READ = new Set([
   "session_meta",
@@ -369,13 +388,6 @@ const quietMessage = (line: LineBytes, state: CodexState, role: string | undefin
   return role !== undefined || (developer && user);
 };
 
-/** A tool call does something only when it names a listed skill's `SKILL.md` or a listed server. */
-const quietCall = (line: LineBytes, state: CodexState, name: string | undefined) =>
-  state.copying ||
-  name === "apply_patch" ||
-  ((state.listed.length === 0 || !line.includes("SKILL.md")) &&
-    (state.servers.length === 0 || !line.includes("mcp__")));
-
 /**
  * True only when `parse` would return no Facts and leave `state` as it is. Reads the line's first
  * members, and searches the whole line only for strings whose absence settles it. It assumes, as
@@ -402,15 +414,17 @@ const skip = (line: LineBytes, state: CodexState): boolean => {
   const kind = head.payload.get("type");
   const is = (name: string) => (kind === undefined ? line.includes(`"${name}"`) : kind === name);
   if (type === "event_msg") {
-    // Every `token_count` moves the running totals, a copied one too.
-    return (!state.copying || !is("task_started")) && !is("token_count");
+    // Every `token_count` moves the running totals, a copied one too, and every `task_started`
+    // either ends a copy or starts a turn.
+    if (is("token_count") || is("task_started")) return false;
+    return (
+      state.copying || state.task === undefined || (!is("task_complete") && !is("turn_aborted"))
+    );
   }
   const message = kind === undefined || kind === "message";
-  const call = kind === undefined || kind === "custom_tool_call" || kind === "function_call";
-  return (
-    (!message || quietMessage(line, state, head.payload.get("role"))) &&
-    (!call || quietCall(line, state, head.payload.get("name")))
-  );
+  // Every tool call of the session's own counts.
+  if (!state.copying && (kind === undefined || isCall(kind))) return false;
+  return !message || quietMessage(line, state, head.payload.get("role"));
 };
 
 /**
@@ -421,6 +435,86 @@ const projectOf = (payload: Record<string, unknown>, place: Place | undefined): 
   const url = record(payload.git)?.repository_url;
   const repo = typeof url === "string" ? repoOfRemote(url) : undefined;
   return repo ?? projectOfCwd(payload.cwd, place);
+};
+
+/** A timestamp's UTC day and hour: an ISO string, or whole seconds since the epoch. */
+const momentOf = (value: unknown): { day: string; hour: number; at: number } | undefined => {
+  const time =
+    typeof value === "number" ? value * 1000 : typeof value === "string" ? Date.parse(value) : NaN;
+  if (!Number.isFinite(time) || time < 0) return undefined;
+  const date = new Date(time);
+  return {
+    day: date.toISOString().slice(0, 10),
+    hour: date.getUTCHours(),
+    at: Math.floor(time / 1000),
+  };
+};
+
+/** A rate-limit window's reading: `used_percent`, `window_minutes`, `resets_at`. */
+const windowOf = (value: unknown) => {
+  const window = record(value);
+  const used = window?.used_percent;
+  const minutes = window?.window_minutes;
+  if (typeof used !== "number" || !Number.isFinite(used) || used < 0) return undefined;
+  if (typeof minutes !== "number" || !Number.isSafeInteger(minutes) || minutes < 0)
+    return undefined;
+  const resets = window?.resets_at;
+  return {
+    usedPercent: used,
+    windowMinutes: minutes,
+    ...(typeof resets === "number" && Number.isSafeInteger(resets) && resets >= 0
+      ? { resetsAt: resets }
+      : {}),
+  };
+};
+
+/**
+ * The rate-limit readings of a `token_count`, one Fact per window it names, and the limit reached
+ * once when the event starts saying so: Codex repeats `rate_limit_reached_type` on every event
+ * while the limit holds. The reach goes to the fuller window. Plan type and credits are not read.
+ */
+const limitFacts = (
+  limits: Record<string, unknown>,
+  moment: { day: string; at: number },
+  state: CodexState,
+): Fact[] => {
+  const windows = [windowOf(limits.primary), windowOf(limits.secondary)].filter(
+    (window) => window !== undefined,
+  );
+  const reached = limits.rate_limit_reached_type != null;
+  const reach = reached && !state.limited;
+  state.limited = reached;
+  if (windows.length === 0) {
+    return reach ? [{ type: "usage-limit", day: moment.day, windowMinutes: 0, reached: 1 }] : [];
+  }
+  const fullest = windows.reduce((best, window) =>
+    window.usedPercent > best.usedPercent ? window : best,
+  );
+  return windows.map((window): Fact => ({
+    type: "usage-limit",
+    day: moment.day,
+    at: moment.at,
+    ...window,
+    ...(reach && window === fullest ? { reached: 1 } : {}),
+  }));
+};
+
+/**
+ * The name a tool call counts under: `mcp:<server>` for a tool in an `mcp__<server>` namespace or
+ * named `mcp__<server>__<tool>` (the server listed, or the name's first part), else its own name.
+ */
+const callTool = (payload: Record<string, unknown>, state: CodexState): string => {
+  const name = typeof payload.name === "string" ? payload.name : CALLS[payload.type as string];
+  const namespace = payload.namespace;
+  if (typeof namespace === "string" && namespace.startsWith("mcp__")) {
+    return toolName(name ?? "", namespace.slice(5));
+  }
+  if (name?.startsWith("mcp__")) {
+    const token = name.slice(5);
+    const server = serverOf(token, state) ?? /^(.+?)__./u.exec(token)?.[1];
+    if (server !== undefined) return toolName(name, server);
+  }
+  return toolName(name ?? "");
 };
 
 /** A count Codex wrote: a whole number of 0 or more. */
@@ -481,6 +575,37 @@ const compaction = (state: CodexState): Fact[] => {
 };
 
 /**
+ * A task's end: `task_complete`, or `turn_aborted` when the user stopped it. Its duration is
+ * `duration_ms`, or the span from `started_at` to `completed_at`; a task without either is
+ * counted untimed.
+ */
+const taskEnd = (payload: Record<string, unknown>, state: CodexState): Fact[] => {
+  const task = state.task;
+  if (task === undefined || state.day === undefined || state.via === undefined) return [];
+  state.task = undefined;
+  const { duration_ms: duration, started_at: started, completed_at: completed } = payload;
+  const ms =
+    typeof duration === "number" && Number.isSafeInteger(duration) && duration >= 0
+      ? duration
+      : typeof started === "number" && typeof completed === "number" && completed >= started
+        ? Math.round((completed - started) * 1000)
+        : undefined;
+  const interrupted = payload.type === "turn_aborted";
+  if (ms === undefined && !interrupted) return [];
+  return [
+    {
+      type: "usage-turn",
+      day: task.day,
+      via: state.via,
+      project: state.project ?? "unknown",
+      thread: state.thread ?? "main",
+      ...(interrupted ? { interrupted: 1 } : {}),
+      ...(ms === undefined ? {} : { timed: 1, durationMs: ms }),
+    },
+  ];
+};
+
+/**
  * Codex's rollout JSONL (`~/.codex/sessions/**`). Each session opens with `session_meta`; its
  * listing is a developer message, or a `world_state` line in newer versions; a skill the user
  * mentions with `$name` comes in as a `<skill>` message; the model opens a skill by reading its
@@ -492,6 +617,11 @@ const compaction = (state: CodexState): Fact[] => {
  * from older rollouts. A fork or subagent first copies its parent's history, totals and
  * compactions included; none of the copy counts, only the steps after its own first task, as
  * ccusage skips a fork's replay.
+ *
+ * A turn is a task: `task_started` opens it, `task_complete` times it, `turn_aborted` marks it
+ * interrupted, and the tool calls between them are its. Each tool call counts under its tool's
+ * name, an MCP server's as `mcp:<server>`; `spawn_agent` starts a subagent. `token_count` also
+ * carries the rate-limit windows' readings.
  */
 export const codexTranscripts: TranscriptFormat<CodexState> = {
   markers: [
@@ -502,8 +632,12 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
     "<tools>",
     '"token_count"',
     '"task_started"',
+    '"task_complete"',
+    '"turn_aborted"',
     '"custom_tool_call"',
     '"function_call"',
+    '"local_shell_call"',
+    '"web_search_call"',
     "<skill>",
     '"turn_context"',
     '"compacted"',
@@ -651,19 +785,42 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
       ) {
         state.copying = false;
       }
+      if (payload.type === "task_started") {
+        if (state.copying) return [];
+        const moment = momentOf(payload.started_at) ?? momentOf(value.timestamp);
+        if (moment === undefined) return [];
+        const thread = state.thread ?? "main";
+        state.task = { day: moment.day, subagents: false };
+        return [
+          {
+            type: "usage-turn",
+            day: moment.day,
+            via,
+            project: state.project ?? "unknown",
+            thread,
+            turns: 1,
+          },
+          { type: "usage-hour", day: moment.day, hour: moment.hour, thread, turns: 1 },
+        ];
+      }
+      if (payload.type === "task_complete" || payload.type === "turn_aborted") {
+        return state.copying ? [] : taskEnd(payload, state);
+      }
       if (payload.type !== "token_count") return [];
       const info = record(payload.info);
       // A copy's totals are the parent's: the fork's own steps start from them.
       const step = info === undefined ? undefined : stepOf(info, state);
-      const requestDay = isoDay(value.timestamp);
-      if (step !== undefined && !state.copying && requestDay !== undefined) {
+      const moment = momentOf(value.timestamp);
+      const limits = record(payload.rate_limits);
+      if (limits && moment && !state.copying) facts.push(...limitFacts(limits, moment, state));
+      if (step !== undefined && !state.copying && moment !== undefined) {
         const [input = 0, cached = 0, write = 0, output = 0, reasoning = 0] = step;
         const cacheRead = Math.min(cached, input);
         const cacheWrite = Math.min(write, input - cacheRead);
         if (input + output > 0) {
           facts.push({
             type: "usage-tokens",
-            day: requestDay,
+            day: moment.day,
             via,
             project: state.project ?? "unknown",
             thread: state.thread ?? "main",
@@ -676,6 +833,13 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
             cacheWrite5m: 0,
             cacheWrite1h: 0,
             cacheRewrite: 0,
+          });
+          facts.push({
+            type: "usage-hour",
+            day: moment.day,
+            hour: moment.hour,
+            thread: state.thread ?? "main",
+            requests: 1,
           });
         }
       }
@@ -721,8 +885,25 @@ export const codexTranscripts: TranscriptFormat<CodexState> = {
       return facts;
     }
 
-    if (payload.type !== "custom_tool_call" && payload.type !== "function_call") return [];
-    if (state.copying || payload.name === "apply_patch") return [];
+    if (typeof payload.type !== "string" || !isCall(payload.type) || state.copying) return [];
+    const thread = state.thread ?? "main";
+    const callDay = momentOf(value.timestamp)?.day ?? state.task?.day ?? day;
+    facts.push({ type: "usage-tool", day: callDay, thread, tool: callTool(payload, state) });
+    if (state.task !== undefined) {
+      const spawns = payload.name === SPAWN_AGENT && !state.task.subagents;
+      if (spawns) state.task.subagents = true;
+      facts.push({
+        type: "usage-turn",
+        day: state.task.day,
+        via,
+        project: state.project ?? "unknown",
+        thread,
+        toolCalls: 1,
+        ...(spawns ? { withSubagents: 1 } : {}),
+      });
+    }
+    if (payload.type !== "custom_tool_call" && payload.type !== "function_call") return facts;
+    if (payload.name === "apply_patch") return facts;
     const text = toolText(payload) ?? "";
     for (const reference of text.includes("SKILL.md") ? (text.match(SKILL_REF) ?? []) : []) {
       for (const path of expandBraces(reference)) {

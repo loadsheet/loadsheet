@@ -195,7 +195,8 @@ const sheetLegend = (report: Report) =>
 
 const GRADE: Record<Grade, string> = { exact: "exact", inferred: "inferred", none: "-" };
 /** The signals behind the sheets and rules; usage history and its settings have a view of their own. */
-const SHEET_SIGNALS = SIGNALS.filter((signal) => signal !== "usage" && signal !== "cacheTtl");
+const HISTORY_SIGNALS = new Set<string>(["usage", "cacheTtl", "turns", "hours", "tools", "limits"]);
+const SHEET_SIGNALS = SIGNALS.filter((signal) => !HISTORY_SIGNALS.has(signal));
 
 const coverageBlock = (report: Report): string[] => {
   if (!report.coverage.length) return [];
