@@ -353,11 +353,12 @@ const cell = (style: Style, format: Format | Format[] | undefined, text: string,
   return style(format, text) + padded.slice(text.length);
 };
 
-/** The version, the machines it could not read, and what the summary teaches about `harnesses`. */
-const header = (report: Report, harnesses: string[]) => {
+/** The version, the machines it could not read, and the chat line for `harnesses` when given. */
+const header = (report: Report, harnesses?: string[]) => {
   const out = [report.tool.replace("@", " ")];
   for (const machine of report.machines.filter((m) => !m.reachable))
     out.push(`not read: ${machine.name}${machine.error ? ` (${visible(machine.error)})` : ""}`);
+  if (harnesses === undefined) return out;
   const names = harnesses.length ? listOf(harnesses.map(harnessName)) : "your coding agent";
   out.push("", `Learn what you send to ${names} with the first message of every chat.`);
   return out;
@@ -678,7 +679,10 @@ const nothingYet = (report: Report) => {
 export const renderSummary = (report: Report, options: SummaryOptions = {}): string => {
   const style = options.style ?? plain;
   if (options.harness !== undefined) {
-    const out = header(report, [options.harness]);
+    const out = header(
+      report,
+      sessionsUnread(report, options.harness) ? undefined : [options.harness],
+    );
     const sheet = report.sheet.find((candidate) => candidate.harness === options.harness);
     if (!sheet || !sheet.sessions) {
       out.push("", nothingToBreakDown(report, options.harness));

@@ -347,11 +347,10 @@ describe("renderSummary for one harness", () => {
       sheet: [...local().sheet, { harness: "pi", sessions: 0, lines: [line("notes", 50, 0)] }],
     });
     expect(renderSummary(at(true), { harness: "pi" })).toBe(
-      "loadsheet 1.2.3\n\nLearn what you send to Pi with the first message of every chat.\n\n" +
-        "loadsheet doesn't read Pi chats, only what's installed: run it again with --full to list it.\n",
+      "loadsheet 1.2.3\n\nloadsheet doesn't read Pi chats, only what's installed: run it again with --full to list it.\n",
     );
-    expect(renderSummary(at(false), { harness: "pi" })).toContain(
-      "loadsheet doesn't read Pi chats, and finds no Pi install to list.",
+    expect(renderSummary(at(false), { harness: "pi" })).toBe(
+      "loadsheet 1.2.3\n\nloadsheet doesn't read Pi chats, and finds no Pi install to list.\n",
     );
   });
 });
