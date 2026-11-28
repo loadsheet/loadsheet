@@ -3,9 +3,12 @@
 // 1. the git remote of the folder or its nearest ancestor below the home (`origin`, else the first
 //    remote), as lowercase `owner/repo`: the last two segments of the remote's path, on any host;
 // 2. the longest hint whose prefix holds the key, for folders that no longer exist;
-// 3. for a worktree that no longer exists, the remote of its repository or of a live sibling;
+// 3. for a T3 worktree that no longer exists, the remote of a live worktree of the same repository:
+//    one beside it in its repository's folder, or one whose name starts with the repository's name,
+//    as T3 names a worktree `<repo>-<branch>`;
 // 4. the key itself, with a worktree folder folded to the repository it was made from and a
-//    scratch or temporary folder folded to its parent, whose child names are often task titles.
+//    scratch or temporary folder folded to its parent, whose child names are often task titles. A
+//    T3 worktree whose folder is gone folds to `~/.t3/worktrees`, since its name is a branch's.
 // The home's own `.git` (a dotfiles repository) is never read, and a remote that is a path on the
 // disk counts as none, so no result names an absolute path under the home.
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -118,7 +121,9 @@ const repoOfDir = (dir: string, home: string, fs: ProjectFs): string | undefined
 const holds = (prefix: string, key: string) =>
   key === prefix || key.startsWith(prefix.endsWith("/") ? prefix : `${prefix}/`);
 
-/** T3 Code keeps a repository's worktrees in one folder named after it. */
+/** T3 Code's worktrees: `<repo>-<branch>`, or a folder named after the repository holding them. */
+const T3_ROOT = "~/.t3/worktrees";
+const T3_WORKTREE = /^~\/\.t3\/worktrees\/([^/]+)/;
 const T3_WORKTREES = /^(~\/\.t3\/worktrees\/[^/]+)\//;
 
 /** Folders whose children are one-off scratch or temporary folders. */
@@ -163,8 +168,20 @@ export const createProjectResolver = ({
     .toSorted((a, b) => b.prefix.length - a.prefix.length);
   const memo = new Map<string, string>();
   const siblings = new Map<string, string | undefined>();
+  const remotes = new Map<string, string | undefined>();
+  let t3Names: readonly string[] | undefined;
 
-  /** The repository of a deleted worktree, read from the repository or a live worktree beside it. */
+  /** `owner/repo` of the repository whose checkout is `dir`, from its own `.git` only. */
+  const remoteOf = (dir: string): string | undefined => {
+    if (remotes.has(dir)) return remotes.get(dir);
+    const config = configOf(join(dir, ".git"), fs);
+    const text = config === undefined ? undefined : fs.read(config);
+    const repo = text === undefined ? undefined : remoteUrls(text).map(repoOfRemote).find(Boolean);
+    remotes.set(dir, repo);
+    return repo;
+  };
+
+  /** The repository of a deleted worktree, read from a live worktree beside it. */
   const repoOfFolded = (folded: string, normal: string): string | undefined => {
     // A Claude Code worktree sits inside its repository, which repoOfDir already walked through.
     if (folded === normal || !T3_WORKTREES.test(normal)) return undefined;
@@ -172,13 +189,47 @@ export const createProjectResolver = ({
     const dir = toPath(folded);
     let repo: string | undefined;
     for (const name of (fs.list?.(dir) ?? []).slice(0, MAX_SIBLINGS)) {
-      const config = configOf(join(dir, name, ".git"), fs);
-      const text = config === undefined ? undefined : fs.read(config);
-      repo = text === undefined ? undefined : remoteUrls(text).map(repoOfRemote).find(Boolean);
+      repo = remoteOf(join(dir, name));
       if (repo) break;
     }
     siblings.set(folded, repo);
     return repo;
+  };
+
+  /**
+   * The repository of a T3 worktree named `name`, from a live worktree named `<repo>` or
+   * `<repo>-…` whose remote's repository is `<repo>`, the longest such prefix of `name` first.
+   * When live worktrees disagree on the owner, the most of them decide, and a tie names none.
+   */
+  const repoOfName = (name: string): string | undefined => {
+    t3Names ??= fs.list?.(toPath(T3_ROOT)) ?? [];
+    const dashes = [...name.matchAll(/-/g)].map((match) => match.index);
+    for (const end of [name.length, ...dashes.toReversed()]) {
+      const prefix = name.slice(0, end);
+      const votes = new Map<string, number>();
+      const live = t3Names
+        .filter((each) => each !== name && (each === prefix || each.startsWith(`${prefix}-`)))
+        .slice(0, MAX_SIBLINGS);
+      for (const each of live) {
+        const repo = remoteOf(join(toPath(T3_ROOT), each));
+        if (repo?.slice(repo.indexOf("/") + 1) === prefix.toLowerCase())
+          votes.set(repo, (votes.get(repo) ?? 0) + 1);
+      }
+      const [first, second] = [...votes].toSorted((a, b) => b[1] - a[1]);
+      if (first && first[1] !== second?.[1]) return first[0];
+    }
+    return undefined;
+  };
+
+  /** A T3 worktree's repository when a live worktree names it, else what the key folds to. */
+  const ofT3 = (folded: string, normal: string): string | undefined => {
+    const name = T3_WORKTREE.exec(normal)?.[1];
+    if (name === undefined) return undefined;
+    return (
+      repoOfFolded(folded, normal) ??
+      repoOfName(name) ??
+      (fs.kind(toPath(`${T3_ROOT}/${name}`)) === "dir" ? folded : T3_ROOT)
+    );
   };
 
   return (key) => {
@@ -192,7 +243,7 @@ export const createProjectResolver = ({
       project =
         repoOfDir(path, root, fs) ??
         sorted.find((hint) => holds(hint.prefix, normal))?.project ??
-        repoOfFolded(folded, normal) ??
+        ofT3(folded, normal) ??
         folded;
     } else {
       project = key.toLowerCase();

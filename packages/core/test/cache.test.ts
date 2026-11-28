@@ -74,6 +74,11 @@ const sessions = (
   ...extra,
 });
 
+const NONE = Object.fromEntries(Object.keys(EXACT).map((signal) => [signal, "none"])) as Record<
+  Signal,
+  Grade
+>;
+
 const coverage = (settings?: Settings, extra: Partial<Coverage> = {}): Coverage => ({
   machine: "laptop",
   harness: "claude-code",
@@ -484,6 +489,7 @@ it("keeps unread T3 coverage when filtering for a harness that reads no usage of
     harness: "t3-code",
     installed: false,
     sessions: 0,
+    signals: NONE,
     unread: ["statev2.sqlite"],
   });
   const one = scan([], undefined, {
@@ -495,6 +501,23 @@ it("keeps unread T3 coverage when filtering for a harness that reads no usage of
   expect(
     report([one], "short-history", { harnesses: ["codex"] }).coverage.map((row) => row.harness),
   ).toEqual(["codex"]);
+});
+
+it("does not keep an uninstalled harness's own unread store as an unowned store's row", () => {
+  // opencode is not installed, yet its database is there and can't be read. It is not a store
+  // that supplies other harnesses, so filtering for antigravity drops it.
+  const opencode = coverage(undefined, {
+    harness: "opencode",
+    installed: false,
+    sessions: 0,
+    signals: { ...NONE, usage: "inferred" },
+    unread: ["opencode.db"],
+  });
+  const one = scan([], undefined, { coverage: [opencode] });
+  expect(report([one], "short-history", { harnesses: ["antigravity"] }).coverage).toEqual([]);
+  expect(report([one], "short-history", { harnesses: ["opencode"] }).coverage).toMatchObject([
+    { harness: "opencode", unread: ["opencode.db"] },
+  ]);
 });
 
 describe("short-history fix", () => {

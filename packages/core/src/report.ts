@@ -337,7 +337,8 @@ export const buildReport = ({
     for (const cell of scan.sessions) harnesses.add(cell.harness);
   }
   const wanted = config.harnesses ? new Set(config.harnesses) : undefined;
-  // A store no harness owns, such as T3 Code's, has a row only to say it could not be read. Its
+  // A store no harness owns, such as T3 Code's, has a row only to say it could not be read, and
+  // grades no signal: a harness's own store reads usage, so its row grades `usage`. The store's
   // usage is about harnesses it names itself: a selected one that reads no usage of its own on that
   // machine could have had some from it. A harness the store supplies carries the store in its own
   // row's `unread`.
@@ -345,6 +346,7 @@ export const buildReport = ({
     !row.installed &&
     row.sessions === 0 &&
     !!row.unread?.length &&
+    Object.values(row.signals).every((grade) => grade === "none") &&
     !!wanted &&
     [...wanted].some((harness) =>
       scan.coverage.every((each) => each.harness !== harness || each.signals.usage === "none"),
