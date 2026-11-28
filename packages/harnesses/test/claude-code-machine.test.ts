@@ -452,15 +452,16 @@ describe("Claude Code context window", () => {
 });
 
 describe("Claude Code's session ids", () => {
-  it("names a main transcript's session, and no subagent's", () => {
+  it("names a main transcript by its session, and a subagent's by its path under the session", () => {
     const projects = "/home/jo/.claude/projects/-home-jo-app";
-    expect(machine.sessionId!(`${projects}/1f2e3d4c-aaaa-bbbb-cccc-0123456789ab.jsonl`)).toBe(
-      "1f2e3d4c-aaaa-bbbb-cccc-0123456789ab",
+    const session = "1f2e3d4c-aaaa-bbbb-cccc-0123456789ab";
+    expect(machine.sessionId!(`${projects}/${session}.jsonl`)).toBe(session);
+    expect(machine.sessionId!(`${projects}/${session}/subagents/agent-a1.jsonl`)).toBe(
+      `${session}/subagents/agent-a1.jsonl`,
     );
-    expect(
-      machine.sessionId!(
-        `${projects}/1f2e3d4c-aaaa-bbbb-cccc-0123456789ab/subagents/agent-a1.jsonl`,
-      ),
-    ).toBeUndefined();
+    expect(machine.sessionId!(`${projects}/${session}/subagents/workflows/w/agent-b.jsonl`)).toBe(
+      `${session}/subagents/workflows/w/agent-b.jsonl`,
+    );
+    expect(machine.sessionId!(`${projects}/${session}/notes.txt`)).toBeUndefined();
   });
 });

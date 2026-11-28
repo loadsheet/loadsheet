@@ -7,6 +7,10 @@ import {
 } from "@loadsheet/kit";
 import { projectOfCwd } from "./path.ts";
 
+/** The thread id in a rollout's name, `rollout-<YYYY-MM-DDTHH-MM-SS>-<thread id>.jsonl`. */
+export const codexSessionId = (path: string): string | undefined =>
+  /(?:^|\/)rollout-\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d-([^/]+?)\.jsonl(?:\.zst)?$/u.exec(path)?.[1];
+
 /** The user instruction file's item name: Codex loads `AGENTS.md` (or `AGENTS.override.md`) from its home. */
 export const CODEX_INSTRUCTIONS = "~/.codex/AGENTS.md";
 

@@ -10,13 +10,20 @@
 //    reasoning, dedupeKey, reportedCostUsd, speed, rateModelIndex?, unresolvedServiceTierTurnId?,
 //    cacheCreation1h?, modelCalls?]
 //
-// `reduceScanCache` keeps the files of one provider whose session no listed transcript counts,
-// and sums their records per session, file kind, UTC day and model. T3 counts a dedupe key once
+// T3 keeps the same record layout in v17 and v18 (v18 re-reads Grok's files only); any other
+// version throws, so that the store reading it is listed as unread rather than guessed at.
+//
+// `reduceScanCache` keeps the files of one provider that no listed transcript file holds, and sums
+// their records per session, file kind, UTC day and model. A file counts from its own transcript
+// when this scan listed it, else from the cache: a session whose main transcript is gone and whose
+// subagents' remain takes its main conversation from here and its subagents from theirs. T3 counts a dedupe key once
 // across every file, since Claude copies a session's requests into the transcript that resumes
 // it: copies keep each counter's maximum, in the first copy's file. A key a listed transcript
 // also holds counts there, so its copies here are dropped. The rows hold session ids and the
 // project folder's name, so they are bound into a store's query and never reach a Fact.
 import type { Day } from "@loadsheet/schema";
+import { claudeSessionId } from "./claude-code-machine.ts";
+import { codexSessionId } from "./codex-transcripts.ts";
 
 /** One file's sums for a day and model, or (with `start`) that the file is a conversation. */
 export interface ScanCacheRow {
@@ -47,6 +54,8 @@ export interface ScanCacheRow {
 
 /** Where a file's records go: its session, whether it is a subagent's, and its project folder. */
 export interface CacheFile {
+  /** The file's id as the harness's `sessionId` names its transcript, which `native` holds when listed. */
+  readonly id: string;
   readonly session: string;
   readonly subagent: boolean;
   readonly dir: string;
@@ -57,7 +66,7 @@ export interface ScanCacheOptions {
   readonly provider: string;
   /** A file's session, or undefined to leave it out. */
   readonly file: (path: string) => CacheFile | undefined;
-  /** The sessions a listed transcript counts. */
+  /** The ids of the transcript files this scan listed, which count from their transcripts. */
   readonly native: ReadonlySet<string>;
   /**
    * Whether a request's 5-minute cache write is counted again as `rw` when it comes 5 to 60
@@ -138,14 +147,20 @@ const merge = (held: Usage, copy: Usage) => {
 
 const utcDay = (ms: number): Day => new Date(ms).toISOString().slice(0, 10);
 
+/** The cache versions whose records this reads. */
+const VERSIONS: readonly unknown[] = [17, 18];
+
 /**
- * The provider's files in T3 Code's usage cache whose session no listed transcript counts, as
- * rows per session, file kind, day and model, plus one `start` row per file. Anything it cannot
- * read gives no rows.
+ * The provider's files in T3 Code's usage cache that this scan did not list, as rows per session,
+ * file kind, day and model, plus one `start` row per file. A record it cannot read gives no rows;
+ * a document of another version or shape throws.
  */
 export const reduceScanCache = (document: unknown, options: ScanCacheOptions): ScanCacheRow[] => {
-  if (!isRecord(document) || !isRecord(document.files) || !Array.isArray(document.models)) {
-    return [];
+  if (!isRecord(document) || !VERSIONS.includes(document.version)) {
+    throw new Error("not a T3 Code usage cache of a known version");
+  }
+  if (!isRecord(document.files) || !Array.isArray(document.models)) {
+    throw new Error("not a T3 Code usage cache");
   }
   const { models } = document;
   const gone: Usage[][] = [];
@@ -158,7 +173,7 @@ export const reduceScanCache = (document: unknown, options: ScanCacheOptions): S
       ...(Array.isArray(entry.r) ? entry.r : []),
       ...(Array.isArray(entry.t) ? entry.t : []),
     ];
-    if (options.native.has(file.session)) {
+    if (options.native.has(file.id)) {
       listed.push(rows);
       continue;
     }
@@ -230,18 +245,23 @@ export const reduceScanCache = (document: unknown, options: ScanCacheOptions): S
   return rows;
 };
 
-const CLAUDE_MAIN = /^.*\/projects\/([^/]+)\/([^/]+)\.jsonl$/u;
-const CLAUDE_SUBAGENT = /^.*\/projects\/([^/]+)\/([^/]+)\/subagents\/.+\.jsonl$/u;
+const CLAUDE_FILE = /\/projects\/([^/]+)\/([^/]+?)(?:\.jsonl|(\/subagents\/.+\.jsonl))$/u;
 
 /**
  * A Claude Code transcript's session: `projects/<folder>/<session>.jsonl` is its main
  * conversation, and every file under `projects/<folder>/<session>/subagents/` one of its subagents'.
  */
 export const claudeCacheFile = (path: string): CacheFile | undefined => {
-  const main = CLAUDE_MAIN.exec(path);
-  if (main) return { session: main[2]!, subagent: false, dir: main[1]! };
-  const subagent = CLAUDE_SUBAGENT.exec(path);
-  return subagent ? { session: subagent[2]!, subagent: true, dir: subagent[1]! } : undefined;
+  const match = CLAUDE_FILE.exec(path);
+  const id = claudeSessionId(path);
+  if (!match || !id) return undefined;
+  return { id, session: match[2]!, subagent: match[3] !== undefined, dir: match[1]! };
+};
+
+/** A Codex rollout's thread, by the id in its name; the cache keeps no project folder for it. */
+export const codexCacheFile = (path: string): CacheFile | undefined => {
+  const id = codexSessionId(path);
+  return id ? { id, session: id, subagent: false, dir: "" } : undefined;
 };
 
 /** T3 Code's usage cache, the newest version in its data folder. */

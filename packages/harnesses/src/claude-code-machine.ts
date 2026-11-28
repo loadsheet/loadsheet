@@ -54,13 +54,16 @@ export const claudeSources = (place: Place): string[] => {
 export const claudeRoots = (place: Place): string[] => [`${claudeConfigDir(place)}/projects`];
 
 /**
- * The session id of a transcript under the roots: a main session's file is
- * `projects/<folder>/<session id>.jsonl`, and a subagent's `<session id>/subagents/agent-<id>.jsonl`,
- * which is no session of its own.
+ * A transcript's id under the roots, for the stores that keep copies of it: a main session's file
+ * is `projects/<folder>/<session id>.jsonl`, named by its session id, and a subagent's is any file
+ * under `<session id>/subagents/`, named `<session id>/subagents/<rest of its path>`, as T3 Code's
+ * usage cache keeps each file apart.
  */
 export const claudeSessionId = (path: string): string | undefined => {
-  const [name, parent] = path.split("/").reverse();
-  if (!name?.endsWith(".jsonl") || parent === "subagents") return undefined;
+  const subagent = /(?:^|\/)([^/]+\/subagents\/.+\.jsonl)$/u.exec(path);
+  if (subagent) return subagent[1];
+  const name = path.split("/").pop();
+  if (!name?.endsWith(".jsonl")) return undefined;
   return name.slice(0, -".jsonl".length) || undefined;
 };
 

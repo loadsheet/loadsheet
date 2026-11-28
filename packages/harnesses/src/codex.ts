@@ -3,7 +3,7 @@ import type { Item, Settings } from "@loadsheet/schema";
 import { parse } from "tinyaml";
 import { codexStateDb } from "./codex-state.ts";
 import { readCodexConfig, type SkillRule } from "./codex-toml.ts";
-import { CODEX_INSTRUCTIONS, codexTranscripts } from "./codex-transcripts.ts";
+import { CODEX_INSTRUCTIONS, codexSessionId, codexTranscripts } from "./codex-transcripts.ts";
 import { readManagers, skillsLockPath, type Manager } from "./managed.ts";
 import { isAbsolute, normalPath } from "./path.ts";
 import { readSkillMd, type SkillMd } from "./skill-md.ts";
@@ -374,10 +374,6 @@ const codexHome = (place: Place) => {
     isAbsolute(configured) ? configured : `${place.cwd ?? place.home}/${configured}`,
   );
 };
-
-/** The thread id in a rollout's name, `rollout-<YYYY-MM-DDTHH-MM-SS>-<thread id>.jsonl`. */
-export const codexSessionId = (path: string): string | undefined =>
-  /(?:^|\/)rollout-\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d-([^/]+?)\.jsonl(?:\.zst)?$/u.exec(path)?.[1];
 
 /**
  * Codex (OpenAI's coding agent): its packs, its home directory, its rollout transcripts, and its

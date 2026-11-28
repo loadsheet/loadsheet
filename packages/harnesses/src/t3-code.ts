@@ -6,9 +6,11 @@
 // Claude Code deletes old transcripts, and T3 keeps two copies of what they held. Its usage cache
 // (`t3-scan-cache.ts`, bound as `$scanCache`) keeps every request of each transcript file it read,
 // subagents' included; its database keeps each turn's sum for the sessions it drove, main
-// conversations only. A Claude session counts from the first of these that has it: its
-// transcript, when its id is in `$native`, the ids of the transcripts this scan listed; else the
-// cache; else T3's turns. A session the cache fills in takes its project, subagent flag and
+// conversations only. Each transcript file counts from the first of these that has it: itself,
+// when its id is in `$native`, the ids of the transcript files this scan listed (a main
+// conversation's is its session's id); else the cache; else, for a main conversation, T3's turns.
+// So a session whose main transcript is gone and whose subagents' remain counts each file once.
+// A session the cache fills in takes its project, subagent flag and
 // compactions from T3's database when T3 drove it, its project from T3's runtime record of the
 // resumed session next, else from a T3 project whose folder Claude would have filed it under. Its
 // via is `t3-code` when T3 knows it, as Claude Code's own transcripts name T3's sessions, else

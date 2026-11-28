@@ -390,6 +390,45 @@ const makeT3 = async () => {
   return { db, add, addProviderThread, item };
 };
 
+/** T3 Code's usage cache: each file's records, `[at, model, session, uncached, cached, creation, output, reasoning, key, cost, speed, rate model, tier, 1h, calls]`. */
+const scanCache = (
+  files: Record<string, { r?: unknown[]; t?: unknown[]; p?: string }>,
+  version = 17,
+) =>
+  write(`${home}/.t3/userdata/usage-scan-cache-v${version}.json`, {
+    files: Object.fromEntries(
+      Object.entries(files).map(([path, { r = [], t = [], p = "claude" }]) => [
+        path,
+        { s: 1, m: 1, p, r, t, mr: 0, o: 0, gl: 0, gh: 0, cs: null },
+      ]),
+    ),
+    version,
+    models: ["claude-x", "<synthetic>", "gpt-z"],
+    sessions: ["id-canary-session"],
+  });
+const request = (
+  iso: string,
+  [uncached, cached, creation, output]: number[],
+  key: string | null,
+  { hour = 0, calls = 1, model = 0 } = {},
+) => [
+  Date.parse(iso),
+  model,
+  0,
+  uncached,
+  cached,
+  creation,
+  output,
+  0,
+  key,
+  null,
+  0,
+  null,
+  null,
+  hour,
+  calls,
+];
+
 describe("T3 Code's database", () => {
   it("counts the threads of the agents loadsheet does not read, per turn", async () => {
     // Open while read, as T3 keeps it: its newest rows are in the WAL.
@@ -546,41 +585,6 @@ describe("T3 Code's database", () => {
     expect(tokenRows(unlisted).some((row) => row.key.startsWith("claude-code"))).toBe(false);
   });
 
-  /** T3 Code's usage cache: each file's records, `[at, model, session, uncached, cached, creation, output, reasoning, key, cost, speed, rate model, tier, 1h, calls]`. */
-  const scanCache = (files: Record<string, { r?: unknown[]; t?: unknown[]; p?: string }>) =>
-    write(`${home}/.t3/userdata/usage-scan-cache-v17.json`, {
-      files: Object.fromEntries(
-        Object.entries(files).map(([path, { r = [], t = [], p = "claude" }]) => [
-          path,
-          { s: 1, m: 1, p, r, t, mr: 0, o: 0, gl: 0, gh: 0, cs: null },
-        ]),
-      ),
-      version: 17,
-      models: ["claude-x", "<synthetic>"],
-      sessions: ["id-canary-session"],
-    });
-  const request = (
-    iso: string,
-    [uncached, cached, creation, output]: number[],
-    key: string | null,
-    { hour = 0, calls = 1, model = 0 } = {},
-  ) => [
-    Date.parse(iso),
-    model,
-    0,
-    uncached,
-    cached,
-    creation,
-    output,
-    0,
-    key,
-    null,
-    0,
-    null,
-    null,
-    hour,
-    calls,
-  ];
   const claudeRef = (nativeId: string) => ({
     nativeThreadRef: { driver: "claudeAgent", nativeId },
     createdAt: "2026-11-20T08:00:00.000Z",
@@ -782,10 +786,92 @@ describe("T3 Code's database", () => {
       },
     ];
 
-    expect(claudeRows(await scan([claudeCode], sessionStores))).toEqual(expected);
-    // One T3 cannot read leaves them too.
+    const missing = await scan([claudeCode], sessionStores);
+    expect(claudeRows(missing)).toEqual(expected);
+    expect(missing.coverage.find((row) => row.harness === "claude-code")?.unread).toBeUndefined();
+    // One that cannot be parsed leaves them too, and says the store was not wholly read.
     await write(`${home}/.t3/userdata/usage-scan-cache-v17.json`, '{"files":{');
-    expect(claudeRows(await scan([claudeCode], sessionStores))).toEqual(expected);
+    const broken = await scan([claudeCode], sessionStores);
+    expect(claudeRows(broken)).toEqual(expected);
+    expect(broken.coverage.map((row) => [row.harness, row.unread])).toEqual([
+      ["claude-code", ["statev2.sqlite"]],
+      ["t3-code", ["statev2.sqlite"]],
+    ]);
+  });
+
+  it("reads the scan cache's versions 17 and 18, and lists another as unread", async () => {
+    const { db } = await makeT3();
+    db.close();
+    await listTranscript("id-canary-listed");
+    const files = {
+      [`${home}/.claude/projects/-code-app/id-canary-gone.jsonl`]: {
+        r: [request("2026-11-21T09:00:00.000Z", [5, 0, 0, 5], "id-canary-k1")],
+      },
+    };
+    const read = async (version: number) => {
+      for (const name of await NodeFSP.readdir(`${home}/.t3/userdata`)) {
+        if (name.startsWith("usage-scan-cache")) await NodeFSP.rm(`${home}/.t3/userdata/${name}`);
+      }
+      await scanCache(files, version);
+      const result = await scan([claudeCode], sessionStores);
+      return [
+        claudeRows(result).map((row) => row.counts),
+        result.coverage.find((row) => row.harness === "claude-code")?.unread,
+      ];
+    };
+
+    expect(await read(17)).toEqual([[[1, 5, 5, 0, 0, 0]], undefined]);
+    expect(await read(18)).toEqual([[[1, 5, 5, 0, 0, 0]], undefined]);
+    expect(await read(19)).toEqual([[], ["statev2.sqlite"]]);
+    expect(await read(16)).toEqual([[], ["statev2.sqlite"]]);
+  });
+
+  it("counts a gone main transcript from the cache and its listed subagent from its file", async () => {
+    const { db } = await makeT3();
+    db.close();
+    const app = `${home}/.claude/projects/-code-app`;
+    await scanCache({
+      [`${app}/id-canary-s.jsonl`]: {
+        r: [request("2026-11-21T09:00:00.000Z", [5, 0, 0, 5], "id-canary-k1")],
+      },
+      [`${app}/id-canary-s/subagents/agent-id-canary-a.jsonl`]: {
+        r: [request("2026-11-21T09:05:00.000Z", [70, 0, 0, 70], "id-canary-k2")],
+      },
+    });
+    // The subagent's transcript is listed; it holds no usage, so any here would be the cache's.
+    await listTranscript("id-canary-s/subagents/agent-id-canary-a");
+
+    const result = await scan([claudeCode], sessionStores);
+
+    expect(claudeRows(result)).toEqual([
+      { key: "claude-code unknown 2026-11-21 unknown main claude-x", counts: [1, 5, 5, 0, 0, 0] },
+    ]);
+    expect(findCanary(result, [tmp, "id-canary"])).toEqual([]);
+  });
+
+  it("counts a listed main transcript from its file and its gone subagent from the cache", async () => {
+    const { db } = await makeT3();
+    db.close();
+    const app = `${home}/.claude/projects/-code-app`;
+    await scanCache({
+      [`${app}/id-canary-s.jsonl`]: {
+        r: [request("2026-11-21T09:00:00.000Z", [5, 0, 0, 5], "id-canary-k1")],
+      },
+      [`${app}/id-canary-s/subagents/agent-id-canary-a.jsonl`]: {
+        r: [request("2026-11-21T09:05:00.000Z", [70, 0, 0, 70], "id-canary-k2")],
+      },
+    });
+    await listTranscript("id-canary-s");
+
+    const result = await scan([claudeCode], sessionStores);
+
+    expect(claudeRows(result)).toEqual([
+      {
+        key: "claude-code unknown 2026-11-21 unknown subagent claude-x",
+        counts: [1, 70, 70, 0, 0, 0],
+      },
+    ]);
+    expect(findCanary(result, [tmp, "id-canary"])).toEqual([]);
   });
 
   it("gets a Coverage row only to say it could not be read", async () => {
