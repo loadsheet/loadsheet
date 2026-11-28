@@ -353,11 +353,12 @@ const cell = (style: Style, format: Format | Format[] | undefined, text: string,
   return style(format, text) + padded.slice(text.length);
 };
 
-/** The version, the machines it could not read, and what the summary teaches about `harnesses`. */
-const header = (report: Report, harnesses: string[]) => {
+/** The version, the machines it could not read, and the chat line for `harnesses` when given. */
+const header = (report: Report, harnesses?: string[]) => {
   const out = [report.tool.replace("@", " ")];
   for (const machine of report.machines.filter((m) => !m.reachable))
     out.push(`not read: ${machine.name}${machine.error ? ` (${visible(machine.error)})` : ""}`);
+  if (harnesses === undefined) return out;
   const names = harnesses.length ? listOf(harnesses.map(harnessName)) : "your coding agent";
   out.push("", `Learn what you send to ${names} with the first message of every chat.`);
   return out;
@@ -644,6 +645,24 @@ const breakdown = (report: Report, sheet: Sheet, style: Style, all: boolean) => 
   return out;
 };
 
+/** Whether loadsheet reads no sessions of the harness anywhere, as for Pi or Cursor. */
+const sessionsUnread = (report: Report, harness: string) => {
+  const rows = report.coverage.filter((row) => row.harness === harness);
+  return (
+    rows.length > 0 && rows.every((row) => row.sessions === 0 && row.signals.listing === "none")
+  );
+};
+
+/** Why `loadsheet <harness>` has nothing to break down. */
+const nothingToBreakDown = (report: Report, harness: string) => {
+  const name = harnessName(harness);
+  if (!sessionsUnread(report, harness))
+    return `${name} had no chats in the last ${plural(report.config.window, "day")}, so there is nothing to break down.`;
+  return report.coverage.some((row) => row.harness === harness && row.installed)
+    ? `loadsheet doesn't read ${name} chats, only what's installed: run it again with --full to list it.`
+    : `loadsheet doesn't read ${name} chats, and finds no ${name} install to list.`;
+};
+
 /** Said when no harness had a chat, on two lines that fit a terminal. */
 const nothingYet = (report: Report) => {
   const where = report.machines.length > 1 ? "on these machines" : "on this machine";
@@ -660,13 +679,13 @@ const nothingYet = (report: Report) => {
 export const renderSummary = (report: Report, options: SummaryOptions = {}): string => {
   const style = options.style ?? plain;
   if (options.harness !== undefined) {
-    const out = header(report, [options.harness]);
+    const out = header(
+      report,
+      sessionsUnread(report, options.harness) ? undefined : [options.harness],
+    );
     const sheet = report.sheet.find((candidate) => candidate.harness === options.harness);
     if (!sheet || !sheet.sessions) {
-      out.push(
-        "",
-        `${harnessName(options.harness)} had no chats in the last ${plural(report.config.window, "day")}, so there is nothing to break down.`,
-      );
+      out.push("", nothingToBreakDown(report, options.harness));
     } else {
       out.push(...breakdown(report, sheet, style, options.all ?? false));
     }

@@ -327,4 +327,30 @@ describe("renderSummary for one harness", () => {
       "Codex had no chats in the last 30 days, so there is nothing to break down.",
     );
   });
+
+  it("says loadsheet doesn't read the chats of a harness it only inventories", () => {
+    const none = {
+      listing: "none",
+      modelUse: "none",
+      userUse: "none",
+      instructions: "none",
+      mcp: "none",
+      tokens: "none",
+      usage: "none",
+      cacheTtl: "none",
+    } as const;
+    const at = (installed: boolean) => ({
+      ...local(),
+      coverage: [
+        { machine: "desk", harness: "pi", installed, sessions: 0, versions: [], signals: none },
+      ],
+      sheet: [...local().sheet, { harness: "pi", sessions: 0, lines: [line("notes", 50, 0)] }],
+    });
+    expect(renderSummary(at(true), { harness: "pi" })).toBe(
+      "loadsheet 1.2.3\n\nloadsheet doesn't read Pi chats, only what's installed: run it again with --full to list it.\n",
+    );
+    expect(renderSummary(at(false), { harness: "pi" })).toBe(
+      "loadsheet 1.2.3\n\nloadsheet doesn't read Pi chats, and finds no Pi install to list.\n",
+    );
+  });
 });
