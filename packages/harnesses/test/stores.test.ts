@@ -1036,6 +1036,57 @@ describe("Codex's state database", () => {
     expect(findCanary(result, [tmp, SECRET, "id-canary", id])).toEqual([]);
   });
 
+  it("splits a gone thread's tokens from T3's scan cache, and takes the rest from the state", async () => {
+    const listed = "019a0000-0000-7000-8000-00000000c0de";
+    await codexRollout(listed, "2026-11-22T10:00:00.000Z");
+    const { db, row } = await makeCodexState();
+    row("id-canary-cached", IN, spawned, 5000, "git@github.com:acme/app.git");
+    row("id-canary-state", IN, plain, 700, null);
+    row(listed, IN, plain, 110, null);
+    db.close();
+    const rollout = (id: string) =>
+      `${home}/.codex/sessions/2026/11/22/rollout-2026-11-22T10-00-00-${id}.jsonl`;
+    const gpt = { model: 2 };
+    await scanCache({
+      // Gone, and in the state database: its split, across two days, with the state's fields.
+      [rollout("id-canary-cached")]: {
+        p: "codex",
+        r: [
+          request("2026-11-22T10:00:00.000Z", [60, 30, 0, 9], null, gpt),
+          request("2026-11-23T10:00:00.000Z", [6, 3, 0, 1], null, { ...gpt, calls: 2 }),
+        ],
+      },
+      // Gone, and not in the state database: its session from the cache, its via unknown.
+      [rollout("id-canary-orphan")]: {
+        p: "codex",
+        r: [request("2026-11-21T10:00:00.000Z", [4, 0, 0, 4], null, gpt)],
+      },
+      // Listed: the rollout counts it.
+      [rollout(listed)]: {
+        p: "codex",
+        r: [request("2026-11-22T10:00:00.000Z", [9, 9, 9, 9], null, gpt)],
+      },
+    });
+
+    const result = await scan([codex]);
+
+    expect(parseScan(result)).toEqual(result);
+    expect(unsplitRows(result)).toEqual([
+      "codex unknown 2026-11-21 unknown main gpt-z 1 8 0",
+      "codex T3 Code 2026-11-22 ~/code/app main gpt-z 0 0 700",
+      "codex codex_cli_rs 2026-11-22 ~/code/app main unknown 1 110 0",
+      "codex codex_exec 2026-11-22 acme/app subagent gpt-z 1 99 0",
+      "codex codex_exec 2026-11-23 acme/app subagent gpt-z 2 10 0",
+    ]);
+    expect(sessionRows(result)).toEqual({
+      "codex unknown 2026-11-21 unknown main": [1, 0, 0],
+      "codex codex_exec 2026-11-22 acme/app subagent": [1, 0, 0],
+      "codex codex_cli_rs 2026-11-22 ~/code/app main": [1, 0, 0],
+      "codex T3 Code 2026-11-22 ~/code/app main": [1, 0, 0],
+    });
+    expect(findCanary(result, [tmp, SECRET, "id-canary", listed])).toEqual([]);
+  });
+
   it("reads the newest Codex state database", async () => {
     const old = await makeCodexState("state_4.sqlite");
     old.row("id-canary-stale", IN, plain, 4444, null);
