@@ -7,7 +7,7 @@ import type { Harness } from "@loadsheet/kit";
 import { scanMachine } from "@loadsheet/kit/node";
 import { parseScan, type Scan } from "@loadsheet/schema";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
-import { grok, opencode, sessionStores, t3Code } from "../src/index.ts";
+import { claudeCode, grok, opencode, sessionStores, t3Code } from "../src/index.ts";
 import { noTokens, tokensOf } from "../src/store-facts.ts";
 
 // Every session below is invented for these tests; nothing comes from a real machine.
@@ -273,13 +273,15 @@ CREATE TABLE projection_projects (project_id TEXT PRIMARY KEY, title TEXT, works
 CREATE TABLE orchestration_v2_projection_threads (thread_id TEXT PRIMARY KEY, project_id TEXT,
   default_provider TEXT, created_at TEXT, payload_json TEXT);
 CREATE TABLE orchestration_v2_projection_provider_threads (provider_thread_id TEXT PRIMARY KEY,
-  provider TEXT, payload_json TEXT);
+  thread_id TEXT, provider TEXT, payload_json TEXT);
 CREATE TABLE orchestration_v2_projection_provider_turns (provider_turn_id TEXT PRIMARY KEY,
   thread_id TEXT, provider_thread_id TEXT, started_at TEXT, completed_at TEXT, payload_json TEXT);
 CREATE TABLE orchestration_v2_projection_turn_items (item_id TEXT PRIMARY KEY, thread_id TEXT,
-  type TEXT, payload_json TEXT);
+  provider_thread_id TEXT, type TEXT, payload_json TEXT);
 CREATE INDEX provider_turns_thread_idx ON orchestration_v2_projection_provider_turns(thread_id);
 CREATE INDEX turn_items_thread_type_idx ON orchestration_v2_projection_turn_items(thread_id, type);
+CREATE UNIQUE INDEX provider_turns_provider_thread_idx
+  ON orchestration_v2_projection_provider_turns(provider_thread_id, provider_turn_id);
 CREATE INDEX threads_provider_idx ON orchestration_v2_projection_threads(default_provider);`;
 
 const usage = (input: number, cached: number, output: number, reasoning: number, creation = 0) =>
@@ -301,13 +303,43 @@ const makeT3 = async () => {
   project.run("id-canary-p1", SECRET, `${home}/code/app`);
   const thread = db.prepare("INSERT INTO orchestration_v2_projection_threads VALUES (?,?,?,?,?)");
   const providerThread = db.prepare(
-    "INSERT INTO orchestration_v2_projection_provider_threads VALUES (?,?,?)",
+    "INSERT INTO orchestration_v2_projection_provider_threads VALUES (?,?,?,?)",
   );
   const turn = db.prepare(
     "INSERT INTO orchestration_v2_projection_provider_turns VALUES (?,?,?,?,?,?)",
   );
-  const item = db.prepare("INSERT INTO orchestration_v2_projection_turn_items VALUES (?,?,?,?)");
+  const itemRow = db.prepare(
+    "INSERT INTO orchestration_v2_projection_turn_items VALUES (?,?,?,?,?)",
+  );
+  const item = (id: string, threadId: string, type: string, payloadJson: string) =>
+    itemRow.run(id, threadId, `${threadId}-pt`, type, payloadJson);
   let turns = 0;
+  /** A provider thread of a T3 thread, and its turns. */
+  const addProviderThread = (
+    threadId: string,
+    providerThreadId: string,
+    provider: string,
+    payload: object,
+    turnList: [string, string | null][],
+  ) => {
+    providerThread.run(
+      providerThreadId,
+      threadId,
+      provider,
+      JSON.stringify({ text: SECRET, ...payload }),
+    );
+    for (const [completed, payloadJson] of turnList) {
+      turns += 1;
+      turn.run(
+        `id-canary-turn-${turns}`,
+        threadId,
+        providerThreadId,
+        completed,
+        completed,
+        payloadJson ?? "{}",
+      );
+    }
+  };
   const add = (
     id: string,
     provider: string,
@@ -315,20 +347,10 @@ const makeT3 = async () => {
     payload: object,
     projectId: string | null,
     turnList: [string, string | null][],
+    providerPayload: object = {},
   ) => {
     thread.run(id, projectId, provider, created, JSON.stringify({ title: SECRET, ...payload }));
-    providerThread.run(`${id}-pt`, provider, JSON.stringify({ text: SECRET }));
-    for (const [completed, payloadJson] of turnList) {
-      turns += 1;
-      turn.run(
-        `id-canary-turn-${turns}`,
-        id,
-        `${id}-pt`,
-        completed,
-        completed,
-        payloadJson ?? "{}",
-      );
-    }
+    addProviderThread(id, `${id}-pt`, provider, providerPayload, turnList);
   };
   const model = { modelSelection: { model: "gemini-x" } };
   add("id-canary-t1", "antigravity", "2026-11-20T10:00:00.000Z", model, "id-canary-p1", [
@@ -337,9 +359,9 @@ const makeT3 = async () => {
     // A turn T3 has no usage for.
     ["2026-11-21T12:00:00.000Z", null],
   ]);
-  item.run("id-canary-i1", "id-canary-t1", "compaction", JSON.stringify({ text: SECRET }));
-  item.run("id-canary-i2", "id-canary-t1", "compaction", "{}");
-  item.run("id-canary-i3", "id-canary-t1", "assistant_message", JSON.stringify({ text: SECRET }));
+  item("id-canary-i1", "id-canary-t1", "compaction", JSON.stringify({ text: SECRET }));
+  item("id-canary-i2", "id-canary-t1", "compaction", "{}");
+  item("id-canary-i3", "id-canary-t1", "assistant_message", JSON.stringify({ text: SECRET }));
   add(
     "id-canary-t2",
     "antigravity",
@@ -356,19 +378,20 @@ const makeT3 = async () => {
   add("id-canary-t4", "cursor", "2026-11-22T10:00:00.000Z", {}, "id-canary-p1", [
     ["2026-11-22T10:05:00.000Z", usage(10, 0, 2, 0)],
   ]);
-  // Agents whose own files loadsheet reads: never counted from T3's copy.
+  // Agents whose own files loadsheet reads: never counted from T3's copy. The Claude one names no
+  // session, so it is never counted in place of its transcript either.
   for (const provider of ["claudeAgent", "codex", "grok", "opencode"]) {
     add(`id-canary-${provider}`, provider, "2026-11-22T10:00:00.000Z", model, "id-canary-p1", [
       ["2026-11-22T10:05:00.000Z", usage(5000, 0, 500, 0)],
     ]);
   }
-  return db;
+  return { db, add, addProviderThread, item };
 };
 
 describe("T3 Code's database", () => {
   it("counts the threads of the agents loadsheet does not read, per turn", async () => {
     // Open while read, as T3 keeps it: its newest rows are in the WAL.
-    const db = await makeT3();
+    const { db } = await makeT3();
     db.exec("PRAGMA journal_mode = WAL");
     try {
       const result = await scan([], sessionStores);
@@ -407,18 +430,118 @@ describe("T3 Code's database", () => {
   });
 
   it("reaches each thread's turns and items through their indexes", async () => {
-    const db = await makeT3();
+    const { db } = await makeT3();
     try {
       const plan = db
         .prepare(`EXPLAIN QUERY PLAN ${t3Code.query}`)
-        .all({ $since: "2026-11-18T00:00:00.000Z" })
+        .all({ $since: "2026-11-18T00:00:00.000Z", $native: "[]" })
         .map((row) => String(row.detail));
       expect(plan.some((detail) => /provider_turns_thread_idx/u.test(detail))).toBe(true);
       expect(plan.some((detail) => /turn_items_thread_type_idx/u.test(detail))).toBe(true);
+      expect(plan.some((detail) => /provider_turns_provider_thread_idx/u.test(detail))).toBe(true);
       expect(plan.some((detail) => /^SCAN (pt|ti)\b/u.test(detail))).toBe(false);
     } finally {
       db.close();
     }
+  });
+
+  it("backfills a Claude session whose transcript is gone, skips a listed one", async () => {
+    const { db, add, addProviderThread, item } = await makeT3();
+    const claude = { modelSelection: { model: "claude-x" } };
+    const ref = (nativeId: string, createdAt: string) => ({
+      nativeThreadRef: { driver: "claudeAgent", nativeId },
+      createdAt,
+    });
+    // Its transcript is gone: its turns, session and compaction count, via T3.
+    add(
+      "id-canary-c1",
+      "claudeAgent",
+      "2026-11-20T08:00:00.000Z",
+      claude,
+      "id-canary-p1",
+      [
+        ["2026-11-21T09:30:00.000Z", usage(1000, 600, 50, 10, 100)],
+        ["2026-11-22T09:30:00.000Z", usage(400, 300, 20, 0)],
+      ],
+      ref("id-canary-gone-1", "2026-11-21T09:00:00.000Z"),
+    );
+    item("id-canary-i4", "id-canary-c1", "compaction", "{}");
+    // Its transcript is listed below: the transcript counts it, not T3.
+    add(
+      "id-canary-c2",
+      "claudeAgent",
+      "2026-11-21T08:00:00.000Z",
+      claude,
+      "id-canary-p1",
+      [["2026-11-21T08:30:00.000Z", usage(7000, 0, 700, 0)]],
+      ref("id-canary-listed", "2026-11-21T08:00:00.000Z"),
+    );
+    // A subagent's thread.
+    add(
+      "id-canary-c3",
+      "claudeAgent",
+      "2026-11-22T08:00:00.000Z",
+      { ...claude, lineage: { parentThreadId: "id-canary-c1" } },
+      "id-canary-p1",
+      [["2026-11-22T08:30:00.000Z", usage(80, 0, 8, 0)]],
+      ref("id-canary-gone-2", "2026-11-22T08:00:00.000Z"),
+    );
+    // A Codex thread switched to Claude: only its Claude provider thread counts, under no model,
+    // since the thread's model is Codex's.
+    add(
+      "id-canary-s1",
+      "codex",
+      "2026-11-22T11:00:00.000Z",
+      { modelSelection: { model: "gpt-x" } },
+      "id-canary-p1",
+      [["2026-11-22T11:05:00.000Z", usage(9000, 0, 900, 0)]],
+    );
+    addProviderThread(
+      "id-canary-s1",
+      "id-canary-s1-claude",
+      "claudeAgent",
+      ref("id-canary-gone-3", "2026-11-22T12:00:00.000Z"),
+      [["2026-11-22T12:05:00.000Z", usage(30, 10, 3, 0)]],
+    );
+    db.close();
+    const transcript = `${home}/.claude/projects/-code-app/id-canary-listed.jsonl`;
+    await write(transcript, '{"type":"summary"}\n');
+    await NodeFSP.utimes(transcript, IN, IN);
+
+    const result = await scan([claudeCode], sessionStores);
+
+    expect(parseScan(result)).toEqual(result);
+    expect(tokenRows(result).filter((row) => row.key.startsWith("claude-code"))).toEqual([
+      {
+        key: "claude-code t3-code 2026-11-21 ~/code/app main claude-x",
+        counts: [1, 300, 50, 10, 600, 100],
+      },
+      {
+        key: "claude-code t3-code 2026-11-22 ~/code/app main claude-x",
+        counts: [1, 100, 20, 0, 300, 0],
+      },
+      {
+        key: "claude-code t3-code 2026-11-22 ~/code/app main unknown",
+        counts: [1, 20, 3, 0, 10, 0],
+      },
+      {
+        key: "claude-code t3-code 2026-11-22 ~/code/app subagent claude-x",
+        counts: [1, 80, 8, 0, 0, 0],
+      },
+    ]);
+    const sessions = sessionRows(result);
+    expect(
+      Object.fromEntries(Object.entries(sessions).filter(([key]) => key.startsWith("claude-code"))),
+    ).toEqual({
+      "claude-code t3-code 2026-11-21 ~/code/app main": [1, 1, 1],
+      "claude-code t3-code 2026-11-22 ~/code/app main": [1, 0, 0],
+      "claude-code t3-code 2026-11-22 ~/code/app subagent": [1, 0, 0],
+    });
+    expect(findCanary(result, [tmp, SECRET, "id-canary", "999999"])).toEqual([]);
+
+    // Without Claude Code's transcripts listed, T3 does not stand in for them.
+    const unlisted = await scan([], sessionStores);
+    expect(tokenRows(unlisted).some((row) => row.key.startsWith("claude-code"))).toBe(false);
   });
 
   it("gets a Coverage row only to say it could not be read", async () => {
