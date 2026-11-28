@@ -216,6 +216,20 @@ describe("foldFacts", () => {
     expect(foldFacts("h", facts).usage).toBeUndefined();
   });
 
+  it("sums unsplit tokens on their own, and leaves cells without any as they were", () => {
+    const zero = { ...tokens("2026-11-20", "main", 0), requests: 0 };
+    const tally = foldFacts("h", [
+      { ...zero, unsplit: 700 },
+      { ...zero, unsplit: 300 },
+      tokens("2026-11-21", "main", 1),
+    ]);
+    expect(tally.usage!.tokens.map(({ day, input, unsplit }) => [day, input, unsplit])).toEqual([
+      ["2026-11-20", 0, 1000],
+      ["2026-11-21", 1, undefined],
+    ]);
+    expect(sumTallies([tally, tally]).usage!.tokens[0]!.unsplit).toBe(2000);
+  });
+
   it("holds each token split to its whole, so a cell stays inside the schema's bounds", () => {
     const tally = foldFacts("h", [
       {

@@ -7,7 +7,7 @@ import {
   type UsageTokenCell,
 } from "@loadsheet/schema";
 import { describe, expect, it } from "vite-plus/test";
-import { renderUsage, unreadUsageStores, usageTotals } from "../src/index.ts";
+import { renderUsage, sumUsage, unreadUsageStores, usageTotals } from "../src/index.ts";
 
 const fleet = parseReport(
   JSON.parse(
@@ -94,6 +94,22 @@ describe("usageTotals", () => {
       "acme/site",
       "other/x",
     ]);
+  });
+
+  it("totals include unsplit", () => {
+    const unsplit = { ...tokens("other/x", 0, "codex"), output: 0, cacheRead: 0, cacheWrite: 0 };
+    const usage = {
+      sessions: [],
+      tokens: [tokens("acme/app", 40), { ...unsplit, cacheWrite5m: 0, unsplit: 800 }],
+    };
+    const totals = usageTotals(usage);
+    expect(totals.all.tokens).toBe(1000);
+    expect(totals.harnesses.map((row) => [row.name, row.tokens, row.share])).toEqual([
+      ["codex", 800, 80],
+      ["claude-code", 200, 20],
+    ]);
+    // Summed over machines, the counter adds up like the others.
+    expect(sumUsage([usage, usage])!.tokens.map((cell) => cell.unsplit)).toEqual([undefined, 1600]);
   });
 
   it("counts nothing for a Report without usage", () => {

@@ -8,6 +8,7 @@ import { scanMachine } from "@loadsheet/kit/node";
 import { parseScan, type Scan } from "@loadsheet/schema";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { grok, opencode, sessionStores, t3Code } from "../src/index.ts";
+import { noTokens, tokensOf } from "../src/store-facts.ts";
 
 // Every session below is invented for these tests; nothing comes from a real machine.
 
@@ -94,6 +95,17 @@ const modelUsage = (
   outputTokens: output,
   reasoningTokens: reasoning,
   modelCalls: calls,
+});
+
+describe("store token counters", () => {
+  it("carry a total with no split as unsplit, in no other counter", () => {
+    const none = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 };
+    const total = tokensOf({ ...none, unsplit: 900 });
+    expect(total).toMatchObject({ input: 0, output: 0, cacheRead: 0, unsplit: 900 });
+    expect(noTokens(total)).toBe(false);
+    expect("unsplit" in tokensOf(none)).toBe(false);
+    expect(noTokens(tokensOf(none))).toBe(true);
+  });
 });
 
 describe("Grok's session folders", () => {

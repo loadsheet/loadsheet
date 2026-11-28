@@ -66,7 +66,8 @@ const rowsBy = (usage: Usage, key: (cell: { harness: string; project: string }) 
     known.compacted += cell.compacted;
   }
   for (const cell of usage.tokens)
-    row(key(cell)).tokens += cell.input + cell.output + cell.cacheRead + cell.cacheWrite;
+    row(key(cell)).tokens +=
+      cell.input + cell.output + cell.cacheRead + cell.cacheWrite + (cell.unsplit ?? 0);
   const sorted = [...rows.values()].sort(
     (a, b) =>
       b.tokens - a.tokens || b.sessions - a.sessions || (a.name < b.name ? -1 : +(a.name > b.name)),
@@ -81,7 +82,8 @@ const projectName = (project: string) => (isRepository(project) ? project : NO_R
 
 /**
  * What `loadsheet usage` counts from a Report's usage: totals, and rows by harness, organisation
- * and project. Tokens are what ccusage counts: input, output, cache reads and cache writes.
+ * and project. Tokens are what ccusage counts: input, output, cache reads and cache writes, plus
+ * the tokens whose split is unknown.
  */
 export const usageTotals = (usage: Usage | undefined): UsageTotals => {
   const cells: Usage = usage ?? { sessions: [], tokens: [] };

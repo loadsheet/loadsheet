@@ -103,6 +103,7 @@ export interface CompactionFact extends FactOfThread {
  * Tokens of model requests. `day` is the UTC day of the requests, not of the session's start. Once
  * per request, or once per several requests summed (`requests`, default 1). The splits are parts:
  * `reasoning` of `output`, `cacheWrite5m`, `cacheWrite1h` and `cacheRewrite` of `cacheWrite`.
+ * `unsplit` is its own part of the total, beside input, output and the cache.
  */
 export interface UsageTokensFact extends FactOfThread {
   readonly type: "usage-tokens";
@@ -119,6 +120,8 @@ export interface UsageTokensFact extends FactOfThread {
   readonly cacheWrite1h: number;
   /** Cache-write tokens of a request 5 to 60 minutes after the previous one of its conversation. */
   readonly cacheRewrite: number;
+  /** Tokens whose split is unknown, such as a thread's total alone; counted in no other counter. */
+  readonly unsplit?: number;
 }
 
 /**

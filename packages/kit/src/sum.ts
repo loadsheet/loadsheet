@@ -171,6 +171,7 @@ export class Accumulator {
       cell.cacheWrite5m += from.cacheWrite5m;
       cell.cacheWrite1h += from.cacheWrite1h;
       cell.cacheRewrite += from.cacheRewrite;
+      if (from.unsplit) cell.unsplit = (cell.unsplit ?? 0) + from.unsplit;
     }
   }
 
@@ -237,6 +238,8 @@ export class Accumulator {
         cell.cacheWrite5m += write5m;
         cell.cacheWrite1h += Math.min(fact.cacheWrite1h, fact.cacheWrite - write5m);
         cell.cacheRewrite += Math.min(fact.cacheRewrite, fact.cacheWrite);
+        // Written only when some are counted, so cells without any keep their shape.
+        if (fact.unsplit) cell.unsplit = (cell.unsplit ?? 0) + fact.unsplit;
       }
     }
   }

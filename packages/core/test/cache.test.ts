@@ -372,6 +372,23 @@ describe("cache-off", () => {
     expect(report([built], "cache-off").findings).toHaveLength(count);
   });
 
+  it("cache-off ignores unsplit", () => {
+    // Tokens with no split say nothing of the cache: neither sent past it nor read from it.
+    const unknown = (sent: number) =>
+      scan([], undefined, {
+        usage: {
+          sessions: [sessions(LAST, 10)],
+          tokens: [
+            tokens(LAST, 0, 0, { input: sent, cacheWrite: 0, cacheRead: 0, unsplit: 5 * M }),
+          ],
+        },
+      });
+    expect(report([unknown(M - 1)], "cache-off").findings).toEqual([]);
+    expect(report([unknown(M)], "cache-off").findings).toMatchObject([
+      { evidence: { sessions: 10, tokens: M } },
+    ]);
+  });
+
   it("counts cache writes as tokens sent", () => {
     const written = scan([tokens(LAST, M / 2, M / 2, { input: 0, cacheRead: 0 })], undefined, {
       usage: {

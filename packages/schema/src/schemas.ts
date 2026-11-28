@@ -499,10 +499,15 @@ const UsageTokenCellSchema = v.pipe(
     cacheWrite: count("Input tokens written to the prompt cache."),
     cacheWrite5m: count("Of the cache writes, the tokens written to a cache that lives 5 minutes."),
     cacheWrite1h: count(
-      "Of the cache writes, the tokens written to a cache that lives 1 hour; with cacheWrite5m at most cacheWrite, and the rest unsplit.",
+      "Of the cache writes, the tokens written to a cache that lives 1 hour; with cacheWrite5m at most cacheWrite, and the rest of unknown lifetime.",
     ),
     cacheRewrite: count(
       "Five-minute cache writes 5 to 60 minutes after a request to the same model in the conversation: possible reuse with a longer cache, not guaranteed hits.",
+    ),
+    unsplit: v.optional(
+      count(
+        "Tokens whose split into input, output and cache is unknown, counted in no other counter. Absent means 0.",
+      ),
     ),
   }),
   v.check((cell) => cell.reasoning <= cell.output, "reasoning must not exceed output"),

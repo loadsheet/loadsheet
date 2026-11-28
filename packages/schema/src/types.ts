@@ -223,10 +223,12 @@ export interface UsageTokenCell {
   cacheWrite: number;
   /** Of the cache writes, the tokens written to a cache that lives 5 minutes. */
   cacheWrite5m: number;
-  /** Of the cache writes, the tokens written to a cache that lives 1 hour; with cacheWrite5m at most cacheWrite, and the rest unsplit. */
+  /** Of the cache writes, the tokens written to a cache that lives 1 hour; with cacheWrite5m at most cacheWrite, and the rest of unknown lifetime. */
   cacheWrite1h: number;
   /** Five-minute cache writes 5 to 60 minutes after a request to the same model in the conversation: possible reuse with a longer cache, not guaranteed hits. */
   cacheRewrite: number;
+  /** Tokens whose split into input, output and cache is unknown, counted in no other counter. Absent means 0. */
+  unsplit?: number;
 }
 
 /** A machine's or a Report's usage history: sessions and tokens per project, as additive counters with no text. */

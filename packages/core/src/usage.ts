@@ -48,7 +48,10 @@ export const sumUsage = (
       const key = tokenKey(cell);
       const known = tokens.get(key);
       if (!known) tokens.set(key, { ...cell });
-      else for (const count of TOKEN_COUNTS) known[count] += cell[count];
+      else {
+        for (const count of TOKEN_COUNTS) known[count] += cell[count];
+        if (cell.unsplit) known.unsplit = (known.unsplit ?? 0) + cell.unsplit;
+      }
     }
   }
   if (sessions.size === 0 && tokens.size === 0) return undefined;

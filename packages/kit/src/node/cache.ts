@@ -255,6 +255,7 @@ const retable = (raw: unknown, from: readonly string[], to: StringTable): unknow
 //                  manualCompactions, ...
 //   usageTokens:   day, harness, via, project, thread, model, requests, input, output, reasoning,
 //                  cacheRead, cacheWrite, cacheWrite5m, cacheWrite1h, cacheRewrite, ...
+//                  (no `unsplit`: only session stores count it, and they are never cached)
 // Within each tuple the strings come first: `refs` is how many.
 
 /** An encoded tally, as `checkTally` accepted it. */

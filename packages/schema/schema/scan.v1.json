@@ -569,12 +569,17 @@
               "cacheWrite1h": {
                 "type": "integer",
                 "minimum": 0,
-                "description": "Of the cache writes, the tokens written to a cache that lives 1 hour; with cacheWrite5m at most cacheWrite, and the rest unsplit."
+                "description": "Of the cache writes, the tokens written to a cache that lives 1 hour; with cacheWrite5m at most cacheWrite, and the rest of unknown lifetime."
               },
               "cacheRewrite": {
                 "type": "integer",
                 "minimum": 0,
                 "description": "Five-minute cache writes 5 to 60 minutes after a request to the same model in the conversation: possible reuse with a longer cache, not guaranteed hits."
+              },
+              "unsplit": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Tokens whose split into input, output and cache is unknown, counted in no other counter. Absent means 0."
               }
             },
             "required": [

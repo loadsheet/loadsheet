@@ -31,13 +31,17 @@ export const utcDay = (value: unknown): Day | undefined => {
 export const modelName = (value: unknown): string =>
   typeof value === "string" && value.trim() ? value.trim() : "unknown";
 
-/** Token counters as a Fact's, from totals whose input includes what was read from and written to the cache. */
+/**
+ * Token counters as a Fact's, from totals whose input includes what was read from and written to
+ * the cache. `unsplit` is a total the store keeps with no split, such as a thread's whole count.
+ */
 export const tokensOf = (totals: {
   input: number;
   cacheRead: number;
   cacheWrite: number;
   output: number;
   reasoning: number;
+  unsplit?: number;
 }): Pick<
   UsageTokensFact,
   | "input"
@@ -48,6 +52,7 @@ export const tokensOf = (totals: {
   | "cacheWrite5m"
   | "cacheWrite1h"
   | "cacheRewrite"
+  | "unsplit"
 > => ({
   input: Math.max(0, totals.input - totals.cacheRead - totals.cacheWrite),
   output: totals.output,
@@ -57,6 +62,7 @@ export const tokensOf = (totals: {
   cacheWrite5m: 0,
   cacheWrite1h: 0,
   cacheRewrite: 0,
+  ...(totals.unsplit ? { unsplit: totals.unsplit } : {}),
 });
 
 /** Whether a Fact's counters are all zero, so that it says nothing. */
@@ -65,4 +71,6 @@ export const noTokens = (tokens: {
   output: number;
   cacheRead: number;
   cacheWrite: number;
-}) => tokens.input + tokens.output + tokens.cacheRead + tokens.cacheWrite === 0;
+  unsplit?: number;
+}) =>
+  tokens.input + tokens.output + tokens.cacheRead + tokens.cacheWrite + (tokens.unsplit ?? 0) === 0;
